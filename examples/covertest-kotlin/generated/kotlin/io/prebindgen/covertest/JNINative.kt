@@ -181,6 +181,12 @@ internal object JNINative {
     @JvmStatic external fun call_callback_row_resource_live_510223cb2d40d9e1(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_row_resource_drops_01de29492e0e46ba(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_row_resource_hold_5cf985322f526efd(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_owned_probe_18cebe9ab6081eb8(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_optional_probe_bed3ad3142d5a05b(p0_callback: Any?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_nested_probe_88c40199386d8891(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_pair_probe_de30e0e31a7df3e7(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_transferred_probe_a4ac030f6ad6a92d(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_rows_transferred_pair_probe_43ce9ece795705de(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_rows_owned_3e990348ad64d75b(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_rows_borrowed_57b23a1fb6669005(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_rows_optional_0d52c7d730c41d75(p0_callback: Any?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit

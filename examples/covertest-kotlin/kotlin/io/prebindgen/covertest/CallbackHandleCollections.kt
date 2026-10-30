@@ -172,10 +172,10 @@ fun checkCallbackHandleCollections() {
     // A native probe enters the real generated bridge with a malformed middle
     // row: completed rows, the failed row and unread rows must all be reclaimed.
     var malformedCalls = 0
-    val scopedBridge = rowBridge("callbackRowsOwned", OrdinaryCallbackRowVecCallback { malformedCalls++ })
-    val transferredBridge = rowBridge("callbackRowsTransferred", OrdinaryCallbackTransferredRowVecCallback { malformedCalls++ })
-    val pairBridge = rowBridge("callbackRowsPair", OrdinaryCallbackRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
-    val mixedBridge = rowBridge("callbackRowsTransferredPair", OrdinaryCallbackTransferredRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
+    val scopedBridge = rowBridge("callbackRowsOwnedProbe", OrdinaryCallbackRowVecCallback { malformedCalls++ })
+    val transferredBridge = rowBridge("callbackRowsTransferredProbe", OrdinaryCallbackTransferredRowVecCallback { malformedCalls++ })
+    val pairBridge = rowBridge("callbackRowsPairProbe", OrdinaryCallbackRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
+    val mixedBridge = rowBridge("callbackRowsTransferredPairProbe", OrdinaryCallbackTransferredRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
     for ((bridge, mode, drops) in listOf(
         Triple(scopedBridge, 0, 6L), Triple(transferredBridge, 0, 6L),
         Triple(pairBridge, 1, 12L), Triple(mixedBridge, 1, 12L),
@@ -190,10 +190,10 @@ fun checkCallbackHandleCollections() {
     // Observe the actual JNI invocation result so the runtime's exception
     // containment cannot hide a spurious successful-delivery cleanup error.
     var validCalls = 0
-    val validBridge = rowBridge("callbackRowsOwned", OrdinaryCallbackRowVecCallback { validCalls++ })
+    val validBridge = rowBridge("callbackRowsOwnedProbe", OrdinaryCallbackRowVecCallback { rows -> validCalls++; rowHandles(rows).forEach { it.close() } })
     check(CallbackRowsRuntimeProbe.malformed(validBridge, 4) == 0L && validCalls == 1)
     var absentCalls = 0
-    val absentBridge = rowBridge("callbackRowsOptional", OrdinaryOptionalOptionalCallbackRowVecCallback { rows ->
+    val absentBridge = rowBridge("callbackRowsOptionalProbe", OrdinaryOptionalOptionalCallbackRowVecCallback { rows ->
         check(rows == null)
         absentCalls++
     })
@@ -201,7 +201,7 @@ fun checkCallbackHandleCollections() {
     // Reflection propagates any exception from the generated nested bridge,
     // including cleanup of absent optional rows and empty inner collections.
     var emptyCalls = 0
-    val emptyBridge = rowBridge("callbackRowsNested", OrdinaryOptionalCallbackNestedRowVecVecCallback { groups ->
+    val emptyBridge = rowBridge("callbackRowsNestedProbe", OrdinaryOptionalCallbackNestedRowVecVecCallback { groups ->
         check(groups == listOf(listOf(null), emptyList<CallbackNestedRow?>()))
         emptyCalls++
     })

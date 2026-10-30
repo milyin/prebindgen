@@ -4423,6 +4423,11 @@ pub struct __PbBulk_Range_112cc4c6f3f785e3 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_Range_11e62943be787ed5 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i32_1233d7a0efd1d246 {
     pub v0: i32,
 }
@@ -4472,6 +4477,11 @@ pub struct __PbBulk_i32_i64_220da08e0b780b69 {
     pub v0: i32,
     pub v1: i64,
     pub v2: i64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_257bda408ee32755 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4637,6 +4647,11 @@ pub struct __PbBulk_Range_9e5469d83589e250 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_Range_a15a90b5b0cdaba7 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_Range_a4ae347219cc8258 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
@@ -4736,6 +4751,25 @@ pub struct __PbBulk_i32_Range_e5f8866547bdf41a {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_i32_i64_e6369465b61481d1 {
+    pub v0: i32,
+    pub v1: i64,
+    pub v2: ::prebindgen_jni_runtime::bulk::Range,
+    pub v3: i64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_i32_i64_e730ef3861c078bd {
+    pub v0: i32,
+    pub v1: i64,
+    pub v2: ::prebindgen_jni_runtime::bulk::Range,
+    pub v3: i64,
+    pub v4: i32,
+    pub v5: i64,
+    pub v6: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i64_i64_ee997f40a731b1db {
     pub v0: i64,
     pub v1: i64,
@@ -4785,8 +4819,8 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 1426008087648646986i64, if cfg!(target_endian = "big") { 1 } else { 0
-            }, ::core::mem::size_of:: < usize > () as i64
+            1i64, 894360410763660462i64, if cfg!(target_endian = "big") { 1 } else { 0 },
+            ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
             ([
@@ -4850,6 +4884,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_112cc4c6f3f785e3>(),
                 ::core::mem::align_of::<__PbBulk_Range_112cc4c6f3f785e3>(),
                 ::core::mem::offset_of!(__PbBulk_Range_112cc4c6f3f785e3, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_11e62943be787ed5>(),
+                ::core::mem::align_of::<__PbBulk_Range_11e62943be787ed5>(),
+                ::core::mem::offset_of!(__PbBulk_Range_11e62943be787ed5, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -4934,6 +4977,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v0),
                 ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v1),
                 ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v2),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_257bda408ee32755>(),
+                ::core::mem::align_of::<__PbBulk_Range_257bda408ee32755>(),
+                ::core::mem::offset_of!(__PbBulk_Range_257bda408ee32755, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -5218,6 +5270,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
+                ::core::mem::size_of::<__PbBulk_Range_a15a90b5b0cdaba7>(),
+                ::core::mem::align_of::<__PbBulk_Range_a15a90b5b0cdaba7>(),
+                ::core::mem::offset_of!(__PbBulk_Range_a15a90b5b0cdaba7, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
                 ::core::mem::size_of::<__PbBulk_Range_a4ae347219cc8258>(),
                 ::core::mem::align_of::<__PbBulk_Range_a4ae347219cc8258>(),
                 ::core::mem::offset_of!(__PbBulk_Range_a4ae347219cc8258, v0),
@@ -5387,6 +5448,33 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::align_of::<__PbBulk_i32_Range_e5f8866547bdf41a>(),
                 ::core::mem::offset_of!(__PbBulk_i32_Range_e5f8866547bdf41a, v0),
                 ::core::mem::offset_of!(__PbBulk_i32_Range_e5f8866547bdf41a, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i32_i64_e6369465b61481d1>(),
+                ::core::mem::align_of::<__PbBulk_i32_i64_e6369465b61481d1>(),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e6369465b61481d1, v0),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e6369465b61481d1, v1),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e6369465b61481d1, v2),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e6369465b61481d1, v3),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i32_i64_e730ef3861c078bd>(),
+                ::core::mem::align_of::<__PbBulk_i32_i64_e730ef3861c078bd>(),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v0),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v1),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v2),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v3),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v4),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v5),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_e730ef3861c078bd, v6),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -29435,7 +29523,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1owned_13e990348ad64d75b<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1owned_1probe_118cebe9ab6081eb8<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -29615,7 +29703,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     );
             };
             let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_rows_owned(
+            let source_value = perftest_flat::callback_rows_owned_probe(
                 __prebindgen_argument_0,
             );
             let _: () = {
@@ -29668,210 +29756,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1borrowed_157b23a1fb6669005<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
-                &mut jni_environment,
-                &p0_callback,
-                "([B)V",
-                "io.prebindgen.covertest.CallbackRowListCallback",
-            )?;
-            #[allow(unused_mut, clippy::collapsible_if)]
-            let p0_callback_value = move |
-                callback_source_0: &[perftest_flat::CallbackRow]|
-            {
-                p0_callback_retained
-                    .with_env(
-                        17i32,
-                        |callback_environment| {
-                            let mut callback_environment = callback_environment;
-                            let callback_value_0 = callback_source_0;
-                            {
-                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
-                                );
-                                let callback_arg_0_w1_source = &(callback_value_0);
-                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
-                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
-                                    callback_arg_0_w3,
-                                );
-                                let callback_arg_0_w1 = callback_arg_0_w0_writer
-                                    .rows(
-                                        callback_arg_0_w3,
-                                        ::core::mem::size_of::<
-                                            __PbBulk_i64_Range_f508a557893415ce,
-                                        >(),
-                                        ::core::mem::align_of::<
-                                            __PbBulk_i64_Range_f508a557893415ce,
-                                        >(),
-                                    )?;
-                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
-                                    .iter()
-                                    .enumerate()
-                                {
-                                    let callback_arg_0_w5_record = &(callback_arg_0_w2);
-                                    let mut callback_arg_0_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w5_record.first,
-                                        ),
-                                    });
-                                    let callback_arg_0_w5_f1_source = &callback_arg_0_w5_record
-                                        .label;
-                                    let callback_arg_0_w5_f1 = Some(
-                                        callback_arg_0_w0_writer
-                                            .append_buffer(callback_arg_0_w5_f1_source.as_bytes())?,
-                                    );
-                                    let mut callback_arg_0_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w5_record.second,
-                                        ),
-                                    });
-                                    callback_arg_0_w0_writer
-                                        .write(
-                                            (callback_arg_0_w1.offset as usize
-                                                + callback_arg_0_w4
-                                                    * ::core::mem::size_of::<
-                                                        __PbBulk_i64_Range_f508a557893415ce,
-                                                    >())
-                                                + ::core::mem::offset_of!(
-                                                    __PbBulk_i64_Range_f508a557893415ce, v0
-                                                ),
-                                            ((&mut *callback_arg_0_w5_f0)
-                                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                                    perftest_flat::CallbackRowResource,
-                                                >) as i64,
-                                        )?;
-                                    callback_arg_0_w0_writer
-                                        .range(
-                                            (callback_arg_0_w1.offset as usize
-                                                + callback_arg_0_w4
-                                                    * ::core::mem::size_of::<
-                                                        __PbBulk_i64_Range_f508a557893415ce,
-                                                    >())
-                                                + ::core::mem::offset_of!(
-                                                    __PbBulk_i64_Range_f508a557893415ce, v1
-                                                ),
-                                            callback_arg_0_w5_f1,
-                                        )?;
-                                    callback_arg_0_w0_writer
-                                        .write(
-                                            (callback_arg_0_w1.offset as usize
-                                                + callback_arg_0_w4
-                                                    * ::core::mem::size_of::<
-                                                        __PbBulk_i64_Range_f508a557893415ce,
-                                                    >())
-                                                + ::core::mem::offset_of!(
-                                                    __PbBulk_i64_Range_f508a557893415ce, v2
-                                                ),
-                                            ((&mut *callback_arg_0_w5_f2)
-                                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                                    perftest_flat::CallbackRowResource,
-                                                >) as i64,
-                                        )?;
-                                    callback_arg_0_w1_commits
-                                        .push(move || {
-                                            let _ = Box::into_raw(callback_arg_0_w5_f0);
-                                            let _ = Box::into_raw(callback_arg_0_w5_f2);
-                                        });
-                                }
-                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
-                                callback_arg_0_w0_writer
-                                    .range(
-                                        ::core::mem::offset_of!(
-                                            __PbBulk_Range_070bbcf38f849ff2, v0
-                                        ),
-                                        callback_arg_0_w1,
-                                    )?;
-                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                                    callback_environment
-                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
-                                        .map_err(|e| e.to_string())?,
-                                );
-                                let callback_java_0_0 = callback_arg_0_w0;
-                                let arguments = [
-                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        l: callback_java_0_0.as_raw(),
-                                    },
-                                ];
-                                {
-                                    for commit in callback_arg_0_w1_commits {
-                                        commit();
-                                    }
-                                }
-                                unsafe {
-                                    p0_callback_retained
-                                        .invoke(callback_environment, &arguments)
-                                }
-                            }
-                        },
-                    );
-            };
-            let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_rows_borrowed(
-                __prebindgen_argument_0,
-            );
-            let _: () = {
-                success_transferred = true;
-            };
-            Ok(())
-        }
-    }) {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1optional_10d52c7d730c41d75<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1optional_1probe_1bed3ad3142d5a05b<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -30132,7 +30017,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             let __prebindgen_argument_0 = p0_callback_value;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
             let __prebindgen_argument_1 = p1_w0;
-            let source_value = perftest_flat::callback_rows_optional(
+            let source_value = perftest_flat::callback_rows_optional_probe(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
@@ -30186,7 +30071,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1nested_15da56d6464038743<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1nested_1probe_188c40199386d8891<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -30624,7 +30509,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     );
             };
             let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_rows_nested(
+            let source_value = perftest_flat::callback_rows_nested_probe(
                 __prebindgen_argument_0,
             );
             let _: () = {
@@ -30677,7 +30562,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1pair_1a961f029753aca2e<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1pair_1probe_1de30e0e31a7df3e7<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -30998,7 +30883,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     );
             };
             let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_rows_pair(
+            let source_value = perftest_flat::callback_rows_pair_probe(
                 __prebindgen_argument_0,
             );
             let _: () = {
@@ -31051,162 +30936,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1handles_10883c9c06120fdc3<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
-                &mut jni_environment,
-                &p0_callback,
-                "([B)V",
-                "io.prebindgen.covertest.CallbackRowResourceVecCallback",
-            )?;
-            #[allow(unused_mut, clippy::collapsible_if)]
-            let p0_callback_value = move |
-                callback_source_0: Vec<perftest_flat::CallbackRowResource>|
-            {
-                p0_callback_retained
-                    .with_env(
-                        17i32,
-                        |callback_environment| {
-                            let mut callback_environment = callback_environment;
-                            let callback_value_0 = callback_source_0;
-                            {
-                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                                    ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>(),
-                                );
-                                let callback_arg_0_w1_source = callback_value_0;
-                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
-                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
-                                    callback_arg_0_w3,
-                                );
-                                let callback_arg_0_w1 = callback_arg_0_w0_writer
-                                    .rows(
-                                        callback_arg_0_w3,
-                                        ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
-                                        ::core::mem::align_of::<__PbBulk_i64_59a3202a71549093>(),
-                                    )?;
-                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
-                                    .into_iter()
-                                    .enumerate()
-                                {
-                                    let mut callback_arg_0_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: callback_arg_0_w2,
-                                    });
-                                    callback_arg_0_w0_writer
-                                        .write(
-                                            (callback_arg_0_w1.offset as usize
-                                                + callback_arg_0_w4
-                                                    * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>())
-                                                + ::core::mem::offset_of!(
-                                                    __PbBulk_i64_59a3202a71549093, v0
-                                                ),
-                                            ((&mut *callback_arg_0_w5)
-                                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                                    perftest_flat::CallbackRowResource,
-                                                >) as i64,
-                                        )?;
-                                    callback_arg_0_w1_commits
-                                        .push(move || {
-                                            let _ = Box::into_raw(callback_arg_0_w5);
-                                        });
-                                }
-                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
-                                callback_arg_0_w0_writer
-                                    .range(
-                                        ::core::mem::offset_of!(
-                                            __PbBulk_Range_f673a6355cb08de9, v0
-                                        ),
-                                        callback_arg_0_w1,
-                                    )?;
-                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                                    callback_environment
-                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
-                                        .map_err(|e| e.to_string())?,
-                                );
-                                let callback_java_0_0 = callback_arg_0_w0;
-                                let arguments = [
-                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        l: callback_java_0_0.as_raw(),
-                                    },
-                                ];
-                                {
-                                    for commit in callback_arg_0_w1_commits {
-                                        commit();
-                                    }
-                                }
-                                unsafe {
-                                    p0_callback_retained
-                                        .invoke(callback_environment, &arguments)
-                                }
-                            }
-                        },
-                    );
-            };
-            let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_row_handles(
-                __prebindgen_argument_0,
-            );
-            let _: () = {
-                success_transferred = true;
-            };
-            Ok(())
-        }
-    }) {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1bab23b0a8a8f4840<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1probe_1a4ac030f6ad6a92d<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -31382,7 +31112,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     );
             };
             let __prebindgen_argument_0 = p0_callback_value;
-            let source_value = perftest_flat::callback_rows_transferred(
+            let source_value = perftest_flat::callback_rows_transferred_probe(
                 __prebindgen_argument_0,
             );
             let _: () = {
@@ -31435,7 +31165,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1pair_1e141e947123b4d58<
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1pair_1probe_143ce9ece795705de<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -31740,6 +31470,2103 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 }
                                 {
                                     for commit in callback_arg_1_w0_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_transferred_pair_probe(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1owned_13e990348ad64d75b<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B)V",
+                "io.prebindgen.covertest.CallbackRowVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<perftest_flat::CallbackRow>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                                );
+                                let callback_arg_0_w1_source = callback_value_0;
+                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
+                                    callback_arg_0_w3,
+                                );
+                                let callback_arg_0_w1 = callback_arg_0_w0_writer
+                                    .rows(
+                                        callback_arg_0_w3,
+                                        ::core::mem::size_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                        ::core::mem::align_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                    )?;
+                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w5_record = &(callback_arg_0_w2);
+                                    let mut callback_arg_0_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.first,
+                                        ),
+                                    });
+                                    let callback_arg_0_w5_f1_source = &callback_arg_0_w5_record
+                                        .label;
+                                    let callback_arg_0_w5_f1 = Some(
+                                        callback_arg_0_w0_writer
+                                            .append_buffer(callback_arg_0_w5_f1_source.as_bytes())?,
+                                    );
+                                    let mut callback_arg_0_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.second,
+                                        ),
+                                    });
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .range(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v1
+                                                ),
+                                            callback_arg_0_w5_f1,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v2
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w5_f0);
+                                            let _ = Box::into_raw(callback_arg_0_w5_f2);
+                                        });
+                                }
+                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
+                                callback_arg_0_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_070bbcf38f849ff2, v0
+                                        ),
+                                        callback_arg_0_w1,
+                                    )?;
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_owned(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1borrowed_157b23a1fb6669005<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B)V",
+                "io.prebindgen.covertest.CallbackRowListCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: &[perftest_flat::CallbackRow]|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                                );
+                                let callback_arg_0_w1_source = &(callback_value_0);
+                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
+                                    callback_arg_0_w3,
+                                );
+                                let callback_arg_0_w1 = callback_arg_0_w0_writer
+                                    .rows(
+                                        callback_arg_0_w3,
+                                        ::core::mem::size_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                        ::core::mem::align_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                    )?;
+                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
+                                    .iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w5_record = &(callback_arg_0_w2);
+                                    let mut callback_arg_0_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.first,
+                                        ),
+                                    });
+                                    let callback_arg_0_w5_f1_source = &callback_arg_0_w5_record
+                                        .label;
+                                    let callback_arg_0_w5_f1 = Some(
+                                        callback_arg_0_w0_writer
+                                            .append_buffer(callback_arg_0_w5_f1_source.as_bytes())?,
+                                    );
+                                    let mut callback_arg_0_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.second,
+                                        ),
+                                    });
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .range(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v1
+                                                ),
+                                            callback_arg_0_w5_f1,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v2
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w5_f0);
+                                            let _ = Box::into_raw(callback_arg_0_w5_f2);
+                                        });
+                                }
+                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
+                                callback_arg_0_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_070bbcf38f849ff2, v0
+                                        ),
+                                        callback_arg_0_w1,
+                                    )?;
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_borrowed(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1optional_10d52c7d730c41d75<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    p1_w1: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B)V",
+                "io.prebindgen.covertest.OptionalOptionalCallbackRowVecCallback",
+            )?;
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Option<Vec<Option<perftest_flat::CallbackRow>>>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let (
+                                    _,
+                                    (callback_arg_0_w0_value0,),
+                                    callback_arg_0_w0_commit,
+                                ) = if let Some(callback_arg_0_w1) = callback_value_0 {
+                                    let mut callback_arg_0_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                        ::core::mem::size_of::<__PbBulk_Range_11e62943be787ed5>(),
+                                    );
+                                    let callback_arg_0_w3_source = callback_arg_0_w1;
+                                    let callback_arg_0_w5 = callback_arg_0_w3_source.len();
+                                    let mut callback_arg_0_w3_commits = Vec::with_capacity(
+                                        callback_arg_0_w5,
+                                    );
+                                    let callback_arg_0_w3 = callback_arg_0_w2_writer
+                                        .rows(
+                                            callback_arg_0_w5,
+                                            ::core::mem::size_of::<__PbBulk_i32_i64_e6369465b61481d1>(),
+                                            ::core::mem::align_of::<__PbBulk_i32_i64_e6369465b61481d1>(),
+                                        )?;
+                                    for (callback_arg_0_w6, callback_arg_0_w4) in callback_arg_0_w3_source
+                                        .into_iter()
+                                        .enumerate()
+                                    {
+                                        let (
+                                            callback_arg_0_w7,
+                                            (
+                                                callback_arg_0_w7_value0,
+                                                callback_arg_0_w7_value1,
+                                                callback_arg_0_w7_value2,
+                                            ),
+                                            callback_arg_0_w7_commit,
+                                        ) = if let Some(callback_arg_0_w8) = callback_arg_0_w4 {
+                                            let callback_arg_0_w9_record = &(callback_arg_0_w8);
+                                            let mut callback_arg_0_w9_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                                value: ::core::clone::Clone::clone(
+                                                    &callback_arg_0_w9_record.first,
+                                                ),
+                                            });
+                                            let callback_arg_0_w9_f1_source = &callback_arg_0_w9_record
+                                                .label;
+                                            let callback_arg_0_w9_f1 = Some(
+                                                callback_arg_0_w2_writer
+                                                    .append_buffer(callback_arg_0_w9_f1_source.as_bytes())?,
+                                            );
+                                            let mut callback_arg_0_w9_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                                value: ::core::clone::Clone::clone(
+                                                    &callback_arg_0_w9_record.second,
+                                                ),
+                                            });
+                                            let callback_arg_0_w7_values = (
+                                                (&mut *callback_arg_0_w9_f0)
+                                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                                        perftest_flat::CallbackRowResource,
+                                                    >,
+                                                callback_arg_0_w9_f1,
+                                                (&mut *callback_arg_0_w9_f2)
+                                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                                        perftest_flat::CallbackRowResource,
+                                                    >,
+                                            );
+                                            (
+                                                1i32,
+                                                callback_arg_0_w7_values,
+                                                Some(move || {
+                                                    let _ = Box::into_raw(callback_arg_0_w9_f0);
+                                                    let _ = Box::into_raw(callback_arg_0_w9_f2);
+                                                }),
+                                            )
+                                        } else {
+                                            (
+                                                0i32,
+                                                (std::ptr::null_mut(), None, std::ptr::null_mut()),
+                                                None,
+                                            )
+                                        };
+                                        callback_arg_0_w2_writer
+                                            .write(
+                                                (callback_arg_0_w3.offset as usize
+                                                    + callback_arg_0_w6
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e6369465b61481d1,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e6369465b61481d1, v0
+                                                    ),
+                                                callback_arg_0_w7,
+                                            )?;
+                                        callback_arg_0_w2_writer
+                                            .write(
+                                                (callback_arg_0_w3.offset as usize
+                                                    + callback_arg_0_w6
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e6369465b61481d1,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e6369465b61481d1, v1
+                                                    ),
+                                                (callback_arg_0_w7_value0) as i64,
+                                            )?;
+                                        callback_arg_0_w2_writer
+                                            .range(
+                                                (callback_arg_0_w3.offset as usize
+                                                    + callback_arg_0_w6
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e6369465b61481d1,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e6369465b61481d1, v2
+                                                    ),
+                                                callback_arg_0_w7_value1,
+                                            )?;
+                                        callback_arg_0_w2_writer
+                                            .write(
+                                                (callback_arg_0_w3.offset as usize
+                                                    + callback_arg_0_w6
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e6369465b61481d1,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e6369465b61481d1, v3
+                                                    ),
+                                                (callback_arg_0_w7_value2) as i64,
+                                            )?;
+                                        callback_arg_0_w3_commits
+                                            .push(move || {
+                                                if let Some(callback_arg_0_w7_action) = callback_arg_0_w7_commit {
+                                                    callback_arg_0_w7_action();
+                                                }
+                                            });
+                                    }
+                                    let callback_arg_0_w3 = Some(callback_arg_0_w3);
+                                    callback_arg_0_w2_writer
+                                        .range(
+                                            ::core::mem::offset_of!(
+                                                __PbBulk_Range_11e62943be787ed5, v0
+                                            ),
+                                            callback_arg_0_w3,
+                                        )?;
+                                    let callback_arg_0_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                        callback_environment
+                                            .byte_array_from_slice(callback_arg_0_w2_writer.bytes())
+                                            .map_err(|e| e.to_string())?,
+                                    );
+                                    let callback_arg_0_w0_values = (callback_arg_0_w2,);
+                                    (
+                                        1i32,
+                                        callback_arg_0_w0_values,
+                                        Some(move || {
+                                            for commit in callback_arg_0_w3_commits {
+                                                commit();
+                                            }
+                                        }),
+                                    )
+                                } else {
+                                    (
+                                        0i32,
+                                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                                        None,
+                                    )
+                                };
+                                let callback_java_0_0 = callback_arg_0_w0_value0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    if let Some(callback_arg_0_w0_action) = callback_arg_0_w0_commit {
+                                        callback_arg_0_w0_action();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::callback_rows_optional(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1nested_15da56d6464038743<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B)V",
+                "io.prebindgen.covertest.OptionalCallbackNestedRowVecVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<Vec<Option<perftest_flat::CallbackNestedRow>>>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_257bda408ee32755>(),
+                                );
+                                let callback_arg_0_w1_source = callback_value_0;
+                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
+                                    callback_arg_0_w3,
+                                );
+                                let callback_arg_0_w1 = callback_arg_0_w0_writer
+                                    .rows(
+                                        callback_arg_0_w3,
+                                        ::core::mem::size_of::<__PbBulk_Range_a15a90b5b0cdaba7>(),
+                                        ::core::mem::align_of::<__PbBulk_Range_a15a90b5b0cdaba7>(),
+                                    )?;
+                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w5_source = callback_arg_0_w2;
+                                    let callback_arg_0_w7 = callback_arg_0_w5_source.len();
+                                    let mut callback_arg_0_w5_commits = Vec::with_capacity(
+                                        callback_arg_0_w7,
+                                    );
+                                    let callback_arg_0_w5 = callback_arg_0_w0_writer
+                                        .rows(
+                                            callback_arg_0_w7,
+                                            ::core::mem::size_of::<__PbBulk_i32_i64_e730ef3861c078bd>(),
+                                            ::core::mem::align_of::<__PbBulk_i32_i64_e730ef3861c078bd>(),
+                                        )?;
+                                    for (callback_arg_0_w8, callback_arg_0_w6) in callback_arg_0_w5_source
+                                        .into_iter()
+                                        .enumerate()
+                                    {
+                                        let (
+                                            callback_arg_0_w9,
+                                            (
+                                                callback_arg_0_w9_value0,
+                                                callback_arg_0_w9_value1,
+                                                callback_arg_0_w9_value2,
+                                                callback_arg_0_w9_value3,
+                                                callback_arg_0_w9_value4,
+                                                callback_arg_0_w9_value5,
+                                            ),
+                                            callback_arg_0_w9_commit,
+                                        ) = if let Some(callback_arg_0_w10) = callback_arg_0_w6 {
+                                            let callback_arg_0_w11_record = callback_arg_0_w10;
+                                            let callback_arg_0_w11_f0_record = callback_arg_0_w11_record
+                                                .row;
+                                            let mut callback_arg_0_w11_f0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                                value: callback_arg_0_w11_f0_record.first,
+                                            });
+                                            let callback_arg_0_w11_f0_f1_source = callback_arg_0_w11_f0_record
+                                                .label;
+                                            let callback_arg_0_w11_f0_f1 = Some(
+                                                callback_arg_0_w0_writer
+                                                    .append_buffer(callback_arg_0_w11_f0_f1_source.as_bytes())?,
+                                            );
+                                            let mut callback_arg_0_w11_f0_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                                value: callback_arg_0_w11_f0_record.second,
+                                            });
+                                            let (
+                                                callback_arg_0_w11_f1_present,
+                                                (
+                                                    callback_arg_0_w11_f1_present_value0,
+                                                    callback_arg_0_w11_f1_present_value1,
+                                                ),
+                                                callback_arg_0_w11_f1_present_commit,
+                                            ) = if let Some(callback_arg_0_w11_f1_payload) = callback_arg_0_w11_record
+                                                .detail
+                                            {
+                                                let callback_arg_0_w11_f1_some_record = callback_arg_0_w11_f1_payload;
+                                                let (
+                                                    _,
+                                                    (callback_arg_0_w11_f1_some_f0_present_value0,),
+                                                    callback_arg_0_w11_f1_some_f0_present_commit,
+                                                ) = if let Some(callback_arg_0_w11_f1_some_f0_payload) = callback_arg_0_w11_f1_some_record
+                                                    .resource
+                                                {
+                                                    let mut callback_arg_0_w11_f1_some_f0_some = Box::new(::prebindgen_jni_runtime::Allocation {
+                                                        value: callback_arg_0_w11_f1_some_f0_payload,
+                                                    });
+                                                    let callback_arg_0_w11_f1_some_f0_present_values = (
+                                                        (&mut *callback_arg_0_w11_f1_some_f0_some)
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                perftest_flat::CallbackRowResource,
+                                                            >,
+                                                    );
+                                                    (
+                                                        1i32,
+                                                        callback_arg_0_w11_f1_some_f0_present_values,
+                                                        Some(move || {
+                                                            let _ = Box::into_raw(callback_arg_0_w11_f1_some_f0_some);
+                                                        }),
+                                                    )
+                                                } else {
+                                                    (0i32, (std::ptr::null_mut(),), None)
+                                                };
+                                                let callback_arg_0_w11_f1_some_f1_source = callback_arg_0_w11_f1_some_record
+                                                    .note;
+                                                let callback_arg_0_w11_f1_some_f1 = Some(
+                                                    callback_arg_0_w0_writer
+                                                        .append_buffer(
+                                                            callback_arg_0_w11_f1_some_f1_source.as_bytes(),
+                                                        )?,
+                                                );
+                                                let callback_arg_0_w11_f1_present_values = (
+                                                    callback_arg_0_w11_f1_some_f0_present_value0,
+                                                    callback_arg_0_w11_f1_some_f1,
+                                                );
+                                                (
+                                                    1i32,
+                                                    callback_arg_0_w11_f1_present_values,
+                                                    Some(move || {
+                                                        if let Some(callback_arg_0_w11_f1_some_f0_present_action) = callback_arg_0_w11_f1_some_f0_present_commit {
+                                                            callback_arg_0_w11_f1_some_f0_present_action();
+                                                        }
+                                                    }),
+                                                )
+                                            } else {
+                                                (0i32, (std::ptr::null_mut(), None), None)
+                                            };
+                                            let callback_arg_0_w9_values = (
+                                                (&mut *callback_arg_0_w11_f0_f0)
+                                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                                        perftest_flat::CallbackRowResource,
+                                                    >,
+                                                callback_arg_0_w11_f0_f1,
+                                                (&mut *callback_arg_0_w11_f0_f2)
+                                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                                        perftest_flat::CallbackRowResource,
+                                                    >,
+                                                callback_arg_0_w11_f1_present,
+                                                callback_arg_0_w11_f1_present_value0,
+                                                callback_arg_0_w11_f1_present_value1,
+                                            );
+                                            (
+                                                1i32,
+                                                callback_arg_0_w9_values,
+                                                Some(move || {
+                                                    let _ = Box::into_raw(callback_arg_0_w11_f0_f0);
+                                                    let _ = Box::into_raw(callback_arg_0_w11_f0_f2);
+                                                    if let Some(callback_arg_0_w11_f1_present_action) = callback_arg_0_w11_f1_present_commit {
+                                                        callback_arg_0_w11_f1_present_action();
+                                                    }
+                                                }),
+                                            )
+                                        } else {
+                                            (
+                                                0i32,
+                                                (
+                                                    std::ptr::null_mut(),
+                                                    None,
+                                                    std::ptr::null_mut(),
+                                                    0,
+                                                    std::ptr::null_mut(),
+                                                    None,
+                                                ),
+                                                None,
+                                            )
+                                        };
+                                        callback_arg_0_w0_writer
+                                            .write(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v0
+                                                    ),
+                                                callback_arg_0_w9,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .write(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v1
+                                                    ),
+                                                (callback_arg_0_w9_value0) as i64,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .range(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v2
+                                                    ),
+                                                callback_arg_0_w9_value1,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .write(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v3
+                                                    ),
+                                                (callback_arg_0_w9_value2) as i64,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .write(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v4
+                                                    ),
+                                                callback_arg_0_w9_value3,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .write(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v5
+                                                    ),
+                                                (callback_arg_0_w9_value4) as i64,
+                                            )?;
+                                        callback_arg_0_w0_writer
+                                            .range(
+                                                (callback_arg_0_w5.offset as usize
+                                                    + callback_arg_0_w8
+                                                        * ::core::mem::size_of::<
+                                                            __PbBulk_i32_i64_e730ef3861c078bd,
+                                                        >())
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_i32_i64_e730ef3861c078bd, v6
+                                                    ),
+                                                callback_arg_0_w9_value5,
+                                            )?;
+                                        callback_arg_0_w5_commits
+                                            .push(move || {
+                                                if let Some(callback_arg_0_w9_action) = callback_arg_0_w9_commit {
+                                                    callback_arg_0_w9_action();
+                                                }
+                                            });
+                                    }
+                                    let callback_arg_0_w5 = Some(callback_arg_0_w5);
+                                    callback_arg_0_w0_writer
+                                        .range(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<__PbBulk_Range_a15a90b5b0cdaba7>())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_Range_a15a90b5b0cdaba7, v0
+                                                ),
+                                            callback_arg_0_w5,
+                                        )?;
+                                    callback_arg_0_w1_commits
+                                        .push(move || {
+                                            for commit in callback_arg_0_w5_commits {
+                                                commit();
+                                            }
+                                        });
+                                }
+                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
+                                callback_arg_0_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_257bda408ee32755, v0
+                                        ),
+                                        callback_arg_0_w1,
+                                    )?;
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_nested(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1pair_1a961f029753aca2e<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B[B)V",
+                "io.prebindgen.covertest.CallbackRowVecCallbackRowVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<perftest_flat::CallbackRow>,
+                callback_source_1: Vec<perftest_flat::CallbackRow>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            let callback_value_1 = callback_source_1;
+                            {
+                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                                );
+                                let callback_arg_0_w1_source = callback_value_0;
+                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
+                                    callback_arg_0_w3,
+                                );
+                                let callback_arg_0_w1 = callback_arg_0_w0_writer
+                                    .rows(
+                                        callback_arg_0_w3,
+                                        ::core::mem::size_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                        ::core::mem::align_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                    )?;
+                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w5_record = &(callback_arg_0_w2);
+                                    let mut callback_arg_0_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.first,
+                                        ),
+                                    });
+                                    let callback_arg_0_w5_f1_source = &callback_arg_0_w5_record
+                                        .label;
+                                    let callback_arg_0_w5_f1 = Some(
+                                        callback_arg_0_w0_writer
+                                            .append_buffer(callback_arg_0_w5_f1_source.as_bytes())?,
+                                    );
+                                    let mut callback_arg_0_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_0_w5_record.second,
+                                        ),
+                                    });
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .range(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v1
+                                                ),
+                                            callback_arg_0_w5_f1,
+                                        )?;
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v2
+                                                ),
+                                            ((&mut *callback_arg_0_w5_f2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w5_f0);
+                                            let _ = Box::into_raw(callback_arg_0_w5_f2);
+                                        });
+                                }
+                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
+                                callback_arg_0_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_070bbcf38f849ff2, v0
+                                        ),
+                                        callback_arg_0_w1,
+                                    )?;
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let mut callback_arg_1_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                                );
+                                let callback_arg_1_w1_source = callback_value_1;
+                                let callback_arg_1_w3 = callback_arg_1_w1_source.len();
+                                let mut callback_arg_1_w1_commits = Vec::with_capacity(
+                                    callback_arg_1_w3,
+                                );
+                                let callback_arg_1_w1 = callback_arg_1_w0_writer
+                                    .rows(
+                                        callback_arg_1_w3,
+                                        ::core::mem::size_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                        ::core::mem::align_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                    )?;
+                                for (callback_arg_1_w4, callback_arg_1_w2) in callback_arg_1_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_1_w5_record = &(callback_arg_1_w2);
+                                    let mut callback_arg_1_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_1_w5_record.first,
+                                        ),
+                                    });
+                                    let callback_arg_1_w5_f1_source = &callback_arg_1_w5_record
+                                        .label;
+                                    let callback_arg_1_w5_f1 = Some(
+                                        callback_arg_1_w0_writer
+                                            .append_buffer(callback_arg_1_w5_f1_source.as_bytes())?,
+                                    );
+                                    let mut callback_arg_1_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_1_w5_record.second,
+                                        ),
+                                    });
+                                    callback_arg_1_w0_writer
+                                        .write(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                                ),
+                                            ((&mut *callback_arg_1_w5_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_1_w0_writer
+                                        .range(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v1
+                                                ),
+                                            callback_arg_1_w5_f1,
+                                        )?;
+                                    callback_arg_1_w0_writer
+                                        .write(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v2
+                                                ),
+                                            ((&mut *callback_arg_1_w5_f2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_1_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_1_w5_f0);
+                                            let _ = Box::into_raw(callback_arg_1_w5_f2);
+                                        });
+                                }
+                                let callback_arg_1_w1 = Some(callback_arg_1_w1);
+                                callback_arg_1_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_070bbcf38f849ff2, v0
+                                        ),
+                                        callback_arg_1_w1,
+                                    )?;
+                                let callback_arg_1_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_1_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let callback_java_1_0 = callback_arg_1_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_1_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                {
+                                    for commit in callback_arg_1_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_pair(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1handles_10883c9c06120fdc3<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([B)V",
+                "io.prebindgen.covertest.CallbackRowResourceVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<perftest_flat::CallbackRowResource>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let mut callback_arg_0_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>(),
+                                );
+                                let callback_arg_0_w1_source = callback_value_0;
+                                let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                let mut callback_arg_0_w1_commits = Vec::with_capacity(
+                                    callback_arg_0_w3,
+                                );
+                                let callback_arg_0_w1 = callback_arg_0_w0_writer
+                                    .rows(
+                                        callback_arg_0_w3,
+                                        ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
+                                        ::core::mem::align_of::<__PbBulk_i64_59a3202a71549093>(),
+                                    )?;
+                                for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let mut callback_arg_0_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: callback_arg_0_w2,
+                                    });
+                                    callback_arg_0_w0_writer
+                                        .write(
+                                            (callback_arg_0_w1.offset as usize
+                                                + callback_arg_0_w4
+                                                    * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_59a3202a71549093, v0
+                                                ),
+                                            ((&mut *callback_arg_0_w5)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_0_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w5);
+                                        });
+                                }
+                                let callback_arg_0_w1 = Some(callback_arg_0_w1);
+                                callback_arg_0_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_f673a6355cb08de9, v0
+                                        ),
+                                        callback_arg_0_w1,
+                                    )?;
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_0_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w1_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_row_handles(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1bab23b0a8a8f4840<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([Ljava/lang/Object;)V",
+                "io.prebindgen.covertest.CallbackTransferredRowVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<perftest_flat::CallbackTransferredRow>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let callback_arg_0_w0_source = callback_value_0;
+                                let callback_arg_0_w2 = callback_arg_0_w0_source.len();
+                                let mut callback_arg_0_w0_commits = Vec::with_capacity(
+                                    callback_arg_0_w2,
+                                );
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
+                                    &mut callback_environment,
+                                    callback_arg_0_w2,
+                                )?;
+                                for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w0_frame = unsafe {
+                                        ::prebindgen_jni_runtime::LocalFrame::new(
+                                            &callback_environment,
+                                            11i32,
+                                        )
+                                    }?;
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
+                                    let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: callback_arg_0_w4_record.first,
+                                    });
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
+                                    let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: callback_arg_0_w4_record.second,
+                                    });
+                                    let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
+                                        &mut callback_environment,
+                                        3usize,
+                                    )?;
+                                    let object = callback_environment
+                                        .call_static_method(
+                                            "java/lang/Long",
+                                            "valueOf",
+                                            "(J)Ljava/lang/Long;",
+                                            &[
+                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                    ((&mut *callback_arg_0_w4_f0)
+                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                            perftest_flat::CallbackRowResource,
+                                                        >) as i64,
+                                                ),
+                                            ],
+                                        )
+                                        .and_then(|v| v.l())
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            0i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    let object = callback_arg_0_w4_f1;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            1i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    let object = callback_environment
+                                        .call_static_method(
+                                            "java/lang/Long",
+                                            "valueOf",
+                                            "(J)Ljava/lang/Long;",
+                                            &[
+                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                    ((&mut *callback_arg_0_w4_f2)
+                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                            perftest_flat::CallbackRowResource,
+                                                        >) as i64,
+                                                ),
+                                            ],
+                                        )
+                                        .and_then(|v| v.l())
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            2i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0,
+                                            callback_arg_0_w3 as i32,
+                                            &callback_arg_0_w0_row,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    drop(callback_arg_0_w0_frame);
+                                    callback_arg_0_w0_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w4_f0);
+                                            let _ = Box::into_raw(callback_arg_0_w4_f2);
+                                        });
+                                }
+                                let callback_arg_0_w0 = Some(callback_arg_0_w0);
+                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
+                                    Some(value) => {
+                                        callback_environment
+                                            .new_local_ref(value)
+                                            .map_err(|e| e.to_string())?
+                                    }
+                                    None => {
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                    }
+                                };
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w0_commits {
+                                        commit();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::callback_rows_transferred(
+                __prebindgen_argument_0,
+            );
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1pair_1e141e947123b4d58<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "([Ljava/lang/Object;[B)V",
+                "io.prebindgen.covertest.CallbackTransferredRowVecCallbackRowVecCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |
+                callback_source_0: Vec<perftest_flat::CallbackTransferredRow>,
+                callback_source_1: Vec<perftest_flat::CallbackRow>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            let callback_value_1 = callback_source_1;
+                            {
+                                let callback_arg_0_w0_source = callback_value_0;
+                                let callback_arg_0_w2 = callback_arg_0_w0_source.len();
+                                let mut callback_arg_0_w0_commits = Vec::with_capacity(
+                                    callback_arg_0_w2,
+                                );
+                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
+                                    &mut callback_environment,
+                                    callback_arg_0_w2,
+                                )?;
+                                for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_0_w0_frame = unsafe {
+                                        ::prebindgen_jni_runtime::LocalFrame::new(
+                                            &callback_environment,
+                                            11i32,
+                                        )
+                                    }?;
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
+                                    let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: callback_arg_0_w4_record.first,
+                                    });
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
+                                    let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: callback_arg_0_w4_record.second,
+                                    });
+                                    let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
+                                        &mut callback_environment,
+                                        3usize,
+                                    )?;
+                                    let object = callback_environment
+                                        .call_static_method(
+                                            "java/lang/Long",
+                                            "valueOf",
+                                            "(J)Ljava/lang/Long;",
+                                            &[
+                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                    ((&mut *callback_arg_0_w4_f0)
+                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                            perftest_flat::CallbackRowResource,
+                                                        >) as i64,
+                                                ),
+                                            ],
+                                        )
+                                        .and_then(|v| v.l())
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            0i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    let object = callback_arg_0_w4_f1;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            1i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    let object = callback_environment
+                                        .call_static_method(
+                                            "java/lang/Long",
+                                            "valueOf",
+                                            "(J)Ljava/lang/Long;",
+                                            &[
+                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                    ((&mut *callback_arg_0_w4_f2)
+                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                            perftest_flat::CallbackRowResource,
+                                                        >) as i64,
+                                                ),
+                                            ],
+                                        )
+                                        .and_then(|v| v.l())
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0_row,
+                                            2i32,
+                                            &object,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .delete_local_ref(object)
+                                        .map_err(|e| e.to_string())?;
+                                    callback_environment
+                                        .set_object_array_element(
+                                            &callback_arg_0_w0,
+                                            callback_arg_0_w3 as i32,
+                                            &callback_arg_0_w0_row,
+                                        )
+                                        .map_err(|e| e.to_string())?;
+                                    drop(callback_arg_0_w0_frame);
+                                    callback_arg_0_w0_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_0_w4_f0);
+                                            let _ = Box::into_raw(callback_arg_0_w4_f2);
+                                        });
+                                }
+                                let callback_arg_0_w0 = Some(callback_arg_0_w0);
+                                let mut callback_arg_1_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                                );
+                                let callback_arg_1_w1_source = callback_value_1;
+                                let callback_arg_1_w3 = callback_arg_1_w1_source.len();
+                                let mut callback_arg_1_w1_commits = Vec::with_capacity(
+                                    callback_arg_1_w3,
+                                );
+                                let callback_arg_1_w1 = callback_arg_1_w0_writer
+                                    .rows(
+                                        callback_arg_1_w3,
+                                        ::core::mem::size_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                        ::core::mem::align_of::<
+                                            __PbBulk_i64_Range_f508a557893415ce,
+                                        >(),
+                                    )?;
+                                for (callback_arg_1_w4, callback_arg_1_w2) in callback_arg_1_w1_source
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let callback_arg_1_w5_record = &(callback_arg_1_w2);
+                                    let mut callback_arg_1_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_1_w5_record.first,
+                                        ),
+                                    });
+                                    let callback_arg_1_w5_f1_source = &callback_arg_1_w5_record
+                                        .label;
+                                    let callback_arg_1_w5_f1 = Some(
+                                        callback_arg_1_w0_writer
+                                            .append_buffer(callback_arg_1_w5_f1_source.as_bytes())?,
+                                    );
+                                    let mut callback_arg_1_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                        value: ::core::clone::Clone::clone(
+                                            &callback_arg_1_w5_record.second,
+                                        ),
+                                    });
+                                    callback_arg_1_w0_writer
+                                        .write(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                                ),
+                                            ((&mut *callback_arg_1_w5_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_1_w0_writer
+                                        .range(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v1
+                                                ),
+                                            callback_arg_1_w5_f1,
+                                        )?;
+                                    callback_arg_1_w0_writer
+                                        .write(
+                                            (callback_arg_1_w1.offset as usize
+                                                + callback_arg_1_w4
+                                                    * ::core::mem::size_of::<
+                                                        __PbBulk_i64_Range_f508a557893415ce,
+                                                    >())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_Range_f508a557893415ce, v2
+                                                ),
+                                            ((&mut *callback_arg_1_w5_f2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackRowResource,
+                                                >) as i64,
+                                        )?;
+                                    callback_arg_1_w1_commits
+                                        .push(move || {
+                                            let _ = Box::into_raw(callback_arg_1_w5_f0);
+                                            let _ = Box::into_raw(callback_arg_1_w5_f2);
+                                        });
+                                }
+                                let callback_arg_1_w1 = Some(callback_arg_1_w1);
+                                callback_arg_1_w0_writer
+                                    .range(
+                                        ::core::mem::offset_of!(
+                                            __PbBulk_Range_070bbcf38f849ff2, v0
+                                        ),
+                                        callback_arg_1_w1,
+                                    )?;
+                                let callback_arg_1_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                    callback_environment
+                                        .byte_array_from_slice(callback_arg_1_w0_writer.bytes())
+                                        .map_err(|e| e.to_string())?,
+                                );
+                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
+                                    Some(value) => {
+                                        callback_environment
+                                            .new_local_ref(value)
+                                            .map_err(|e| e.to_string())?
+                                    }
+                                    None => {
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                    }
+                                };
+                                let callback_java_1_0 = callback_arg_1_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_1_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    for commit in callback_arg_0_w0_commits {
+                                        commit();
+                                    }
+                                }
+                                {
+                                    for commit in callback_arg_1_w1_commits {
                                         commit();
                                     }
                                 }
