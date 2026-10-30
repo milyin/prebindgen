@@ -182,7 +182,8 @@ impl Codec for CCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {

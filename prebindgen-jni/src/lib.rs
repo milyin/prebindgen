@@ -222,11 +222,23 @@ pub struct JniGenBuilder {
     init: String,
     packages: Vec<PackageDecl>,
     error_classes: Vec<(syn::Type, String)>,
+    bulk_collection_outputs: Option<bool>,
 }
 impl JniGenBuilder {
     /// Create an empty builder; equivalent to [`JniGen::builder`].
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Use bulk transport by default for materialized collection outputs.
+    ///
+    /// Enabled by default for Rust-to-Kotlin collections, including callback
+    /// arguments. Direct byte buffers retain their existing representation.
+    /// Explicit ordinary collection expansions and callback/fold delivery bypass
+    /// this default; nested automatic collections inherit an ordinary choice.
+    /// Set `false` to retain ordinary defaults; explicit `.bulk()` still works.
+    pub fn set_bulk_collection_outputs(mut self, enabled: bool) -> Self {
+        self.bulk_collection_outputs = Some(enabled);
+        self
     }
     /// Adjust the selected flat model before declaration defaults are applied.
     ///
@@ -427,6 +439,7 @@ impl JniGenBuilder {
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
+            bulk_collection_outputs: self.bulk_collection_outputs.unwrap_or(true),
         };
         let mut declarations = Vec::new();
         let mut class_types = BTreeSet::new();
@@ -523,14 +536,14 @@ impl JniGenBuilder {
             }
         }
         let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
+        validate_declaration_names(&flat)?;
+        data::prepare(&mut flat)?;
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
             self.outputs,
             self.error_mappers,
         )?;
-        validate_declaration_names(&flat)?;
-        data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
         let codec = data::DataCodec {
             callback_outputs: Some(&output_defaults),
@@ -811,6 +824,9 @@ impl Codec for JniCodec {
         plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
+        flat.metadata.bulk_collection_outputs
+    }
     fn sequence_input(
         &self,
         _: &(),
@@ -833,7 +849,8 @@ impl Codec for JniCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, index, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {

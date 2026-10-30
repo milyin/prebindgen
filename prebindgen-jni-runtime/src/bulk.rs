@@ -146,25 +146,25 @@ impl Writer {
     pub fn range(&mut self, offset: usize, value: Option<Range>) -> Result<()> {
         self.write(offset, value.unwrap_or(Range::ABSENT))
     }
+    /// Append a payload while its source is alive and return its frame descriptor.
+    pub fn append_buffer(&mut self, value: &[u8]) -> Result<Range> {
+        let start = self.bytes.len();
+        let end = start
+            .checked_add(value.len())
+            .ok_or("bulk payload length overflow")?;
+        if end > i32::MAX as usize {
+            return Err("bulk frame exceeds JVM array limit".into());
+        }
+        self.bytes.extend_from_slice(value);
+        Ok(Range {
+            offset: start as u64,
+            length: value.len() as u64,
+        })
+    }
     /// Append a byte payload and write its descriptor, preserving null versus empty.
     pub fn buffer(&mut self, offset: usize, value: Option<&[u8]>) -> Result<()> {
-        let r = if let Some(v) = value {
-            let start = self.bytes.len();
-            let end = start
-                .checked_add(v.len())
-                .ok_or("bulk payload length overflow")?;
-            if end > i32::MAX as usize {
-                return Err("bulk frame exceeds JVM array limit".into());
-            }
-            self.bytes.extend_from_slice(v);
-            Range {
-                offset: start as u64,
-                length: v.len() as u64,
-            }
-        } else {
-            Range::ABSENT
-        };
-        self.write(offset, r)
+        let range = value.map(|bytes| self.append_buffer(bytes)).transpose()?;
+        self.range(offset, range)
     }
     /// Encoded bytes without compacting or copying the native vector.
     pub fn bytes(&self) -> &[u8] {
