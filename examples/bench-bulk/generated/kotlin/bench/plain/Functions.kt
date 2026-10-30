@@ -52,6 +52,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.`a`, callback_return_w1.`b`, callback_return_w1.`c`, callback_return_w1.`d`, callback_return_w1.`e`, callback_return_w1.`f`, callback_return_w1.`g`, callback_return_w1.`h`)
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -90,6 +91,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.`f0`, callback_return_w1.`f1`, callback_return_w1.`f2`, callback_return_w1.`f3`, callback_return_w1.`f4`, callback_return_w1.`f5`, callback_return_w1.`f6`, callback_return_w1.`f7`, callback_return_w1.`f8`, callback_return_w1.`f9`, callback_return_w1.`f10`, callback_return_w1.`f11`, callback_return_w1.`f12`, callback_return_w1.`f13`, callback_return_w1.`f14`, callback_return_w1.`f15`, callback_return_w1.`f16`, callback_return_w1.`f17`, callback_return_w1.`f18`, callback_return_w1.`f19`, callback_return_w1.`f20`, callback_return_w1.`f21`, callback_return_w1.`f22`, callback_return_w1.`f23`, callback_return_w1.`f24`, callback_return_w1.`f25`, callback_return_w1.`f26`, callback_return_w1.`f27`, callback_return_w1.`f28`, callback_return_w1.`f29`, callback_return_w1.`f30`, callback_return_w1.`f31`)
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -171,7 +173,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1.`a` } catch (fa
 
 public fun `numbersSum`(p0_w1: kotlin.collections.List<Long>, onError: bench.plain.JniErrorHandler<Long> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (bench.plain.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -185,7 +187,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map {
 
 public fun `rowsSum`(p0_w1: kotlin.collections.List<bench.plain.Row>, onError: bench.plain.JniErrorHandler<Long> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`a`, p0_w5.`b`, p0_w5.`c`, p0_w5.`d`, p0_w5.`e`, p0_w5.`f`, p0_w5.`g`, p0_w5.`h`) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`a`, p0_w5.`b`, p0_w5.`c`, p0_w5.`d`, p0_w5.`e`, p0_w5.`f`, p0_w5.`g`, p0_w5.`h`) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (bench.plain.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -249,7 +251,7 @@ try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.
 
 public fun `rowsEcho`(p0_w1: kotlin.collections.List<bench.plain.Row>, onError: bench.plain.JniErrorHandler<kotlin.collections.List<bench.plain.Row>> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.plain.Row> = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`a`, p0_w5.`b`, p0_w5.`c`, p0_w5.`d`, p0_w5.`e`, p0_w5.`f`, p0_w5.`g`, p0_w5.`h`) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`a`, p0_w5.`b`, p0_w5.`c`, p0_w5.`d`, p0_w5.`e`, p0_w5.`f`, p0_w5.`g`, p0_w5.`h`) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (bench.plain.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -374,6 +376,7 @@ callbackCleanupFailure = callbackOutput0_failure
         }
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }

@@ -61,11 +61,23 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1make_1bcd43e
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::row_make(__prebindgen_argument_0);
             let ret_w0_record = source_value;
             let ret_w0_f0 = ret_w0_record.a;
@@ -117,7 +129,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1make_1bcd43e
             };
             Ok(())
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -173,11 +186,23 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1make_1
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::wide_row_make(__prebindgen_argument_0);
             let ret_w0_record = source_value;
             let ret_w0_f0 = ret_w0_record.f0;
@@ -325,7 +350,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1make_1
             };
             Ok(())
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -413,171 +439,437 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1sum_18
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0_f0 = if true { Some(p0_w1_f0) } else { None };
-            let p0_w0_f1 = if true { Some(p0_w1_f1) } else { None };
-            let p0_w0_f2 = if true { Some(p0_w1_f2) } else { None };
-            let p0_w0_f3 = if true { Some(p0_w1_f3) } else { None };
-            let p0_w0_f4 = if true { Some(p0_w1_f4) } else { None };
-            let p0_w0_f5 = if true { Some(p0_w1_f5) } else { None };
-            let p0_w0_f6 = if true { Some(p0_w1_f6) } else { None };
-            let p0_w0_f7 = if true { Some(p0_w1_f7) } else { None };
-            let p0_w0_f8 = if true { Some(p0_w1_f8) } else { None };
-            let p0_w0_f9 = if true { Some(p0_w1_f9) } else { None };
-            let p0_w0_f10 = if true { Some(p0_w1_f10) } else { None };
-            let p0_w0_f11 = if true { Some(p0_w1_f11) } else { None };
-            let p0_w0_f12 = if true { Some(p0_w1_f12) } else { None };
-            let p0_w0_f13 = if true { Some(p0_w1_f13) } else { None };
-            let p0_w0_f14 = if true { Some(p0_w1_f14) } else { None };
-            let p0_w0_f15 = if true { Some(p0_w1_f15) } else { None };
-            let p0_w0_f16 = if true { Some(p0_w1_f16) } else { None };
-            let p0_w0_f17 = if true { Some(p0_w1_f17) } else { None };
-            let p0_w0_f18 = if true { Some(p0_w1_f18) } else { None };
-            let p0_w0_f19 = if true { Some(p0_w1_f19) } else { None };
-            let p0_w0_f20 = if true { Some(p0_w1_f20) } else { None };
-            let p0_w0_f21 = if true { Some(p0_w1_f21) } else { None };
-            let p0_w0_f22 = if true { Some(p0_w1_f22) } else { None };
-            let p0_w0_f23 = if true { Some(p0_w1_f23) } else { None };
-            let p0_w0_f24 = if true { Some(p0_w1_f24) } else { None };
-            let p0_w0_f25 = if true { Some(p0_w1_f25) } else { None };
-            let p0_w0_f26 = if true { Some(p0_w1_f26) } else { None };
-            let p0_w0_f27 = if true { Some(p0_w1_f27) } else { None };
-            let p0_w0_f28 = if true { Some(p0_w1_f28) } else { None };
-            let p0_w0_f29 = if true { Some(p0_w1_f29) } else { None };
-            let p0_w0_f30 = if true { Some(p0_w1_f30) } else { None };
-            let p0_w0_f31 = if true { Some(p0_w1_f31) } else { None };
-            let p0_w0_f0: i64 = ::core::convert::Into::into(
-                p0_w0_f0.expect("active value"),
-            );
-            let p0_w0_f1: i64 = ::core::convert::Into::into(
-                p0_w0_f1.expect("active value"),
-            );
-            let p0_w0_f2: i64 = ::core::convert::Into::into(
-                p0_w0_f2.expect("active value"),
-            );
-            let p0_w0_f3: i64 = ::core::convert::Into::into(
-                p0_w0_f3.expect("active value"),
-            );
-            let p0_w0_f4: i64 = ::core::convert::Into::into(
-                p0_w0_f4.expect("active value"),
-            );
-            let p0_w0_f5: i64 = ::core::convert::Into::into(
-                p0_w0_f5.expect("active value"),
-            );
-            let p0_w0_f6: i64 = ::core::convert::Into::into(
-                p0_w0_f6.expect("active value"),
-            );
-            let p0_w0_f7: i64 = ::core::convert::Into::into(
-                p0_w0_f7.expect("active value"),
-            );
-            let p0_w0_f8: i64 = ::core::convert::Into::into(
-                p0_w0_f8.expect("active value"),
-            );
-            let p0_w0_f9: i64 = ::core::convert::Into::into(
-                p0_w0_f9.expect("active value"),
-            );
-            let p0_w0_f10: i64 = ::core::convert::Into::into(
-                p0_w0_f10.expect("active value"),
-            );
-            let p0_w0_f11: i64 = ::core::convert::Into::into(
-                p0_w0_f11.expect("active value"),
-            );
-            let p0_w0_f12: i64 = ::core::convert::Into::into(
-                p0_w0_f12.expect("active value"),
-            );
-            let p0_w0_f13: i64 = ::core::convert::Into::into(
-                p0_w0_f13.expect("active value"),
-            );
-            let p0_w0_f14: i64 = ::core::convert::Into::into(
-                p0_w0_f14.expect("active value"),
-            );
-            let p0_w0_f15: i64 = ::core::convert::Into::into(
-                p0_w0_f15.expect("active value"),
-            );
-            let p0_w0_f16: i64 = ::core::convert::Into::into(
-                p0_w0_f16.expect("active value"),
-            );
-            let p0_w0_f17: i64 = ::core::convert::Into::into(
-                p0_w0_f17.expect("active value"),
-            );
-            let p0_w0_f18: i64 = ::core::convert::Into::into(
-                p0_w0_f18.expect("active value"),
-            );
-            let p0_w0_f19: i64 = ::core::convert::Into::into(
-                p0_w0_f19.expect("active value"),
-            );
-            let p0_w0_f20: i64 = ::core::convert::Into::into(
-                p0_w0_f20.expect("active value"),
-            );
-            let p0_w0_f21: i64 = ::core::convert::Into::into(
-                p0_w0_f21.expect("active value"),
-            );
-            let p0_w0_f22: i64 = ::core::convert::Into::into(
-                p0_w0_f22.expect("active value"),
-            );
-            let p0_w0_f23: i64 = ::core::convert::Into::into(
-                p0_w0_f23.expect("active value"),
-            );
-            let p0_w0_f24: i64 = ::core::convert::Into::into(
-                p0_w0_f24.expect("active value"),
-            );
-            let p0_w0_f25: i64 = ::core::convert::Into::into(
-                p0_w0_f25.expect("active value"),
-            );
-            let p0_w0_f26: i64 = ::core::convert::Into::into(
-                p0_w0_f26.expect("active value"),
-            );
-            let p0_w0_f27: i64 = ::core::convert::Into::into(
-                p0_w0_f27.expect("active value"),
-            );
-            let p0_w0_f28: i64 = ::core::convert::Into::into(
-                p0_w0_f28.expect("active value"),
-            );
-            let p0_w0_f29: i64 = ::core::convert::Into::into(
-                p0_w0_f29.expect("active value"),
-            );
-            let p0_w0_f30: i64 = ::core::convert::Into::into(
-                p0_w0_f30.expect("active value"),
-            );
-            let p0_w0_f31: i64 = ::core::convert::Into::into(
-                p0_w0_f31.expect("active value"),
-            );
-            let p0_w0: bench_flat::WideRow = bench_flat::WideRow {
-                f0: p0_w0_f0,
-                f1: p0_w0_f1,
-                f2: p0_w0_f2,
-                f3: p0_w0_f3,
-                f4: p0_w0_f4,
-                f5: p0_w0_f5,
-                f6: p0_w0_f6,
-                f7: p0_w0_f7,
-                f8: p0_w0_f8,
-                f9: p0_w0_f9,
-                f10: p0_w0_f10,
-                f11: p0_w0_f11,
-                f12: p0_w0_f12,
-                f13: p0_w0_f13,
-                f14: p0_w0_f14,
-                f15: p0_w0_f15,
-                f16: p0_w0_f16,
-                f17: p0_w0_f17,
-                f18: p0_w0_f18,
-                f19: p0_w0_f19,
-                f20: p0_w0_f20,
-                f21: p0_w0_f21,
-                f22: p0_w0_f22,
-                f23: p0_w0_f23,
-                f24: p0_w0_f24,
-                f25: p0_w0_f25,
-                f26: p0_w0_f26,
-                f27: p0_w0_f27,
-                f28: p0_w0_f28,
-                f29: p0_w0_f29,
-                f30: p0_w0_f30,
-                f31: p0_w0_f31,
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_built = if true {
+                Some({
+                    let p0_w0_f0: i64 = ::core::convert::Into::into(
+                        p0_w0_f0.expect("active value"),
+                    );
+                    p0_w0_f0
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_w0;
+            let p0_w0_f1 = if true { Some(p0_w1_f1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f1_built = if true {
+                Some({
+                    let p0_w0_f1: i64 = ::core::convert::Into::into(
+                        p0_w0_f1.expect("active value"),
+                    );
+                    p0_w0_f1
+                })
+            } else {
+                None
+            };
+            let p0_w0_f2 = if true { Some(p0_w1_f2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f2_built = if true {
+                Some({
+                    let p0_w0_f2: i64 = ::core::convert::Into::into(
+                        p0_w0_f2.expect("active value"),
+                    );
+                    p0_w0_f2
+                })
+            } else {
+                None
+            };
+            let p0_w0_f3 = if true { Some(p0_w1_f3) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f3_built = if true {
+                Some({
+                    let p0_w0_f3: i64 = ::core::convert::Into::into(
+                        p0_w0_f3.expect("active value"),
+                    );
+                    p0_w0_f3
+                })
+            } else {
+                None
+            };
+            let p0_w0_f4 = if true { Some(p0_w1_f4) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f4_built = if true {
+                Some({
+                    let p0_w0_f4: i64 = ::core::convert::Into::into(
+                        p0_w0_f4.expect("active value"),
+                    );
+                    p0_w0_f4
+                })
+            } else {
+                None
+            };
+            let p0_w0_f5 = if true { Some(p0_w1_f5) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f5_built = if true {
+                Some({
+                    let p0_w0_f5: i64 = ::core::convert::Into::into(
+                        p0_w0_f5.expect("active value"),
+                    );
+                    p0_w0_f5
+                })
+            } else {
+                None
+            };
+            let p0_w0_f6 = if true { Some(p0_w1_f6) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f6_built = if true {
+                Some({
+                    let p0_w0_f6: i64 = ::core::convert::Into::into(
+                        p0_w0_f6.expect("active value"),
+                    );
+                    p0_w0_f6
+                })
+            } else {
+                None
+            };
+            let p0_w0_f7 = if true { Some(p0_w1_f7) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f7_built = if true {
+                Some({
+                    let p0_w0_f7: i64 = ::core::convert::Into::into(
+                        p0_w0_f7.expect("active value"),
+                    );
+                    p0_w0_f7
+                })
+            } else {
+                None
+            };
+            let p0_w0_f8 = if true { Some(p0_w1_f8) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f8_built = if true {
+                Some({
+                    let p0_w0_f8: i64 = ::core::convert::Into::into(
+                        p0_w0_f8.expect("active value"),
+                    );
+                    p0_w0_f8
+                })
+            } else {
+                None
+            };
+            let p0_w0_f9 = if true { Some(p0_w1_f9) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f9_built = if true {
+                Some({
+                    let p0_w0_f9: i64 = ::core::convert::Into::into(
+                        p0_w0_f9.expect("active value"),
+                    );
+                    p0_w0_f9
+                })
+            } else {
+                None
+            };
+            let p0_w0_f10 = if true { Some(p0_w1_f10) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f10_built = if true {
+                Some({
+                    let p0_w0_f10: i64 = ::core::convert::Into::into(
+                        p0_w0_f10.expect("active value"),
+                    );
+                    p0_w0_f10
+                })
+            } else {
+                None
+            };
+            let p0_w0_f11 = if true { Some(p0_w1_f11) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f11_built = if true {
+                Some({
+                    let p0_w0_f11: i64 = ::core::convert::Into::into(
+                        p0_w0_f11.expect("active value"),
+                    );
+                    p0_w0_f11
+                })
+            } else {
+                None
+            };
+            let p0_w0_f12 = if true { Some(p0_w1_f12) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f12_built = if true {
+                Some({
+                    let p0_w0_f12: i64 = ::core::convert::Into::into(
+                        p0_w0_f12.expect("active value"),
+                    );
+                    p0_w0_f12
+                })
+            } else {
+                None
+            };
+            let p0_w0_f13 = if true { Some(p0_w1_f13) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f13_built = if true {
+                Some({
+                    let p0_w0_f13: i64 = ::core::convert::Into::into(
+                        p0_w0_f13.expect("active value"),
+                    );
+                    p0_w0_f13
+                })
+            } else {
+                None
+            };
+            let p0_w0_f14 = if true { Some(p0_w1_f14) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f14_built = if true {
+                Some({
+                    let p0_w0_f14: i64 = ::core::convert::Into::into(
+                        p0_w0_f14.expect("active value"),
+                    );
+                    p0_w0_f14
+                })
+            } else {
+                None
+            };
+            let p0_w0_f15 = if true { Some(p0_w1_f15) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f15_built = if true {
+                Some({
+                    let p0_w0_f15: i64 = ::core::convert::Into::into(
+                        p0_w0_f15.expect("active value"),
+                    );
+                    p0_w0_f15
+                })
+            } else {
+                None
+            };
+            let p0_w0_f16 = if true { Some(p0_w1_f16) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f16_built = if true {
+                Some({
+                    let p0_w0_f16: i64 = ::core::convert::Into::into(
+                        p0_w0_f16.expect("active value"),
+                    );
+                    p0_w0_f16
+                })
+            } else {
+                None
+            };
+            let p0_w0_f17 = if true { Some(p0_w1_f17) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f17_built = if true {
+                Some({
+                    let p0_w0_f17: i64 = ::core::convert::Into::into(
+                        p0_w0_f17.expect("active value"),
+                    );
+                    p0_w0_f17
+                })
+            } else {
+                None
+            };
+            let p0_w0_f18 = if true { Some(p0_w1_f18) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f18_built = if true {
+                Some({
+                    let p0_w0_f18: i64 = ::core::convert::Into::into(
+                        p0_w0_f18.expect("active value"),
+                    );
+                    p0_w0_f18
+                })
+            } else {
+                None
+            };
+            let p0_w0_f19 = if true { Some(p0_w1_f19) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f19_built = if true {
+                Some({
+                    let p0_w0_f19: i64 = ::core::convert::Into::into(
+                        p0_w0_f19.expect("active value"),
+                    );
+                    p0_w0_f19
+                })
+            } else {
+                None
+            };
+            let p0_w0_f20 = if true { Some(p0_w1_f20) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f20_built = if true {
+                Some({
+                    let p0_w0_f20: i64 = ::core::convert::Into::into(
+                        p0_w0_f20.expect("active value"),
+                    );
+                    p0_w0_f20
+                })
+            } else {
+                None
+            };
+            let p0_w0_f21 = if true { Some(p0_w1_f21) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f21_built = if true {
+                Some({
+                    let p0_w0_f21: i64 = ::core::convert::Into::into(
+                        p0_w0_f21.expect("active value"),
+                    );
+                    p0_w0_f21
+                })
+            } else {
+                None
+            };
+            let p0_w0_f22 = if true { Some(p0_w1_f22) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f22_built = if true {
+                Some({
+                    let p0_w0_f22: i64 = ::core::convert::Into::into(
+                        p0_w0_f22.expect("active value"),
+                    );
+                    p0_w0_f22
+                })
+            } else {
+                None
+            };
+            let p0_w0_f23 = if true { Some(p0_w1_f23) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f23_built = if true {
+                Some({
+                    let p0_w0_f23: i64 = ::core::convert::Into::into(
+                        p0_w0_f23.expect("active value"),
+                    );
+                    p0_w0_f23
+                })
+            } else {
+                None
+            };
+            let p0_w0_f24 = if true { Some(p0_w1_f24) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f24_built = if true {
+                Some({
+                    let p0_w0_f24: i64 = ::core::convert::Into::into(
+                        p0_w0_f24.expect("active value"),
+                    );
+                    p0_w0_f24
+                })
+            } else {
+                None
+            };
+            let p0_w0_f25 = if true { Some(p0_w1_f25) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f25_built = if true {
+                Some({
+                    let p0_w0_f25: i64 = ::core::convert::Into::into(
+                        p0_w0_f25.expect("active value"),
+                    );
+                    p0_w0_f25
+                })
+            } else {
+                None
+            };
+            let p0_w0_f26 = if true { Some(p0_w1_f26) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f26_built = if true {
+                Some({
+                    let p0_w0_f26: i64 = ::core::convert::Into::into(
+                        p0_w0_f26.expect("active value"),
+                    );
+                    p0_w0_f26
+                })
+            } else {
+                None
+            };
+            let p0_w0_f27 = if true { Some(p0_w1_f27) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f27_built = if true {
+                Some({
+                    let p0_w0_f27: i64 = ::core::convert::Into::into(
+                        p0_w0_f27.expect("active value"),
+                    );
+                    p0_w0_f27
+                })
+            } else {
+                None
+            };
+            let p0_w0_f28 = if true { Some(p0_w1_f28) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f28_built = if true {
+                Some({
+                    let p0_w0_f28: i64 = ::core::convert::Into::into(
+                        p0_w0_f28.expect("active value"),
+                    );
+                    p0_w0_f28
+                })
+            } else {
+                None
+            };
+            let p0_w0_f29 = if true { Some(p0_w1_f29) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f29_built = if true {
+                Some({
+                    let p0_w0_f29: i64 = ::core::convert::Into::into(
+                        p0_w0_f29.expect("active value"),
+                    );
+                    p0_w0_f29
+                })
+            } else {
+                None
+            };
+            let p0_w0_f30 = if true { Some(p0_w1_f30) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f30_built = if true {
+                Some({
+                    let p0_w0_f30: i64 = ::core::convert::Into::into(
+                        p0_w0_f30.expect("active value"),
+                    );
+                    p0_w0_f30
+                })
+            } else {
+                None
+            };
+            let p0_w0_f31 = if true { Some(p0_w1_f31) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f31_built = if true {
+                Some({
+                    let p0_w0_f31: i64 = ::core::convert::Into::into(
+                        p0_w0_f31.expect("active value"),
+                    );
+                    p0_w0_f31
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: bench_flat::WideRow = bench_flat::WideRow {
+                        f0: p0_w0_f0_built.expect("active input"),
+                        f1: p0_w0_f1_built.expect("active input"),
+                        f2: p0_w0_f2_built.expect("active input"),
+                        f3: p0_w0_f3_built.expect("active input"),
+                        f4: p0_w0_f4_built.expect("active input"),
+                        f5: p0_w0_f5_built.expect("active input"),
+                        f6: p0_w0_f6_built.expect("active input"),
+                        f7: p0_w0_f7_built.expect("active input"),
+                        f8: p0_w0_f8_built.expect("active input"),
+                        f9: p0_w0_f9_built.expect("active input"),
+                        f10: p0_w0_f10_built.expect("active input"),
+                        f11: p0_w0_f11_built.expect("active input"),
+                        f12: p0_w0_f12_built.expect("active input"),
+                        f13: p0_w0_f13_built.expect("active input"),
+                        f14: p0_w0_f14_built.expect("active input"),
+                        f15: p0_w0_f15_built.expect("active input"),
+                        f16: p0_w0_f16_built.expect("active input"),
+                        f17: p0_w0_f17_built.expect("active input"),
+                        f18: p0_w0_f18_built.expect("active input"),
+                        f19: p0_w0_f19_built.expect("active input"),
+                        f20: p0_w0_f20_built.expect("active input"),
+                        f21: p0_w0_f21_built.expect("active input"),
+                        f22: p0_w0_f22_built.expect("active input"),
+                        f23: p0_w0_f23_built.expect("active input"),
+                        f24: p0_w0_f24_built.expect("active input"),
+                        f25: p0_w0_f25_built.expect("active input"),
+                        f26: p0_w0_f26_built.expect("active input"),
+                        f27: p0_w0_f27_built.expect("active input"),
+                        f28: p0_w0_f28_built.expect("active input"),
+                        f29: p0_w0_f29_built.expect("active input"),
+                        f30: p0_w0_f30_built.expect("active input"),
+                        f31: p0_w0_f31_built.expect("active input"),
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::wide_row_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -592,7 +884,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1sum_18
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -650,7 +943,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
                 &mut jni_environment,
@@ -658,155 +953,238 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
                 "(J)[Ljava/lang/Object;",
                 "bench.plain.RowReturnCallback",
             )?;
-            #[allow(unused_mut, clippy::collapsible_if)]
-            let p0_callback_value = move |callback_source_0: i64| {
-                p0_callback_retained
-                    .with_env_result(
-                        26i32,
-                        |callback_environment| {
-                            let mut callback_environment = callback_environment;
-                            let callback_value_0 = callback_source_0;
-                            {
-                                let callback_arg_0_w0 = callback_value_0;
-                                let arguments = [
-                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        j: callback_arg_0_w0,
-                                    },
-                                ];
-                                {}
-                                let callback_result = unsafe {
-                                    p0_callback_retained
-                                        .invoke_return(
-                                            callback_environment,
-                                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
-                                            &arguments,
-                                        )
-                                }?;
-                                let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                    callback_result.l().map_err(|e| e.to_string())?,
-                                );
-                                let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    0usize,
-                                )?;
-                                let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    1usize,
-                                )?;
-                                let callback_return_w1_f2 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    2usize,
-                                )?;
-                                let callback_return_w1_f3 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    3usize,
-                                )?;
-                                let callback_return_w1_f4 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    4usize,
-                                )?;
-                                let callback_return_w1_f5 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    5usize,
-                                )?;
-                                let callback_return_w1_f6 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    6usize,
-                                )?;
-                                let callback_return_w1_f7 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    7usize,
-                                )?;
-                                let callback_return_w0_f0 = if true {
-                                    Some(callback_return_w1_f0)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f1 = if true {
-                                    Some(callback_return_w1_f1)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f2 = if true {
-                                    Some(callback_return_w1_f2)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f3 = if true {
-                                    Some(callback_return_w1_f3)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f4 = if true {
-                                    Some(callback_return_w1_f4)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f5 = if true {
-                                    Some(callback_return_w1_f5)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f6 = if true {
-                                    Some(callback_return_w1_f6)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f7 = if true {
-                                    Some(callback_return_w1_f7)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f0.expect("active value"),
-                                );
-                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f1.expect("active value"),
-                                );
-                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f2.expect("active value"),
-                                );
-                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f3.expect("active value"),
-                                );
-                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f4.expect("active value"),
-                                );
-                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f5.expect("active value"),
-                                );
-                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f6.expect("active value"),
-                                );
-                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f7.expect("active value"),
-                                );
-                                let callback_return_w0: bench_flat::Row = bench_flat::Row {
-                                    a: callback_return_w0_f0,
-                                    b: callback_return_w0_f1,
-                                    c: callback_return_w0_f2,
-                                    d: callback_return_w0_f3,
-                                    e: callback_return_w0_f4,
-                                    f: callback_return_w0_f5,
-                                    g: callback_return_w0_f6,
-                                    h: callback_return_w0_f7,
-                                };
-                                let callback_return_value = callback_return_w0;
-                                Ok(callback_return_value)
-                            }
-                        },
-                    )
-                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                Some({
+                    #[allow(unused_mut, clippy::collapsible_if)]
+                    let p0_callback_value = move |callback_source_0: i64| {
+                        p0_callback_retained
+                            .with_env_result(
+                                26i32,
+                                |callback_environment| {
+                                    let mut callback_environment = callback_environment;
+                                    let callback_value_0 = callback_source_0;
+                                    {
+                                        let callback_arg_0_w0 = callback_value_0;
+                                        let arguments = [
+                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                j: callback_arg_0_w0,
+                                            },
+                                        ];
+                                        {}
+                                        let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                        let __prebindgen_input_consumed = &__pb_input_consumed;
+                                        let callback_result = unsafe {
+                                            p0_callback_retained
+                                                .invoke_return(
+                                                    callback_environment,
+                                                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                    &arguments,
+                                                )
+                                        }?;
+                                        let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                            callback_result.l().map_err(|e| e.to_string())?,
+                                        );
+                                        let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            0usize,
+                                        )?;
+                                        let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            1usize,
+                                        )?;
+                                        let callback_return_w1_f2 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            2usize,
+                                        )?;
+                                        let callback_return_w1_f3 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            3usize,
+                                        )?;
+                                        let callback_return_w1_f4 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            4usize,
+                                        )?;
+                                        let callback_return_w1_f5 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            5usize,
+                                        )?;
+                                        let callback_return_w1_f6 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            6usize,
+                                        )?;
+                                        let callback_return_w1_f7 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            7usize,
+                                        )?;
+                                        let callback_return_w0_f0 = if true {
+                                            Some(callback_return_w1_f0)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f0_built = if true {
+                                            Some({
+                                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f0.expect("active value"),
+                                                );
+                                                callback_return_w0_f0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f1 = if true {
+                                            Some(callback_return_w1_f1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f1_built = if true {
+                                            Some({
+                                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f1.expect("active value"),
+                                                );
+                                                callback_return_w0_f1
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f2 = if true {
+                                            Some(callback_return_w1_f2)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f2_built = if true {
+                                            Some({
+                                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f2.expect("active value"),
+                                                );
+                                                callback_return_w0_f2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f3 = if true {
+                                            Some(callback_return_w1_f3)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f3_built = if true {
+                                            Some({
+                                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f3.expect("active value"),
+                                                );
+                                                callback_return_w0_f3
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f4 = if true {
+                                            Some(callback_return_w1_f4)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f4_built = if true {
+                                            Some({
+                                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f4.expect("active value"),
+                                                );
+                                                callback_return_w0_f4
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f5 = if true {
+                                            Some(callback_return_w1_f5)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f5_built = if true {
+                                            Some({
+                                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f5.expect("active value"),
+                                                );
+                                                callback_return_w0_f5
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f6 = if true {
+                                            Some(callback_return_w1_f6)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f6_built = if true {
+                                            Some({
+                                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f6.expect("active value"),
+                                                );
+                                                callback_return_w0_f6
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f7 = if true {
+                                            Some(callback_return_w1_f7)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f7_built = if true {
+                                            Some({
+                                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f7.expect("active value"),
+                                                );
+                                                callback_return_w0_f7
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some({
+                                                let callback_return_w0: bench_flat::Row = bench_flat::Row {
+                                                    a: callback_return_w0_f0_built.expect("active input"),
+                                                    b: callback_return_w0_f1_built.expect("active input"),
+                                                    c: callback_return_w0_f2_built.expect("active input"),
+                                                    d: callback_return_w0_f3_built.expect("active input"),
+                                                    e: callback_return_w0_f4_built.expect("active input"),
+                                                    f: callback_return_w0_f5_built.expect("active input"),
+                                                    g: callback_return_w0_f6_built.expect("active input"),
+                                                    h: callback_return_w0_f7_built.expect("active input"),
+                                                };
+                                                callback_return_w0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok(callback_return_value)
+                                    }
+                                },
+                            )
+                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_callback_value;
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
             let source_value = bench_flat::row_return_handler_new(
                 __prebindgen_argument_0,
             );
@@ -829,7 +1207,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -887,7 +1266,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
                 &mut jni_environment,
@@ -895,491 +1276,766 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
                 "(J)[Ljava/lang/Object;",
                 "bench.plain.WideRowReturnCallback",
             )?;
-            #[allow(unused_mut, clippy::collapsible_if)]
-            let p0_callback_value = move |callback_source_0: i64| {
-                p0_callback_retained
-                    .with_env_result(
-                        50i32,
-                        |callback_environment| {
-                            let mut callback_environment = callback_environment;
-                            let callback_value_0 = callback_source_0;
-                            {
-                                let callback_arg_0_w0 = callback_value_0;
-                                let arguments = [
-                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        j: callback_arg_0_w0,
-                                    },
-                                ];
-                                {}
-                                let callback_result = unsafe {
-                                    p0_callback_retained
-                                        .invoke_return(
-                                            callback_environment,
-                                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
-                                            &arguments,
-                                        )
-                                }?;
-                                let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                    callback_result.l().map_err(|e| e.to_string())?,
-                                );
-                                let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    0usize,
-                                )?;
-                                let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    1usize,
-                                )?;
-                                let callback_return_w1_f2 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    2usize,
-                                )?;
-                                let callback_return_w1_f3 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    3usize,
-                                )?;
-                                let callback_return_w1_f4 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    4usize,
-                                )?;
-                                let callback_return_w1_f5 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    5usize,
-                                )?;
-                                let callback_return_w1_f6 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    6usize,
-                                )?;
-                                let callback_return_w1_f7 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    7usize,
-                                )?;
-                                let callback_return_w1_f8 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    8usize,
-                                )?;
-                                let callback_return_w1_f9 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    9usize,
-                                )?;
-                                let callback_return_w1_f10 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    10usize,
-                                )?;
-                                let callback_return_w1_f11 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    11usize,
-                                )?;
-                                let callback_return_w1_f12 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    12usize,
-                                )?;
-                                let callback_return_w1_f13 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    13usize,
-                                )?;
-                                let callback_return_w1_f14 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    14usize,
-                                )?;
-                                let callback_return_w1_f15 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    15usize,
-                                )?;
-                                let callback_return_w1_f16 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    16usize,
-                                )?;
-                                let callback_return_w1_f17 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    17usize,
-                                )?;
-                                let callback_return_w1_f18 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    18usize,
-                                )?;
-                                let callback_return_w1_f19 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    19usize,
-                                )?;
-                                let callback_return_w1_f20 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    20usize,
-                                )?;
-                                let callback_return_w1_f21 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    21usize,
-                                )?;
-                                let callback_return_w1_f22 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    22usize,
-                                )?;
-                                let callback_return_w1_f23 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    23usize,
-                                )?;
-                                let callback_return_w1_f24 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    24usize,
-                                )?;
-                                let callback_return_w1_f25 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    25usize,
-                                )?;
-                                let callback_return_w1_f26 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    26usize,
-                                )?;
-                                let callback_return_w1_f27 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    27usize,
-                                )?;
-                                let callback_return_w1_f28 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    28usize,
-                                )?;
-                                let callback_return_w1_f29 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    29usize,
-                                )?;
-                                let callback_return_w1_f30 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    30usize,
-                                )?;
-                                let callback_return_w1_f31 = ::prebindgen_jni_runtime::row_i64(
-                                    &mut callback_environment,
-                                    &(callback_result_rows),
-                                    31usize,
-                                )?;
-                                let callback_return_w0_f0 = if true {
-                                    Some(callback_return_w1_f0)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f1 = if true {
-                                    Some(callback_return_w1_f1)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f2 = if true {
-                                    Some(callback_return_w1_f2)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f3 = if true {
-                                    Some(callback_return_w1_f3)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f4 = if true {
-                                    Some(callback_return_w1_f4)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f5 = if true {
-                                    Some(callback_return_w1_f5)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f6 = if true {
-                                    Some(callback_return_w1_f6)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f7 = if true {
-                                    Some(callback_return_w1_f7)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f8 = if true {
-                                    Some(callback_return_w1_f8)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f9 = if true {
-                                    Some(callback_return_w1_f9)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f10 = if true {
-                                    Some(callback_return_w1_f10)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f11 = if true {
-                                    Some(callback_return_w1_f11)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f12 = if true {
-                                    Some(callback_return_w1_f12)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f13 = if true {
-                                    Some(callback_return_w1_f13)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f14 = if true {
-                                    Some(callback_return_w1_f14)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f15 = if true {
-                                    Some(callback_return_w1_f15)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f16 = if true {
-                                    Some(callback_return_w1_f16)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f17 = if true {
-                                    Some(callback_return_w1_f17)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f18 = if true {
-                                    Some(callback_return_w1_f18)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f19 = if true {
-                                    Some(callback_return_w1_f19)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f20 = if true {
-                                    Some(callback_return_w1_f20)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f21 = if true {
-                                    Some(callback_return_w1_f21)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f22 = if true {
-                                    Some(callback_return_w1_f22)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f23 = if true {
-                                    Some(callback_return_w1_f23)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f24 = if true {
-                                    Some(callback_return_w1_f24)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f25 = if true {
-                                    Some(callback_return_w1_f25)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f26 = if true {
-                                    Some(callback_return_w1_f26)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f27 = if true {
-                                    Some(callback_return_w1_f27)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f28 = if true {
-                                    Some(callback_return_w1_f28)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f29 = if true {
-                                    Some(callback_return_w1_f29)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f30 = if true {
-                                    Some(callback_return_w1_f30)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f31 = if true {
-                                    Some(callback_return_w1_f31)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f0.expect("active value"),
-                                );
-                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f1.expect("active value"),
-                                );
-                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f2.expect("active value"),
-                                );
-                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f3.expect("active value"),
-                                );
-                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f4.expect("active value"),
-                                );
-                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f5.expect("active value"),
-                                );
-                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f6.expect("active value"),
-                                );
-                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f7.expect("active value"),
-                                );
-                                let callback_return_w0_f8: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f8.expect("active value"),
-                                );
-                                let callback_return_w0_f9: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f9.expect("active value"),
-                                );
-                                let callback_return_w0_f10: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f10.expect("active value"),
-                                );
-                                let callback_return_w0_f11: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f11.expect("active value"),
-                                );
-                                let callback_return_w0_f12: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f12.expect("active value"),
-                                );
-                                let callback_return_w0_f13: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f13.expect("active value"),
-                                );
-                                let callback_return_w0_f14: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f14.expect("active value"),
-                                );
-                                let callback_return_w0_f15: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f15.expect("active value"),
-                                );
-                                let callback_return_w0_f16: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f16.expect("active value"),
-                                );
-                                let callback_return_w0_f17: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f17.expect("active value"),
-                                );
-                                let callback_return_w0_f18: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f18.expect("active value"),
-                                );
-                                let callback_return_w0_f19: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f19.expect("active value"),
-                                );
-                                let callback_return_w0_f20: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f20.expect("active value"),
-                                );
-                                let callback_return_w0_f21: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f21.expect("active value"),
-                                );
-                                let callback_return_w0_f22: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f22.expect("active value"),
-                                );
-                                let callback_return_w0_f23: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f23.expect("active value"),
-                                );
-                                let callback_return_w0_f24: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f24.expect("active value"),
-                                );
-                                let callback_return_w0_f25: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f25.expect("active value"),
-                                );
-                                let callback_return_w0_f26: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f26.expect("active value"),
-                                );
-                                let callback_return_w0_f27: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f27.expect("active value"),
-                                );
-                                let callback_return_w0_f28: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f28.expect("active value"),
-                                );
-                                let callback_return_w0_f29: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f29.expect("active value"),
-                                );
-                                let callback_return_w0_f30: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f30.expect("active value"),
-                                );
-                                let callback_return_w0_f31: i64 = ::core::convert::Into::into(
-                                    callback_return_w0_f31.expect("active value"),
-                                );
-                                let callback_return_w0: bench_flat::WideRow = bench_flat::WideRow {
-                                    f0: callback_return_w0_f0,
-                                    f1: callback_return_w0_f1,
-                                    f2: callback_return_w0_f2,
-                                    f3: callback_return_w0_f3,
-                                    f4: callback_return_w0_f4,
-                                    f5: callback_return_w0_f5,
-                                    f6: callback_return_w0_f6,
-                                    f7: callback_return_w0_f7,
-                                    f8: callback_return_w0_f8,
-                                    f9: callback_return_w0_f9,
-                                    f10: callback_return_w0_f10,
-                                    f11: callback_return_w0_f11,
-                                    f12: callback_return_w0_f12,
-                                    f13: callback_return_w0_f13,
-                                    f14: callback_return_w0_f14,
-                                    f15: callback_return_w0_f15,
-                                    f16: callback_return_w0_f16,
-                                    f17: callback_return_w0_f17,
-                                    f18: callback_return_w0_f18,
-                                    f19: callback_return_w0_f19,
-                                    f20: callback_return_w0_f20,
-                                    f21: callback_return_w0_f21,
-                                    f22: callback_return_w0_f22,
-                                    f23: callback_return_w0_f23,
-                                    f24: callback_return_w0_f24,
-                                    f25: callback_return_w0_f25,
-                                    f26: callback_return_w0_f26,
-                                    f27: callback_return_w0_f27,
-                                    f28: callback_return_w0_f28,
-                                    f29: callback_return_w0_f29,
-                                    f30: callback_return_w0_f30,
-                                    f31: callback_return_w0_f31,
-                                };
-                                let callback_return_value = callback_return_w0;
-                                Ok(callback_return_value)
-                            }
-                        },
-                    )
-                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                Some({
+                    #[allow(unused_mut, clippy::collapsible_if)]
+                    let p0_callback_value = move |callback_source_0: i64| {
+                        p0_callback_retained
+                            .with_env_result(
+                                50i32,
+                                |callback_environment| {
+                                    let mut callback_environment = callback_environment;
+                                    let callback_value_0 = callback_source_0;
+                                    {
+                                        let callback_arg_0_w0 = callback_value_0;
+                                        let arguments = [
+                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                j: callback_arg_0_w0,
+                                            },
+                                        ];
+                                        {}
+                                        let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                        let __prebindgen_input_consumed = &__pb_input_consumed;
+                                        let callback_result = unsafe {
+                                            p0_callback_retained
+                                                .invoke_return(
+                                                    callback_environment,
+                                                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                    &arguments,
+                                                )
+                                        }?;
+                                        let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                            callback_result.l().map_err(|e| e.to_string())?,
+                                        );
+                                        let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            0usize,
+                                        )?;
+                                        let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            1usize,
+                                        )?;
+                                        let callback_return_w1_f2 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            2usize,
+                                        )?;
+                                        let callback_return_w1_f3 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            3usize,
+                                        )?;
+                                        let callback_return_w1_f4 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            4usize,
+                                        )?;
+                                        let callback_return_w1_f5 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            5usize,
+                                        )?;
+                                        let callback_return_w1_f6 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            6usize,
+                                        )?;
+                                        let callback_return_w1_f7 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            7usize,
+                                        )?;
+                                        let callback_return_w1_f8 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            8usize,
+                                        )?;
+                                        let callback_return_w1_f9 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            9usize,
+                                        )?;
+                                        let callback_return_w1_f10 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            10usize,
+                                        )?;
+                                        let callback_return_w1_f11 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            11usize,
+                                        )?;
+                                        let callback_return_w1_f12 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            12usize,
+                                        )?;
+                                        let callback_return_w1_f13 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            13usize,
+                                        )?;
+                                        let callback_return_w1_f14 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            14usize,
+                                        )?;
+                                        let callback_return_w1_f15 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            15usize,
+                                        )?;
+                                        let callback_return_w1_f16 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            16usize,
+                                        )?;
+                                        let callback_return_w1_f17 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            17usize,
+                                        )?;
+                                        let callback_return_w1_f18 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            18usize,
+                                        )?;
+                                        let callback_return_w1_f19 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            19usize,
+                                        )?;
+                                        let callback_return_w1_f20 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            20usize,
+                                        )?;
+                                        let callback_return_w1_f21 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            21usize,
+                                        )?;
+                                        let callback_return_w1_f22 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            22usize,
+                                        )?;
+                                        let callback_return_w1_f23 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            23usize,
+                                        )?;
+                                        let callback_return_w1_f24 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            24usize,
+                                        )?;
+                                        let callback_return_w1_f25 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            25usize,
+                                        )?;
+                                        let callback_return_w1_f26 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            26usize,
+                                        )?;
+                                        let callback_return_w1_f27 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            27usize,
+                                        )?;
+                                        let callback_return_w1_f28 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            28usize,
+                                        )?;
+                                        let callback_return_w1_f29 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            29usize,
+                                        )?;
+                                        let callback_return_w1_f30 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            30usize,
+                                        )?;
+                                        let callback_return_w1_f31 = ::prebindgen_jni_runtime::row_i64(
+                                            &mut callback_environment,
+                                            &(callback_result_rows),
+                                            31usize,
+                                        )?;
+                                        let callback_return_w0_f0 = if true {
+                                            Some(callback_return_w1_f0)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f0_built = if true {
+                                            Some({
+                                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f0.expect("active value"),
+                                                );
+                                                callback_return_w0_f0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f1 = if true {
+                                            Some(callback_return_w1_f1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f1_built = if true {
+                                            Some({
+                                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f1.expect("active value"),
+                                                );
+                                                callback_return_w0_f1
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f2 = if true {
+                                            Some(callback_return_w1_f2)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f2_built = if true {
+                                            Some({
+                                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f2.expect("active value"),
+                                                );
+                                                callback_return_w0_f2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f3 = if true {
+                                            Some(callback_return_w1_f3)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f3_built = if true {
+                                            Some({
+                                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f3.expect("active value"),
+                                                );
+                                                callback_return_w0_f3
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f4 = if true {
+                                            Some(callback_return_w1_f4)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f4_built = if true {
+                                            Some({
+                                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f4.expect("active value"),
+                                                );
+                                                callback_return_w0_f4
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f5 = if true {
+                                            Some(callback_return_w1_f5)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f5_built = if true {
+                                            Some({
+                                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f5.expect("active value"),
+                                                );
+                                                callback_return_w0_f5
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f6 = if true {
+                                            Some(callback_return_w1_f6)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f6_built = if true {
+                                            Some({
+                                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f6.expect("active value"),
+                                                );
+                                                callback_return_w0_f6
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f7 = if true {
+                                            Some(callback_return_w1_f7)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f7_built = if true {
+                                            Some({
+                                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f7.expect("active value"),
+                                                );
+                                                callback_return_w0_f7
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f8 = if true {
+                                            Some(callback_return_w1_f8)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f8_built = if true {
+                                            Some({
+                                                let callback_return_w0_f8: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f8.expect("active value"),
+                                                );
+                                                callback_return_w0_f8
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f9 = if true {
+                                            Some(callback_return_w1_f9)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f9_built = if true {
+                                            Some({
+                                                let callback_return_w0_f9: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f9.expect("active value"),
+                                                );
+                                                callback_return_w0_f9
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f10 = if true {
+                                            Some(callback_return_w1_f10)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f10_built = if true {
+                                            Some({
+                                                let callback_return_w0_f10: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f10.expect("active value"),
+                                                );
+                                                callback_return_w0_f10
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f11 = if true {
+                                            Some(callback_return_w1_f11)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f11_built = if true {
+                                            Some({
+                                                let callback_return_w0_f11: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f11.expect("active value"),
+                                                );
+                                                callback_return_w0_f11
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f12 = if true {
+                                            Some(callback_return_w1_f12)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f12_built = if true {
+                                            Some({
+                                                let callback_return_w0_f12: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f12.expect("active value"),
+                                                );
+                                                callback_return_w0_f12
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f13 = if true {
+                                            Some(callback_return_w1_f13)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f13_built = if true {
+                                            Some({
+                                                let callback_return_w0_f13: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f13.expect("active value"),
+                                                );
+                                                callback_return_w0_f13
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f14 = if true {
+                                            Some(callback_return_w1_f14)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f14_built = if true {
+                                            Some({
+                                                let callback_return_w0_f14: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f14.expect("active value"),
+                                                );
+                                                callback_return_w0_f14
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f15 = if true {
+                                            Some(callback_return_w1_f15)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f15_built = if true {
+                                            Some({
+                                                let callback_return_w0_f15: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f15.expect("active value"),
+                                                );
+                                                callback_return_w0_f15
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f16 = if true {
+                                            Some(callback_return_w1_f16)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f16_built = if true {
+                                            Some({
+                                                let callback_return_w0_f16: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f16.expect("active value"),
+                                                );
+                                                callback_return_w0_f16
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f17 = if true {
+                                            Some(callback_return_w1_f17)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f17_built = if true {
+                                            Some({
+                                                let callback_return_w0_f17: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f17.expect("active value"),
+                                                );
+                                                callback_return_w0_f17
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f18 = if true {
+                                            Some(callback_return_w1_f18)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f18_built = if true {
+                                            Some({
+                                                let callback_return_w0_f18: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f18.expect("active value"),
+                                                );
+                                                callback_return_w0_f18
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f19 = if true {
+                                            Some(callback_return_w1_f19)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f19_built = if true {
+                                            Some({
+                                                let callback_return_w0_f19: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f19.expect("active value"),
+                                                );
+                                                callback_return_w0_f19
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f20 = if true {
+                                            Some(callback_return_w1_f20)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f20_built = if true {
+                                            Some({
+                                                let callback_return_w0_f20: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f20.expect("active value"),
+                                                );
+                                                callback_return_w0_f20
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f21 = if true {
+                                            Some(callback_return_w1_f21)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f21_built = if true {
+                                            Some({
+                                                let callback_return_w0_f21: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f21.expect("active value"),
+                                                );
+                                                callback_return_w0_f21
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f22 = if true {
+                                            Some(callback_return_w1_f22)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f22_built = if true {
+                                            Some({
+                                                let callback_return_w0_f22: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f22.expect("active value"),
+                                                );
+                                                callback_return_w0_f22
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f23 = if true {
+                                            Some(callback_return_w1_f23)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f23_built = if true {
+                                            Some({
+                                                let callback_return_w0_f23: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f23.expect("active value"),
+                                                );
+                                                callback_return_w0_f23
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f24 = if true {
+                                            Some(callback_return_w1_f24)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f24_built = if true {
+                                            Some({
+                                                let callback_return_w0_f24: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f24.expect("active value"),
+                                                );
+                                                callback_return_w0_f24
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f25 = if true {
+                                            Some(callback_return_w1_f25)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f25_built = if true {
+                                            Some({
+                                                let callback_return_w0_f25: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f25.expect("active value"),
+                                                );
+                                                callback_return_w0_f25
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f26 = if true {
+                                            Some(callback_return_w1_f26)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f26_built = if true {
+                                            Some({
+                                                let callback_return_w0_f26: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f26.expect("active value"),
+                                                );
+                                                callback_return_w0_f26
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f27 = if true {
+                                            Some(callback_return_w1_f27)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f27_built = if true {
+                                            Some({
+                                                let callback_return_w0_f27: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f27.expect("active value"),
+                                                );
+                                                callback_return_w0_f27
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f28 = if true {
+                                            Some(callback_return_w1_f28)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f28_built = if true {
+                                            Some({
+                                                let callback_return_w0_f28: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f28.expect("active value"),
+                                                );
+                                                callback_return_w0_f28
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f29 = if true {
+                                            Some(callback_return_w1_f29)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f29_built = if true {
+                                            Some({
+                                                let callback_return_w0_f29: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f29.expect("active value"),
+                                                );
+                                                callback_return_w0_f29
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f30 = if true {
+                                            Some(callback_return_w1_f30)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f30_built = if true {
+                                            Some({
+                                                let callback_return_w0_f30: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f30.expect("active value"),
+                                                );
+                                                callback_return_w0_f30
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w0_f31 = if true {
+                                            Some(callback_return_w1_f31)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_f31_built = if true {
+                                            Some({
+                                                let callback_return_w0_f31: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0_f31.expect("active value"),
+                                                );
+                                                callback_return_w0_f31
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some({
+                                                let callback_return_w0: bench_flat::WideRow = bench_flat::WideRow {
+                                                    f0: callback_return_w0_f0_built.expect("active input"),
+                                                    f1: callback_return_w0_f1_built.expect("active input"),
+                                                    f2: callback_return_w0_f2_built.expect("active input"),
+                                                    f3: callback_return_w0_f3_built.expect("active input"),
+                                                    f4: callback_return_w0_f4_built.expect("active input"),
+                                                    f5: callback_return_w0_f5_built.expect("active input"),
+                                                    f6: callback_return_w0_f6_built.expect("active input"),
+                                                    f7: callback_return_w0_f7_built.expect("active input"),
+                                                    f8: callback_return_w0_f8_built.expect("active input"),
+                                                    f9: callback_return_w0_f9_built.expect("active input"),
+                                                    f10: callback_return_w0_f10_built.expect("active input"),
+                                                    f11: callback_return_w0_f11_built.expect("active input"),
+                                                    f12: callback_return_w0_f12_built.expect("active input"),
+                                                    f13: callback_return_w0_f13_built.expect("active input"),
+                                                    f14: callback_return_w0_f14_built.expect("active input"),
+                                                    f15: callback_return_w0_f15_built.expect("active input"),
+                                                    f16: callback_return_w0_f16_built.expect("active input"),
+                                                    f17: callback_return_w0_f17_built.expect("active input"),
+                                                    f18: callback_return_w0_f18_built.expect("active input"),
+                                                    f19: callback_return_w0_f19_built.expect("active input"),
+                                                    f20: callback_return_w0_f20_built.expect("active input"),
+                                                    f21: callback_return_w0_f21_built.expect("active input"),
+                                                    f22: callback_return_w0_f22_built.expect("active input"),
+                                                    f23: callback_return_w0_f23_built.expect("active input"),
+                                                    f24: callback_return_w0_f24_built.expect("active input"),
+                                                    f25: callback_return_w0_f25_built.expect("active input"),
+                                                    f26: callback_return_w0_f26_built.expect("active input"),
+                                                    f27: callback_return_w0_f27_built.expect("active input"),
+                                                    f28: callback_return_w0_f28_built.expect("active input"),
+                                                    f29: callback_return_w0_f29_built.expect("active input"),
+                                                    f30: callback_return_w0_f30_built.expect("active input"),
+                                                    f31: callback_return_w0_f31_built.expect("active input"),
+                                                };
+                                                callback_return_w0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok(callback_return_value)
+                                    }
+                                },
+                            )
+                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_callback_value;
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
             let source_value = bench_flat::wide_row_return_handler_new(
                 __prebindgen_argument_0,
             );
@@ -1402,7 +2058,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1461,8 +2118,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1fire
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -1474,13 +2135,36 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1fire
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let p1_w0 = if true { Some(p1_w1) } else { None };
-            let p0_w0: &bench_flat::RowReturnHandler = unsafe {
-                &(*p0_w1_pointer).value
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &bench_flat::RowReturnHandler = unsafe {
+                        &(*p0_w1_pointer).value
+                    };
+                    p0_w0
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i64 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = bench_flat::row_return_fire(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -1498,7 +2182,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1fire
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1557,8 +2242,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -1570,13 +2259,36 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let p1_w0 = if true { Some(p1_w1) } else { None };
-            let p0_w0: &bench_flat::WideRowReturnHandler = unsafe {
-                &(*p0_w1_pointer).value
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &bench_flat::WideRowReturnHandler = unsafe {
+                        &(*p0_w1_pointer).value
+                    };
+                    p0_w0
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i64 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = bench_flat::wide_row_return_fire(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -1594,7 +2306,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1652,11 +2365,23 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1control_1b0073ee3
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::control(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -1671,7 +2396,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1control_1b0073ee3
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1729,11 +2455,23 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1scalar_1a4a5da3f7
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::scalar(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -1748,7 +2486,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1scalar_1a4a5da3f7
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1813,51 +2552,125 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1sum_1db65517
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0_f0 = if true { Some(p0_w1_f0) } else { None };
-            let p0_w0_f1 = if true { Some(p0_w1_f1) } else { None };
-            let p0_w0_f2 = if true { Some(p0_w1_f2) } else { None };
-            let p0_w0_f3 = if true { Some(p0_w1_f3) } else { None };
-            let p0_w0_f4 = if true { Some(p0_w1_f4) } else { None };
-            let p0_w0_f5 = if true { Some(p0_w1_f5) } else { None };
-            let p0_w0_f6 = if true { Some(p0_w1_f6) } else { None };
-            let p0_w0_f7 = if true { Some(p0_w1_f7) } else { None };
-            let p0_w0_f0: i64 = ::core::convert::Into::into(
-                p0_w0_f0.expect("active value"),
-            );
-            let p0_w0_f1: i64 = ::core::convert::Into::into(
-                p0_w0_f1.expect("active value"),
-            );
-            let p0_w0_f2: i64 = ::core::convert::Into::into(
-                p0_w0_f2.expect("active value"),
-            );
-            let p0_w0_f3: i64 = ::core::convert::Into::into(
-                p0_w0_f3.expect("active value"),
-            );
-            let p0_w0_f4: i64 = ::core::convert::Into::into(
-                p0_w0_f4.expect("active value"),
-            );
-            let p0_w0_f5: i64 = ::core::convert::Into::into(
-                p0_w0_f5.expect("active value"),
-            );
-            let p0_w0_f6: i64 = ::core::convert::Into::into(
-                p0_w0_f6.expect("active value"),
-            );
-            let p0_w0_f7: i64 = ::core::convert::Into::into(
-                p0_w0_f7.expect("active value"),
-            );
-            let p0_w0: bench_flat::Row = bench_flat::Row {
-                a: p0_w0_f0,
-                b: p0_w0_f1,
-                c: p0_w0_f2,
-                d: p0_w0_f3,
-                e: p0_w0_f4,
-                f: p0_w0_f5,
-                g: p0_w0_f6,
-                h: p0_w0_f7,
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_built = if true {
+                Some({
+                    let p0_w0_f0: i64 = ::core::convert::Into::into(
+                        p0_w0_f0.expect("active value"),
+                    );
+                    p0_w0_f0
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_w0;
+            let p0_w0_f1 = if true { Some(p0_w1_f1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f1_built = if true {
+                Some({
+                    let p0_w0_f1: i64 = ::core::convert::Into::into(
+                        p0_w0_f1.expect("active value"),
+                    );
+                    p0_w0_f1
+                })
+            } else {
+                None
+            };
+            let p0_w0_f2 = if true { Some(p0_w1_f2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f2_built = if true {
+                Some({
+                    let p0_w0_f2: i64 = ::core::convert::Into::into(
+                        p0_w0_f2.expect("active value"),
+                    );
+                    p0_w0_f2
+                })
+            } else {
+                None
+            };
+            let p0_w0_f3 = if true { Some(p0_w1_f3) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f3_built = if true {
+                Some({
+                    let p0_w0_f3: i64 = ::core::convert::Into::into(
+                        p0_w0_f3.expect("active value"),
+                    );
+                    p0_w0_f3
+                })
+            } else {
+                None
+            };
+            let p0_w0_f4 = if true { Some(p0_w1_f4) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f4_built = if true {
+                Some({
+                    let p0_w0_f4: i64 = ::core::convert::Into::into(
+                        p0_w0_f4.expect("active value"),
+                    );
+                    p0_w0_f4
+                })
+            } else {
+                None
+            };
+            let p0_w0_f5 = if true { Some(p0_w1_f5) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f5_built = if true {
+                Some({
+                    let p0_w0_f5: i64 = ::core::convert::Into::into(
+                        p0_w0_f5.expect("active value"),
+                    );
+                    p0_w0_f5
+                })
+            } else {
+                None
+            };
+            let p0_w0_f6 = if true { Some(p0_w1_f6) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f6_built = if true {
+                Some({
+                    let p0_w0_f6: i64 = ::core::convert::Into::into(
+                        p0_w0_f6.expect("active value"),
+                    );
+                    p0_w0_f6
+                })
+            } else {
+                None
+            };
+            let p0_w0_f7 = if true { Some(p0_w1_f7) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f7_built = if true {
+                Some({
+                    let p0_w0_f7: i64 = ::core::convert::Into::into(
+                        p0_w0_f7.expect("active value"),
+                    );
+                    p0_w0_f7
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: bench_flat::Row = bench_flat::Row {
+                        a: p0_w0_f0_built.expect("active input"),
+                        b: p0_w0_f1_built.expect("active input"),
+                        c: p0_w0_f2_built.expect("active input"),
+                        d: p0_w0_f3_built.expect("active input"),
+                        e: p0_w0_f4_built.expect("active input"),
+                        f: p0_w0_f5_built.expect("active input"),
+                        g: p0_w0_f6_built.expect("active input"),
+                        h: p0_w0_f7_built.expect("active input"),
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::row_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -1872,7 +2685,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1sum_1db65517
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -1930,7 +2744,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
@@ -1961,24 +2777,34 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
                     {
                         return Err("JNI collection field decoding failed".into());
                     }
-                    let p0_w4 = if true {
-                        Some(*p0_w5.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
-                        );
-                        let p0_w0 = p0_w4;
+                        let p0_w4 = if true {
+                            Some(*p0_w5.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_built = if true {
+                            Some({
+                                let p0_w4: i64 = ::core::convert::Into::into(
+                                    p0_w4.expect("active value"),
+                                );
+                                p0_w4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w0 = p0_w4_built.expect("active input");
                         Ok(p0_w0)
                     })();
                     drop(p0_w1_frame);
                     p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::numbers_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -1993,7 +2819,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -2051,9 +2878,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<bench_flat::Row> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -2061,7 +2890,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
-                p0_w1_staged.reserve_exact(p0_w2);
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -2155,99 +2984,167 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
                     {
                         return Err("JNI collection field decoding failed".into());
                     }
-                    let p0_w4_f0 = if true {
-                        Some(*p0_w5_f0.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f1 = if true {
-                        Some(*p0_w5_f1.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f2 = if true {
-                        Some(*p0_w5_f2.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f3 = if true {
-                        Some(*p0_w5_f3.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f4 = if true {
-                        Some(*p0_w5_f4.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f5 = if true {
-                        Some(*p0_w5_f5.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f6 = if true {
-                        Some(*p0_w5_f6.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f7 = if true {
-                        Some(*p0_w5_f7.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<bench_flat::Row, String> {
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        bench_flat::Row,
+                        String,
+                    > {
+                        let p0_w4_f0 = if true {
+                            Some(*p0_w5_f0.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f0_built = if true {
+                            Some({
                                 let p0_w4_f0: i64 = ::core::convert::Into::into(
                                     p0_w4_f0.expect("active value"),
                                 );
+                                p0_w4_f0
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f1 = if true {
+                            Some(*p0_w5_f1.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f1_built = if true {
+                            Some({
                                 let p0_w4_f1: i64 = ::core::convert::Into::into(
                                     p0_w4_f1.expect("active value"),
                                 );
+                                p0_w4_f1
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f2 = if true {
+                            Some(*p0_w5_f2.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f2_built = if true {
+                            Some({
                                 let p0_w4_f2: i64 = ::core::convert::Into::into(
                                     p0_w4_f2.expect("active value"),
                                 );
+                                p0_w4_f2
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f3 = if true {
+                            Some(*p0_w5_f3.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f3_built = if true {
+                            Some({
                                 let p0_w4_f3: i64 = ::core::convert::Into::into(
                                     p0_w4_f3.expect("active value"),
                                 );
+                                p0_w4_f3
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f4 = if true {
+                            Some(*p0_w5_f4.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f4_built = if true {
+                            Some({
                                 let p0_w4_f4: i64 = ::core::convert::Into::into(
                                     p0_w4_f4.expect("active value"),
                                 );
+                                p0_w4_f4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f5 = if true {
+                            Some(*p0_w5_f5.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f5_built = if true {
+                            Some({
                                 let p0_w4_f5: i64 = ::core::convert::Into::into(
                                     p0_w4_f5.expect("active value"),
                                 );
+                                p0_w4_f5
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f6 = if true {
+                            Some(*p0_w5_f6.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f6_built = if true {
+                            Some({
                                 let p0_w4_f6: i64 = ::core::convert::Into::into(
                                     p0_w4_f6.expect("active value"),
                                 );
+                                p0_w4_f6
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f7 = if true {
+                            Some(*p0_w5_f7.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f7_built = if true {
+                            Some({
                                 let p0_w4_f7: i64 = ::core::convert::Into::into(
                                     p0_w4_f7.expect("active value"),
                                 );
+                                p0_w4_f7
+                            })
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_built = if true {
+                            Some({
                                 let p0_w4: bench_flat::Row = bench_flat::Row {
-                                    a: p0_w4_f0,
-                                    b: p0_w4_f1,
-                                    c: p0_w4_f2,
-                                    d: p0_w4_f3,
-                                    e: p0_w4_f4,
-                                    f: p0_w4_f5,
-                                    g: p0_w4_f6,
-                                    h: p0_w4_f7,
+                                    a: p0_w4_f0_built.expect("active input"),
+                                    b: p0_w4_f1_built.expect("active input"),
+                                    c: p0_w4_f2_built.expect("active input"),
+                                    d: p0_w4_f3_built.expect("active input"),
+                                    e: p0_w4_f4_built.expect("active input"),
+                                    f: p0_w4_f5_built.expect("active input"),
+                                    g: p0_w4_f6_built.expect("active input"),
+                                    h: p0_w4_f7_built.expect("active input"),
                                 };
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                                p0_w4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w0 = p0_w4_built.expect("active input");
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<bench_flat::Row> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
-            let __prebindgen_argument_0 = p0_w0.as_slice();
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::rows_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -2262,7 +3159,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -2321,14 +3219,36 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i64 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = bench_flat::rows_make(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -2518,7 +3438,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -2576,9 +3497,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<bench_flat::Row> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -2586,7 +3509,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
-                p0_w1_staged.reserve_exact(p0_w2);
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -2680,99 +3603,167 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                     {
                         return Err("JNI collection field decoding failed".into());
                     }
-                    let p0_w4_f0 = if true {
-                        Some(*p0_w5_f0.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f1 = if true {
-                        Some(*p0_w5_f1.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f2 = if true {
-                        Some(*p0_w5_f2.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f3 = if true {
-                        Some(*p0_w5_f3.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f4 = if true {
-                        Some(*p0_w5_f4.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f5 = if true {
-                        Some(*p0_w5_f5.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f6 = if true {
-                        Some(*p0_w5_f6.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    let p0_w4_f7 = if true {
-                        Some(*p0_w5_f7.as_ref().map_err(|e| e.clone())?)
-                    } else {
-                        None
-                    };
-                    drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<bench_flat::Row, String> {
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        bench_flat::Row,
+                        String,
+                    > {
+                        let p0_w4_f0 = if true {
+                            Some(*p0_w5_f0.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f0_built = if true {
+                            Some({
                                 let p0_w4_f0: i64 = ::core::convert::Into::into(
                                     p0_w4_f0.expect("active value"),
                                 );
+                                p0_w4_f0
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f1 = if true {
+                            Some(*p0_w5_f1.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f1_built = if true {
+                            Some({
                                 let p0_w4_f1: i64 = ::core::convert::Into::into(
                                     p0_w4_f1.expect("active value"),
                                 );
+                                p0_w4_f1
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f2 = if true {
+                            Some(*p0_w5_f2.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f2_built = if true {
+                            Some({
                                 let p0_w4_f2: i64 = ::core::convert::Into::into(
                                     p0_w4_f2.expect("active value"),
                                 );
+                                p0_w4_f2
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f3 = if true {
+                            Some(*p0_w5_f3.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f3_built = if true {
+                            Some({
                                 let p0_w4_f3: i64 = ::core::convert::Into::into(
                                     p0_w4_f3.expect("active value"),
                                 );
+                                p0_w4_f3
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f4 = if true {
+                            Some(*p0_w5_f4.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f4_built = if true {
+                            Some({
                                 let p0_w4_f4: i64 = ::core::convert::Into::into(
                                     p0_w4_f4.expect("active value"),
                                 );
+                                p0_w4_f4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f5 = if true {
+                            Some(*p0_w5_f5.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f5_built = if true {
+                            Some({
                                 let p0_w4_f5: i64 = ::core::convert::Into::into(
                                     p0_w4_f5.expect("active value"),
                                 );
+                                p0_w4_f5
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f6 = if true {
+                            Some(*p0_w5_f6.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f6_built = if true {
+                            Some({
                                 let p0_w4_f6: i64 = ::core::convert::Into::into(
                                     p0_w4_f6.expect("active value"),
                                 );
+                                p0_w4_f6
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w4_f7 = if true {
+                            Some(*p0_w5_f7.as_ref().map_err(|e| e.clone())?)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_f7_built = if true {
+                            Some({
                                 let p0_w4_f7: i64 = ::core::convert::Into::into(
                                     p0_w4_f7.expect("active value"),
                                 );
+                                p0_w4_f7
+                            })
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_built = if true {
+                            Some({
                                 let p0_w4: bench_flat::Row = bench_flat::Row {
-                                    a: p0_w4_f0,
-                                    b: p0_w4_f1,
-                                    c: p0_w4_f2,
-                                    d: p0_w4_f3,
-                                    e: p0_w4_f4,
-                                    f: p0_w4_f5,
-                                    g: p0_w4_f6,
-                                    h: p0_w4_f7,
+                                    a: p0_w4_f0_built.expect("active input"),
+                                    b: p0_w4_f1_built.expect("active input"),
+                                    c: p0_w4_f2_built.expect("active input"),
+                                    d: p0_w4_f3_built.expect("active input"),
+                                    e: p0_w4_f4_built.expect("active input"),
+                                    f: p0_w4_f5_built.expect("active input"),
+                                    g: p0_w4_f6_built.expect("active input"),
+                                    h: p0_w4_f7_built.expect("active input"),
                                 };
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                                p0_w4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w0 = p0_w4_built.expect("active input");
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<bench_flat::Row> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::rows_echo(__prebindgen_argument_0);
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -2959,7 +3950,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -3025,63 +4017,153 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1packet_1sum_1c07e
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0_f0_f0 = if true { Some(p0_w1_f0_f0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f0_built = if true {
+                Some({
+                    let p0_w0_f0_f0: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f0.expect("active value"),
+                    );
+                    p0_w0_f0_f0
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f1 = if true { Some(p0_w1_f0_f1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f1_built = if true {
+                Some({
+                    let p0_w0_f0_f1: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f1.expect("active value"),
+                    );
+                    p0_w0_f0_f1
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f2 = if true { Some(p0_w1_f0_f2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f2_built = if true {
+                Some({
+                    let p0_w0_f0_f2: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f2.expect("active value"),
+                    );
+                    p0_w0_f0_f2
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f3 = if true { Some(p0_w1_f0_f3) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f3_built = if true {
+                Some({
+                    let p0_w0_f0_f3: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f3.expect("active value"),
+                    );
+                    p0_w0_f0_f3
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f4 = if true { Some(p0_w1_f0_f4) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f4_built = if true {
+                Some({
+                    let p0_w0_f0_f4: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f4.expect("active value"),
+                    );
+                    p0_w0_f0_f4
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f5 = if true { Some(p0_w1_f0_f5) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f5_built = if true {
+                Some({
+                    let p0_w0_f0_f5: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f5.expect("active value"),
+                    );
+                    p0_w0_f0_f5
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f6 = if true { Some(p0_w1_f0_f6) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f6_built = if true {
+                Some({
+                    let p0_w0_f0_f6: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f6.expect("active value"),
+                    );
+                    p0_w0_f0_f6
+                })
+            } else {
+                None
+            };
             let p0_w0_f0_f7 = if true { Some(p0_w1_f0_f7) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_f7_built = if true {
+                Some({
+                    let p0_w0_f0_f7: i64 = ::core::convert::Into::into(
+                        p0_w0_f0_f7.expect("active value"),
+                    );
+                    p0_w0_f0_f7
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f0_built = if true {
+                Some({
+                    let p0_w0_f0: bench_flat::Row = bench_flat::Row {
+                        a: p0_w0_f0_f0_built.expect("active input"),
+                        b: p0_w0_f0_f1_built.expect("active input"),
+                        c: p0_w0_f0_f2_built.expect("active input"),
+                        d: p0_w0_f0_f3_built.expect("active input"),
+                        e: p0_w0_f0_f4_built.expect("active input"),
+                        f: p0_w0_f0_f5_built.expect("active input"),
+                        g: p0_w0_f0_f6_built.expect("active input"),
+                        h: p0_w0_f0_f7_built.expect("active input"),
+                    };
+                    p0_w0_f0
+                })
+            } else {
+                None
+            };
             let p0_w0_f1 = if true {
                 Some(::prebindgen_jni_runtime::bytes(&mut jni_environment, &p0_w1_f1)?)
             } else {
                 None
             };
-            let p0_w0_f0_f0: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f0.expect("active value"),
-            );
-            let p0_w0_f0_f1: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f1.expect("active value"),
-            );
-            let p0_w0_f0_f2: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f2.expect("active value"),
-            );
-            let p0_w0_f0_f3: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f3.expect("active value"),
-            );
-            let p0_w0_f0_f4: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f4.expect("active value"),
-            );
-            let p0_w0_f0_f5: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f5.expect("active value"),
-            );
-            let p0_w0_f0_f6: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f6.expect("active value"),
-            );
-            let p0_w0_f0_f7: i64 = ::core::convert::Into::into(
-                p0_w0_f0_f7.expect("active value"),
-            );
-            let p0_w0_f0: bench_flat::Row = bench_flat::Row {
-                a: p0_w0_f0_f0,
-                b: p0_w0_f0_f1,
-                c: p0_w0_f0_f2,
-                d: p0_w0_f0_f3,
-                e: p0_w0_f0_f4,
-                f: p0_w0_f0_f5,
-                g: p0_w0_f0_f6,
-                h: p0_w0_f0_f7,
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_f1_built = if true {
+                Some({
+                    let p0_w0_f1: Vec<u8> = ::core::convert::Into::into(
+                        p0_w0_f1.expect("active value"),
+                    );
+                    p0_w0_f1
+                })
+            } else {
+                None
             };
-            let p0_w0_f1: Vec<u8> = ::core::convert::Into::into(
-                p0_w0_f1.expect("active value"),
-            );
-            let p0_w0: bench_flat::Packet = bench_flat::Packet {
-                header: p0_w0_f0,
-                bytes: p0_w0_f1,
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: bench_flat::Packet = bench_flat::Packet {
+                        header: p0_w0_f0_built.expect("active input"),
+                        bytes: p0_w0_f1_built.expect("active input"),
+                    };
+                    p0_w0
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_w0;
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::packet_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let __pb_direct_result = unsafe {
@@ -3096,7 +4178,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1packet_1sum_1c07e
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -3154,7 +4237,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
                 &mut jni_environment,
@@ -3162,291 +4247,312 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                 "([Ljava/lang/Object;)J",
                 "bench.plain.RowsCallback",
             )?;
-            #[allow(unused_mut, clippy::collapsible_if)]
-            let p0_callback_value = move |callback_source_0: Vec<bench_flat::Row>| {
-                p0_callback_retained
-                    .with_env_result(
-                        17i32,
-                        |callback_environment| {
-                            let mut callback_environment = callback_environment;
-                            let callback_value_0 = callback_source_0;
-                            {
-                                let callback_arg_0_w0_source = callback_value_0;
-                                let callback_arg_0_w2 = callback_arg_0_w0_source.len();
-                                let mut callback_arg_0_w0_commits = Vec::with_capacity(
-                                    callback_arg_0_w2,
-                                );
-                                let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
-                                    &mut callback_environment,
-                                    callback_arg_0_w2,
-                                )?;
-                                for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
-                                    .into_iter()
-                                    .enumerate()
-                                {
-                                    let callback_arg_0_w0_frame = unsafe {
-                                        ::prebindgen_jni_runtime::LocalFrame::new(
-                                            &callback_environment,
-                                            16i32,
-                                        )
-                                    }?;
-                                    let callback_arg_0_w4_record = callback_arg_0_w1;
-                                    let callback_arg_0_w4_f0 = callback_arg_0_w4_record.a;
-                                    let callback_arg_0_w4_f1 = callback_arg_0_w4_record.b;
-                                    let callback_arg_0_w4_f2 = callback_arg_0_w4_record.c;
-                                    let callback_arg_0_w4_f3 = callback_arg_0_w4_record.d;
-                                    let callback_arg_0_w4_f4 = callback_arg_0_w4_record.e;
-                                    let callback_arg_0_w4_f5 = callback_arg_0_w4_record.f;
-                                    let callback_arg_0_w4_f6 = callback_arg_0_w4_record.g;
-                                    let callback_arg_0_w4_f7 = callback_arg_0_w4_record.h;
-                                    let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
-                                        &mut callback_environment,
-                                        8usize,
-                                    )?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f0,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            0i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f1,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            1i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f2,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            2i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f3,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            3i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f4,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            4i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f5,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            5i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f6,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            6i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    let object = callback_environment
-                                        .call_static_method(
-                                            "java/lang/Long",
-                                            "valueOf",
-                                            "(J)Ljava/lang/Long;",
-                                            &[
-                                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                    callback_arg_0_w4_f7,
-                                                ),
-                                            ],
-                                        )
-                                        .and_then(|v| v.l())
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0_row,
-                                            7i32,
-                                            &object,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .delete_local_ref(object)
-                                        .map_err(|e| e.to_string())?;
-                                    callback_environment
-                                        .set_object_array_element(
-                                            &callback_arg_0_w0,
-                                            callback_arg_0_w3 as i32,
-                                            &callback_arg_0_w0_row,
-                                        )
-                                        .map_err(|e| e.to_string())?;
-                                    drop(callback_arg_0_w0_frame);
-                                    callback_arg_0_w0_commits.push(move || {});
-                                }
-                                let callback_arg_0_w0 = Some(callback_arg_0_w0);
-                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
-                                    Some(value) => {
-                                        callback_environment
-                                            .new_local_ref(value)
-                                            .map_err(|e| e.to_string())?
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                Some({
+                    #[allow(unused_mut, clippy::collapsible_if)]
+                    let p0_callback_value = move |
+                        callback_source_0: Vec<bench_flat::Row>|
+                    {
+                        p0_callback_retained
+                            .with_env_result(
+                                17i32,
+                                |callback_environment| {
+                                    let mut callback_environment = callback_environment;
+                                    let callback_value_0 = callback_source_0;
+                                    {
+                                        let callback_arg_0_w0_source = callback_value_0;
+                                        let callback_arg_0_w2 = callback_arg_0_w0_source.len();
+                                        let mut callback_arg_0_w0_commits = Vec::with_capacity(
+                                            callback_arg_0_w2,
+                                        );
+                                        let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
+                                            &mut callback_environment,
+                                            callback_arg_0_w2,
+                                        )?;
+                                        for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
+                                            .into_iter()
+                                            .enumerate()
+                                        {
+                                            let callback_arg_0_w0_frame = unsafe {
+                                                ::prebindgen_jni_runtime::LocalFrame::new(
+                                                    &callback_environment,
+                                                    16i32,
+                                                )
+                                            }?;
+                                            let callback_arg_0_w4_record = callback_arg_0_w1;
+                                            let callback_arg_0_w4_f0 = callback_arg_0_w4_record.a;
+                                            let callback_arg_0_w4_f1 = callback_arg_0_w4_record.b;
+                                            let callback_arg_0_w4_f2 = callback_arg_0_w4_record.c;
+                                            let callback_arg_0_w4_f3 = callback_arg_0_w4_record.d;
+                                            let callback_arg_0_w4_f4 = callback_arg_0_w4_record.e;
+                                            let callback_arg_0_w4_f5 = callback_arg_0_w4_record.f;
+                                            let callback_arg_0_w4_f6 = callback_arg_0_w4_record.g;
+                                            let callback_arg_0_w4_f7 = callback_arg_0_w4_record.h;
+                                            let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
+                                                &mut callback_environment,
+                                                8usize,
+                                            )?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f0,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    0i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f1,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    1i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f2,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    2i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f3,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    3i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f4,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    4i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f5,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    5i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f6,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    6i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            let object = callback_environment
+                                                .call_static_method(
+                                                    "java/lang/Long",
+                                                    "valueOf",
+                                                    "(J)Ljava/lang/Long;",
+                                                    &[
+                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                                            callback_arg_0_w4_f7,
+                                                        ),
+                                                    ],
+                                                )
+                                                .and_then(|v| v.l())
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0_row,
+                                                    7i32,
+                                                    &object,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .delete_local_ref(object)
+                                                .map_err(|e| e.to_string())?;
+                                            callback_environment
+                                                .set_object_array_element(
+                                                    &callback_arg_0_w0,
+                                                    callback_arg_0_w3 as i32,
+                                                    &callback_arg_0_w0_row,
+                                                )
+                                                .map_err(|e| e.to_string())?;
+                                            drop(callback_arg_0_w0_frame);
+                                            callback_arg_0_w0_commits.push(move || {});
+                                        }
+                                        let callback_arg_0_w0 = Some(callback_arg_0_w0);
+                                        let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
+                                            Some(value) => {
+                                                callback_environment
+                                                    .new_local_ref(value)
+                                                    .map_err(|e| e.to_string())?
+                                            }
+                                            None => {
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                            }
+                                        };
+                                        let arguments = [
+                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                l: callback_java_0_0.as_raw(),
+                                            },
+                                        ];
+                                        {
+                                            for commit in callback_arg_0_w0_commits {
+                                                commit();
+                                            }
+                                        }
+                                        let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                        let __prebindgen_input_consumed = &__pb_input_consumed;
+                                        let callback_result = unsafe {
+                                            p0_callback_retained
+                                                .invoke_return(
+                                                    callback_environment,
+                                                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                                        ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
+                                                    ),
+                                                    &arguments,
+                                                )
+                                        }?;
+                                        let callback_return_w1 = callback_result
+                                            .j()
+                                            .map_err(|e| e.to_string())?;
+                                        let callback_return_w0 = if true {
+                                            Some(callback_return_w1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some({
+                                                let callback_return_w0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0.expect("active value"),
+                                                );
+                                                callback_return_w0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok(callback_return_value)
                                     }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
-                                let arguments = [
-                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        l: callback_java_0_0.as_raw(),
-                                    },
-                                ];
-                                {
-                                    for commit in callback_arg_0_w0_commits {
-                                        commit();
-                                    }
-                                }
-                                let callback_result = unsafe {
-                                    p0_callback_retained
-                                        .invoke_return(
-                                            callback_environment,
-                                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
-                                                ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
-                                            ),
-                                            &arguments,
-                                        )
-                                }?;
-                                let callback_return_w1 = callback_result
-                                    .j()
-                                    .map_err(|e| e.to_string())?;
-                                let callback_return_w0 = if true {
-                                    Some(callback_return_w1)
-                                } else {
-                                    None
-                                };
-                                let callback_return_w0: i64 = ::core::convert::Into::into(
-                                    callback_return_w0.expect("active value"),
-                                );
-                                let callback_return_value = callback_return_w0;
-                                Ok(callback_return_value)
-                            }
-                        },
-                    )
-                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                                },
+                            )
+                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
             };
-            let __prebindgen_argument_0 = p0_callback_value;
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
             let source_value = bench_flat::handler_new(__prebindgen_argument_0);
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
@@ -3467,7 +4573,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -3527,8 +4634,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_16fdab6ebdae
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut ::prebindgen_jni_runtime::Allocation<bench_flat::Handler>
             } else {
@@ -3537,14 +4648,47 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_16fdab6ebdae
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &bench_flat::Handler = unsafe { &(*p0_w1_pointer).value };
+                    p0_w0
+                })
+            } else {
+                None
+            };
             let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i64 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
             let p2_w0 = if true { Some(p2_w1) } else { None };
-            let p0_w0: &bench_flat::Handler = unsafe { &(*p0_w1_pointer).value };
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
-            let p2_w0: i64 = ::core::convert::Into::into(p2_w0.expect("active value"));
-            let __prebindgen_argument_2 = p2_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: i64 = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
             let source_value = bench_flat::fire(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -3563,7 +4707,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_16fdab6ebdae
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -3624,7 +4769,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         if jni_environment
             .get_array_length(&__pb_output_accepted)
             .map_err(|e| e.to_string())? != 1
@@ -3636,11 +4783,31 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
         }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i64 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = bench_flat::rows_for_reduce(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -3735,7 +4902,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
