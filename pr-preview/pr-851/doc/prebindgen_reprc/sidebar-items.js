@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["schema_id"],"struct":["LayoutArtifact","Record","SizeAlign","SourceFeatures"],"type":["Result"]};

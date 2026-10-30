@@ -1,9 +1,0 @@
-(function() {
-    const implementors = Object.fromEntries([["prebindgen_jni_runtime",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"prebindgen_jni_runtime/struct.LocalFrame.html\" title=\"struct prebindgen_jni_runtime::LocalFrame\">LocalFrame</a>&lt;'_&gt;",0]]],["prebindgen_runtime",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"prebindgen_runtime/struct.CallbackReturnAllocations.html\" title=\"struct prebindgen_runtime::CallbackReturnAllocations\">CallbackReturnAllocations</a>",0]]]]);
-    if (window.register_implementors) {
-        window.register_implementors(implementors);
-    } else {
-        window.pending_implementors = implementors;
-    }
-})()
-//{"start":59,"fragment_lengths":[333,357]}
