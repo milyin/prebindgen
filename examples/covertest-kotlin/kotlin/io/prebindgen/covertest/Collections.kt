@@ -192,7 +192,7 @@ fun checkCollections() {
         byteArrayOf(7), "text")
     for (row in listOf(validRow, validRow.copyOf().also { it[8] = null })) {
         val packet = rawScalars.invokePacket(arrayOf<Any?>(row), 0.0)
-        check(packet[0] == null && (packet[1] as Array<*>).size == 1)
+        check(packet[0] == null && (packet[1] as ByteArray).isNotEmpty())
     }
     // Reject every wrong boxed class, and null for each non-reference field.
     // Reference nulls are checked later against the Rust domain: wide is

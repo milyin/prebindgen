@@ -635,6 +635,9 @@ impl Codec for DataCodec<'_> {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, extra: &()) -> bool {
+        JniCodec.default_output_sequence_is_bulk(flat, extra)
+    }
     fn sequence_input(
         &self,
         e: &(),

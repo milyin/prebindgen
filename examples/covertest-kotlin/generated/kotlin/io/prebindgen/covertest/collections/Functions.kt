@@ -8,57 +8,25 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`flag`, p0_w5.`byte`, p0_w5.`s
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_scalars_d9a5730159aaf1ce(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.collections.SequenceScalars>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-            if (output_row[8] != null) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.collections.SequenceScalars>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.collections.SequenceScalars>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r47d5b4cf248acabb.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r16c9028899446031.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r16c9028899446031.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             if (output_row[8] != null) {
-            }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            if (output_row[8] != null) {
+            if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[8])) == 1) {
             }
 
-outputlist.add(io.prebindgen.covertest.collections.SequenceScalars(output_row[0] as Boolean, output_row[1] as Byte, output_row[2] as Short, output_row[3] as Int, output_row[4] as Long, output_row[5] as Float, output_row[6] as Double, java.math.BigInteger(output_row[7] as ByteArray), if (output_row[8] != null) output_row[8] as String else null))
+outputbulkList!!.add(io.prebindgen.covertest.collections.SequenceScalars(((requireNotNull(outputbulkReader).byte((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[0]).toInt() != 0)) as Boolean, (requireNotNull(outputbulkReader).byte((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[1])) as Byte, (requireNotNull(outputbulkReader).short((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[2])) as Short, (requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[3])) as Int, (requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[4])) as Long, (requireNotNull(outputbulkReader).float((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[5])) as Float, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[6])) as Double, java.math.BigInteger((requireNotNull(outputbulkReader).wide((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[7])) as ByteArray), if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[8])) == 1) (requireNotNull(outputbulkReader).text((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r16c9028899446031.offsets[9])) as String else null))
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-            if (output_row[8] != null) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -69,49 +37,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5?.toByteArray()) }, { kotlin.co
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_u128_04e9df44fc750d1f(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<java.math.BigInteger>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<java.math.BigInteger>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<java.math.BigInteger>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r31d2b5a17a152d89.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r98c254983b527011.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r98c254983b527011.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(java.math.BigInteger(1, output_row[0] as ByteArray))
+outputbulkList!!.add(java.math.BigInteger(1, (requireNotNull(outputbulkReader).wide((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r98c254983b527011.offsets[0])) as ByteArray))
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -136,111 +78,123 @@ public fun `collectionMakeItems`(onError: io.prebindgen.covertest.JniErrorHandle
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_make_items_c6725210ed9bf318(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r8ffe01984b73b3e2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-        var outputitem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r8ffe01984b73b3e2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+outputbulkActions = kotlin.collections.mutableListOf()
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size
+        var outputbulkItem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             try { val owner = outputitem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            outputitem_g0_g0_0 = io.prebindgen.covertest.resources.OwnedResource(output_row[0] as Long)
+outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try {             try { val owner = outputbulkItem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
+            outputbulkItem_g0_g0_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.offsets[0])) as Long)
 
-outputlist.add(requireNotNull(outputitem_g0_g0_0))
+outputbulkList!!.add(requireNotNull(outputbulkItem_g0_g0_0))
 }
-            requireNotNull(outputlist)
+            requireNotNull(outputbulkList)
         } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r8ffe01984b73b3e2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rd99ca8906ac47728.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             throw failure
         }
     } finally { returnCapture.release() }
 }
 
 public fun <R> `collectionBundle`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource>, Long) -> R): R = run {
-    val returnCapture = io.prebindgen.covertest.Return_Array_Any___Long2_ErrorEmpty_9ac4dd96dd8aa1a2.acquire()
+    val returnCapture = io.prebindgen.covertest.Return_ByteArray_Long2_ErrorEmpty_34705c584e211183.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_bundle_f76991cc8c87924d(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputg0_g0_g0_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputg0_g0_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputg0_g0_g0_cleanupAction in outputg0_g0_g0_cleanups.orEmpty()) { try { outputg0_g0_g0_cleanupAction(failure) } catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) } }
-for (outputg0_g0_g0_index in (outputg0_g0_g0_cleanups?.size ?: 0) until (returnCapture.s0 as kotlin.Array<*>).size) {
-var outputg0_g0_g0_failure: kotlin.Throwable? = failure
-try { val outputg0_g0_g0__row = (returnCapture.s0 as kotlin.Array<*>)[outputg0_g0_g0_index] as kotlin.Array<*>
-        var outputg0_g0_g0_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputg0_g0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputg0_g0_g0_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
+ if (outputg0_g0_g0_bulkReader == null) { outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+ }
+try { if (outputg0_g0_g0_bulkRange == null) outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputg0_g0_g0_bulkActions.orEmpty()) { try { action(failure) } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_g0_bulkCleanupError) } }
+for (outputg0_g0_g0_bulkIndex in (outputg0_g0_g0_bulkActions?.size ?: 0) until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputg0_g0_g0_bulkFailure: Throwable? = failure
+try {         var outputg0_g0_g0_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputg0_g0_g0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg0_g0_g0__row[0] as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = cleanup else if (outputg0_g0_g0_failure !== cleanup) outputg0_g0_g0_failure!!.addSuppressed(cleanup) }
+            try { val owner = outputg0_g0_g0_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = cleanup else if (outputg0_g0_g0_bulkFailure !== cleanup) outputg0_g0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = outputg0_g0_g0_bulkCleanupError else if (outputg0_g0_g0_bulkFailure !== outputg0_g0_g0_bulkCleanupError) outputg0_g0_g0_bulkFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
 
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-
-}
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) }
+} } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputg0_g0_g0_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputg0_g0_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputg0_g0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputg0_g0_g0_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
-outputg0_g0_g0_cleanups = kotlin.collections.mutableListOf()
-outputg0_g0_g0_list = kotlin.collections.mutableListOf()
-for (outputg0_g0_g0_rawRow in (returnCapture.s0 as kotlin.Array<*>)) {
-val outputg0_g0_g0__row = outputg0_g0_g0_rawRow as kotlin.Array<*>
-        var outputg0_g0_g0_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputg0_g0_g0_bulkList = kotlin.collections.ArrayList(outputg0_g0_g0_bulkRange!!.length)
+outputg0_g0_g0_bulkActions = kotlin.collections.mutableListOf()
+for (outputg0_g0_g0_bulkIndex in 0 until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputg0_g0_g0_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputg0_g0_g0_cleanups.add { outputg0_g0_g0_initialFailure -> var outputg0_g0_g0_failure = outputg0_g0_g0_initialFailure; try {             try { val owner = outputg0_g0_g0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg0_g0_g0__row[0] as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = cleanup else if (outputg0_g0_g0_failure !== cleanup) outputg0_g0_g0_failure!!.addSuppressed(cleanup) }
- } catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }; outputg0_g0_g0_failure }
-            outputg0_g0_g0_item_0 = io.prebindgen.covertest.resources.OwnedResource(outputg0_g0_g0__row[0] as Long)
+outputg0_g0_g0_bulkActions!!.add { initial -> var outputg0_g0_g0_bulkFailure = initial; try {             try { val owner = outputg0_g0_g0_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = cleanup else if (outputg0_g0_g0_bulkFailure !== cleanup) outputg0_g0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = outputg0_g0_g0_bulkCleanupError else if (outputg0_g0_g0_bulkFailure !== outputg0_g0_g0_bulkCleanupError) outputg0_g0_g0_bulkFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }; outputg0_g0_g0_bulkFailure }
+            outputg0_g0_g0_bulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
-outputg0_g0_g0_list.add(requireNotNull(outputg0_g0_g0_item_0))
+outputg0_g0_g0_bulkList!!.add(requireNotNull(outputg0_g0_g0_bulkItem_0))
 }
-            build(requireNotNull(outputg0_g0_g0_list), returnCapture.s1)
+            build(requireNotNull(outputg0_g0_g0_bulkList), returnCapture.s1)
         } catch (failure: Throwable) {
-try {
-for (outputg0_g0_g0_cleanupAction in outputg0_g0_g0_cleanups.orEmpty()) { try { outputg0_g0_g0_cleanupAction(failure) } catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) } }
-for (outputg0_g0_g0_index in (outputg0_g0_g0_cleanups?.size ?: 0) until (returnCapture.s0 as kotlin.Array<*>).size) {
-var outputg0_g0_g0_failure: kotlin.Throwable? = failure
-try { val outputg0_g0_g0__row = (returnCapture.s0 as kotlin.Array<*>)[outputg0_g0_g0_index] as kotlin.Array<*>
-        var outputg0_g0_g0_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputg0_g0_g0_bulkReader == null) { outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+ }
+try { if (outputg0_g0_g0_bulkRange == null) outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputg0_g0_g0_bulkActions.orEmpty()) { try { action(failure) } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_g0_bulkCleanupError) } }
+for (outputg0_g0_g0_bulkIndex in (outputg0_g0_g0_bulkActions?.size ?: 0) until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputg0_g0_g0_bulkFailure: Throwable? = failure
+try {         var outputg0_g0_g0_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputg0_g0_g0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg0_g0_g0__row[0] as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = cleanup else if (outputg0_g0_g0_failure !== cleanup) outputg0_g0_g0_failure!!.addSuppressed(cleanup) }
+            try { val owner = outputg0_g0_g0_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = cleanup else if (outputg0_g0_g0_bulkFailure !== cleanup) outputg0_g0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = outputg0_g0_g0_bulkCleanupError else if (outputg0_g0_g0_bulkFailure !== outputg0_g0_g0_bulkCleanupError) outputg0_g0_g0_bulkFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
 
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-
-}
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) }
+} } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
             throw failure
         }
     } finally { returnCapture.release() }
@@ -256,59 +210,65 @@ val nativeResult = try { run { val handles = try { (kotlin.collections.emptyList
         val ownership = BooleanArray(1)
         try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_handles_d09dc27d024df24c(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0]) { if (p0_w3 != null) { p0_w3_elements.orEmpty().forEach { it.third() } } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
              if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
             if (nativeResult != null) {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+outputbulkActions = kotlin.collections.mutableListOf()
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            outputitem_0 = io.prebindgen.covertest.resources.OwnedResource(output_row[0] as Long)
+outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try {             try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
+            outputbulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
-outputlist.add(requireNotNull(outputitem_0))
+outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 }
             }
-            if (nativeResult != null) requireNotNull(outputlist) else null
+            if (nativeResult != null) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
             if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             }
             throw failure
         }
@@ -328,156 +288,134 @@ val nativeResult = try { run { val handles = try { (kotlin.collections.emptyList
         val ownership = BooleanArray(1)
         try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_nested_handles_a1c0a814a0de57b0(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0]) { p0_w1_elements.orEmpty().forEach { it.third() } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource>>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource>>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r5fcba94d312234e5.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkItem_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
 
-try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
-        var outputitem_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkItem_bulkActions.orEmpty()) { try { outputbulkFailure = action(outputbulkFailure) } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) } }
+for (outputbulkItem_bulkIndex in (outputbulkItem_bulkActions?.size ?: 0) until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[0] as Long) } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
-}
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource>>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource>>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r5fcba94d312234e5.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+outputbulkActions = kotlin.collections.mutableListOf()
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size
+var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkItem_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try { try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
-        var outputitem_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try { try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkItem_bulkActions.orEmpty()) { try { outputbulkFailure = action(outputbulkFailure) } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) } }
+for (outputbulkItem_bulkIndex in (outputbulkItem_bulkActions?.size ?: 0) until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[0] as Long) } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
+outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkItem_bulkList = kotlin.collections.ArrayList(outputbulkItem_bulkRange!!.length)
+outputbulkItem_bulkActions = kotlin.collections.mutableListOf()
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputbulkItem_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
+outputbulkItem_bulkActions!!.add { initial -> var outputbulkItem_bulkFailure = initial; try {             try { val owner = outputbulkItem_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }; outputbulkItem_bulkFailure }
+            outputbulkItem_bulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
+
+outputbulkItem_bulkList!!.add(requireNotNull(outputbulkItem_bulkItem_0))
 }
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-outputitem_cleanups = kotlin.collections.mutableListOf()
-outputitem_list = kotlin.collections.mutableListOf()
-for (outputitem_rawRow in (output_row[0] as kotlin.Array<*>)) {
-val outputitem__row = outputitem_rawRow as kotlin.Array<*>
-        var outputitem_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputitem_cleanups.add { outputitem_initialFailure -> var outputitem_failure = outputitem_initialFailure; try {             try { val owner = outputitem_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[0] as Long) } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
- } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }; outputitem_failure }
-            outputitem_item_0 = io.prebindgen.covertest.resources.OwnedResource(outputitem__row[0] as Long)
-
-outputitem_list.add(requireNotNull(outputitem_item_0))
+outputbulkList!!.add(requireNotNull(outputbulkItem_bulkList))
 }
-
-outputlist.add(requireNotNull(outputitem_list))
-}
-            requireNotNull(outputlist)
+            requireNotNull(outputbulkList)
         } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r5fcba94d312234e5.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkItem_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
 
-try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
-        var outputitem_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkItem_bulkActions.orEmpty()) { try { outputbulkFailure = action(outputbulkFailure) } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) } }
+for (outputbulkItem_bulkIndex in (outputbulkItem_bulkActions?.size ?: 0) until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[0] as Long) } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
-}
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             throw failure
         }
     } finally { returnCapture.release() }
 }
 
 public fun <R> `collectionNumbers`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (kotlin.collections.List<Long>, Long) -> R): R = run {
-    val returnCapture = io.prebindgen.covertest.Return_Array_Any___Long2_ErrorEmpty_9ac4dd96dd8aa1a2.acquire()
+    val returnCapture = io.prebindgen.covertest.Return_ByteArray_Long2_ErrorEmpty_34705c584e211183.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_numbers_58708da43cac559a(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputg0_g0_g0_list: kotlin.collections.MutableList<Long>? = null
-var outputg0_g0_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputg0_g0_g0_cleanupAction in outputg0_g0_g0_cleanups.orEmpty()) { try { outputg0_g0_g0_cleanupAction(failure) } catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) } }
-for (outputg0_g0_g0_index in (outputg0_g0_g0_cleanups?.size ?: 0) until (returnCapture.s0 as kotlin.Array<*>).size) {
-var outputg0_g0_g0_failure: kotlin.Throwable? = failure
-try { val outputg0_g0_g0__row = (returnCapture.s0 as kotlin.Array<*>)[outputg0_g0_g0_index] as kotlin.Array<*>
-
-
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-
-}
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputg0_g0_g0_list: kotlin.collections.MutableList<Long>? = null
-var outputg0_g0_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputg0_g0_g0_cleanups = kotlin.collections.mutableListOf()
-outputg0_g0_g0_list = kotlin.collections.mutableListOf()
-for (outputg0_g0_g0_rawRow in (returnCapture.s0 as kotlin.Array<*>)) {
-val outputg0_g0_g0__row = outputg0_g0_g0_rawRow as kotlin.Array<*>
+    var outputg0_g0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_g0_bulkList: kotlin.collections.MutableList<Long>? = null
+outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputg0_g0_g0_bulkList = kotlin.collections.ArrayList(outputg0_g0_g0_bulkRange!!.length)
+for (outputg0_g0_g0_bulkIndex in 0 until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputg0_g0_g0_cleanups.add { outputg0_g0_g0_initialFailure -> var outputg0_g0_g0_failure = outputg0_g0_g0_initialFailure; try {  } catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }; outputg0_g0_g0_failure }
 
-outputg0_g0_g0_list.add(outputg0_g0_g0__row[0] as Long)
+outputg0_g0_g0_bulkList!!.add((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            build(requireNotNull(outputg0_g0_g0_list), returnCapture.s1)
-        } catch (failure: Throwable) {
-try {
-for (outputg0_g0_g0_cleanupAction in outputg0_g0_g0_cleanups.orEmpty()) { try { outputg0_g0_g0_cleanupAction(failure) } catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) } }
-for (outputg0_g0_g0_index in (outputg0_g0_g0_cleanups?.size ?: 0) until (returnCapture.s0 as kotlin.Array<*>).size) {
-var outputg0_g0_g0_failure: kotlin.Throwable? = failure
-try { val outputg0_g0_g0__row = (returnCapture.s0 as kotlin.Array<*>)[outputg0_g0_g0_index] as kotlin.Array<*>
 
-
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-
-}
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (failure !== outputg0_g0_g0_cleanupError) failure.addSuppressed(outputg0_g0_g0_cleanupError) }
-            throw failure
-        }
+build(requireNotNull(outputg0_g0_g0_bulkList), returnCapture.s1)
     } finally { returnCapture.release() }
 }
 
@@ -490,49 +428,23 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
 val nativeResult = try { run { val handles = try { (kotlin.collections.emptyList<Nothing>() + (p0_w1_elements.orEmpty().flatMap { it.second() })) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
         run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_resource_ids_25588809310a31d6(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -543,49 +455,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_i64_90bde5aeb8c647ea(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -596,49 +482,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_text_19d59571edb173e9(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<String>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<String>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<String>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r79427dd643a1b061.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r963ae3ba49e0cb2b.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r963ae3ba49e0cb2b.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as String)
+outputbulkList!!.add((requireNotNull(outputbulkReader).text((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r963ae3ba49e0cb2b.offsets[0])) as String)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -649,49 +509,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_bytes_f8c8c3aaf2aa2be0(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<ByteArray>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<ByteArray>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<ByteArray>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rba88ec47a5d9bc85.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.re048ef6766326a01.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.re048ef6766326a01.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as ByteArray)
+outputbulkList!!.add((requireNotNull(outputbulkReader).bytes((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.re048ef6766326a01.offsets[0])) as ByteArray)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -705,97 +539,33 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5_elements?.map { it.first() }?.
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_nested_4394d3d5a3b0ca8f(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<Long>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-
-try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
-
-
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
-}
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<Long>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r01c263066f8f1a73.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.size
+var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<Long>? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try { try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkItem_bulkList = kotlin.collections.ArrayList(outputbulkItem_bulkRange!!.length)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
 
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
-}
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-outputitem_cleanups = kotlin.collections.mutableListOf()
-outputitem_list = kotlin.collections.mutableListOf()
-for (outputitem_rawRow in (output_row[0] as kotlin.Array<*>)) {
-val outputitem__row = outputitem_rawRow as kotlin.Array<*>
-
-outputitem_cleanups.add { outputitem_initialFailure -> var outputitem_failure = outputitem_initialFailure; try {  } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }; outputitem_failure }
-
-outputitem_list.add(outputitem__row[0] as Long)
+outputbulkItem_bulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
 
-outputlist.add(requireNotNull(outputitem_list))
+outputbulkList!!.add(requireNotNull(outputbulkItem_bulkList))
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-var outputitem_list: kotlin.collections.MutableList<Long>? = null
-var outputitem_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
 
-try {
-for (outputitem_cleanupAction in outputitem_cleanups.orEmpty()) { try { outputfailure = outputitem_cleanupAction(outputfailure) } catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) } }
-for (outputitem_index in (outputitem_cleanups?.size ?: 0) until (output_row[0] as kotlin.Array<*>).size) {
-var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
-
-
-} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
-outputfailure = outputitem_failure
-}
-} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -806,57 +576,25 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>((if (p0_w7 != null) 1 else 0), if (p
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_options_a293ccc475eb588e(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long?>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-            if (output_row[0] == 1) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long?>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long?>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra4ae347219cc8258.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             if (output_row[0] == 1) {
-            }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            if (output_row[0] == 1) {
+            if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[0])) == 1) {
             }
 
-outputlist.add(if (output_row[0] == 1) output_row[1] as Long else null)
+outputbulkList!!.add(if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[0])) == 1) (requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[1])) as Long else null)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-            if (output_row[0] == 1) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -867,52 +605,32 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w7) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_1f78a6a6c734d45b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
              if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
         try {
             if (nativeResult != null) {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
             }
-            if (nativeResult != null) requireNotNull(outputlist) else null
+            if (nativeResult != null) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
             if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
             throw failure
         }
@@ -926,60 +644,34 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>((if (p0_w9 != null) 1 else 0), if (p
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_items_a463b73617be6af0(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long?>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long?>? = null
              if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-            if (output_row[0] == 1) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long?>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long?>? = null
         try {
             if (nativeResult != null) {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra4ae347219cc8258.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             if (output_row[0] == 1) {
-            }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            if (output_row[0] == 1) {
+            if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[0])) == 1) {
             }
 
-outputlist.add(if (output_row[0] == 1) output_row[1] as Long else null)
+outputbulkList!!.add(if ((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[0])) == 1) (requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r06ab1b823b7727ce.offsets[1])) as Long else null)
 }
             }
-            if (nativeResult != null) requireNotNull(outputlist) else null
+            if (nativeResult != null) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
             if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-            if (output_row[0] == 1) {
-            }
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
             throw failure
         }
@@ -993,49 +685,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.wireValue) }, { kotlin.collect
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_enum_a72cd6089a34be29(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.enums.Code>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.enums.Code>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.enums.Code>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r3c60c14977bc5776.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r97b32bb0d64f8bc2.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r97b32bb0d64f8bc2.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(io.prebindgen.covertest.enums.Code.fromWire(output_row[0] as Int))
+outputbulkList!!.add(io.prebindgen.covertest.enums.Code.fromWire((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r97b32bb0d64f8bc2.offsets[0])) as Int))
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -1046,49 +712,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_probe_cf67d7568b2f663c(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Int>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Int>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Int>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r5141b4657b63c2b4.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1233d7a0efd1d246.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1233d7a0efd1d246.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Int)
+outputbulkList!!.add((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1233d7a0efd1d246.offsets[0])) as Int)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -1099,49 +739,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_borrow_0edafd22349f21ff(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -1152,49 +766,23 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_slice_00044f8d9833eed8(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
@@ -1228,55 +816,61 @@ val nativeResult = try { run { val handles = try { (kotlin.collections.emptyList
         val ownership = BooleanArray(1)
         try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { p2_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_handles_eceeff64e2628ef6(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } finally { if (ownership[0]) { p0_w1_elements.orEmpty().forEach { it.third() } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
  }
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+outputbulkActions = kotlin.collections.mutableListOf()
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            outputitem_0 = io.prebindgen.covertest.resources.OwnedResource(output_row[0] as Long)
+outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try {             try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
+            outputbulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
-outputlist.add(requireNotNull(outputitem_0))
+outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 }
-            requireNotNull(outputlist)
+            requireNotNull(outputbulkList)
         } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1306,150 +900,93 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.empty
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_result_be11b22c862519eb(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-    var outputlist: kotlin.collections.MutableList<Long>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<Long>? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(output_row[0] as Long)
+outputbulkList!!.add((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
 public fun `collectionFail`(onBindingError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.CollectionErrorHandler<Unit>): Unit = run {
-    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorArray_Any___Array_Any__2_ee1a9a01b387d74d.acquire()
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorByteArray_ByteArray2_8bb1103e963f51d1.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_fail_e960b89bf99875af(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
-    if (returnCapture.status == 3) return@run run { var outputg0_g0_g0_list: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputg0_g0_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-var outputg0_g1_g0_list: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
-var outputg0_g1_g0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 3) return@run run { var outputg0_g0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputg0_g0_g0_bulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
+var outputg0_g1_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g1_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g1_g0_bulkList: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
 
 var cleanupFailure: Throwable? = null
 var callbackFailed = false
 try {
-outputg0_g0_g0_cleanups = kotlin.collections.mutableListOf()
-outputg0_g0_g0_list = kotlin.collections.mutableListOf()
-for (outputg0_g0_g0_rawRow in (returnCapture.d0 as kotlin.Array<*>)) {
-val outputg0_g0_g0__row = outputg0_g0_g0_rawRow as kotlin.Array<*>
-        var outputg0_g0_g0_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.d0 as ByteArray)
+outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputg0_g0_g0_bulkList = kotlin.collections.ArrayList(outputg0_g0_g0_bulkRange!!.length)
+outputg0_g0_g0_bulkActions = kotlin.collections.mutableListOf()
+for (outputg0_g0_g0_bulkIndex in 0 until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputg0_g0_g0_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputg0_g0_g0_cleanups.add { outputg0_g0_g0_initialFailure -> var outputg0_g0_g0_failure = outputg0_g0_g0_initialFailure; try {             try { val owner = outputg0_g0_g0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg0_g0_g0__row[0] as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = cleanup else if (outputg0_g0_g0_failure !== cleanup) outputg0_g0_g0_failure!!.addSuppressed(cleanup) }
- } catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }; outputg0_g0_g0_failure }
-            outputg0_g0_g0_item_0 = io.prebindgen.covertest.resources.OwnedResource(outputg0_g0_g0__row[0] as Long)
+outputg0_g0_g0_bulkActions!!.add { initial -> var outputg0_g0_g0_bulkFailure = initial; try {             try { val owner = outputg0_g0_g0_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = cleanup else if (outputg0_g0_g0_bulkFailure !== cleanup) outputg0_g0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = outputg0_g0_g0_bulkCleanupError else if (outputg0_g0_g0_bulkFailure !== outputg0_g0_g0_bulkCleanupError) outputg0_g0_g0_bulkFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }; outputg0_g0_g0_bulkFailure }
+            outputg0_g0_g0_bulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
-outputg0_g0_g0_list.add(requireNotNull(outputg0_g0_g0_item_0))
+outputg0_g0_g0_bulkList!!.add(requireNotNull(outputg0_g0_g0_bulkItem_0))
 }
-outputg0_g1_g0_cleanups = kotlin.collections.mutableListOf()
-outputg0_g1_g0_list = kotlin.collections.mutableListOf()
-for (outputg0_g1_g0_rawRow in (returnCapture.d1 as kotlin.Array<*>)) {
-val outputg0_g1_g0__row = outputg0_g1_g0_rawRow as kotlin.Array<*>
-var outputg0_g1_g0_item_list: kotlin.collections.MutableList<Long>? = null
-var outputg0_g1_g0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+outputg0_g1_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.d1 as ByteArray)
+outputg0_g1_g0_bulkRange = requireNotNull(outputg0_g1_g0_bulkReader).rows(((requireNotNull(outputg0_g1_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r01c263066f8f1a73.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.size)
+outputg0_g1_g0_bulkList = kotlin.collections.ArrayList(outputg0_g1_g0_bulkRange!!.length)
+for (outputg0_g1_g0_bulkIndex in 0 until outputg0_g1_g0_bulkRange!!.length) {
+val outputg0_g1_g0_bulkBase = outputg0_g1_g0_bulkRange!!.offset + outputg0_g1_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.size
+var outputg0_g1_g0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g1_g0_bulkItem_bulkList: kotlin.collections.MutableList<Long>? = null
 
-outputg0_g1_g0_cleanups.add { outputg0_g1_g0_initialFailure -> var outputg0_g1_g0_failure = outputg0_g1_g0_initialFailure; try { try {
-for (outputg0_g1_g0_item_cleanupAction in outputg0_g1_g0_item_cleanups.orEmpty()) { try { outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupAction(outputg0_g1_g0_failure) } catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) } }
-for (outputg0_g1_g0_item_index in (outputg0_g1_g0_item_cleanups?.size ?: 0) until (outputg0_g1_g0__row[0] as kotlin.Array<*>).size) {
-var outputg0_g1_g0_item_failure: kotlin.Throwable? = outputg0_g1_g0_failure
-try { val outputg0_g1_g0_item__row = (outputg0_g1_g0__row[0] as kotlin.Array<*>)[outputg0_g1_g0_item_index] as kotlin.Array<*>
+outputg0_g1_g0_bulkItem_bulkRange = requireNotNull(outputg0_g1_g0_bulkReader).rows(((requireNotNull(outputg0_g1_g0_bulkReader).range((outputg0_g1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+outputg0_g1_g0_bulkItem_bulkList = kotlin.collections.ArrayList(outputg0_g1_g0_bulkItem_bulkRange!!.length)
+for (outputg0_g1_g0_bulkItem_bulkIndex in 0 until outputg0_g1_g0_bulkItem_bulkRange!!.length) {
+val outputg0_g1_g0_bulkItem_bulkBase = outputg0_g1_g0_bulkItem_bulkRange!!.offset + outputg0_g1_g0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
 
-} catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_item_failure == null) outputg0_g1_g0_item_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_item_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_item_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) }
-outputg0_g1_g0_failure = outputg0_g1_g0_item_failure
-}
-} catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) }
- } catch (outputg0_g1_g0_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_cleanupError) }; outputg0_g1_g0_failure }
-outputg0_g1_g0_item_cleanups = kotlin.collections.mutableListOf()
-outputg0_g1_g0_item_list = kotlin.collections.mutableListOf()
-for (outputg0_g1_g0_item_rawRow in (outputg0_g1_g0__row[0] as kotlin.Array<*>)) {
-val outputg0_g1_g0_item__row = outputg0_g1_g0_item_rawRow as kotlin.Array<*>
-
-outputg0_g1_g0_item_cleanups.add { outputg0_g1_g0_item_initialFailure -> var outputg0_g1_g0_item_failure = outputg0_g1_g0_item_initialFailure; try {  } catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_item_failure == null) outputg0_g1_g0_item_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_item_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_item_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) }; outputg0_g1_g0_item_failure }
-
-outputg0_g1_g0_item_list.add(outputg0_g1_g0_item__row[0] as Long)
+outputg0_g1_g0_bulkItem_bulkList!!.add((requireNotNull(outputg0_g1_g0_bulkReader).long((outputg0_g1_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
 
-outputg0_g1_g0_list.add(requireNotNull(outputg0_g1_g0_item_list))
+outputg0_g1_g0_bulkList!!.add(requireNotNull(outputg0_g1_g0_bulkItem_bulkList))
 }
 
-onError.run(requireNotNull(outputg0_g0_g0_list), requireNotNull(outputg0_g1_g0_list))
+onError.run(requireNotNull(outputg0_g0_g0_bulkList), requireNotNull(outputg0_g1_g0_bulkList))
 } catch (failure: Throwable) { callbackFailed = true; cleanupFailure = failure; throw failure } finally {
-try {
-for (outputg0_g0_g0_cleanupAction in outputg0_g0_g0_cleanups.orEmpty()) { try { cleanupFailure = outputg0_g0_g0_cleanupAction(cleanupFailure) } catch (outputg0_g0_g0_cleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g0_g0_cleanupError else if (cleanupFailure !== outputg0_g0_g0_cleanupError) cleanupFailure!!.addSuppressed(outputg0_g0_g0_cleanupError) } }
-for (outputg0_g0_g0_index in (outputg0_g0_g0_cleanups?.size ?: 0) until (returnCapture.d0 as kotlin.Array<*>).size) {
-var outputg0_g0_g0_failure: kotlin.Throwable? = cleanupFailure
-try { val outputg0_g0_g0__row = (returnCapture.d0 as kotlin.Array<*>)[outputg0_g0_g0_index] as kotlin.Array<*>
-        var outputg0_g0_g0_item_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputg0_g0_g0_bulkReader == null) { outputg0_g0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.d0 as ByteArray)
+ }
+try { if (outputg0_g0_g0_bulkRange == null) outputg0_g0_g0_bulkRange = requireNotNull(outputg0_g0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputg0_g0_g0_bulkActions.orEmpty()) { try { cleanupFailure = action(cleanupFailure) } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g0_g0_bulkCleanupError else if (cleanupFailure !== outputg0_g0_g0_bulkCleanupError) cleanupFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) } }
+for (outputg0_g0_g0_bulkIndex in (outputg0_g0_g0_bulkActions?.size ?: 0) until outputg0_g0_g0_bulkRange!!.length) {
+val outputg0_g0_g0_bulkBase = outputg0_g0_g0_bulkRange!!.offset + outputg0_g0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputg0_g0_g0_bulkFailure: Throwable? = cleanupFailure
+try {         var outputg0_g0_g0_bulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputg0_g0_g0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg0_g0_g0__row[0] as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = cleanup else if (outputg0_g0_g0_failure !== cleanup) outputg0_g0_g0_failure!!.addSuppressed(cleanup) }
-
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (outputg0_g0_g0_failure == null) outputg0_g0_g0_failure = outputg0_g0_g0_cleanupError else if (outputg0_g0_g0_failure !== outputg0_g0_g0_cleanupError) outputg0_g0_g0_failure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-cleanupFailure = outputg0_g0_g0_failure
-}
-} catch (outputg0_g0_g0_cleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g0_g0_cleanupError else if (cleanupFailure !== outputg0_g0_g0_cleanupError) cleanupFailure!!.addSuppressed(outputg0_g0_g0_cleanupError) }
-try {
-for (outputg0_g1_g0_cleanupAction in outputg0_g1_g0_cleanups.orEmpty()) { try { cleanupFailure = outputg0_g1_g0_cleanupAction(cleanupFailure) } catch (outputg0_g1_g0_cleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g1_g0_cleanupError else if (cleanupFailure !== outputg0_g1_g0_cleanupError) cleanupFailure!!.addSuppressed(outputg0_g1_g0_cleanupError) } }
-for (outputg0_g1_g0_index in (outputg0_g1_g0_cleanups?.size ?: 0) until (returnCapture.d1 as kotlin.Array<*>).size) {
-var outputg0_g1_g0_failure: kotlin.Throwable? = cleanupFailure
-try { val outputg0_g1_g0__row = (returnCapture.d1 as kotlin.Array<*>)[outputg0_g1_g0_index] as kotlin.Array<*>
-var outputg0_g1_g0_item_list: kotlin.collections.MutableList<Long>? = null
-var outputg0_g1_g0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-
-try {
-for (outputg0_g1_g0_item_cleanupAction in outputg0_g1_g0_item_cleanups.orEmpty()) { try { outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupAction(outputg0_g1_g0_failure) } catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) } }
-for (outputg0_g1_g0_item_index in (outputg0_g1_g0_item_cleanups?.size ?: 0) until (outputg0_g1_g0__row[0] as kotlin.Array<*>).size) {
-var outputg0_g1_g0_item_failure: kotlin.Throwable? = outputg0_g1_g0_failure
-try { val outputg0_g1_g0_item__row = (outputg0_g1_g0__row[0] as kotlin.Array<*>)[outputg0_g1_g0_item_index] as kotlin.Array<*>
-
-
-} catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_item_failure == null) outputg0_g1_g0_item_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_item_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_item_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) }
-outputg0_g1_g0_failure = outputg0_g1_g0_item_failure
-}
-} catch (outputg0_g1_g0_item_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_item_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_item_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_item_cleanupError) }
-
-} catch (outputg0_g1_g0_cleanupError: Throwable) { if (outputg0_g1_g0_failure == null) outputg0_g1_g0_failure = outputg0_g1_g0_cleanupError else if (outputg0_g1_g0_failure !== outputg0_g1_g0_cleanupError) outputg0_g1_g0_failure!!.addSuppressed(outputg0_g1_g0_cleanupError) }
-cleanupFailure = outputg0_g1_g0_failure
-}
-} catch (outputg0_g1_g0_cleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g1_g0_cleanupError else if (cleanupFailure !== outputg0_g1_g0_cleanupError) cleanupFailure!!.addSuppressed(outputg0_g1_g0_cleanupError) }
+            try { val owner = outputg0_g0_g0_bulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputg0_g0_g0_bulkReader).long((outputg0_g0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = cleanup else if (outputg0_g0_g0_bulkFailure !== cleanup) outputg0_g0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_g0_bulkFailure == null) outputg0_g0_g0_bulkFailure = outputg0_g0_g0_bulkCleanupError else if (outputg0_g0_g0_bulkFailure !== outputg0_g0_g0_bulkCleanupError) outputg0_g0_g0_bulkFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
+cleanupFailure = outputg0_g0_g0_bulkFailure
+} } catch (outputg0_g0_g0_bulkCleanupError: Throwable) { if (cleanupFailure == null) cleanupFailure = outputg0_g0_g0_bulkCleanupError else if (cleanupFailure !== outputg0_g0_g0_bulkCleanupError) cleanupFailure!!.addSuppressed(outputg0_g0_g0_bulkCleanupError) }
 
 if (!callbackFailed) cleanupFailure?.let { throw it }
 } }
@@ -1467,60 +1004,66 @@ val nativeResult = try { run { val handles = try { (kotlin.collections.emptyList
         val ownership = BooleanArray(1)
         try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_result_optional_2bf5c4a387d195e5(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } finally { if (ownership[0]) { p0_w1_elements.orEmpty().forEach { it.third() } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
              if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             }
  }
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
+var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
             if (nativeResult != null) {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+outputbulkActions = kotlin.collections.mutableListOf()
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+        var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            outputitem_0 = io.prebindgen.covertest.resources.OwnedResource(output_row[0] as Long)
+outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try {             try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
+            outputbulkItem_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
-outputlist.add(requireNotNull(outputitem_0))
+outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 }
             }
-            if (nativeResult != null) requireNotNull(outputlist) else null
+            if (nativeResult != null) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
             if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-        var outputitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
+for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = outputitem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
             }
             throw failure
         }
@@ -1549,52 +1092,32 @@ public fun `storageGetVec`(p0_w1: io.prebindgen.covertest.Storage?, onError: io.
 val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
         run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_storage_get_vec_1f0f8386b7d2b147(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.collections.Payload>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.collections.Payload>? = null
              if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.collections.Payload>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.collections.Payload>? = null
         try {
             if (nativeResult != null) {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r112cc4c6f3f785e3.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.size
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
-outputlist.add(io.prebindgen.covertest.collections.Payload(output_row[0] as Long, output_row[1] as Int, output_row[2] as Double, output_row[3] as Boolean))
+outputbulkList!!.add(io.prebindgen.covertest.collections.Payload((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.offsets[0])) as Long, (requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.offsets[1])) as Int, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.offsets[2])) as Double, ((requireNotNull(outputbulkReader).byte((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r7bf5c71332a16abd.offsets[3]).toInt() != 0)) as Boolean))
 }
             }
-            if (nativeResult != null) requireNotNull(outputlist) else null
+            if (nativeResult != null) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
             if (nativeResult != null) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
             }
             throw failure
         }

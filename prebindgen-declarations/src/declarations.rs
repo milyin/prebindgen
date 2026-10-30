@@ -672,7 +672,7 @@ impl Declarations {
                     return Ok(Output::Sequence {
                         element: Box::new(resolve(element, &Output::auto(), stack)?),
                         mode: None,
-                        delivery: SequenceDelivery::Value,
+                        delivery: SequenceDelivery::Auto,
                     });
                 }
                 if type_key(ty) == "()" {
@@ -704,7 +704,7 @@ impl Declarations {
                         Output::Sequence {
                             element: Box::new(child),
                             mode: None,
-                            delivery: SequenceDelivery::Value,
+                            delivery: SequenceDelivery::Auto,
                         }
                     });
                 }
