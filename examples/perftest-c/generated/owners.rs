@@ -2052,6 +2052,7 @@ pub unsafe extern "C" fn owner_inline_packets_take(p0_w1: __PbRows) -> usize {
                     p0_w1.data as *const __PbRow_inline_packets_take_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_inline_packets_take_p0_w1)
@@ -2350,6 +2351,7 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                     as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1,
                                 callback_return_w2,
                             )?;
+                            callback_return_w1_staged.reserve_exact(callback_return_w2);
                             for callback_return_w3 in 0..callback_return_w2 {
                                 let callback_return_w6 = unsafe {
                                     (*((callback_return_w1.data

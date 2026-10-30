@@ -278,6 +278,11 @@ impl Codec for CCodec {
         !matches!(ty, syn::Type::Reference(_))
             && (owned::native_output(_flat, ty) || !matches!(Value::of(ty), Some(Value::Scalar(_))))
     }
+    fn input_leaf_construction_is_pure(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        Primitive::from_type(ty).is_some()
+            && owned::declaration(flat, ty).is_none()
+            && !owned::pointer_declared(flat, ty)
+    }
     fn input_leaf(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,

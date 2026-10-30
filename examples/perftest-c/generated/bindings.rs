@@ -4135,6 +4135,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_many(p0_w1: __PbRows) 
                     p0_w1.data as *const __PbRow_callback_return_handler_many_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = unsafe {
                         (*((p0_w1.data
@@ -5256,6 +5257,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                     as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
                                 callback_return_w2,
                             )?;
+                            callback_return_w1_staged.reserve_exact(callback_return_w2);
                             for callback_return_w3 in 0..callback_return_w2 {
                                 let callback_return_w5 = unsafe {
                                     (*((callback_return_w1.data
@@ -5445,6 +5447,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                     as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
                                 callback_return_w2,
                             )?;
+                            callback_return_w1_staged.reserve_exact(callback_return_w2);
                             for callback_return_w3 in 0..callback_return_w2 {
                                 let callback_return_w5 = unsafe {
                                     (*((callback_return_w1.data
@@ -6512,7 +6515,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                     };
                     let raw_result = callback_result.value;
                     let callback_return_w1 = raw_result;
-                    let mut callback_return_w1_staged = Vec::new();
+                    let mut callback_return_w0: Vec<i64> = Vec::new();
                     if true {
                         let callback_return_w2 = callback_return_w1.len;
                         ::prebindgen_runtime::validate_slice(
@@ -6520,6 +6523,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 as *const __PbRow_callback_5fdca16b0dadfb25_callback_return_w1,
                             callback_return_w2,
                         )?;
+                        callback_return_w0.reserve_exact(callback_return_w2);
                         for callback_return_w3 in 0..callback_return_w2 {
                             let callback_return_w5 = unsafe {
                                 (*((callback_return_w1.data
@@ -6532,26 +6536,20 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                             } else {
                                 None
                             };
-                            callback_return_w1_staged
-                                .push(move || {
-                                    move || -> ::core::result::Result<i64, String> {
-                                        let callback_return_w4: i64 = ::core::convert::Into::into(
-                                            callback_return_w4.expect("active value"),
-                                        );
-                                        let callback_return_w0 = callback_return_w4;
-                                        Ok(callback_return_w0)
-                                    }
-                                });
+                            #[allow(clippy::redundant_closure_call)]
+                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                i64,
+                                String,
+                            > {
+                                let callback_return_w4: i64 = ::core::convert::Into::into(
+                                    callback_return_w4.expect("active value"),
+                                );
+                                let callback_return_w0 = callback_return_w4;
+                                Ok(callback_return_w0)
+                            })();
+                            callback_return_w0.push(callback_return_w1_element_built?);
                         }
                     }
-                    let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
-                        .into_iter()
-                        .map(|acquire| acquire())
-                        .collect();
-                    let callback_return_w0: Vec<i64> = callback_return_w1_acquired
-                        .into_iter()
-                        .map(|construct| construct())
-                        .collect::<::core::result::Result<_, String>>()?;
                     let callback_return_value = callback_return_w0;
                     Ok(callback_return_value)
                 });
@@ -6837,6 +6835,7 @@ pub unsafe extern "C" fn perftest_collection_alias(
                     p0_w1.data as *const __PbRow_collection_alias_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_alias_p0_w1)
@@ -6980,13 +6979,14 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_borrow_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_borrow_p0_w1)
@@ -6994,26 +6994,17 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = &p0_w0;
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -7091,13 +7082,14 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1)
@@ -7105,26 +7097,17 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = &p0_w0;
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -7305,6 +7288,7 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
                     p0_w1.data as *const __PbRow_collection_bytes_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_bytes_p0_w1)
@@ -7427,6 +7411,7 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
                     p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1)
@@ -7521,6 +7506,7 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                     p0_w1.data as *const __PbRow_collection_construct_all_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_construct_all_p0_w1)
@@ -7656,6 +7642,7 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
                     p0_w1.data as *const __PbRow_collection_enum_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_enum_p0_w1)
@@ -7790,6 +7777,7 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
                     p0_w1.data as *const __PbRow_collection_enum_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_enum_each_p0_w1)
@@ -8032,6 +8020,7 @@ pub unsafe extern "C" fn perftest_collection_handles(
                     p0_w1.data as *const __PbRow_collection_handles_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_handles_p0_w1)
@@ -8265,6 +8254,7 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                     p0_w1.data as *const __PbRow_collection_handles_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_handles_each_p0_w1)
@@ -8451,13 +8441,14 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_i64_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_i64_p0_w1)
@@ -8465,26 +8456,17 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -8561,13 +8543,14 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_i64_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_i64_each_p0_w1)
@@ -8575,26 +8558,17 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -8611,6 +8585,400 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
             }
             let result = perftest_collection_i64_each_result {
                 v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_collection_input_array_p0_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_collection_input_array_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_collection_input_array(p0_w1: __PbRows) -> i64 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_collection_input_array_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_collection_input_array_p0_w1,
+                    p0_w2,
+                )?;
+                if p0_w2 != 4 {
+                    return Err("wrong fixed array length".into());
+                }
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_collection_input_array_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w4 = if true { Some(p0_w5) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let p0_w0: [i64; 4] = p0_w0
+                .try_into()
+                .map_err(|_| "wrong fixed array length".to_string())?;
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::collection_input_array(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_collection_input_array_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_collection_input_custom_p0_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_collection_input_custom_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_collection_input_custom(
+    p0_w1: __PbRows,
+    p1_w1: u8,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_collection_input_custom_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w1_staged = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_collection_input_custom_p0_w1,
+                    p0_w2,
+                )?;
+                p0_w1_staged.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_collection_input_custom_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w5 = if true { Some(p0_w6) } else { None };
+                    p0_w1_staged
+                        .push(move || {
+                            move || -> ::core::result::Result<i64, String> {
+                                let p0_w5: i64 = ::core::convert::Into::into(
+                                    p0_w5.expect("active value"),
+                                );
+                                let p0_w4: i64 = perftest_flat::collection_input_value(
+                                    p0_w5,
+                                );
+                                let p0_w0 = p0_w4;
+                                Ok(p0_w0)
+                            }
+                        });
+                }
+            }
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            let p0_w1_acquired: Vec<_> = p0_w1_staged
+                .into_iter()
+                .map(|acquire| acquire())
+                .collect();
+            let p0_w0: Vec<i64> = p0_w1_acquired
+                .into_iter()
+                .map(|construct| construct())
+                .collect::<::core::result::Result<_, String>>()?;
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_custom(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_collection_input_custom_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_collection_input_optional_p0_w3 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_collection_input_optional_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_collection_input_optional(
+    p0_w1: i32,
+    p0_w3: __PbRows,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_collection_input_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            if p0_w1 != 0 && p0_w1 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let mut p0_w2: Vec<i64> = Vec::new();
+            if p0_w1 == 1i32 {
+                let p0_w4 = p0_w3.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w3.data as *const __PbRow_collection_input_optional_p0_w3,
+                    p0_w4,
+                )?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w7 = unsafe {
+                        (*((p0_w3.data as *const __PbRow_collection_input_optional_p0_w3)
+                            .add(p0_w5)))
+                            .v0
+                    };
+                    let p0_w6 = if true { Some(p0_w7) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    p0_w2.push(p0_w3_element_built?);
+                }
+            }
+            let p0_w0 = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::collection_input_optional(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_collection_input_optional_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_collection_input_plain_p0_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_collection_input_plain_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_collection_input_plain(
+    p0_w1: __PbRows,
+    p1_w1: u8,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_collection_input_plain_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_collection_input_plain_p0_w1,
+                    p0_w2,
+                )?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_collection_input_plain_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w4 = if true { Some(p0_w5) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_plain(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_collection_input_plain_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_collection_input_slice_p0_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_collection_input_slice_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_collection_input_slice(p0_w1: __PbRows) -> i64 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_collection_input_slice_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_collection_input_slice_p0_w1,
+                    p0_w2,
+                )?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_collection_input_slice_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w4 = if true { Some(p0_w5) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let __prebindgen_argument_0 = p0_w0.as_slice();
+            let source_value = perftest_flat::collection_input_slice(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_collection_input_slice_result {
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {};
@@ -9010,19 +9378,21 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
                     p0_w1.data as *const __PbRow_collection_nested_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_nested_p0_w1)
                             .add(p0_w3)))
                             .v0
                     };
-                    let mut p0_w5_staged = Vec::new();
+                    let mut p0_w4: Vec<i64> = Vec::new();
                     if true {
                         let p0_w6 = (p0_w5).len;
                         ::prebindgen_runtime::validate_slice(
                             (p0_w5).data as *const __PbRow_collection_nested_p0_w5,
                             p0_w6,
                         )?;
+                        p0_w4.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w9 = unsafe {
                                 (*(((p0_w5).data as *const __PbRow_collection_nested_p0_w5)
@@ -9030,29 +9400,23 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
                                     .v0
                             };
                             let p0_w8 = if true { Some(p0_w9) } else { None };
-                            p0_w5_staged
-                                .push(move || {
-                                    move || -> ::core::result::Result<i64, String> {
-                                        let p0_w8: i64 = ::core::convert::Into::into(
-                                            p0_w8.expect("active value"),
-                                        );
-                                        let p0_w4 = p0_w8;
-                                        Ok(p0_w4)
-                                    }
-                                });
+                            #[allow(clippy::redundant_closure_call)]
+                            let p0_w5_element_built = (|| -> ::core::result::Result<
+                                i64,
+                                String,
+                            > {
+                                let p0_w8: i64 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w4 = p0_w8;
+                                Ok(p0_w4)
+                            })();
+                            p0_w4.push(p0_w5_element_built?);
                         }
                     }
                     p0_w1_staged
                         .push(move || {
-                            let p0_w5_acquired: Vec<_> = p0_w5_staged
-                                .into_iter()
-                                .map(|acquire| acquire())
-                                .collect();
                             move || -> ::core::result::Result<Vec<i64>, String> {
-                                let p0_w4: Vec<i64> = p0_w5_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let p0_w0 = p0_w4;
                                 Ok(p0_w0)
                             }
@@ -9204,19 +9568,21 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                     p0_w1.data as *const __PbRow_collection_nested_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_nested_each_p0_w1)
                             .add(p0_w3)))
                             .v0
                     };
-                    let mut p0_w5_staged = Vec::new();
+                    let mut p0_w4: Vec<i64> = Vec::new();
                     if true {
                         let p0_w6 = (p0_w5).len;
                         ::prebindgen_runtime::validate_slice(
                             (p0_w5).data as *const __PbRow_collection_nested_each_p0_w5,
                             p0_w6,
                         )?;
+                        p0_w4.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w9 = unsafe {
                                 (*(((p0_w5).data
@@ -9225,29 +9591,23 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                                     .v0
                             };
                             let p0_w8 = if true { Some(p0_w9) } else { None };
-                            p0_w5_staged
-                                .push(move || {
-                                    move || -> ::core::result::Result<i64, String> {
-                                        let p0_w8: i64 = ::core::convert::Into::into(
-                                            p0_w8.expect("active value"),
-                                        );
-                                        let p0_w4 = p0_w8;
-                                        Ok(p0_w4)
-                                    }
-                                });
+                            #[allow(clippy::redundant_closure_call)]
+                            let p0_w5_element_built = (|| -> ::core::result::Result<
+                                i64,
+                                String,
+                            > {
+                                let p0_w8: i64 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w4 = p0_w8;
+                                Ok(p0_w4)
+                            })();
+                            p0_w4.push(p0_w5_element_built?);
                         }
                     }
                     p0_w1_staged
                         .push(move || {
-                            let p0_w5_acquired: Vec<_> = p0_w5_staged
-                                .into_iter()
-                                .map(|acquire| acquire())
-                                .collect();
                             move || -> ::core::result::Result<Vec<i64>, String> {
-                                let p0_w4: Vec<i64> = p0_w5_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let p0_w0 = p0_w4;
                                 Ok(p0_w0)
                             }
@@ -9400,6 +9760,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                     p0_w1.data as *const __PbRow_collection_nested_handles_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_nested_handles_p0_w1)
@@ -9415,6 +9776,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                                 as *const __PbRow_collection_nested_handles_p0_w5,
                             p0_w6,
                         )?;
+                        p0_w5_staged.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w9 = unsafe {
                                 (*(((p0_w5).data
@@ -9647,6 +10009,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                     p0_w1.data as *const __PbRow_collection_nested_handles_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data
@@ -9663,6 +10026,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                                 as *const __PbRow_collection_nested_handles_each_p0_w5,
                             p0_w6,
                         )?;
+                        p0_w5_staged.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w9 = unsafe {
                                 (*(((p0_w5).data
@@ -9961,13 +10325,14 @@ pub unsafe extern "C" fn perftest_collection_optional(
             if p0_w1 != 0 && p0_w1 != 1 {
                 return Err("invalid option presence".into());
             }
-            let mut p0_w3_staged = Vec::new();
+            let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w3.data as *const __PbRow_collection_optional_p0_w3,
                     p0_w4,
                 )?;
+                p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data as *const __PbRow_collection_optional_p0_w3)
@@ -9975,31 +10340,18 @@ pub unsafe extern "C" fn perftest_collection_optional(
                             .v0
                     };
                     let p0_w6 = if true { Some(p0_w7) } else { None };
-                    p0_w3_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                let p0_w2 = p0_w6;
-                                Ok(p0_w2)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    p0_w2.push(p0_w3_element_built?);
                 }
             }
-            let p0_w3_acquired: Vec<_> = p0_w3_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0 = if p0_w1 == 1i32 {
-                let p0_w2: Vec<i64> = p0_w3_acquired
-                    .into_iter()
-                    .map(|construct| construct())
-                    .collect::<::core::result::Result<_, String>>()?;
-                Some(p0_w2)
-            } else {
-                None
-            };
+            let p0_w0 = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_optional(
                 __prebindgen_argument_0,
@@ -10114,13 +10466,14 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
             if p0_w1 != 0 && p0_w1 != 1 {
                 return Err("invalid option presence".into());
             }
-            let mut p0_w3_staged = Vec::new();
+            let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w3.data as *const __PbRow_collection_optional_each_p0_w3,
                     p0_w4,
                 )?;
+                p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data as *const __PbRow_collection_optional_each_p0_w3)
@@ -10128,31 +10481,18 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
                             .v0
                     };
                     let p0_w6 = if true { Some(p0_w7) } else { None };
-                    p0_w3_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                let p0_w2 = p0_w6;
-                                Ok(p0_w2)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    p0_w2.push(p0_w3_element_built?);
                 }
             }
-            let p0_w3_acquired: Vec<_> = p0_w3_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0 = if p0_w1 == 1i32 {
-                let p0_w2: Vec<i64> = p0_w3_acquired
-                    .into_iter()
-                    .map(|construct| construct())
-                    .collect::<::core::result::Result<_, String>>()?;
-                Some(p0_w2)
-            } else {
-                None
-            };
+            let p0_w0 = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_optional(
                 __prebindgen_argument_0,
@@ -10262,6 +10602,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                     p0_w3.data as *const __PbRow_collection_optional_handles_p0_w3,
                     p0_w4,
                 )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data
@@ -10460,6 +10801,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                     p0_w3.data as *const __PbRow_collection_optional_handles_each_p0_w3,
                     p0_w4,
                 )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data
@@ -10642,6 +10984,7 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                     p0_w3.data as *const __PbRow_collection_optional_items_p0_w3,
                     p0_w4,
                 )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data as *const __PbRow_collection_optional_items_p0_w3)
@@ -10823,6 +11166,7 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
                     p0_w3.data as *const __PbRow_collection_optional_items_each_p0_w3,
                     p0_w4,
                 )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = unsafe {
                         (*((p0_w3.data
@@ -10986,6 +11330,7 @@ pub unsafe extern "C" fn perftest_collection_options(
                     p0_w1.data as *const __PbRow_collection_options_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_options_p0_w1)
@@ -11129,6 +11474,7 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                     p0_w1.data as *const __PbRow_collection_options_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_options_each_p0_w1)
@@ -11266,13 +11612,14 @@ pub unsafe extern "C" fn perftest_collection_probe(
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<char> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_probe_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_probe_p0_w1)
@@ -11284,16 +11631,18 @@ pub unsafe extern "C" fn perftest_collection_probe(
                     } else {
                         None
                     };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<char, String> {
-                                let p0_w4: char = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        char,
+                        String,
+                    > {
+                        let p0_w4: char = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true {
@@ -11304,14 +11653,6 @@ pub unsafe extern "C" fn perftest_collection_probe(
             } else {
                 None
             };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<char> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let __prebindgen_argument_1 = ::core::convert::AsRef::<
                 str,
@@ -11417,6 +11758,7 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                     p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1)
@@ -11611,13 +11953,14 @@ pub unsafe extern "C" fn perftest_collection_result(
             return Err("null success-output pointer".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_result_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_result_p0_w1)
@@ -11625,27 +11968,18 @@ pub unsafe extern "C" fn perftest_collection_result(
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
             let __prebindgen_argument_1 = p1_w0;
@@ -11775,13 +12109,14 @@ pub unsafe extern "C" fn perftest_collection_result_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_result_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_result_each_p0_w1)
@@ -11789,27 +12124,18 @@ pub unsafe extern "C" fn perftest_collection_result_each(
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
             let __prebindgen_argument_1 = p1_w0;
@@ -11950,6 +12276,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                     p0_w1.data as *const __PbRow_collection_result_optional_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data
@@ -12208,6 +12535,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                     p0_w1.data as *const __PbRow_collection_result_optional_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data
@@ -12400,13 +12728,14 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_slice_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_slice_p0_w1)
@@ -12414,26 +12743,17 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0.as_slice();
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -12510,13 +12830,14 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
                 ::prebindgen_runtime::validate_slice(
                     p0_w1.data as *const __PbRow_collection_slice_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_slice_each_p0_w1)
@@ -12524,26 +12845,17 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
                             .v0
                     };
                     let p0_w4 = if true { Some(p0_w5) } else { None };
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0.as_slice();
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -12623,6 +12935,7 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
                     p0_w1.data as *const __PbRow_collection_text_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_text_p0_w1)
@@ -12745,6 +13058,7 @@ pub unsafe extern "C" fn perftest_collection_text_each(
                     p0_w1.data as *const __PbRow_collection_text_each_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w5 = unsafe {
                         (*((p0_w1.data as *const __PbRow_collection_text_each_p0_w1)
@@ -12856,6 +13170,7 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                     p0_w1.data as *const __PbRow_collection_try_construct_all_p0_w1,
                     p0_w2,
                 )?;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = unsafe {
                         (*((p0_w1.data
@@ -21518,6 +21833,7 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
                     p1_w1.data as *const __PbRow_storage_put_slice_p1_w1,
                     p1_w2,
                 )?;
+                p1_w1_staged.reserve_exact(p1_w2);
                 for p1_w3 in 0..p1_w2 {
                     let p1_w6 = unsafe {
                         (*((p1_w1.data as *const __PbRow_storage_put_slice_p1_w1)

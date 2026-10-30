@@ -6,6 +6,19 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .function(fun!(collection_input_plain))
+        .panic()
+        .function(fun!(collection_input_custom).expand_param(
+            "values",
+            expand_param!(i64).variant(fun!(collection_input_value)),
+        ))
+        .panic()
+        .function(fun!(collection_input_slice))
+        .panic()
+        .function(fun!(collection_input_array))
+        .panic()
+        .function(fun!(collection_input_optional))
+        .panic()
         .function(
             fun!(buffer_views_text).expand_return(
                 expand_return!(String)

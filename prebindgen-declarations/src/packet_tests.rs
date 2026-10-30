@@ -123,12 +123,17 @@ struct CodecImpl {
     bad_sequence: bool,
     reverse_values: bool,
     unknown_prepared_read: bool,
+    pure_primitives: bool,
+    row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
+    fn input_leaf_construction_is_pure(&self, _: &Flat<Self::Schema>, ty: &Type, _: &()) -> bool {
+        self.pure_primitives && prebindgen_flat::Primitive::from_type(ty).is_some()
+    }
     fn group_metadata(&self) -> Metadata {
         Metadata::Components
     }
@@ -216,7 +221,18 @@ impl Codec for CodecImpl {
         v: syn::Ident,
         active: &Condition,
     ) -> Result<CodecInput<Self>> {
-        value::input(ty, w.clone(), v, &active.rust(), quote!(#w), ty.clone())
+        let mut input = value::input(
+            ty,
+            w.clone(),
+            v.clone(),
+            &active.rust(),
+            quote!(#w),
+            ty.clone(),
+        )?;
+        if self.row_only_leaf {
+            input.statements = quote!(let #v: #ty = #w;);
+        }
+        Ok(input)
     }
     fn output_leaf(
         &self,
@@ -264,7 +280,11 @@ impl Codec for CodecImpl {
                 } else {
                     field.clone()
                 },
-                Some(quote!(#field)),
+                if self.row_only_leaf {
+                    None
+                } else {
+                    Some(quote!(#field))
+                },
             )],
             release: quote!(),
         })
@@ -340,10 +360,14 @@ impl Codec for CodecImpl {
 #[test]
 fn optional_sequences_with_two_outer_values_compile_and_execute() {
     for reverse in [false, true] {
-        pointer_length_round_trip(reverse);
+        for pure in [false, true] {
+            for row_only in [false, true] {
+                pointer_length_round_trip(reverse, pure, row_only);
+            }
+        }
     }
 }
-fn pointer_length_round_trip(reverse: bool) {
+fn pointer_length_round_trip(reverse: bool, pure: bool, row_only: bool) {
     use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
@@ -352,17 +376,24 @@ fn pointer_length_round_trip(reverse: bool) {
     )
     .unwrap();
     let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-    defaults
-        .fill(
-            &mut flat,
-            &CodecImpl {
-                reverse_values: reverse,
-                ..Default::default()
-            },
-            &fun!(echo),
-            &(),
-        )
-        .unwrap();
+    let filled = defaults.fill(
+        &mut flat,
+        &CodecImpl {
+            reverse_values: reverse,
+            pure_primitives: pure,
+            row_only_leaf: row_only,
+            ..Default::default()
+        },
+        &fun!(echo),
+        &(),
+    );
+    if row_only && !pure {
+        assert!(filled
+            .unwrap_err()
+            .contains("cannot be read after row validation"));
+        return;
+    }
+    filled.unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(
         prebindgen_flat::wire_definitions(std::iter::once(

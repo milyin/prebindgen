@@ -840,6 +840,13 @@ around a collection distinguish absence from an empty collection, and
 C native vector returns retain their original allocation through inline owners.
 Byte inputs and JNI byte collections retain their byte-buffer transport.
 
+Collection inputs reserve their known row count before building native storage.
+Built-in primitive elements use a direct construction loop in C and JNI,
+including bulk JNI inputs. Other elements retain staged validation, acquisition
+and construction; source constructors run only after call-wide validation and
+ownership acquisition. Custom codecs keep deferred leaf construction unless
+explicitly declaring primitive construction safe during validation.
+
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
 `expand_param!(Element)` or `expand_return!(Element)` on a collection occurrence

@@ -31,6 +31,9 @@ impl EnumCodec<'_> {
     }
 }
 impl Codec for EnumCodec<'_> {
+    fn input_leaf_construction_is_pure(&self, flat: &Bindings, ty: &syn::Type, extra: &()) -> bool {
+        CCodec.input_leaf_construction_is_pure(flat, ty, extra)
+    }
     type Schema = CSchema;
     type Wire = CWire;
     type Niche = CNiche;

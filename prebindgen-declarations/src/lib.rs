@@ -763,6 +763,20 @@ pub trait Codec {
     ) -> bool {
         false
     }
+    /// Whether constructing a primitive leaf and evaluating its argument can run
+    /// during validation, even if another argument subsequently fails validation.
+    /// Construction must be infallible and have no observable side effects,
+    /// and must accept the transport's validation-time row values.
+    /// Applies to both ordinary and bulk leaf conversions. Custom codecs retain
+    /// deferred construction by default. Resource acquisition is never moved.
+    fn input_leaf_construction_is_pure(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
+    }
     /// Keep a collection occurrence in one native input leaf instead of
     /// decomposing it into element rows. Explicit `Input::Sequence` overrides
     /// this preference; input defaults and whole-collection identities use it.
@@ -1656,6 +1670,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
+                    matches!(element_recipe.as_ref(), Input::Leaf)
+                        && prebindgen_flat::Primitive::from_type(element).is_some()
+                        && self
+                            .codec
+                            .input_leaf_construction_is_pure(self.flat, element, extra),
                 );
             }
             Input::Optional(inner) => {

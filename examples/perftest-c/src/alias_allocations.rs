@@ -6,24 +6,30 @@ struct Allocator;
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static ALLOCATED_BYTES: Cell<usize> = const { Cell::new(0) };
+    static REALLOCATIONS: Cell<usize> = const { Cell::new(0) };
 }
-fn record() {
+fn record(size: usize, reallocation: bool) {
     if COUNTING.try_with(Cell::get).unwrap_or(false) {
         let _ = ALLOCATIONS.try_with(|n| n.set(n.get().wrapping_add(1)));
+        let _ = ALLOCATED_BYTES.try_with(|n| n.set(n.get().wrapping_add(size)));
+        if reallocation {
+            let _ = REALLOCATIONS.try_with(|n| n.set(n.get().wrapping_add(1)));
+        }
     }
 }
 #[global_allocator]
 static ALLOCATOR: Allocator = Allocator;
 unsafe impl GlobalAlloc for Allocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record();
+        record(layout.size(), false);
         unsafe { System.alloc(layout) }
     }
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
         unsafe { System.dealloc(pointer, layout) }
     }
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        record();
+        record(size, true);
         unsafe { System.realloc(pointer, layout, size) }
     }
 }
@@ -35,6 +41,8 @@ fn allocations(call: impl FnOnce()) -> usize {
         }
     }
     ALLOCATIONS.with(|n| n.set(0));
+    ALLOCATED_BYTES.with(|n| n.set(0));
+    REALLOCATIONS.with(|n| n.set(0));
     COUNTING.with(|flag| flag.set(true));
     let stop = Stop;
     call();
@@ -169,4 +177,71 @@ fn native_vec_and_string_transfers_preserve_capacity_without_allocating() {
         }),
         0
     );
+}
+
+#[test]
+fn generated_collection_inputs_allocate_once_without_growth() {
+    for size in [0usize, 1, 8, 64, 512, 4096] {
+        let plain: Vec<_> = (0..size)
+            .map(|v| super::__PbRow_collection_input_plain_p0_w1 { v0: v as i64 })
+            .collect();
+        let slice: Vec<_> = (0..size)
+            .map(|v| super::__PbRow_collection_input_slice_p0_w1 { v0: v as i64 })
+            .collect();
+        let custom: Vec<_> = (0..size)
+            .map(|v| super::__PbRow_collection_input_custom_p0_w1 { v0: v as i64 })
+            .collect();
+        let expected = (size * size.saturating_sub(1) / 2) as i64;
+        let plain_cost = allocations(|| unsafe {
+            assert_eq!(
+                super::perftest_collection_input_plain(
+                    super::__PbRows {
+                        data: plain.as_ptr().cast(),
+                        len: size
+                    },
+                    7
+                ),
+                expected + 7
+            );
+        });
+        assert_eq!(plain_cost, usize::from(size != 0));
+        assert_eq!(
+            ALLOCATED_BYTES.with(Cell::get),
+            size * std::mem::size_of::<i64>()
+        );
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+        let slice_cost = allocations(|| unsafe {
+            assert_eq!(
+                super::perftest_collection_input_slice(super::__PbRows {
+                    data: slice.as_ptr().cast(),
+                    len: size
+                }),
+                expected
+            );
+        });
+        assert_eq!(slice_cost, usize::from(size != 0));
+        assert_eq!(
+            ALLOCATED_BYTES.with(Cell::get),
+            size * std::mem::size_of::<i64>()
+        );
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+        // Constructor overrides keep deferred staging, with its length reserved.
+        // This i64 case permits in-place collection between stages. Leave the
+        // allocation count portable across standard-library implementations;
+        // other constructor layouts are not covered by this allocation budget.
+        let custom_cost = allocations(|| unsafe {
+            assert_eq!(
+                super::perftest_collection_input_custom(
+                    super::__PbRows {
+                        data: custom.as_ptr().cast(),
+                        len: size
+                    },
+                    7
+                ),
+                expected + 7
+            );
+        });
+        assert!(custom_cost <= 3 * usize::from(size != 0));
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+    }
 }

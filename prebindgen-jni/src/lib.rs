@@ -824,6 +824,10 @@ impl Codec for JniCodec {
         plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
+    fn input_leaf_construction_is_pure(&self, _: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        // Source converters resolve to Constructor recipes; these are builtin value leaves.
+        Primitive::from_type(ty).is_some()
+    }
     fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
         flat.metadata.bulk_collection_outputs
     }

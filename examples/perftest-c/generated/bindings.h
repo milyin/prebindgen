@@ -669,6 +669,37 @@ typedef struct { perftest_collection_i64_each_p0_w1_row *data; size_t len; } per
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
 uintptr_t perftest_collection_i64_each(perftest_collection_i64_each_p0_w1_rows p0_w1, void (*callback)(void *context, int64_t v0), void *context);
 typedef struct {
+    int64_t v0;
+} perftest_collection_input_array_p0_w1_row;
+typedef struct { perftest_collection_input_array_p0_w1_row *data; size_t len; } perftest_collection_input_array_p0_w1_rows;
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+int64_t perftest_collection_input_array(perftest_collection_input_array_p0_w1_rows p0_w1);
+typedef struct {
+    int64_t v0;
+} perftest_collection_input_custom_p0_w1_row;
+typedef struct { perftest_collection_input_custom_p0_w1_row *data; size_t len; } perftest_collection_input_custom_p0_w1_rows;
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+int64_t perftest_collection_input_custom(perftest_collection_input_custom_p0_w1_rows p0_w1, uint8_t p1_w1);
+typedef struct {
+    int64_t v0;
+} perftest_collection_input_optional_p0_w3_row;
+typedef struct { perftest_collection_input_optional_p0_w3_row *data; size_t len; } perftest_collection_input_optional_p0_w3_rows;
+/* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
+/* Collection values: p0_w3 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+int64_t perftest_collection_input_optional(int32_t p0_w1, perftest_collection_input_optional_p0_w3_rows p0_w3);
+typedef struct {
+    int64_t v0;
+} perftest_collection_input_plain_p0_w1_row;
+typedef struct { perftest_collection_input_plain_p0_w1_row *data; size_t len; } perftest_collection_input_plain_p0_w1_rows;
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+int64_t perftest_collection_input_plain(perftest_collection_input_plain_p0_w1_rows p0_w1, uint8_t p1_w1);
+typedef struct {
+    int64_t v0;
+} perftest_collection_input_slice_p0_w1_row;
+typedef struct { perftest_collection_input_slice_p0_w1_row *data; size_t len; } perftest_collection_input_slice_p0_w1_rows;
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+int64_t perftest_collection_input_slice(perftest_collection_input_slice_p0_w1_rows p0_w1);
+typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_late_drop_ret_w7_row;
 typedef struct { perftest_collection_late_drop_ret_w7_row *data; size_t len; } perftest_collection_late_drop_ret_w7_rows;

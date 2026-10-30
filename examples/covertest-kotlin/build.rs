@@ -144,6 +144,17 @@ fn main() {
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
     let binding = JniGen::builder()
+        .package(package!("collectioninputs")
+            .fun(fun!(collection_input_plain))
+            .fun(fun!(collection_input_bulk).expand_param("values", expand_param!(Vec<i64>).variant_self().bulk()))
+            .fun(fun!(collection_input_custom).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value))))
+            .fun(fun!(collection_input_custom_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value)).bulk()))
+            .fun(fun!(collection_input_narrow).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value))))
+            .fun(fun!(collection_input_narrow_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value)).bulk()))
+            .fun(fun!(collection_input_constructions))
+            .fun(fun!(collection_input_slice))
+            .fun(fun!(collection_input_array))
+            .fun(fun!(collection_input_optional).expand_param("values", expand_param!(Option<Vec<i64>>).variant_self().bulk())))
         .package(package!("defaults")
             .class(data_class!(DefaultBulkRow))
             .fun(fun!(default_bulk_echo))

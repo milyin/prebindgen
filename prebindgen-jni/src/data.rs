@@ -635,6 +635,9 @@ impl Codec for DataCodec<'_> {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
+    fn input_leaf_construction_is_pure(&self, flat: &Bindings, ty: &syn::Type, extra: &()) -> bool {
+        JniCodec.input_leaf_construction_is_pure(flat, ty, extra)
+    }
     fn default_output_sequence_is_bulk(&self, flat: &Bindings, extra: &()) -> bool {
         JniCodec.default_output_sequence_is_bulk(flat, extra)
     }

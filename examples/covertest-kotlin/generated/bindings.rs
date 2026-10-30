@@ -4412,6 +4412,11 @@ pub struct __PbBulk_Range_070bbcf38f849ff2 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_i32_0724546ec24d95a1 {
+    pub v0: i32,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i64_Range_0b9b7f90ad764db3 {
     pub v0: i64,
     pub v1: ::prebindgen_jni_runtime::bulk::Range,
@@ -4535,6 +4540,11 @@ pub struct __PbBulk_i64_Range_535f9e324da6eaa9 {
 pub struct __PbBulk_i64_f64_554fa1d6f8692db9 {
     pub v0: i64,
     pub v1: f64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_560cf018ca83c8a9 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4680,6 +4690,12 @@ pub struct __PbBulk_Range_c248412fa02aa6e4 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_i32_Range_c2b72962102e7ef8 {
+    pub v0: i32,
+    pub v1: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i32_Range_c8d6433a01ad4efb {
     pub v0: i32,
     pub v1: ::prebindgen_jni_runtime::bulk::Range,
@@ -4688,6 +4704,11 @@ pub struct __PbBulk_i32_Range_c8d6433a01ad4efb {
 #[repr(C)]
 pub struct __PbBulk_u8_c958cabd18f5a53a {
     pub v0: u8,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_ca7ae8840b1d5037 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4807,8 +4828,8 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 598069589468907258i64, if cfg!(target_endian = "big") { 1 } else { 0 },
-            ::core::mem::size_of:: < usize > () as i64
+            1i64, 4396119177409816757i64, if cfg!(target_endian = "big") { 1 } else { 0
+            }, ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
             ([
@@ -4853,6 +4874,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
                 ::core::mem::align_of::<__PbBulk_Range_070bbcf38f849ff2>(),
                 ::core::mem::offset_of!(__PbBulk_Range_070bbcf38f849ff2, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i32_0724546ec24d95a1>(),
+                ::core::mem::align_of::<__PbBulk_i32_0724546ec24d95a1>(),
+                ::core::mem::offset_of!(__PbBulk_i32_0724546ec24d95a1, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -5067,6 +5097,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::align_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                 ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v0),
                 ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_560cf018ca83c8a9>(),
+                ::core::mem::align_of::<__PbBulk_Range_560cf018ca83c8a9>(),
+                ::core::mem::offset_of!(__PbBulk_Range_560cf018ca83c8a9, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -5319,6 +5358,16 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
+                ::core::mem::size_of::<__PbBulk_i32_Range_c2b72962102e7ef8>(),
+                ::core::mem::align_of::<__PbBulk_i32_Range_c2b72962102e7ef8>(),
+                ::core::mem::offset_of!(__PbBulk_i32_Range_c2b72962102e7ef8, v0),
+                ::core::mem::offset_of!(__PbBulk_i32_Range_c2b72962102e7ef8, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
                 ::core::mem::size_of::<__PbBulk_i32_Range_c8d6433a01ad4efb>(),
                 ::core::mem::align_of::<__PbBulk_i32_Range_c8d6433a01ad4efb>(),
                 ::core::mem::offset_of!(__PbBulk_i32_Range_c8d6433a01ad4efb, v0),
@@ -5332,6 +5381,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_u8_c958cabd18f5a53a>(),
                 ::core::mem::align_of::<__PbBulk_u8_c958cabd18f5a53a>(),
                 ::core::mem::offset_of!(__PbBulk_u8_c958cabd18f5a53a, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_ca7ae8840b1d5037>(),
+                ::core::mem::align_of::<__PbBulk_Range_ca7ae8840b1d5037>(),
+                ::core::mem::offset_of!(__PbBulk_Range_ca7ae8840b1d5037, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -5545,6 +5603,1324 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1plain_149edb34e988dff39<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    p1_w1: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w5 = ::prebindgen_jni_runtime::row_i64(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w5.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    let p0_w4 = if true {
+                        Some(*p0_w5.as_ref().map_err(|e| e.clone())?)
+                    } else {
+                        None
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let p1_w0 = if true {
+                Some(u8::try_from(p1_w1).map_err(|_| "primitive input out of range")?)
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_plain(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1bulk_17564a92b14e3a524<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    p1_w1: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_1800d3dd3eceec6d, v0))?
+            } else {
+                None
+            };
+            let mut p0_w2: Vec<i64> = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
+                    )?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w7 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
+                                + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
+                        )?;
+                    let p0_w6 = if true { Some(p0_w7) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    p0_w2.push(p0_w3_element_built?);
+                }
+            }
+            let p1_w0 = if true {
+                Some(u8::try_from(p1_w1).map_err(|_| "primitive input out of range")?)
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_bulk(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1custom_13f5932b5fe2bdeb0<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    p1_w1: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w1_staged = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w6 = ::prebindgen_jni_runtime::row_i64(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w6.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    let p0_w5 = if true {
+                        Some(*p0_w6.as_ref().map_err(|e| e.clone())?)
+                    } else {
+                        None
+                    };
+                    drop(p0_w1_frame);
+                    p0_w1_staged
+                        .push(move || {
+                            move || -> ::core::result::Result<i64, String> {
+                                let p0_w5: i64 = ::core::convert::Into::into(
+                                    p0_w5.expect("active value"),
+                                );
+                                let p0_w4: i64 = perftest_flat::collection_input_value(
+                                    p0_w5,
+                                );
+                                let p0_w0 = p0_w4;
+                                Ok(p0_w0)
+                            }
+                        });
+                }
+            }
+            let p1_w0 = if true {
+                Some(u8::try_from(p1_w1).map_err(|_| "primitive input out of range")?)
+            } else {
+                None
+            };
+            let p0_w1_acquired: Vec<_> = p0_w1_staged
+                .into_iter()
+                .map(|acquire| acquire())
+                .collect();
+            let p0_w0: Vec<i64> = p0_w1_acquired
+                .into_iter()
+                .map(|construct| construct())
+                .collect::<::core::result::Result<_, String>>()?;
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_custom(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1custom_1bulk_180b5719b93fcace3<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    p1_w1: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_560cf018ca83c8a9>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_560cf018ca83c8a9, v0))?
+            } else {
+                None
+            };
+            let mut p0_w3_staged = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i64_97145e0ef6a1193d>(),
+                    )?;
+                p0_w3_staged.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w9 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_i64_97145e0ef6a1193d>())
+                                + ::core::mem::offset_of!(__PbBulk_i64_97145e0ef6a1193d, v0),
+                        )?;
+                    let p0_w8 = if true { Some(p0_w9) } else { None };
+                    p0_w3_staged
+                        .push(move || {
+                            move || -> ::core::result::Result<i64, String> {
+                                let p0_w8: i64 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w7: i64 = perftest_flat::collection_input_value(
+                                    p0_w8,
+                                );
+                                let p0_w2 = p0_w7;
+                                Ok(p0_w2)
+                            }
+                        });
+                }
+            }
+            let p1_w0 = if true {
+                Some(u8::try_from(p1_w1).map_err(|_| "primitive input out of range")?)
+            } else {
+                None
+            };
+            let p0_w3_acquired: Vec<_> = p0_w3_staged
+                .into_iter()
+                .map(|acquire| acquire())
+                .collect();
+            let p0_w2: Vec<i64> = p0_w3_acquired
+                .into_iter()
+                .map(|construct| construct())
+                .collect::<::core::result::Result<_, String>>()?;
+            let __prebindgen_argument_0 = p0_w2;
+            let p1_w0: u8 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::collection_input_custom_bulk(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1narrow_1a2e0942031835410<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w1_staged = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w6 = ::prebindgen_jni_runtime::row_i32(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w6.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    let p0_w5 = if true {
+                        Some(
+                            u8::try_from(*p0_w6.as_ref().map_err(|e| e.clone())?)
+                                .map_err(|_| "primitive input out of range")?,
+                        )
+                    } else {
+                        None
+                    };
+                    drop(p0_w1_frame);
+                    p0_w1_staged
+                        .push(move || {
+                            move || -> ::core::result::Result<i64, String> {
+                                let p0_w5: u8 = ::core::convert::Into::into(
+                                    p0_w5.expect("active value"),
+                                );
+                                let p0_w4: i64 = perftest_flat::collection_input_narrow_value(
+                                    p0_w5,
+                                );
+                                let p0_w0 = p0_w4;
+                                Ok(p0_w0)
+                            }
+                        });
+                }
+            }
+            let p0_w1_acquired: Vec<_> = p0_w1_staged
+                .into_iter()
+                .map(|acquire| acquire())
+                .collect();
+            let p0_w0: Vec<i64> = p0_w1_acquired
+                .into_iter()
+                .map(|construct| construct())
+                .collect::<::core::result::Result<_, String>>()?;
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::collection_input_narrow(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1narrow_1bulk_101859c8a0312491b<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_ca7ae8840b1d5037>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_ca7ae8840b1d5037, v0))?
+            } else {
+                None
+            };
+            let mut p0_w3_staged = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i32_0724546ec24d95a1>(),
+                    )?;
+                p0_w3_staged.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w9 = p0_w1_reader
+                        .read::<
+                            i32,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_i32_0724546ec24d95a1>())
+                                + ::core::mem::offset_of!(__PbBulk_i32_0724546ec24d95a1, v0),
+                        )?;
+                    let p0_w8 = if true {
+                        Some(
+                            u8::try_from(p0_w9)
+                                .map_err(|_| "primitive input out of range")?,
+                        )
+                    } else {
+                        None
+                    };
+                    p0_w3_staged
+                        .push(move || {
+                            move || -> ::core::result::Result<i64, String> {
+                                let p0_w8: u8 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w7: i64 = perftest_flat::collection_input_narrow_value(
+                                    p0_w8,
+                                );
+                                let p0_w2 = p0_w7;
+                                Ok(p0_w2)
+                            }
+                        });
+                }
+            }
+            let p0_w3_acquired: Vec<_> = p0_w3_staged
+                .into_iter()
+                .map(|acquire| acquire())
+                .collect();
+            let p0_w2: Vec<i64> = p0_w3_acquired
+                .into_iter()
+                .map(|construct| construct())
+                .collect::<::core::result::Result<_, String>>()?;
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::collection_input_narrow_bulk(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1constructions_107412dbe4e08ef68<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::collection_input_constructions();
+            let ret_w0 = (source_value) as i64;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1slice_1009ff8f8b9e77cd5<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w5 = ::prebindgen_jni_runtime::row_i64(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w5.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    let p0_w4 = if true {
+                        Some(*p0_w5.as_ref().map_err(|e| e.clone())?)
+                    } else {
+                        None
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let __prebindgen_argument_0 = p0_w0.as_slice();
+            let source_value = perftest_flat::collection_input_slice(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1array_1517465a977f1d8a5<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                if p0_w2 != 4 {
+                    return Err("wrong fixed array length".into());
+                }
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w5 = ::prebindgen_jni_runtime::row_i64(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w5.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    let p0_w4 = if true {
+                        Some(*p0_w5.as_ref().map_err(|e| e.clone())?)
+                    } else {
+                        None
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w0.push(p0_w1_element_built?);
+                }
+            }
+            let p0_w0: [i64; 4] = p0_w0
+                .try_into()
+                .map_err(|_| "wrong fixed array length".to_string())?;
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::collection_input_array(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1optional_19f143cf5440a4074<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_i32_Range_c2b72962102e7ef8>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .read::<
+                        i32,
+                    >(::core::mem::offset_of!(__PbBulk_i32_Range_c2b72962102e7ef8, v0))?
+            } else {
+                0
+            };
+            let p0_w5 = if true {
+                p0_w1_reader
+                    .range(
+                        ::core::mem::offset_of!(__PbBulk_i32_Range_c2b72962102e7ef8, v1),
+                    )?
+            } else {
+                None
+            };
+            if p0_w3 != 0 && p0_w3 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let mut p0_w4: Vec<i64> = Vec::new();
+            if p0_w3 == 1i32 {
+                let (p0_w5_start, p0_w6) = p0_w1_reader
+                    .rows(
+                        p0_w5,
+                        ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
+                    )?;
+                p0_w4.reserve_exact(p0_w6);
+                for p0_w7 in 0..p0_w6 {
+                    let p0_w9 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w5_start
+                                + p0_w7
+                                    * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
+                                + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
+                        )?;
+                    let p0_w8 = if true { Some(p0_w9) } else { None };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w5_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w8: i64 = ::core::convert::Into::into(
+                            p0_w8.expect("active value"),
+                        );
+                        let p0_w4 = p0_w8;
+                        Ok(p0_w4)
+                    })();
+                    p0_w4.push(p0_w5_element_built?);
+                }
+            }
+            let p0_w2 = if p0_w3 == 1i32 { Some(p0_w4) } else { None };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::collection_input_optional(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1echo_119271b2932c312bb<
     'local,
 >(
@@ -5567,6 +6943,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -7703,6 +9080,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i32_dc22244d89c2587b>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -7890,6 +9268,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_u8_904fefb3d01cb2ae>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     p0_w3_staged
                         .push(move || {
@@ -8041,6 +9420,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_u8_c958cabd18f5a53a>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -8889,6 +10269,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     callback_return_w6,
                                                     ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>(),
                                                 )?;
+                                            callback_return_w6_staged.reserve_exact(callback_return_w7);
                                             for callback_return_w8 in 0..callback_return_w7 {
                                                 let callback_return_w10 = callback_return_w4_reader
                                                     .read::<
@@ -9085,6 +10466,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
                         .read::<
@@ -9484,6 +10866,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
                         .read::<
@@ -10334,6 +11717,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -10858,6 +12242,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_Array_659298f90cfa7005>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -11039,6 +12424,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_Array_98c254983b527011>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -11314,13 +12700,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 } else {
                                     None
                                 };
-                                let mut callback_return_w4_staged = Vec::new();
+                                let mut callback_return_w3: Vec<i64> = Vec::new();
                                 if true {
                                     let (callback_return_w4_start, callback_return_w5) = callback_return_w2_reader
                                         .rows(
                                             callback_return_w4,
                                             ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                                         )?;
+                                    callback_return_w3.reserve_exact(callback_return_w5);
                                     for callback_return_w6 in 0..callback_return_w5 {
                                         let callback_return_w8 = callback_return_w2_reader
                                             .read::<
@@ -11336,26 +12723,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         } else {
                                             None
                                         };
-                                        callback_return_w4_staged
-                                            .push(move || {
-                                                move || -> ::core::result::Result<i64, String> {
-                                                    let callback_return_w7: i64 = ::core::convert::Into::into(
-                                                        callback_return_w7.expect("active value"),
-                                                    );
-                                                    let callback_return_w3 = callback_return_w7;
-                                                    Ok(callback_return_w3)
-                                                }
-                                            });
+                                        #[allow(clippy::redundant_closure_call)]
+                                        let callback_return_w4_element_built = (|| -> ::core::result::Result<
+                                            i64,
+                                            String,
+                                        > {
+                                            let callback_return_w7: i64 = ::core::convert::Into::into(
+                                                callback_return_w7.expect("active value"),
+                                            );
+                                            let callback_return_w3 = callback_return_w7;
+                                            Ok(callback_return_w3)
+                                        })();
+                                        callback_return_w3.push(callback_return_w4_element_built?);
                                     }
                                 }
-                                let callback_return_w4_acquired: Vec<_> = callback_return_w4_staged
-                                    .into_iter()
-                                    .map(|acquire| acquire())
-                                    .collect();
-                                let callback_return_w3: Vec<i64> = callback_return_w4_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let callback_return_value = callback_return_w3;
                                 Ok(callback_return_value)
                             }
@@ -11599,13 +12980,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 } else {
                                     None
                                 };
-                                let mut callback_return_w4_staged = Vec::new();
+                                let mut callback_return_w3: Vec<i64> = Vec::new();
                                 if true {
                                     let (callback_return_w4_start, callback_return_w5) = callback_return_w2_reader
                                         .rows(
                                             callback_return_w4,
                                             ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                                         )?;
+                                    callback_return_w3.reserve_exact(callback_return_w5);
                                     for callback_return_w6 in 0..callback_return_w5 {
                                         let callback_return_w8 = callback_return_w2_reader
                                             .read::<
@@ -11621,26 +13003,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         } else {
                                             None
                                         };
-                                        callback_return_w4_staged
-                                            .push(move || {
-                                                move || -> ::core::result::Result<i64, String> {
-                                                    let callback_return_w7: i64 = ::core::convert::Into::into(
-                                                        callback_return_w7.expect("active value"),
-                                                    );
-                                                    let callback_return_w3 = callback_return_w7;
-                                                    Ok(callback_return_w3)
-                                                }
-                                            });
+                                        #[allow(clippy::redundant_closure_call)]
+                                        let callback_return_w4_element_built = (|| -> ::core::result::Result<
+                                            i64,
+                                            String,
+                                        > {
+                                            let callback_return_w7: i64 = ::core::convert::Into::into(
+                                                callback_return_w7.expect("active value"),
+                                            );
+                                            let callback_return_w3 = callback_return_w7;
+                                            Ok(callback_return_w3)
+                                        })();
+                                        callback_return_w3.push(callback_return_w4_element_built?);
                                     }
                                 }
-                                let callback_return_w4_acquired: Vec<_> = callback_return_w4_staged
-                                    .into_iter()
-                                    .map(|acquire| acquire())
-                                    .collect();
-                                let callback_return_w3: Vec<i64> = callback_return_w4_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let callback_return_value = callback_return_w3;
                                 Ok(callback_return_value)
                             }
@@ -11939,6 +13315,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                             callback_return_w4,
                                             ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>(),
                                         )?;
+                                    callback_return_w4_staged.reserve_exact(callback_return_w5);
                                     for callback_return_w6 in 0..callback_return_w5 {
                                         let callback_return_w8 = callback_return_w2_reader
                                             .read::<
@@ -12314,6 +13691,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
                         .read::<
@@ -12536,6 +13914,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 if p0_w4 != 2 {
                     return Err("wrong fixed array length".into());
                 }
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
                         .read::<
@@ -12758,6 +14137,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
                         .read::<
@@ -13091,6 +14471,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w5,
                         ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>(),
                     )?;
+                p0_w5_staged.reserve_exact(p0_w6);
                 for p0_w7 in 0..p0_w6 {
                     let p0_w12 = p0_w1_reader
                         .read::<
@@ -13372,6 +14753,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 if p0_w4 != 3 {
                     return Err("wrong fixed array length".into());
                 }
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -13551,6 +14933,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 if p0_w4 != 3 {
                     return Err("wrong fixed array length".into());
                 }
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -13802,6 +15185,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .read::<
@@ -13975,6 +15359,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .range(
@@ -13992,6 +15377,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 p0_w8,
                                 ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                             )?;
+                        p0_w8_staged.reserve_exact(p0_w9);
                         for p0_w10 in 0..p0_w9 {
                             let p0_w13 = p0_w1_reader
                                 .read::<
@@ -14337,6 +15723,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_Range_963ae3ba49e0cb2b>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .range(
@@ -14537,6 +15924,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w5,
                         ::core::mem::size_of::<__PbBulk_i32_Range_e5f8866547bdf41a>(),
                     )?;
+                p0_w5_staged.reserve_exact(p0_w6);
                 for p0_w7 in 0..p0_w6 {
                     let p0_w10 = p0_w1_reader
                         .read::<
@@ -14798,6 +16186,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_Range_e048ef6766326a01>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
                         .range(
@@ -23068,6 +24457,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -25491,7 +26881,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     .map(
                                         ::prebindgen_jni_runtime::jni::objects::JObjectArray::from,
                                     )?;
-                                let mut callback_return_w1_staged = Vec::new();
+                                let mut callback_return_w0: Vec<i64> = Vec::new();
                                 if true {
                                     if callback_return_w1.is_null() {
                                         return Err("null collection".into());
@@ -25499,6 +26889,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let callback_return_w2 = callback_environment
                                         .get_array_length(&callback_return_w1)
                                         .map_err(|e| e.to_string())? as usize;
+                                    callback_return_w0.reserve_exact(callback_return_w2);
                                     for callback_return_w3 in 0..callback_return_w2 {
                                         let callback_return_w1_frame = unsafe {
                                             ::prebindgen_jni_runtime::LocalFrame::new(
@@ -25529,27 +26920,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         } else {
                                             None
                                         };
+                                        #[allow(clippy::redundant_closure_call)]
+                                        let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                            i64,
+                                            String,
+                                        > {
+                                            let callback_return_w4: i64 = ::core::convert::Into::into(
+                                                callback_return_w4.expect("active value"),
+                                            );
+                                            let callback_return_w0 = callback_return_w4;
+                                            Ok(callback_return_w0)
+                                        })();
                                         drop(callback_return_w1_frame);
-                                        callback_return_w1_staged
-                                            .push(move || {
-                                                move || -> ::core::result::Result<i64, String> {
-                                                    let callback_return_w4: i64 = ::core::convert::Into::into(
-                                                        callback_return_w4.expect("active value"),
-                                                    );
-                                                    let callback_return_w0 = callback_return_w4;
-                                                    Ok(callback_return_w0)
-                                                }
-                                            });
+                                        callback_return_w0.push(callback_return_w1_element_built?);
                                     }
                                 }
-                                let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
-                                    .into_iter()
-                                    .map(|acquire| acquire())
-                                    .collect();
-                                let callback_return_w0: Vec<i64> = callback_return_w1_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let callback_return_value = callback_return_w0;
                                 Ok(callback_return_value)
                             }
@@ -26695,6 +28080,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             let callback_return_w2 = callback_environment
                                                 .get_array_length(&callback_return_w1)
                                                 .map_err(|e| e.to_string())? as usize;
+                                            callback_return_w1_staged.reserve_exact(callback_return_w2);
                                             for callback_return_w3 in 0..callback_return_w2 {
                                                 let callback_return_w1_frame = unsafe {
                                                     ::prebindgen_jni_runtime::LocalFrame::new(
@@ -27499,6 +28885,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -27875,6 +29262,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             let callback_return_w2 = callback_environment
                                                 .get_array_length(&callback_return_w1)
                                                 .map_err(|e| e.to_string())? as usize;
+                                            callback_return_w1_staged.reserve_exact(callback_return_w2);
                                             for callback_return_w3 in 0..callback_return_w2 {
                                                 let callback_return_w1_frame = unsafe {
                                                     ::prebindgen_jni_runtime::LocalFrame::new(
@@ -36950,6 +38338,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -39594,6 +40983,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -40058,7 +41448,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<u128> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -40066,6 +41456,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -40096,27 +41487,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        u128,
+                        String,
+                    > {
+                        let p0_w4: u128 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<u128, String> {
-                                let p0_w4: u128 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<u128> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_u128(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -40242,6 +41627,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -40674,6 +42060,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -40917,6 +42304,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -40946,6 +42334,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         let p0_w6 = jni_environment
                             .get_array_length(&(*p0_w5.as_ref().map_err(|e| e.clone())?))
                             .map_err(|e| e.to_string())? as usize;
+                        p0_w5_staged.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w5_frame = unsafe {
                                 ::prebindgen_jni_runtime::LocalFrame::new(
@@ -41351,6 +42740,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -41527,7 +42917,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -41535,6 +42925,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -41560,27 +42951,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -41702,6 +43084,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -41879,6 +43262,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -42054,6 +43438,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -42074,7 +43459,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     {
                         return Err("JNI collection field decoding failed".into());
                     }
-                    let mut p0_w5_staged = Vec::new();
+                    let mut p0_w4: Vec<i64> = Vec::new();
                     if true {
                         if (*p0_w5.as_ref().map_err(|e| e.clone())?).is_null() {
                             return Err("null collection".into());
@@ -42082,6 +43467,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         let p0_w6 = jni_environment
                             .get_array_length(&(*p0_w5.as_ref().map_err(|e| e.clone())?))
                             .map_err(|e| e.to_string())? as usize;
+                        p0_w4.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w5_frame = unsafe {
                                 ::prebindgen_jni_runtime::LocalFrame::new(
@@ -42112,31 +43498,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                             } else {
                                 None
                             };
+                            #[allow(clippy::redundant_closure_call)]
+                            let p0_w5_element_built = (|| -> ::core::result::Result<
+                                i64,
+                                String,
+                            > {
+                                let p0_w8: i64 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w4 = p0_w8;
+                                Ok(p0_w4)
+                            })();
                             drop(p0_w5_frame);
-                            p0_w5_staged
-                                .push(move || {
-                                    move || -> ::core::result::Result<i64, String> {
-                                        let p0_w8: i64 = ::core::convert::Into::into(
-                                            p0_w8.expect("active value"),
-                                        );
-                                        let p0_w4 = p0_w8;
-                                        Ok(p0_w4)
-                                    }
-                                });
+                            p0_w4.push(p0_w5_element_built?);
                         }
                     }
                     drop(p0_w1_frame);
                     p0_w1_staged
                         .push(move || {
-                            let p0_w5_acquired: Vec<_> = p0_w5_staged
-                                .into_iter()
-                                .map(|acquire| acquire())
-                                .collect();
                             move || -> ::core::result::Result<Vec<i64>, String> {
-                                let p0_w4: Vec<i64> = p0_w5_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let p0_w0 = p0_w4;
                                 Ok(p0_w0)
                             }
@@ -42303,6 +43683,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -42522,7 +43903,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1: i32 = i32::from(!p0_w3.is_null());
-            let mut p0_w3_staged = Vec::new();
+            let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 if p0_w3.is_null() {
                     return Err("null collection".into());
@@ -42530,6 +43911,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -42555,32 +43937,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
                     drop(p0_w3_frame);
-                    p0_w3_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                let p0_w2 = p0_w6;
-                                Ok(p0_w2)
-                            }
-                        });
+                    p0_w2.push(p0_w3_element_built?);
                 }
             }
-            let p0_w3_acquired: Vec<_> = p0_w3_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0 = if p0_w1 == 1i32 {
-                let p0_w2: Vec<i64> = p0_w3_acquired
-                    .into_iter()
-                    .map(|construct| construct())
-                    .collect::<::core::result::Result<_, String>>()?;
-                Some(p0_w2)
-            } else {
-                None
-            };
+            let p0_w0 = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_optional(
                 __prebindgen_argument_0,
@@ -42721,6 +44090,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -42964,6 +44334,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -43144,7 +44515,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<char> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -43152,6 +44523,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -43182,17 +44554,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        char,
+                        String,
+                    > {
+                        let p0_w4: char = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<char, String> {
-                                let p0_w4: char = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true {
@@ -43200,14 +44574,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<char> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let __prebindgen_argument_1 = ::core::convert::AsRef::<
                 str,
@@ -43327,7 +44693,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -43335,6 +44701,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -43360,27 +44727,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = &p0_w0;
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -43495,7 +44853,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -43503,6 +44861,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -43528,27 +44887,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0.as_slice();
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -43759,6 +45109,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -44013,6 +45364,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -44201,7 +45553,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -44209,6 +45561,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -44234,28 +45587,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
             let __prebindgen_argument_1 = p1_w0;
@@ -44476,6 +45820,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -44739,6 +46084,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 let p1_w2 = jni_environment
                     .get_array_length(&p1_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p1_w1_staged.reserve_exact(p1_w2);
                 for p1_w3 in 0..p1_w2 {
                     let p1_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -62250,6 +63596,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -62684,7 +64031,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<u128> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -62692,6 +64039,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -62722,27 +64070,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        u128,
+                        String,
+                    > {
+                        let p0_w4: u128 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<u128, String> {
-                                let p0_w4: u128 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<u128> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_u128(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -62892,6 +64234,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -63156,6 +64499,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -63185,6 +64529,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         let p0_w6 = jni_environment
                             .get_array_length(&(*p0_w5.as_ref().map_err(|e| e.clone())?))
                             .map_err(|e| e.to_string())? as usize;
+                        p0_w5_staged.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w5_frame = unsafe {
                                 ::prebindgen_jni_runtime::LocalFrame::new(
@@ -63497,7 +64842,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -63505,6 +64850,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -63530,27 +64876,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -63693,6 +65030,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -63893,6 +65231,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -64093,6 +65432,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -64113,7 +65453,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     {
                         return Err("JNI collection field decoding failed".into());
                     }
-                    let mut p0_w5_staged = Vec::new();
+                    let mut p0_w4: Vec<i64> = Vec::new();
                     if true {
                         if (*p0_w5.as_ref().map_err(|e| e.clone())?).is_null() {
                             return Err("null collection".into());
@@ -64121,6 +65461,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         let p0_w6 = jni_environment
                             .get_array_length(&(*p0_w5.as_ref().map_err(|e| e.clone())?))
                             .map_err(|e| e.to_string())? as usize;
+                        p0_w4.reserve_exact(p0_w6);
                         for p0_w7 in 0..p0_w6 {
                             let p0_w5_frame = unsafe {
                                 ::prebindgen_jni_runtime::LocalFrame::new(
@@ -64151,31 +65492,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                             } else {
                                 None
                             };
+                            #[allow(clippy::redundant_closure_call)]
+                            let p0_w5_element_built = (|| -> ::core::result::Result<
+                                i64,
+                                String,
+                            > {
+                                let p0_w8: i64 = ::core::convert::Into::into(
+                                    p0_w8.expect("active value"),
+                                );
+                                let p0_w4 = p0_w8;
+                                Ok(p0_w4)
+                            })();
                             drop(p0_w5_frame);
-                            p0_w5_staged
-                                .push(move || {
-                                    move || -> ::core::result::Result<i64, String> {
-                                        let p0_w8: i64 = ::core::convert::Into::into(
-                                            p0_w8.expect("active value"),
-                                        );
-                                        let p0_w4 = p0_w8;
-                                        Ok(p0_w4)
-                                    }
-                                });
+                            p0_w4.push(p0_w5_element_built?);
                         }
                     }
                     drop(p0_w1_frame);
                     p0_w1_staged
                         .push(move || {
-                            let p0_w5_acquired: Vec<_> = p0_w5_staged
-                                .into_iter()
-                                .map(|acquire| acquire())
-                                .collect();
                             move || -> ::core::result::Result<Vec<i64>, String> {
-                                let p0_w4: Vec<i64> = p0_w5_acquired
-                                    .into_iter()
-                                    .map(|construct| construct())
-                                    .collect::<::core::result::Result<_, String>>()?;
                                 let p0_w0 = p0_w4;
                                 Ok(p0_w0)
                             }
@@ -64381,6 +65716,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -64608,7 +65944,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
         }
         {
             let p0_w1: i32 = i32::from(!p0_w3.is_null());
-            let mut p0_w3_staged = Vec::new();
+            let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 if p0_w3.is_null() {
                     return Err("null collection".into());
@@ -64616,6 +65952,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -64641,32 +65978,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
                     drop(p0_w3_frame);
-                    p0_w3_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                let p0_w2 = p0_w6;
-                                Ok(p0_w2)
-                            }
-                        });
+                    p0_w2.push(p0_w3_element_built?);
                 }
             }
-            let p0_w3_acquired: Vec<_> = p0_w3_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0 = if p0_w1 == 1i32 {
-                let p0_w2: Vec<i64> = p0_w3_acquired
-                    .into_iter()
-                    .map(|construct| construct())
-                    .collect::<::core::result::Result<_, String>>()?;
-                Some(p0_w2)
-            } else {
-                None
-            };
+            let p0_w0 = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_optional(
                 __prebindgen_argument_0,
@@ -64828,6 +66152,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w4 = jni_environment
                     .get_array_length(&p0_w3)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w3_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -65084,6 +66409,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -65284,7 +66610,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -65292,6 +66618,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -65317,27 +66644,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = &p0_w0;
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -65473,7 +66791,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -65481,6 +66799,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -65506,27 +66825,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0.as_slice();
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source = source_value;
@@ -65673,6 +66983,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -65938,7 +67249,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -65946,6 +67257,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -65971,28 +67283,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
             let __prebindgen_argument_1 = p1_w0;
@@ -66157,6 +67460,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)

@@ -33,6 +33,16 @@ internal object JNINative {
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_collection_input_plain_49edb34e988dff39(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_bulk_7564a92b14e3a524(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_custom_3f5932b5fe2bdeb0(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_custom_bulk_80b5719b93fcace3(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_narrow_a2e0942031835410(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_narrow_bulk_01859c8a0312491b(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_constructions_07412dbe4e08ef68(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_slice_009ff8f8b9e77cd5(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_array_517465a977f1d8a5(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_optional_9f143cf5440a4074(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_default_bulk_echo_19271b2932c312bb(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_default_bulk_array_f969bde7cc1c432a(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_default_bulk_optional_ea20da6fc813acee(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?

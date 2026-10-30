@@ -147,6 +147,7 @@ pub(crate) fn input<C: Codec>(
     active: &Condition,
     child: CodecInput<C>,
     bulk: bool,
+    pure_primitive: bool,
 ) -> Result<CodecInput<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
@@ -204,15 +205,20 @@ pub(crate) fn input<C: Codec>(
     if names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
         return Err("collection prepared input names differ from validation bindings".into());
     }
+    let pure_primitive = pure_primitive && child.resources.is_empty() && child.acquire.is_empty();
     let validation = replace(&child.validation, &transport.validation_values)?;
     let acquire = prepared(&child.acquire, &transport.prepared_values)?;
-    let statements = prepared(&child.statements, &transport.prepared_values)?;
+    let construction = |code: &TokenStream| {
+        if pure_primitive {
+            replace(code, &transport.validation_values)
+        } else {
+            prepared(code, &transport.prepared_values)
+        }
+    };
+    let statements = construction(&child.statements)?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
-    let argument = prepared(
-        &quote!(let #var = #child_argument;),
-        &transport.prepared_values,
-    )?;
+    let argument = construction(&quote!(let #var = #child_argument;))?;
     let mut resources = Vec::new();
     let mut declarations = TokenStream::new();
     let mut collect = TokenStream::new();
@@ -264,6 +270,40 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Slice => quote!(#var.as_slice()),
         SequenceView::Mutable => unreachable!(),
     };
+    // Only adapter-confirmed primitive leaves may move construction earlier.
+    // Source constructors and all resource-bearing conversions retain the phases.
+    if pure_primitive {
+        let element_value = format_ident!("{wire}_element_built");
+        return Ok(InputPlan {
+            fallible: true,
+            context: Default::default(),
+            acknowledgement: None,
+            node: WireNode::Chain {
+                controls: transport.controls,
+                child: Box::new(child.node),
+                meta: transport.metadata,
+            },
+            validation: quote! {
+                let mut #var:Vec<#element>=Vec::new();
+                if #condition { #open #length_check
+                    #var.reserve_exact(#length);
+                    for #index in 0..#length {
+                        #bind #validation
+                        #[allow(clippy::redundant_closure_call)]
+                        let #element_value=(|| -> ::core::result::Result<#element,String> {
+                            #statements #argument Ok(#var)
+                        })();
+                        #release
+                        #var.push(#element_value?);
+                    }
+                }
+            },
+            acquire: quote!(),
+            statements: to_array,
+            argument: value,
+            resources,
+        });
+    }
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
@@ -276,7 +316,7 @@ pub(crate) fn input<C: Codec>(
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
-            if #condition { #open #length_check for #index in 0..#length {
+            if #condition { #open #length_check #staged.reserve_exact(#length); for #index in 0..#length {
                 #bind #validation #collect #release
                 #staged.push(move || { #acquire move || -> ::core::result::Result<#element,String> { #statements #argument Ok(#var) } });
             }}
