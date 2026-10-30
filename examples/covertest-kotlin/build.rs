@@ -222,7 +222,7 @@ fn main() {
             .fun(fun!(buffer_views_bytes).expand_return(expand_return!(Vec<u8>).field_self().field(fun!(buffer_views_bytes_len)))))
         .package(package!("buffers")
             .class(data_class!(JniBufferRow)).class(data_class!(JniBufferResourceRow))
-            .fun(fun!(jni_buffer_resource)).fun(fun!(jni_buffer_domain_failure)).fun(fun!(jni_buffer_resource_rows))
+            .fun(fun!(jni_buffer_resource)).fun(fun!(jni_buffer_domain_failure)).fun(fun!(jni_buffer_resource_rows).expand_return(expand_return!(Vec<JniBufferResourceRow>).field_self()))
             .fun(fun!(jni_buffer_text)).fun(fun!(jni_buffer_string))
             .fun(fun!(jni_buffer_bytes)).fun(fun!(jni_buffer_vec))
             .fun(fun!(jni_buffer_optional_text)).fun(fun!(jni_buffer_optional_bytes))

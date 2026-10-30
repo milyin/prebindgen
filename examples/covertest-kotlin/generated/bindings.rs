@@ -4554,11 +4554,6 @@ pub struct __PbBulk_Range_5fcba94d312234e5 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
-pub struct __PbBulk_Range_605ce764399b6a69 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
 pub struct __PbBulk_i64_638fef00b45d8f09 {
     pub v0: i64,
 }
@@ -4585,13 +4580,6 @@ pub struct __PbBulk_i64_i32_7bf5c71332a16abd {
 pub struct __PbBulk_i32_Array_807a81a0a53fa8e0 {
     pub v0: i32,
     pub v1: [u8; 16],
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i64_Range_8318083250c8683b {
-    pub v0: i64,
-    pub v1: ::prebindgen_jni_runtime::bulk::Range,
-    pub v2: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4819,7 +4807,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 894360410763660462i64, if cfg!(target_endian = "big") { 1 } else { 0 },
+            1i64, 598069589468907258i64, if cfg!(target_endian = "big") { 1 } else { 0 },
             ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
@@ -5113,15 +5101,6 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
-                ::core::mem::size_of::<__PbBulk_Range_605ce764399b6a69>(),
-                ::core::mem::align_of::<__PbBulk_Range_605ce764399b6a69>(),
-                ::core::mem::offset_of!(__PbBulk_Range_605ce764399b6a69, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
                 ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>(),
                 ::core::mem::align_of::<__PbBulk_i64_638fef00b45d8f09>(),
                 ::core::mem::offset_of!(__PbBulk_i64_638fef00b45d8f09, v0),
@@ -5165,17 +5144,6 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::align_of::<__PbBulk_i32_Array_807a81a0a53fa8e0>(),
                 ::core::mem::offset_of!(__PbBulk_i32_Array_807a81a0a53fa8e0, v0),
                 ::core::mem::offset_of!(__PbBulk_i32_Array_807a81a0a53fa8e0, v1),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i64_Range_8318083250c8683b>(),
-                ::core::mem::align_of::<__PbBulk_i64_Range_8318083250c8683b>(),
-                ::core::mem::offset_of!(__PbBulk_i64_Range_8318083250c8683b, v0),
-                ::core::mem::offset_of!(__PbBulk_i64_Range_8318083250c8683b, v1),
-                ::core::mem::offset_of!(__PbBulk_i64_Range_8318083250c8683b, v2),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -17673,87 +17641,82 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     match ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::jni_buffer_resource_rows();
-            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_605ce764399b6a69>(),
-            );
-            let ret_w1_source = source_value;
-            let ret_w3 = ret_w1_source.len();
-            let mut ret_w1_commits = Vec::with_capacity(ret_w3);
-            let ret_w1 = ret_w0_writer
-                .rows(
-                    ret_w3,
-                    ::core::mem::size_of::<__PbBulk_i64_Range_8318083250c8683b>(),
-                    ::core::mem::align_of::<__PbBulk_i64_Range_8318083250c8683b>(),
-                )?;
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
-                let ret_w5_record = ret_w2;
-                let mut ret_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w5_record.resource,
+            let ret_w0_source = source_value;
+            let ret_w2 = ret_w0_source.len();
+            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
+            let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+                let ret_w0_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
+                }?;
+                let ret_w4_record = ret_w1;
+                let mut ret_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w4_record.resource,
                 });
-                let ret_w5_f1_source = ret_w5_record.text;
-                let ret_w5_f1 = Some(
-                    ret_w0_writer.append_buffer(ret_w5_f1_source.as_bytes())?,
-                );
-                let ret_w5_f2_source = ret_w5_record.bytes;
-                let ret_w5_f2 = Some(
-                    ret_w0_writer.append_buffer(ret_w5_f2_source.as_ref())?,
-                );
-                ret_w0_writer
-                    .write(
-                        (ret_w1.offset as usize
-                            + ret_w4
-                                * ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_8318083250c8683b,
-                                >())
-                            + ::core::mem::offset_of!(
-                                __PbBulk_i64_Range_8318083250c8683b, v0
+                let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f1 = ret_w4_record.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4_f1),
+                    )?
+                };
+                let ret_w4_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f2 = ret_w4_record.bytes;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4_f2),
+                    )?
+                };
+                let ret_w0_row = ::prebindgen_jni_runtime::array(
+                    &mut jni_environment,
+                    3usize,
+                )?;
+                let object = jni_environment
+                    .call_static_method(
+                        "java/lang/Long",
+                        "valueOf",
+                        "(J)Ljava/lang/Long;",
+                        &[
+                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                ((&mut *ret_w4_f0)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        perftest_flat::CallbackOwned,
+                                    >) as i64,
                             ),
-                        ((&mut *ret_w5_f0)
-                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                perftest_flat::CallbackOwned,
-                            >) as i64,
-                    )?;
-                ret_w0_writer
-                    .range(
-                        (ret_w1.offset as usize
-                            + ret_w4
-                                * ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_8318083250c8683b,
-                                >())
-                            + ::core::mem::offset_of!(
-                                __PbBulk_i64_Range_8318083250c8683b, v1
-                            ),
-                        ret_w5_f1,
-                    )?;
-                ret_w0_writer
-                    .range(
-                        (ret_w1.offset as usize
-                            + ret_w4
-                                * ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_8318083250c8683b,
-                                >())
-                            + ::core::mem::offset_of!(
-                                __PbBulk_i64_Range_8318083250c8683b, v2
-                            ),
-                        ret_w5_f2,
-                    )?;
-                ret_w1_commits
+                        ],
+                    )
+                    .and_then(|v| v.l())
+                    .map_err(|e| e.to_string())?;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 0i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let object = ret_w4_f1;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 1i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let object = ret_w4_f2;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 2i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                jni_environment
+                    .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
+                    .map_err(|e| e.to_string())?;
+                drop(ret_w0_frame);
+                ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w5_f0);
+                        let _ = Box::into_raw(ret_w4_f0);
                     });
             }
-            let ret_w1 = Some(ret_w1);
-            ret_w0_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_605ce764399b6a69, v0),
-                    ret_w1,
-                )?;
-            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                jni_environment
-                    .byte_array_from_slice(ret_w0_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let __pb_direct_object = ret_w0;
+            let ret_w0 = Some(ret_w0);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -17761,7 +17724,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                     .l
             };
             let _: () = {
-                for commit in ret_w1_commits {
+                for commit in ret_w0_commits {
                     commit();
                 }
                 direct_output = __pb_direct_result;

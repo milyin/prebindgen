@@ -106,7 +106,11 @@ impl Hook {
         let mut table = Box::new(*original);
         match mode {
             0 => table.PushLocalFrame = Some(fail_frame),
-            1 => table.NewObjectArray = Some(fail_array),
+            // Materialized collections use object arrays or a bulk byte frame.
+            1 => {
+                table.NewObjectArray = Some(fail_array);
+                table.NewByteArray = Some(fail_bytes);
+            }
             2 | 4 | 6 | 8 => table.NewStringUTF = Some(fail_string),
             3 | 5 | 7 | 9 => table.NewByteArray = Some(fail_bytes),
             _ => unreachable!(),

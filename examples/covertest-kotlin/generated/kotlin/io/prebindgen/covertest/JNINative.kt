@@ -99,7 +99,7 @@ internal object JNINative {
     @JvmStatic external fun call_buffer_views_bytes_491539966ab74896(returns: Return_ByteArray_Long2_ErrorEmpty_34705c584e211183): Unit
     @JvmStatic external fun call_jni_buffer_resource_f33d027f936f6663(returns: Return_Long_String_ByteArray3_ErrorEmpty_b6abe218690243a7): Unit
     @JvmStatic external fun call_jni_buffer_domain_failure_f36020e4f4562fe0(returns: Return_Empty_ErrorLong_String_ByteArray3_2803e103835e4ca7): Unit
-    @JvmStatic external fun call_jni_buffer_resource_rows_54fd0c38ecd1f227(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_jni_buffer_resource_rows_54fd0c38ecd1f227(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_jni_buffer_text_d33d1c8fd91af20d(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
     @JvmStatic external fun call_jni_buffer_string_649b053bccecf6a7(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
     @JvmStatic external fun call_jni_buffer_bytes_801aa24b9714561c(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
