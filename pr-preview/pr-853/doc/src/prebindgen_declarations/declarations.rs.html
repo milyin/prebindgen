@@ -672,7 +672,7 @@
 <a href=#672 id=672 data-nosnippet>672</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(Output::Sequence {
 <a href=#673 id=673 data-nosnippet>673</a>                        element: Box::new(resolve(element, <span class="kw-2">&amp;</span>Output::auto(), stack)<span class="question-mark">?</span>),
 <a href=#674 id=674 data-nosnippet>674</a>                        mode: <span class="prelude-val">None</span>,
-<a href=#675 id=675 data-nosnippet>675</a>                        delivery: SequenceDelivery::Value,
+<a href=#675 id=675 data-nosnippet>675</a>                        delivery: SequenceDelivery::Auto,
 <a href=#676 id=676 data-nosnippet>676</a>                    });
 <a href=#677 id=677 data-nosnippet>677</a>                }
 <a href=#678 id=678 data-nosnippet>678</a>                <span class="kw">if </span>type_key(ty) == <span class="string">"()" </span>{
@@ -704,7 +704,7 @@
 <a href=#704 id=704 data-nosnippet>704</a>                        Output::Sequence {
 <a href=#705 id=705 data-nosnippet>705</a>                            element: Box::new(child),
 <a href=#706 id=706 data-nosnippet>706</a>                            mode: <span class="prelude-val">None</span>,
-<a href=#707 id=707 data-nosnippet>707</a>                            delivery: SequenceDelivery::Value,
+<a href=#707 id=707 data-nosnippet>707</a>                            delivery: SequenceDelivery::Auto,
 <a href=#708 id=708 data-nosnippet>708</a>                        }
 <a href=#709 id=709 data-nosnippet>709</a>                    });
 <a href=#710 id=710 data-nosnippet>710</a>                }
