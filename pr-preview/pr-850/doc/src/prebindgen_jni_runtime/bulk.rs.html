@@ -146,25 +146,25 @@
 <a href=#146 id=146 data-nosnippet>146</a>    </span><span class="kw">pub fn </span>range(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: usize, value: <span class="prelude-ty">Option</span>&lt;Range&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#147 id=147 data-nosnippet>147</a>        <span class="self">self</span>.write(offset, value.unwrap_or(Range::ABSENT))
 <a href=#148 id=148 data-nosnippet>148</a>    }
-<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Append a byte payload and write its descriptor, preserving null versus empty.
-<a href=#150 id=150 data-nosnippet>150</a>    </span><span class="kw">pub fn </span>buffer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: usize, value: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#151 id=151 data-nosnippet>151</a>        <span class="kw">let </span>r = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = value {
-<a href=#152 id=152 data-nosnippet>152</a>            <span class="kw">let </span>start = <span class="self">self</span>.bytes.len();
-<a href=#153 id=153 data-nosnippet>153</a>            <span class="kw">let </span>end = start
-<a href=#154 id=154 data-nosnippet>154</a>                .checked_add(v.len())
-<a href=#155 id=155 data-nosnippet>155</a>                .ok_or(<span class="string">"bulk payload length overflow"</span>)<span class="question-mark">?</span>;
-<a href=#156 id=156 data-nosnippet>156</a>            <span class="kw">if </span>end &gt; i32::MAX <span class="kw">as </span>usize {
-<a href=#157 id=157 data-nosnippet>157</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"bulk frame exceeds JVM array limit"</span>.into());
-<a href=#158 id=158 data-nosnippet>158</a>            }
-<a href=#159 id=159 data-nosnippet>159</a>            <span class="self">self</span>.bytes.extend_from_slice(v);
-<a href=#160 id=160 data-nosnippet>160</a>            Range {
-<a href=#161 id=161 data-nosnippet>161</a>                offset: start <span class="kw">as </span>u64,
-<a href=#162 id=162 data-nosnippet>162</a>                length: v.len() <span class="kw">as </span>u64,
-<a href=#163 id=163 data-nosnippet>163</a>            }
-<a href=#164 id=164 data-nosnippet>164</a>        } <span class="kw">else </span>{
-<a href=#165 id=165 data-nosnippet>165</a>            Range::ABSENT
-<a href=#166 id=166 data-nosnippet>166</a>        };
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="self">self</span>.write(offset, r)
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Append a payload while its source is alive and return its frame descriptor.
+<a href=#150 id=150 data-nosnippet>150</a>    </span><span class="kw">pub fn </span>append_buffer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Range&gt; {
+<a href=#151 id=151 data-nosnippet>151</a>        <span class="kw">let </span>start = <span class="self">self</span>.bytes.len();
+<a href=#152 id=152 data-nosnippet>152</a>        <span class="kw">let </span>end = start
+<a href=#153 id=153 data-nosnippet>153</a>            .checked_add(value.len())
+<a href=#154 id=154 data-nosnippet>154</a>            .ok_or(<span class="string">"bulk payload length overflow"</span>)<span class="question-mark">?</span>;
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">if </span>end &gt; i32::MAX <span class="kw">as </span>usize {
+<a href=#156 id=156 data-nosnippet>156</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"bulk frame exceeds JVM array limit"</span>.into());
+<a href=#157 id=157 data-nosnippet>157</a>        }
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="self">self</span>.bytes.extend_from_slice(value);
+<a href=#159 id=159 data-nosnippet>159</a>        <span class="prelude-val">Ok</span>(Range {
+<a href=#160 id=160 data-nosnippet>160</a>            offset: start <span class="kw">as </span>u64,
+<a href=#161 id=161 data-nosnippet>161</a>            length: value.len() <span class="kw">as </span>u64,
+<a href=#162 id=162 data-nosnippet>162</a>        })
+<a href=#163 id=163 data-nosnippet>163</a>    }
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="doccomment">/// Append a byte payload and write its descriptor, preserving null versus empty.
+<a href=#165 id=165 data-nosnippet>165</a>    </span><span class="kw">pub fn </span>buffer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: usize, value: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>range = value.map(|bytes| <span class="self">self</span>.append_buffer(bytes)).transpose()<span class="question-mark">?</span>;
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="self">self</span>.range(offset, range)
 <a href=#168 id=168 data-nosnippet>168</a>    }
 <a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Encoded bytes without compacting or copying the native vector.
 <a href=#170 id=170 data-nosnippet>170</a>    </span><span class="kw">pub fn </span>bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
