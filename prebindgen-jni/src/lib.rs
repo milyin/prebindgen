@@ -1143,6 +1143,10 @@ fn validate_class_name(name: &str) -> Result<()> {
         "BulkWriter",
         "BulkReader",
         "BulkInputRow",
+        "BulkHandleWriter",
+        "InputRows",
+        "PreparedInput",
+        "InputValidation",
     ]
     .contains(&name)
     {
@@ -1496,6 +1500,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
+        let binding_name = if error.is_some() {
+            "onBindingError"
+        } else {
+            "onError"
+        };
         let kotlin_context = KotlinContext {
             package: prefix,
             classes: &kotlin_classes,
@@ -1523,7 +1532,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             locks.extend(code.locks);
             lock_groups.extend(code.lock_groups);
             for binding in code.setup {
-                setup.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
+                setup.push_str(&format!("val {} = try {{ {} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}\n", binding.name, binding.expression));
             }
             consumed.extend(code.consumed);
         }
@@ -1820,11 +1829,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             call
         };
-        let binding_name = if error.is_some() {
-            "onBindingError"
-        } else {
-            "onError"
-        };
         let build = if delivered.len() > 1 {
             kt_params.pop()
         } else {
@@ -1857,14 +1861,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 names.join(", ")
             )
         } else {
-            let mut all_locks = if locks.is_empty() {
-                "kotlin.collections.emptyList<Nothing>()".to_string()
-            } else {
-                format!("listOfNotNull({})", locks.join(", "))
-            };
-            for group in lock_groups {
-                all_locks = format!("({all_locks} + ({group}))");
-            }
+            let all_locks = kotlin::lock_list(&locks, &lock_groups);
             format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
         };
         let call = if callback {

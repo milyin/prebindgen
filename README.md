@@ -857,6 +857,23 @@ released after decoding each row, and are never retained for construction.
 Shared-only calls need no alias history. Other calls keep checked addresses so
 later parameters and collections can reject conflicts with earlier inputs.
 
+Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
+actual JNI row arrays directly, retaining handle wrappers in collection-level
+state until address encoding under the existing locks. Bulk handle inputs pack
+primitive and buffer fields into their byte frame and retain handle offsets;
+addresses are filled under the locks. Neither path creates per-element Triple or
+BulkInputRow callback helpers. Prepared state belongs to one invocation and is
+encoded once; callback returns prepare fresh state for every invocation.
+Partial-consumption receipts use the retained owners, including nested owners in
+native acquisition order. Exceptions from user-provided lists propagate unchanged.
+
+Low-level `KotlinInput` converters can provide `prepared_arguments` for collection
+preparation: use handle objects instead of their addresses and retain nested
+prepared inputs. Nonempty metadata must match the wire argument count.
+Resource-free converters can omit it and reuse `arguments`; handle-bearing custom
+converters must provide the prepared form and receive a generation diagnostic if
+it is absent. This does not change the declaration-level expansion API.
+
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
 `expand_param!(Element)` or `expand_return!(Element)` on a collection occurrence

@@ -1,4 +1,4 @@
-use prebindgen_declarations::{callback, expand_param, expand_return, fun};
+use prebindgen_declarations::{callback, expand_param, expand_return, fun, Input};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -71,6 +71,18 @@ fn main() {
         } else {
             (row_make, wide_make, wide_sum, row_callback, wide_callback)
         };
+        let handle_values = fun!(handle_values_sum).expand_param("values", if bulk {
+            expand_param!(i64).variant(fun!(input_handle_value)).bulk()
+        } else { expand_param!(i64).variant(fun!(input_handle_value)) });
+        let record_input=Input::Sequence(Box::new(Input::Record(vec![
+            Input::Constructor { function:"input_handle_copy".into(),args:vec![Input::Leaf] },
+            Input::Leaf,
+        ])));
+        let handle_records=fun!(handle_records_sum).expand_param("values",if bulk {record_input.bulk()}else{record_input});
+        let owned_handles = if bulk {
+            fun!(owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
+                .expand_return(expand_return!(InputHandle).field_self_into().bulk())
+        } else { fun!(owned_handles_echo) };
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
@@ -79,6 +91,13 @@ fn main() {
             .set_jni_native_init(r#"System.loadLibrary("bulk_bench")"#)
             .package(
                 package!()
+                    .class(ptr_class!(InputHandle))
+                    .class(data_class!(HandleRecord))
+                    .fun(fun!(input_handle_new))
+                    .fun(fun!(input_handle_value))
+                    .fun(handle_values)
+                    .fun(handle_records)
+                    .fun(owned_handles)
                     .class(data_class!(Row))
                     .class(data_class!(WideRow))
                     .class(ptr_class!(RowReturnHandler))

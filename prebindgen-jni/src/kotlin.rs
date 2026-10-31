@@ -68,12 +68,34 @@ pub struct KotlinInput {
     pub parameters: Vec<String>,
     /// Expressions passed to native wires, in wire order.
     pub arguments: Vec<String>,
+    /// Values cached when preparing collection rows, before extracting handle
+    /// addresses under locks. Handle fields retain their nullable wrapper objects;
+    /// other fields retain their encoded wire values. Nested collections retain
+    /// their prepared state. An empty vector falls back to arguments for
+    /// resource-free converters; handle-bearing converters must provide this form.
+    pub prepared_arguments: Vec<String>,
     /// Handle expressions to lock for the duration of the native call.
     pub locks: Vec<String>,
     /// Statements visiting owned handles in native acquisition order. Use
     /// `__pb_consume(handle)` so the writer can invalidate either all owners
     /// on success or only the consumed prefix and its aliases on failure.
     pub consumed: Vec<String>,
+}
+impl KotlinInput {
+    pub(crate) fn prepare_arguments(&mut self, handles: bool) -> Result<()> {
+        if self.prepared_arguments.is_empty() && !self.arguments.is_empty() {
+            if handles {
+                return Err(
+                    "handle-bearing Kotlin input converter must provide prepared_arguments".into(),
+                );
+            }
+            self.prepared_arguments = self.arguments.clone();
+        }
+        if self.prepared_arguments.len() != self.arguments.len() {
+            return Err("Kotlin prepared input values differ from its wire argument count".into());
+        }
+        Ok(())
+    }
 }
 /// Kotlin result conversion and rollback code owned by the result slot.
 #[derive(Default, Clone)]
@@ -251,6 +273,7 @@ pub(crate) fn input_leaves(
     let mut kt_params = Vec::new();
     let mut kt_args = Vec::new();
     let mut locks = Vec::new();
+    let mut prepared_arguments = Vec::new();
     let mut consumed = Vec::new();
     for w in wires {
         let n = &w.name;
@@ -291,10 +314,18 @@ pub(crate) fn input_leaves(
             ),
             _ => (w.kind.kotlin_type().into(), n.to_string()),
         };
+        prepared_arguments.push(match &w.kind {
+            JniWire::Handle { condition, .. } if condition != "true" => {
+                format!("if ({condition}) {n} else null")
+            }
+            JniWire::Handle { .. } => n.to_string(),
+            _ => arg.clone(),
+        });
         kt_params.push(format!("{n}: {kt}"));
         kt_args.push(arg);
     }
     Ok(KotlinInput {
+        prepared_arguments,
         parameters: kt_params,
         arguments: kt_args,
         setup: Vec::new(),
@@ -414,6 +445,30 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
         } => elements.iter().any(has_optional),
     }
 }
+pub(crate) fn lock_list(locks: &[String], groups: &[String]) -> String {
+    let mut groups = groups.iter();
+    let mut out = if locks.is_empty() {
+        groups
+            .next()
+            .map(|group| format!("({group})"))
+            .unwrap_or_else(|| "kotlin.collections.emptyList<Nothing>()".into())
+    } else {
+        format!("kotlin.collections.listOfNotNull({})", locks.join(", "))
+    };
+    for group in groups {
+        out = format!("({out} + ({group}))");
+    }
+    out
+}
+
+pub(crate) fn input_handles(node: &JniNode, owned_only: bool) -> bool {
+    match node {
+        JniNode::Leaf(wires) => wires.iter().any(|w|matches!(&w.kind,JniWire::Handle{handle,..} if !owned_only || handle.access == Access::Move)),
+        JniNode::Chain { child, .. } => input_handles(child, owned_only),
+        JniNode::Branch { controls, children, .. } => controls.iter().any(|w|matches!(&w.kind,JniWire::Handle{handle,..} if !owned_only || handle.access == Access::Move)) || children.iter().any(|n|input_handles(n,owned_only)),
+    }
+}
+
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     match node {
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
@@ -430,7 +485,7 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
         } => {
             let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
             for arm in elements {
-                merge_input(&mut out, input_kotlin(arm, context)?);
+                merge_input(&mut out, input_kotlin(arm, context)?)?;
             }
             Ok(out)
         }
@@ -466,18 +521,23 @@ pub(crate) fn input_components(
 ) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     for node in nodes {
-        merge_input(&mut out, input_kotlin(node, context)?);
+        merge_input(&mut out, input_kotlin(node, context)?)?;
     }
     Ok(out)
 }
 
-fn merge_input(out: &mut KotlinInput, child: KotlinInput) {
+fn merge_input(out: &mut KotlinInput, mut child: KotlinInput) -> Result<()> {
+    child.prepare_arguments(
+        !child.locks.is_empty() || !child.lock_groups.is_empty() || !child.consumed.is_empty(),
+    )?;
     out.parameters.extend(child.parameters);
     out.arguments.extend(child.arguments);
+    out.prepared_arguments.extend(child.prepared_arguments);
     out.setup.extend(child.setup);
     out.lock_groups.extend(child.lock_groups);
     out.locks.extend(child.locks);
     out.consumed.extend(child.consumed);
+    Ok(())
 }
 pub(crate) fn remap_output(
     c: &mut KotlinOutput,
