@@ -880,7 +880,7 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
                     }
                 }
                 Some({
-                    let p1_w0: &Vec<u8> = unsafe { &*p1_w1_pointer };
+                    let p1_w0: &Vec<u8> = unsafe { &*(p1_w1_pointer) };
                     p1_w0
                 })
             } else {
@@ -1112,7 +1112,7 @@ pub unsafe extern "C" fn owner_inline_bytes_capacity(
                     }
                 }
                 Some({
-                    let p0_w0: &Vec<u8> = unsafe { &*p0_w1_pointer };
+                    let p0_w0: &Vec<u8> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
                 })
             } else {
@@ -1729,7 +1729,7 @@ pub unsafe extern "C" fn owner_inline_numbers_capacity(
                     }
                 }
                 Some({
-                    let p0_w0: &Vec<i64> = unsafe { &*p0_w1_pointer };
+                    let p0_w0: &Vec<i64> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
                 })
             } else {
@@ -2195,7 +2195,9 @@ pub unsafe extern "C" fn owner_inline_packet_ref(
                     }
                 }
                 Some({
-                    let p0_w0: &perftest_flat::InlinePacket = unsafe { &*p0_w1_pointer };
+                    let p0_w0: &perftest_flat::InlinePacket = unsafe {
+                        &*(p0_w1_pointer)
+                    };
                     p0_w0
                 })
             } else {
@@ -3125,7 +3127,7 @@ pub unsafe extern "C" fn owner_inline_text_capacity(
                     }
                 }
                 Some({
-                    let p0_w0: &String = unsafe { &*p0_w1_pointer };
+                    let p0_w0: &String = unsafe { &*(p0_w1_pointer) };
                     p0_w0
                 })
             } else {
