@@ -674,3 +674,40 @@ pub fn callback_row_return_cleanup_failure(
         label: "drop failure".into(),
     }]));
 }
+
+// Ordinary row-array ABI entry points used only by malformed-boundary probes.
+#[prebindgen]
+pub fn callback_rows_owned_probe(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {
+    callback_rows_owned(callback);
+}
+#[prebindgen]
+pub fn callback_rows_optional_probe(
+    callback: impl Fn(Option<Vec<Option<CallbackRow>>>) + Send + Sync + 'static,
+    mode: i32,
+) {
+    callback_rows_optional(callback, mode);
+}
+#[prebindgen]
+pub fn callback_rows_nested_probe(
+    callback: impl Fn(Vec<Vec<Option<CallbackNestedRow>>>) + Send + Sync + 'static,
+) {
+    callback_rows_nested(callback);
+}
+#[prebindgen]
+pub fn callback_rows_pair_probe(
+    callback: impl Fn(Vec<CallbackRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback_rows_pair(callback);
+}
+#[prebindgen]
+pub fn callback_rows_transferred_probe(
+    callback: impl Fn(Vec<CallbackTransferredRow>) + Send + Sync + 'static,
+) {
+    callback_rows_transferred(callback);
+}
+#[prebindgen]
+pub fn callback_rows_transferred_pair_probe(
+    callback: impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback_rows_transferred_pair(callback);
+}

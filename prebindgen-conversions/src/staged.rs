@@ -1,10 +1,203 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::{Access, InputPlan, OutputPlan, TemplateContext};
+use crate::{Access, InputPlan, OutputPlan, Resource, ResourceIdentity, TemplateContext};
 use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
+
+/// Check whether function parameters conflict in their access to foreign allocations.
+///
+/// Include every parameter's access requirements during generation. Compiled
+/// eager plans use [`Self::initialize`] before preparation and check each access
+/// before acquiring it. Deferred custom plans use [`Self::emit`] after validation.
+/// Shared-only calls need no bookkeeping; fixed sets use stack storage and
+/// dynamic exclusive sets use native address history.
+#[derive(Default)]
+pub struct ParameterAliasCheck {
+    resources: Vec<Resource>,
+}
+impl ParameterAliasCheck {
+    /// Include the access requirements of one source parameter.
+    ///
+    /// Render its active conditions and identities using this parameter's
+    /// generation context. These expressions remain guarded at runtime: an
+    /// inactive resource's identity is never evaluated.
+    pub fn include_parameter<C: TemplateContext>(
+        &mut self,
+        context: &C,
+        resources: &[Resource],
+    ) -> Result<()> {
+        let rendered = resources
+            .iter()
+            .map(|resource| {
+                Ok(Resource {
+                    registered: resource.registered,
+                    active: context.render(&resource.active)?,
+                    access: resource.access,
+                    identity: if resource.registered {
+                        resource.identity.clone()
+                    } else {
+                        match &resource.identity {
+                            ResourceIdentity::Single(code) => {
+                                ResourceIdentity::Single(context.render(code)?)
+                            }
+                            ResourceIdentity::Many(code) => {
+                                ResourceIdentity::Many(context.render(code)?)
+                            }
+                        }
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.resources.extend(rendered);
+        Ok(())
+    }
+
+    /// Initialize the alias history before evaluating eager input validation.
+    /// The caller also supplies `__prebindgen_input_consumed`, a shared `Cell<usize>`,
+    /// for ownership receipts. Deferred resources require the separate emit path.
+    pub fn initialize(&self) -> Result<TokenStream> {
+        if self.resources.iter().any(|resource| !resource.registered) {
+            return Err("eager input history requires eagerly prepared resources".into());
+        }
+        if self.resources.is_empty() {
+            return Ok(TokenStream::new());
+        }
+        let fixed = self
+            .resources
+            .iter()
+            .all(|r| matches!(r.identity, ResourceIdentity::Single(_)));
+        let count = self.resources.len();
+        Ok(
+            if self.resources.iter().all(|r| r.access == Access::Shared) || fixed && count <= 1 {
+                quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::SharedInputs;)
+            } else if fixed {
+                quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::FixedInputs::<#count>::default();)
+            } else {
+                quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::DynamicInputs::default();)
+            },
+        )
+    }
+    /// Emit a deferred plan's unit alias check; eager accesses are already checked.
+    ///
+    /// Fixed sets of at most eight addresses use pairwise comparisons, omitting
+    /// shared/shared pairs. Larger fixed sets sort a stack array. A dynamic set
+    /// with an exclusive access uses a vector and one sort. No helper state or
+    /// configuration lookup is introduced into the generated runtime.
+    pub fn emit(&self) -> Result<TokenStream> {
+        if self.resources.iter().any(|r| r.registered)
+            && self.resources.iter().any(|r| !r.registered)
+        {
+            return Err(
+                "cannot mix deferred resource conversions with eagerly constructed inputs".into(),
+            );
+        }
+        if self
+            .resources
+            .iter()
+            .all(|r| r.registered || r.access == Access::Shared)
+        {
+            return Ok(quote!(()));
+        }
+        let fixed = self
+            .resources
+            .iter()
+            .all(|r| matches!(r.identity, ResourceIdentity::Single(_)));
+        if fixed && self.resources.len() < 2 {
+            return Ok(quote!(()));
+        }
+        // Check locals live only inside the emitted expression. Reserve all
+        // resource identifiers so they cannot shadow validation locals used by
+        // another resource, including those belonging to a different parameter.
+        let mut used = std::collections::BTreeSet::new();
+        for resource in &self.resources {
+            reserve(&resource.active, &mut used);
+            match &resource.identity {
+                ResourceIdentity::Single(code) | ResourceIdentity::Many(code) => {
+                    reserve(code, &mut used)
+                }
+            }
+        }
+        let mut fresh = |base: String| {
+            let mut name = base;
+            while !used.insert(name.clone()) {
+                name.push('_');
+            }
+            syn::Ident::new(&name, proc_macro2::Span::call_site())
+        };
+        let error = quote!(return Err("conflicting input aliases".into()););
+        if fixed {
+            let addresses = self
+                .resources
+                .iter()
+                .map(|resource| {
+                    let ResourceIdentity::Single(identity) = &resource.identity else {
+                        unreachable!()
+                    };
+                    let active = &resource.active;
+                    quote!(if #active { Some((#identity) as usize) } else { None })
+                })
+                .collect::<Vec<_>>();
+            if self.resources.len() <= 8 {
+                let names = (0..self.resources.len())
+                    .map(|i| fresh(format!("__prebindgen_alias_{i}")))
+                    .collect::<Vec<_>>();
+                let bindings = names
+                    .iter()
+                    .zip(addresses)
+                    .map(|(name, address)| quote!(let #name = #address;));
+                let mut conflicts = Vec::new();
+                for (i, a) in self.resources.iter().enumerate() {
+                    for (j, b) in self.resources.iter().enumerate().skip(i + 1) {
+                        if a.access == Access::Shared && b.access == Access::Shared {
+                            continue;
+                        }
+                        let left = &names[i];
+                        let right = &names[j];
+                        conflicts.push(quote!(#left.is_some() && #left == #right));
+                    }
+                }
+                return expression(quote!({ #(#bindings)* if #(#conflicts)||* { #error } }));
+            }
+            let entries = addresses
+                .into_iter()
+                .zip(&self.resources)
+                .map(|(address, resource)| {
+                    let exclusive = resource.access != Access::Shared;
+                    quote!((#address, #exclusive))
+                });
+            let seen = fresh("__prebindgen_resources".into());
+            return expression(quote!({
+                let mut #seen = [#(#entries),*];
+                #seen.sort_unstable();
+                if #seen.windows(2).any(|pair| pair[0].0.is_some()
+                    && pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)) {
+                    #error
+                }
+            }));
+        }
+        let seen = fresh("__prebindgen_resources".into());
+        let mut collect = TokenStream::new();
+        for resource in &self.resources {
+            let active = &resource.active;
+            let exclusive = resource.access != Access::Shared;
+            let identities = match &resource.identity {
+                ResourceIdentity::Single(code) => quote!(::core::iter::once((#code) as usize)),
+                ResourceIdentity::Many(code) => code.clone(),
+            };
+            collect.extend(quote!(if #active { for identity in #identities { #seen.push((identity, #exclusive)); } }));
+        }
+        expression(quote!({
+            let mut #seen: Vec<(usize, bool)> = Vec::new();
+            #collect
+            #seen.sort_unstable();
+            if #seen.windows(2).any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)) {
+                #error
+            }
+        }))
+    }
+}
 
 /// Slot requests understood by the stored input plans.
 pub enum InputFragment<'a, C> {
@@ -36,13 +229,23 @@ pub enum InputFragment<'a, C> {
         /// Bindings used to render prepared templates.
         context: &'a C,
     },
-    /// Check addresses against `seen: Vec<(usize, bool)>`, then record them.
-    /// The boolean means exclusive access (including ownership transfer).
+    /// Include this parameter in a call-wide alias check during generation.
+    /// The standard plan returns `()`; emit `check.emit()` after validation and
+    /// before acknowledgement/acquisition. Custom conversions may also return
+    /// additional runtime checks as a unit expression.
     CheckAliases {
         /// Bindings used to render prepared templates.
         context: &'a C,
-        /// Caller-owned collection of previously checked allocation accesses.
-        seen: &'a syn::Ident,
+        /// Checks shared by all parameters of this call.
+        check: &'a mut ParameterAliasCheck,
+    },
+    /// Check aliases within an isolated input conversion, such as a callback result.
+    /// Deferred plans emit their isolated check. Eager plans have already checked
+    /// their accesses during validation: initialize their history and consumed
+    /// counter before validation, as the callback return emitters do.
+    CheckInternalAliases {
+        /// Bindings used to render prepared templates.
+        context: &'a C,
     },
 }
 /// Slot requests understood by stored output plans.
@@ -122,31 +325,14 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
                 }
                 None => quote!(()),
             },
-            InputFragment::CheckAliases { context, seen } => {
-                let mut checks = TokenStream::new();
-                for resource in &self.resources {
-                    let active = context.render(&resource.active)?;
-                    let exclusive = resource.access != Access::Shared;
-                    let identities = match &resource.identity {
-                        crate::ResourceIdentity::Single(code) => {
-                            let code = context.render(code)?;
-                            quote!(::core::iter::once((#code) as usize))
-                        }
-                        crate::ResourceIdentity::Many(code) => context.render(code)?,
-                    };
-                    checks.extend(quote! {
-                        if #active { for identity in #identities { #seen.push((identity, #exclusive)); } }
-                    });
-                }
-                if !self.resources.is_empty() {
-                    checks.extend(quote! {
-                        #seen.sort_unstable_by_key(|entry| entry.0);
-                        if #seen.windows(2).any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)) {
-                            return Err("conflicting input aliases".into());
-                        }
-                    });
-                }
-                quote!({ #checks })
+            InputFragment::CheckAliases { context, check } => {
+                check.include_parameter(context, &self.resources)?;
+                quote!(())
+            }
+            InputFragment::CheckInternalAliases { context } => {
+                let mut check = ParameterAliasCheck::default();
+                check.include_parameter(context, &self.resources)?;
+                check.emit()?
             }
         })
     }
@@ -196,7 +382,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
 /// Generators choosing this helper use address alias checks and one shared
 /// acknowledgement. Other generators can compose their own request protocols.
 /// This is deliberately outside Flat: none of these phases are required by its traits.
-pub fn emit_call<I, O, C: 'static, M>(
+pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
     function: &Function<I, O, M>,
     context: &C,
     source: &syn::Ident,
@@ -288,25 +474,64 @@ where
         }
         syn::Ident::new(&name, proc_macro2::Span::call_site())
     };
-    let seen = fresh("__prebindgen_resources".into());
     let args: Vec<_> = (0..inputs.len())
         .map(|i| fresh(format!("__prebindgen_argument_{i}")))
         .collect();
-    let checks = inputs
+    let mut check = ParameterAliasCheck::default();
+    let mut checks = inputs
         .iter()
         .map(|input| {
             input.code_fragment_slot(
                 InputFragment::CheckAliases {
                     context,
-                    seen: &seen,
+                    check: &mut check,
                 },
                 &unit,
             )
         })
         .collect::<Result<Vec<_>>>()?;
-    let delivered = plug(&deliver, quote!({ let _: () = #commit; Ok(#result) }))?;
+    let eager = check.resources.iter().any(|r| r.registered);
+    if eager && check.resources.iter().any(|r| !r.registered) {
+        return Err("cannot mix deferred resource conversions with eagerly constructed inputs; prepare all resource-bearing inputs through the declaration compiler".into());
+    }
+    let early_receipt = eager
+        || (acknowledge.is_some() && check.resources.iter().any(|r| r.access == Access::Move));
+    let setup = if early_receipt {
+        let counter = context_counter(context)?;
+        let aliases = if eager {
+            check.initialize()?
+        } else {
+            TokenStream::new()
+        };
+        quote!(let __prebindgen_input_consumed=#counter; #aliases)
+    } else {
+        TokenStream::new()
+    };
+    if !eager {
+        checks.push(check.emit()?);
+    }
+    checks.retain(|code| code.to_string() != quote!(()).to_string());
+    let alias_checks = quote!(#(let _: () = #checks;)*);
+    let legacy_count = if !eager && early_receipt {
+        let counts = check
+            .resources
+            .iter()
+            .filter(|r| r.access == Access::Move)
+            .map(|r| {
+                let active = &r.active;
+                let count = match &r.identity {
+                    ResourceIdentity::Single(_) => quote!(1usize),
+                    ResourceIdentity::Many(ids) => quote!((#ids).count()),
+                };
+                quote!(if #active {#count} else {0usize})
+            });
+        quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get() #(+ (#counts))*);)
+    } else {
+        TokenStream::new()
+    };
+    let delivered = plug(&deliver, quote!({let _: () = #commit; Ok(#result)}))?;
     let mut body = plug(&prepare, delivered)?;
-    body = scope(quote!(let #source = #path(#(#args),*);), body)?;
+    body = scope(quote!(let #source=#path(#(#args),*);), body)?;
     for (input, target) in inputs.iter().zip(&args).rev() {
         body = input.code_fragment_slot(
             InputFragment::Construct {
@@ -317,24 +542,25 @@ where
             &expected,
         )?;
     }
-    for scope in acquire.iter().rev() {
-        body = plug(scope, body)?;
+    for fragment in acquire.iter().rev() {
+        body = plug(fragment, body)?;
     }
-    body = if let Some(ack) = acknowledge {
-        scope(quote!(let _: () = #ack;), body)?
-    } else {
-        body
-    };
-    body = scope(
-        quote!(
-            let mut #seen: Vec<(usize, bool)> = Vec::new();
-            #(let _: () = #checks;)*
-        ),
-        body,
-    )?;
-    for scope in validation.iter().rev() {
-        body = plug(scope, body)?;
+    body = scope(legacy_count, body)?;
+    if !eager {
+        if let Some(ack) = &acknowledge {
+            body = scope(quote!(let _: () = #ack;), body)?;
+        }
     }
+    body = scope(alias_checks, body)?;
+    for fragment in validation.iter().rev() {
+        body = plug(fragment, body)?;
+    }
+    if eager {
+        if let Some(ack) = acknowledge {
+            body = scope(quote!(let _: () = #ack;), body)?;
+        }
+    }
+    body = scope(setup, body)?;
     Ok(body)
 }
 fn plug(scope: &TokenStream, next: TokenStream) -> Result<TokenStream> {
@@ -395,4 +621,8 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputCon
     fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
         &self.outcomes
     }
+}
+
+fn context_counter(context: &impl TemplateContext) -> Result<TokenStream> {
+    context.render(&crate::template_parameter("input_consumed"))
 }

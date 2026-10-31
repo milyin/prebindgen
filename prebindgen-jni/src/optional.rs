@@ -1,12 +1,25 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
-    // becomes a Java null at delivery; Some(empty) stays a non-null object.
+    if matches!(w, JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. }) {
+        return Ok(quote!(None));
+    }
+    if matches!(w, JniWire::Native128 { .. }) {
+        return Ok(quote!([0u8; 16]));
+    }
+    // Prepared text/bytes already are JVM references. Null means absent;
+    // an empty buffer is a non-null JVM object, with no Rust Option wrapper.
     if matches!(
         w,
-        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }
     ) {
+        return Ok(if input {
+            quote!(Default::default())
+        } else {
+            quote!(::prebindgen_jni_runtime::jni::objects::JObject::null())
+        });
+    }
+    if matches!(w, JniWire::Rows { .. }) {
         return Ok(if input {
             quote!(Default::default())
         } else {
@@ -41,7 +54,10 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
     if matches!(niche, Some(JniNiche::Null))
         && matches!(
             w,
-            JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+            JniWire::Rows { .. }
+                | JniWire::Text { .. }
+                | JniWire::Bytes { .. }
+                | JniWire::BulkBuffer { .. }
         )
     {
         return "null".into();
@@ -132,7 +148,7 @@ pub(crate) fn input_kotlin(
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
-            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }) => {
                 // An explicit presence parameter must not silently become None
                 // when a nullable raw reference is passed for its discriminator.
                 format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
@@ -223,7 +239,10 @@ impl JniNiche {
             Self::Null
                 if matches!(
                     wire,
-                    JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+                    JniWire::Rows { .. }
+                        | JniWire::Text { .. }
+                        | JniWire::Bytes { .. }
+                        | JniWire::BulkBuffer { .. }
                 ) =>
             {
                 quote!(!#value.is_null())

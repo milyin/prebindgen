@@ -144,6 +144,7 @@ pub(crate) fn input(
             panic!("callback failed: {}", error)
         }))
     };
+    let consumed = prebindgen_conversions::template_parameter("input_consumed");
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
@@ -154,7 +155,7 @@ pub(crate) fn input(
         }]),
         acknowledgement: None,
         validation: quote!(let #run = if #condition {Some(#wire.run.ok_or("null callback function")?)} else {None};),
-        acquire: quote!(#release_capture let #owned = if #condition {Some(__PbCallbackOwner::new(#wire.context, #wire.drop))} else {None};),
+        acquire: quote!(#release_capture let #owned = if #condition {{(#consumed).set((#consumed).get()+1); Some(__PbCallbackOwner::new(#wire.context, #wire.drop))}} else {None};),
         statements: quote!(let #run = #run.expect("validated active callback"); let #owned = #owned.expect("validated active callback"); let #var=move |#(#params),*| {let result = ::prebindgen_runtime::boundary(|| #invocation); #handled};),
         argument: quote!(#var),
     })
@@ -171,6 +172,14 @@ fn has_reference(ty: &syn::Type) -> bool {
         || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, _)| has_reference(ty))
 }
 impl CCallback {
+    pub(crate) fn layout_names(&self, names: &mut BTreeSet<String>) {
+        for argument in &self.arguments {
+            crate::layouts::output_names(&argument.output, names);
+        }
+        if let Some((_, plan)) = &self.returned {
+            crate::layouts::input_names(plan, names);
+        }
+    }
     fn has_release(&self) -> bool {
         self.return_fields()
             .iter()
@@ -241,26 +250,70 @@ impl CCallback {
         let Some((_, plan)) = &self.returned else {
             return Ok((quote!(), quote!()));
         };
+        for field in prebindgen_flat::wire_definitions(std::iter::once(&plan.node)) {
+            let tracked = match &field.kind {
+                CWire::Pointer { pointer, .. } if pointer.access == Access::Move => {
+                    self.return_owners.contains_key(&field.name.to_string())
+                }
+                CWire::Owned {
+                    access: Access::Move,
+                    by_value,
+                    ..
+                } => *by_value,
+                CWire::Callback { .. } => false,
+                _ => true,
+            };
+            if !tracked {
+                return Err(
+                    "callback return ownership requires a tracked pointer or inline value".into(),
+                );
+            }
+        }
         let fields = self.return_fields();
         if let [field] = fields.as_slice() {
+            if let CWire::Owned {
+                owner,
+                access: Access::Move,
+                by_value: true,
+            } = &field.kind
+            {
+                let guard = owner.guard_ident();
+                let name = &field.name;
+                return Ok((
+                    quote!(let _callback_return_owner=::prebindgen_runtime::TransferredOwner::new(#guard(#name), __prebindgen_input_consumed, 0);),
+                    quote!(),
+                ));
+            }
             if let CWire::Pointer { pointer, .. } = &field.kind {
                 if self.return_owners.contains_key(&field.name.to_string()) {
                     let name = &field.name;
                     let ty = &pointer.ty;
                     return Ok((
-                        quote!(let callback_return_owner=if #name.is_null(){None}else {::prebindgen_runtime::validate_pointer(#name)?;Some(unsafe {Box::<#ty>::from_raw(#name)})};),
-                        quote!(let _=callback_return_owner.map(Box::into_raw);),
+                        quote!(let _callback_return_owner=unsafe {::prebindgen_runtime::TransferredBox::<#ty>::new(#name, __prebindgen_input_consumed)}?;),
+                        quote!(),
                     ));
                 }
             }
         }
-        let scan = receive_return_owners(&plan.node, context, &self.return_owners)?;
+        // Fixed inline return fields need only stack guards, even beside scalars.
+        if self.return_owners.is_empty() {
+            if let Some((guards, commits)) = inline_return_guards(&plan.node, quote!(true)) {
+                let guards = if guards.is_empty() {
+                    guards
+                } else {
+                    quote!(let mut __pb_guard_index=0usize; #guards)
+                };
+                return Ok((guards, commits));
+            }
+        }
+        let scan =
+            receive_return_owners(&plan.node, context, &self.return_owners, &BTreeMap::new())?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
         Ok((
-            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::default();#scan callback_return_owners.check()?;),
-            quote!(callback_return_owners.commit();),
+            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);#scan callback_return_owners.check()?;),
+            quote!(),
         ))
     }
     fn invocation(
@@ -323,18 +376,12 @@ impl CCallback {
                 &expected,
             )?;
             body = quote!({#commit_owners #body});
-            if !plan.resources.is_empty()
-                && !matches!(fields.as_slice(),[field] if matches!(field.kind,CWire::Pointer{..}))
-            {
-                let seen = syn::parse_quote!(callback_return_resources);
-                let check = plan.code_fragment_slot(
-                    InputFragment::CheckAliases {
-                        context,
-                        seen: &seen,
-                    },
-                    &syn::parse_quote!(()),
-                )?;
-                body = quote!({let mut #seen:Vec<(usize,bool)>=Vec::new();let _:()=#check;#body});
+            let check = plan.code_fragment_slot(
+                InputFragment::CheckInternalAliases { context },
+                &syn::parse_quote!(()),
+            )?;
+            if check.to_string() != quote!(()).to_string() {
+                body = quote!({let _: () = #check; #body});
             }
             plan.code_fragment_slot(
                 InputFragment::Validate {
@@ -356,7 +403,16 @@ impl CCallback {
             .zip(&values)
             .map(|(name, value)| quote!(let #name=#value;));
         let protect_result=self.has_release().then(||quote!(let callback_result=__PbCallbackResult {value:raw_result,context:#owner.context(),release:#release};let raw_result=callback_result.value;));
-        let mut body = quote!({ #(#snapshots)* #commits let raw_result=unsafe {#run(#owner.context(), #(#names),*)}; #protect_result #decode #owners #result });
+        let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
+        if let Some((_, plan)) = &self.returned {
+            alias_check.include_parameter(context, &plan.resources)?;
+        }
+        let aliases = alias_check.initialize()?;
+        let mut body = quote!({
+            let __pb_callback_consumed=::core::cell::Cell::new(0usize);
+            let __prebindgen_input_consumed=&__pb_callback_consumed;
+            #aliases
+            #(#snapshots)* #commits let raw_result=unsafe {#run(#owner.context(), #(#names),*)}; #protect_result #decode #owners #result });
         for (index, arg) in self.arguments.iter().enumerate().rev() {
             let source = format_ident!("callback_source_{index}");
             body = arg.output.code_fragment_slot(
@@ -371,10 +427,74 @@ impl CCallback {
         Ok(body)
     }
 }
+fn inline_return_guards(
+    node: &WireNode<CWire, CChain, CBranch>,
+    active: TokenStream,
+) -> Option<(TokenStream, TokenStream)> {
+    let mut prepare = TokenStream::new();
+    let mut commit = TokenStream::new();
+    match node {
+        WireNode::Leaf(fields) => {
+            for field in fields {
+                if let CWire::Owned {
+                    owner,
+                    access: Access::Move,
+                    by_value: true,
+                } = &field.kind
+                {
+                    let name = &field.name;
+                    let guard = format_ident!("{name}_return_guard");
+                    let ty = owner.guard_ident();
+                    prepare.extend(quote!(let #guard=if #active {let ordinal=__pb_guard_index; __pb_guard_index+=1; Some(::prebindgen_runtime::TransferredOwner::new(#ty(#name), __prebindgen_input_consumed, ordinal))} else {None};));
+                }
+            }
+        }
+        WireNode::Chain {
+            meta: CChain::Sequence(_),
+            ..
+        } => return None,
+        WireNode::Chain {
+            meta: CChain::Optional(optional),
+            child,
+            ..
+        } => {
+            let name = optional.discriminator();
+            let present = optional
+                .niche()
+                .map(|n| n.present(quote!(#name)))
+                .unwrap_or_else(|| quote!(#name==1));
+            let (p, c) = inline_return_guards(child, quote!((#active)&&(#present)))?;
+            prepare.extend(p);
+            commit.extend(c);
+        }
+        WireNode::Branch {
+            meta: CBranch::Alternatives,
+            controls,
+            children,
+        } => {
+            let selector = &controls[0].name;
+            for (index, child) in children.iter().enumerate() {
+                let index = index as i32;
+                let (p, c) = inline_return_guards(child, quote!((#active)&&#selector==#index))?;
+                prepare.extend(p);
+                commit.extend(c);
+            }
+        }
+        WireNode::Branch { children, .. } => {
+            for child in children {
+                let (p, c) = inline_return_guards(child, active.clone())?;
+                prepare.extend(p);
+                commit.extend(c);
+            }
+        }
+    }
+    Some((prepare, commit))
+}
 fn receive_return_owners(
     node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
     context: &CContext,
     owners: &BTreeMap<String, syn::Type>,
+    locations: &BTreeMap<String, TokenStream>,
 ) -> Result<TokenStream> {
     Ok(match node {
         WireNode::Leaf(fields) => fields
@@ -389,6 +509,12 @@ fn receive_return_owners(
                         );
                     }
                 }
+                if let CWire::Owned {owner,access:Access::Move,by_value:true}=&field.kind {
+                    let name=&field.name;let ty=&owner.ty;
+                    let carrier=owner.ident();
+                    let pointer=locations.get(&name.to_string()).cloned().unwrap_or_else(||quote!(&#name));
+                    return Some(quote!(unsafe {callback_return_owners.receive_inline((#pointer as *const #carrier).cast::<#ty>());}));
+                }
                 None
             })
             .collect(),
@@ -397,7 +523,7 @@ fn receive_return_owners(
             child,
             ..
         } => {
-            let scan = receive_return_owners(child, context, owners)?;
+            let scan = receive_return_owners(child, context, owners, locations)?;
             if scan.is_empty() {
                 return Ok(scan);
             }
@@ -413,12 +539,12 @@ fn receive_return_owners(
             controls,
             child,
         } => {
-            let scan = receive_return_owners(child, context, owners)?;
-            if scan.is_empty() {
-                return Ok(scan);
-            }
             let carrier = &controls[0].name;
             let row = &context.row_types[&carrier.to_string()];
+            let mut row_locations=locations.clone();
+            for (i,w) in group::row_fields(child).enumerate(){let field=format_ident!("v{i}");row_locations.insert(w.name.to_string(),quote!(::core::ptr::addr_of!((*((#carrier.data as *const #row).add(index))).#field)));}
+            let scan = receive_return_owners(child, context, owners, &row_locations)?;
+            if scan.is_empty() {return Ok(scan);}
             let reads = group::row_fields(child).enumerate().map(|(i, w)| {
                 let name = &w.name;
                 let field = format_ident!("v{i}");
@@ -436,7 +562,7 @@ fn receive_return_owners(
                 .iter()
                 .enumerate()
                 .map(|(i, child)| {
-                    let scan = receive_return_owners(child, context, owners)?;
+                    let scan = receive_return_owners(child, context, owners, locations)?;
                     let i = i as i32;
                     Ok(quote!(if #selector==#i {#scan}))
                 })
@@ -445,7 +571,7 @@ fn receive_return_owners(
         }
         WireNode::Branch { children, .. } => children
             .iter()
-            .map(|child| receive_return_owners(child, context, owners))
+            .map(|child| receive_return_owners(child, context, owners, locations))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .collect(),
@@ -582,7 +708,7 @@ pub(crate) fn emit(
             )
             .expect("writing to a String");
         }
-        header.push_str(&format!("/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Output allocations passed to run are callback-owned. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles. */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
+        header.push_str(&format!("/* Rust signature: {}. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
     }
     Ok(())
 }

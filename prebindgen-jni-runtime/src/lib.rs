@@ -5,11 +5,15 @@
 //! return are local references in that environment.
 #![warn(missing_docs)]
 pub use jni;
+pub mod bulk;
 use jni::{
     objects::{JByteArray, JObject, JObjectArray, JString, JValue},
     JNIEnv,
 };
 use prebindgen_runtime::Result;
+
+mod return_callback;
+pub use return_callback::{invoke_error_callback, ReturnCallback};
 
 mod sequence;
 pub use sequence::*;
@@ -179,6 +183,36 @@ pub unsafe fn drop_pointer<T: Send>(raw: i64) -> Result<()> {
     drop(Box::from_raw(pointer));
     Ok(())
 }
+
+/// Write input ownership accounting, preserving an existing Java exception on failure.
+pub fn write_input_receipt(
+    env: &mut JNIEnv<'_>,
+    receipt: &jni::objects::JLongArray<'_>,
+    value: i64,
+    failed: bool,
+) {
+    // Successful generated boundaries have no pending exception: retained
+    // callback trampolines clear theirs, and other JNI errors return Err.
+    // Avoid adding an exception probe to every successful packet call.
+    let pending = if failed {
+        env.exception_occurred().ok().filter(|e| !e.is_null())
+    } else {
+        None
+    };
+    if pending.is_some() {
+        let _ = env.exception_clear();
+    }
+    let written = env.set_long_array_region(receipt, 0, &[value]);
+    // Length and object type were validated before consumption. SetLongArrayRegion
+    // does not allocate; failing to publish this receipt cannot be recovered safely.
+    if written.is_err() {
+        std::process::abort();
+    }
+    if let Some(exception) = pending {
+        let _ = env.throw(exception);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

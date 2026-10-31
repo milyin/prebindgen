@@ -9,7 +9,7 @@ use quote::ToTokens;
 pub struct CContext {
     /// Generated ABI row types keyed by sequence carrier name in this function.
     pub row_types: std::collections::BTreeMap<String, syn::Ident>,
-    /// Wrapper-local flag recording acceptance of owned input allocations.
+    /// Wrapper-local Cell counting acquired owned wire values.
     pub acknowledgement: syn::Ident,
     /// Wrapper parameter receiving the result structure.
     pub output_pointer: syn::Ident,
@@ -31,6 +31,10 @@ pub struct CContext {
 impl TemplateContext for CContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         render_template(code, &|name| match name {
+            "input_consumed" => {
+                let counter = &self.acknowledgement;
+                Ok(quote::quote!(&#counter))
+            }
             "output_committed" => Ok(self.output_committed.clone()),
             "error_pointer" => Ok(self.error_pointer.to_token_stream()),
             "error_reported" => Ok(self.error_reported.to_token_stream()),

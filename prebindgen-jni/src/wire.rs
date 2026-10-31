@@ -12,6 +12,30 @@ pub use transport::JniArgument;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
+    /// One complete bulk frame in a byte array. Input length is a separate control.
+    BulkBuffer {
+        /// Kotlin expression selecting this frame.
+        condition: String,
+        /// Whether null is available for an enclosing option.
+        null_niche_available: bool,
+    },
+    /// Native byte/text view inside a bulk frame; never a JNI reference.
+    NativeBuffer {
+        /// Whether the payload is validated UTF-8 text.
+        text: bool,
+    },
+    /// Native nullable offset/count descriptor for collection rows.
+    NativeRows {
+        /// Kotlin expression selecting these rows.
+        condition: String,
+    },
+    /// Fixed-width big-endian bytes for a native 128-bit scalar.
+    Native128 {
+        /// Kotlin expression selecting the active input alternative.
+        condition: String,
+        /// Signed or unsigned 128-bit source primitive.
+        primitive: Primitive,
+    },
     /// A retained callback object with its independently prepared argument boundary.
     Callback {
         /// Signature and output conversions used when Rust invokes this callback.
@@ -105,11 +129,18 @@ impl JniWire {
     /// This reads stored state rather than recomputing the initial niche.
     pub fn available_niche(&self) -> Option<JniNiche> {
         match self {
-            Self::Callback { .. } => None,
+            Self::Callback { .. }
+            | Self::NativeBuffer { .. }
+            | Self::NativeRows { .. }
+            | Self::Native128 { .. } => None,
             Self::Scalar {
                 next_integer_niche, ..
             } => next_integer_niche.map(JniNiche::Integer),
             Self::Handle {
+                null_niche_available: true,
+                ..
+            }
+            | Self::BulkBuffer {
                 null_niche_available: true,
                 ..
             }
@@ -144,6 +175,10 @@ impl JniWire {
             ) if is_integer_niche(*primitive, n) => *next_integer_niche = Some(n),
             (
                 Self::Handle {
+                    null_niche_available,
+                    ..
+                }
+                | Self::BulkBuffer {
                     null_niche_available,
                     ..
                 }
@@ -185,11 +220,18 @@ impl JniWire {
     /// Disable niche availability, including for conditionally active payloads.
     pub fn clear_niche(&mut self) {
         match self {
-            Self::Callback { .. } => {}
+            Self::Callback { .. }
+            | Self::NativeBuffer { .. }
+            | Self::NativeRows { .. }
+            | Self::Native128 { .. } => {}
             Self::Scalar {
                 next_integer_niche, ..
             } => *next_integer_niche = None,
             Self::Handle {
+                null_niche_available,
+                ..
+            }
+            | Self::BulkBuffer {
                 null_niche_available,
                 ..
             }
@@ -219,7 +261,11 @@ impl JniWire {
                 Ok(())
             }
             (
-                Self::Handle { .. } | Self::Rows { .. } | Self::Text { .. } | Self::Bytes { .. },
+                Self::Handle { .. }
+                | Self::BulkBuffer { .. }
+                | Self::Rows { .. }
+                | Self::Text { .. }
+                | Self::Bytes { .. },
                 JniNiche::Null,
             ) => Ok(()),
             (Self::Enum { enum_type, .. }, JniNiche::Integer(n))

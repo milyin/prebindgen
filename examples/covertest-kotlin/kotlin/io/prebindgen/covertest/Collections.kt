@@ -82,20 +82,35 @@ fun checkCollections() {
         onBindingError = JniErrorHandler { closedRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(closedRouted)
-    // All rows validate before any valid owner is acquired or acknowledged.
+    // Group validation rejects a closed owner before acquiring any row.
     val liveWithClosed = collectionResourceNew(103)
     val beforeClosedValidation = ownedResourceDrops()
     collectionInvalid { collectionHandles(listOf(liveWithClosed, aliasProbe), 65, 0, onError = throwResult) }
-    check(!liveWithClosed.isClosed && ownedResourceId(liveWithClosed) == 103L)
+    check(!liveWithClosed.isClosed)
     check(ownedResourceDrops() == beforeClosedValidation)
     liveWithClosed.close()
+    check(ownedResourceDrops() == beforeClosedValidation + 1uL)
+    val same = collectionResourceNew(42)
+    val sameAlias = io.prebindgen.covertest.resources.OwnedResource(same.raw)
+    val unreadAliasTest = collectionResourceNew(43)
+    collectionInvalid { collectionHandles(listOf(same, sameAlias, unreadAliasTest), 65, 0, onError = throwResult) }
+    check(!same.isClosed && !sameAlias.isClosed && !unreadAliasTest.isClosed)
+    sameAlias.markConsumed(); same.close()
+    check(ownedResourceId(unreadAliasTest) == 43L)
+    unreadAliasTest.close()
     val start = ownedResourceDrops()
+    val invalidScalar = listOf(collectionResourceNew(1), collectionResourceNew(2))
+    collectionInvalid { collectionHandles(invalidScalar, 0xd800, 0, onError = throwResult) }
+    check(invalidScalar.all { it.isClosed })
+    val repeated = collectionResourceNew(1)
+    val unread = collectionResourceNew(2)
+    collectionInvalid { collectionHandles(listOf(repeated, repeated, unread), 65, 0, onError = throwResult) }
+    check(!repeated.isClosed && !unread.isClosed && ownedResourceId(unread) == 2L)
+    repeated.close(); unread.close()
+    val crossParameter = listOf(collectionResourceNew(1), collectionResourceNew(2))
+    collectionInvalid { collectionAlias(crossParameter, crossParameter[1]) }
+    check(crossParameter.all { it.isClosed })
     val handles = listOf(collectionResourceNew(1), collectionResourceNew(2))
-    collectionInvalid { collectionHandles(handles, 0xd800, 0, onError = throwResult) }
-    check(handles.none { it.isClosed })
-    collectionInvalid { collectionHandles(listOf(handles[0], handles[0]), 65, 0, onError = throwResult) }
-    collectionInvalid { collectionAlias(handles, handles[1]) }
-    check(handles.none { it.isClosed })
     check(collectionResourceIds(listOf(handles[0], handles[0])) == listOf(1L, 1L))
     check(handles.none { it.isClosed })
     val moved = collectionHandles(handles, 65, 0, onError = throwResult)
@@ -110,12 +125,13 @@ fun checkCollections() {
         check(inputs.all { it.isClosed })
         inputs.forEach { it.close() }
     }
-    check(ownedResourceDrops() == start + 8uL)
+    check(ownedResourceDrops() == start + 14uL)
     val panicStart = ownedResourceDrops()
     val pending = (1L..3L).map(::collectionResourceNew)
     collectionInvalid { collectionConstructAll(pending) }
-    check(pending.all { it.isClosed })
-    check(ownedResourceDrops() == panicStart + 3uL)
+    check(pending.take(2).all { it.isClosed } && !pending[2].isClosed)
+    check(ownedResourceDrops() == panicStart + 2uL)
+    pending[2].close()
     collectionInvalid { collectionMakeItems() }
     check(ownedResourceDrops() == panicStart + 6uL)
     var escaped: List<io.prebindgen.covertest.resources.OwnedResource>? = null
@@ -136,8 +152,9 @@ fun checkCollections() {
     check(optionalHandle.isClosed)
     val nestedHandle = collectionResourceNew(11)
     collectionInvalid { collectionNestedHandles(listOf(listOf(nestedHandle), listOf(nestedHandle))) }
-    check(!nestedHandle.isClosed)
-    collectionNestedHandles(listOf(emptyList(), listOf(nestedHandle))).flatten().single().close()
+    check(nestedHandle.isClosed)
+    val nestedLive = collectionResourceNew(12)
+    collectionNestedHandles(listOf(emptyList(), listOf(nestedLive))).flatten().single().close()
     check(nestedHandle.isClosed)
     // Large dynamic handle lists retain serialization and ownership semantics.
     val many = List(4000) { collectionResourceNew(it.toLong()) }
@@ -186,13 +203,13 @@ fun checkCollections() {
     // Exercise raw JNI validation, including an invalid but inactive payload.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
     val rawScalars = native.declaredMethods.single {
-        it.parameterTypes.toList() == listOf(Array<Any?>::class.java, Double::class.javaPrimitiveType)
+        it.parameterTypes.dropLast(1) == listOf(Array<Any?>::class.java, Double::class.javaPrimitiveType)
     }.also { it.isAccessible = true }
     val validRow = arrayOf<Any?>(true, 1.toByte(), 2.toShort(), 3, 4L, 5.0f, 6.0,
         byteArrayOf(7), "text")
     for (row in listOf(validRow, validRow.copyOf().also { it[8] = null })) {
-        val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
-        check(packet[0] == null && (packet[1] as Array<*>).size == 1)
+        val packet = rawScalars.invokePacket(arrayOf<Any?>(row), 0.0)
+        check(packet[0] == null && (packet[1] as ByteArray).isNotEmpty())
     }
     // Reject every wrong boxed class, and null for each non-reference field.
     // Reference nulls are checked later against the Rust domain: wide is
@@ -201,18 +218,18 @@ fun checkCollections() {
         for (bad in listOf<Any?>(Any(), null)) {
             if (index == 8 && bad == null) continue
             val row = validRow.copyOf().also { it[index] = bad }
-            val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
+            val packet = rawScalars.invokePacket(arrayOf<Any?>(row), 0.0)
             check(packet[0] is String) { "invalid raw field $index was accepted" }
         }
     }
     fun method(second: Class<*>) = native.declaredMethods.single {
-        it.parameterTypes.toList() == listOf(Array<Any?>::class.java, second)
+        it.parameterTypes.dropLast(1) == listOf(Array<Any?>::class.java, second)
     }.also { it.isAccessible = true }
     val probe = method(String::class.java)
     for (bad in listOf(null, arrayOf<Any?>(), arrayOf<Any?>(null), arrayOf<Any?>("bad"), arrayOf<Any?>(0xd800))) {
         collectionInvalid {
             try {
-                val packet = probe.invoke(null, arrayOf<Any?>(bad), "") as Array<*>
+                val packet = probe.invokePacket(arrayOf<Any?>(bad), "")
                 check(packet[0] is String)
                 throw IllegalArgumentException(packet[0] as String)
             }
@@ -220,10 +237,10 @@ fun checkCollections() {
         }
     }
     val optional = method(Short::class.javaPrimitiveType!!)
-    optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(0, "ignored")), 0.toShort())
+    optional.invokePacket( arrayOf<Any?>(arrayOf<Any?>(0, "ignored")), 0.toShort())
     collectionInvalid {
         try {
-            val packet = optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort()) as Array<*>
+            val packet = optional.invokePacket(arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort())
             check(packet[0] is String)
             throw IllegalArgumentException(packet[0] as String)
         }

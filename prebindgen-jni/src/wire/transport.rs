@@ -19,6 +19,11 @@ pub struct JniArgument {
 impl JniWire {
     fn jvm_type(&self) -> JvmType {
         match self {
+            Self::BulkBuffer { .. }
+            | Self::NativeBuffer { text: false }
+            | Self::Native128 { .. } => JvmType::Bytes,
+            Self::NativeBuffer { text: true } => JvmType::Text,
+            Self::NativeRows { .. } => JvmType::Rows,
             Self::Scalar { primitive, .. } => match primitive {
                 Primitive::Bool => JvmType::Boolean,
                 Primitive::I8 => JvmType::Byte,
@@ -40,6 +45,17 @@ impl JniWire {
             Self::Rows { .. } => JvmType::Rows,
             Self::Callback { .. } => JvmType::Object,
         }
+    }
+    pub(crate) fn bulk_scalar_access(&self) -> Result<(&'static str, usize)> {
+        Ok(match self.jvm_type() {
+            JvmType::Boolean | JvmType::Byte => ("byte", 1),
+            JvmType::Short => ("short", 2),
+            JvmType::Int => ("int", 4),
+            JvmType::Long => ("long", 8),
+            JvmType::Float => ("float", 4),
+            JvmType::Double => ("double", 8),
+            _ => return Err("bulk scalar requires a primitive JVM carrier".into()),
+        })
     }
     /// JVM field descriptor used in method signatures, independent of Kotlin spelling.
     pub fn jvm_descriptor(&self) -> &'static str {
@@ -80,6 +96,16 @@ impl JniWire {
     pub fn read_array_element(&self, array: &TokenStream, index: usize) -> TokenStream {
         self.jvm_type().read_array_element(array, index)
     }
+    pub(crate) fn native_return_type(&self) -> syn::Type {
+        if self.is_reference() {
+            syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobject)
+        } else {
+            self.rust_type()
+        }
+    }
+    pub(crate) fn value_member(&self) -> syn::Ident {
+        format_ident!("{}", self.jvm_type().value_member())
+    }
     pub(crate) fn callback_return_type(&self) -> TokenStream {
         self.jvm_type().return_type()
     }
@@ -90,10 +116,12 @@ impl JniWire {
     /// Generate a Java object expression from a prepared output, boxing primitives.
     ///
     /// This accepts the representation in `OutputPlan::values`, not a native
-    /// input: text/bytes are optional Rust payloads, i128/u128 are encoded bytes,
+    /// input: text/bytes are prepared nullable JVM objects, i128/u128 are encoded bytes,
     /// handles are allocation pointers, and rows are optional JNI arrays.
     /// The expression can fail through `?`, uses the `environment` template
     /// parameter, and returns a local reference owned by the caller's frame.
+    /// Text/byte payloads are consumed; each prepared object may be delivered
+    /// once. Other wire kinds retain their declared representation.
     /// It does not commit any ownership transfer.
     pub fn output_object(&self, value: &TokenStream) -> TokenStream {
         let env = prebindgen_conversions::template_parameter("environment");
@@ -101,15 +129,11 @@ impl JniWire {
             return boxed;
         }
         match self.jvm_type() {
-            JvmType::Text => {
-                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::text_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
-            }
+            JvmType::Text => quote!(#value),
             JvmType::Bytes if matches!(self, Self::Scalar { .. }) => {
                 quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &(#value))?)
             }
-            JvmType::Bytes => {
-                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
-            }
+            JvmType::Bytes => quote!(#value),
             JvmType::Object => quote!(#env.new_local_ref(&(#value)).map_err(|e|e.to_string())?),
             JvmType::Rows => {
                 quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
@@ -117,7 +141,7 @@ impl JniWire {
             _ => unreachable!("JVM primitives use their declared boxing conversion"),
         }
     }
-    fn output_scalar(&self, value: &TokenStream) -> TokenStream {
+    pub(crate) fn output_scalar(&self, value: &TokenStream) -> TokenStream {
         if matches!(self, Self::Handle { .. }) {
             quote!((#value) as i64)
         } else {
@@ -129,7 +153,8 @@ impl JniWire {
     ///
     /// `local` must be a fresh identifier for this argument's Java object.
     /// Emit the returned statements before its value and keep references alive
-    /// through the invocation. The caller supplies `environment`, validates the
+    /// through the invocation. Text/byte prepared payloads are consumed once.
+    /// The caller supplies `environment`, validates the
     /// method signature, and commits ownership only after successful delivery.
     /// A custom generator can render both fragments with its [`JniContext`]:
     ///
@@ -141,6 +166,7 @@ impl JniWire {
     ///     environment: syn::parse_quote!(env),
     ///     acknowledgement: syn::parse_quote!(accepted),
     ///     domain_output: syn::parse_quote!(domain_output),
+    ///     return_sink: None,
     ///     is_domain_error: false,
     ///     output_committed: quote!(),
     /// };
@@ -169,6 +195,15 @@ impl JniWire {
 }
 impl WireKind for JniWire {
     fn rust_type(&self) -> syn::Type {
-        self.jvm_type().rust_type()
+        match self {
+            Self::NativeBuffer { .. } => {
+                syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
+            }
+            Self::NativeRows { .. } => {
+                syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
+            }
+            Self::Native128 { .. } => syn::parse_quote!([u8; 16]),
+            _ => self.jvm_type().rust_type(),
+        }
     }
 }

@@ -3,7 +3,7 @@ use prebindgen_flat::WireKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-/// An input conversion split into call-wide validation, acquisition and construction.
+/// An input conversion with preparation, acquisition and construction code.
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
@@ -16,15 +16,17 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the generator emits its signature.
     pub node: prebindgen_flat::WireNode<W, N, B>,
-    /// Shared call acknowledgement, if this input needs one.
+    /// Shared receipt-channel setup or acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
-    /// Validate and prepare every active leaf before any ownership transfer.
+    /// Validate this value before using it. Compiled recipes also acquire and
+    /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Infallible acquisition of all owned inputs, before constructors can run.
+    /// Infallible acquisition of this leaf after its validation and alias checks.
+    /// Empty for compiled recipes that already prepare their values eagerly.
     pub acquire: TokenStream,
     /// Active foreign resources whose identities must be checked across all arguments.
     pub resources: Vec<Resource>,
-    /// Argument construction after all acquisitions, including source constructor calls.
+    /// Construct this value from acquired inputs, including source constructor calls.
     pub statements: TokenStream,
     /// Prepared value expression assigned to the caller-supplied target after `statements`.
     pub argument: TokenStream,
@@ -75,6 +77,9 @@ pub enum ResourceIdentity {
 /// The adapter supplies identity; flat enforces call-wide access conflicts.
 #[derive(Clone, Debug)]
 pub struct Resource {
+    /// This access has already been registered during input preparation.
+    /// Its identity then describes cardinality for call setup, not a later read.
+    pub registered: bool,
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
     /// All identities compared within a call must share an equality-compatible domain.
     pub identity: ResourceIdentity,

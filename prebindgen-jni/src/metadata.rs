@@ -22,6 +22,8 @@ pub struct JniModule {
     pub native_init: String,
     /// Prepared callback declarations, including interfaces unused by exported functions.
     pub callbacks: Vec<JniInput>,
+    /// Use bulk for materialized collection outputs with automatic transport.
+    pub bulk_collection_outputs: bool,
 }
 /// Export and placement decisions belonging to one function.
 #[derive(Clone, Debug)]
@@ -30,7 +32,7 @@ pub struct JniFunction {
     pub package: String,
     /// Destination function name.
     pub name: String,
-    /// Stable declaration order used for native entry-point numbering.
+    /// Declaration order used when rendering functions.
     pub order: usize,
     pub(crate) error: Option<Rc<errors::ErrorBinding>>,
 }

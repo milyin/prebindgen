@@ -430,6 +430,84 @@ impl Class {
 }
 
 impl Codec for DataCodec<'_> {
+    fn input_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.input_leaf(flat, ty, &(), w, v, active)
+        } else {
+            crate::bulk::input_leaf(flat, ty, w, v, active)
+        }
+    }
+    fn output_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<OutputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.output_leaf(flat, ty, &(), w, v, borrowed)
+        } else {
+            crate::bulk::output_leaf(flat, ty, w, v, borrowed)
+        }
+    }
+    fn bulk_input(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: InputPlan<JniWire>,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        crate::bulk::input(w, child, active)
+    }
+    fn bulk_output(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: OutputPlan<JniWire>,
+    ) -> Result<OutputPlan<JniWire>> {
+        crate::bulk::output(w, child)
+    }
+    fn sequence_input_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        crate::bulk::sequence_input(w, n, i, element, active)
+    }
+    fn sequence_output_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        if delivery != prebindgen_declarations::SequenceDelivery::Value {
+            return Err("bulk collection delivery cannot also use per-element callbacks".into());
+        }
+        crate::bulk::sequence_output(w, n, i, element, values)
+    }
+
     type Schema = JniSchema;
     fn expand_input(
         &self,
@@ -463,15 +541,15 @@ impl Codec for DataCodec<'_> {
         _: &(),
     ) -> Result<Option<Output<OutputRequest>>> {
         let policy = match tree {
-            Output::Leaf => Projection::borrowed(),
-            Output::Projected(p) => p.clone(),
+            Output::Leaf => None,
+            Output::Projected(p) => Some(p.clone()),
             _ => return Ok(None),
         };
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
         };
         let fields = &flat.record(ty)?.fields;
-        for name in policy.fields.keys() {
+        for name in policy.iter().flat_map(|p| p.fields.keys()) {
             if !fields
                 .iter()
                 .any(|f| f.name.to_string().trim_start_matches("r#") == name)
@@ -482,10 +560,11 @@ impl Codec for DataCodec<'_> {
                 ));
             }
         }
-        let inherited = policy.inherited();
+        let inherited = policy.as_ref().map(Projection::inherited);
         let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(&inherited);
+            let Some(policy) = &policy else { return Ok(Output::Leaf); };
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
@@ -493,7 +572,7 @@ impl Codec for DataCodec<'_> {
         }).collect::<Result<Vec<_>>>()?;
         Ok(Some(Output::Record {
             fields: children,
-            mode: policy.mode,
+            mode: policy.map(|p| p.mode),
         }))
     }
     fn input_record_metadata(
@@ -556,6 +635,10 @@ impl Codec for DataCodec<'_> {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
+
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, extra: &()) -> bool {
+        JniCodec.default_output_sequence_is_bulk(flat, extra)
+    }
     fn sequence_input(
         &self,
         e: &(),
@@ -616,8 +699,9 @@ impl Codec for DataCodec<'_> {
             .ok_or("missing declared JNI error output")?;
         let env = prebindgen_conversions::template_parameter("environment");
         let reported = prebindgen_conversions::template_parameter("domain_output");
+        let sink = prebindgen_conversions::template_parameter("return_sink");
         let value = message.unwrap_or(value);
-        Ok(quote!({#helper(&mut #env, #value, &mut #reported)?; String::new()}))
+        Ok(quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}))
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
@@ -975,7 +1059,7 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:ProjectionMode::Owned,fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:Some(ProjectionMode::Owned),fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
         );
         let round_trip = defaults
             .resolve_output(
@@ -1068,6 +1152,7 @@ mod group_tests {
         crate::group::validate_layout(&field).unwrap();
         let classes = BTreeMap::new();
         let context = KotlinContext {
+            package: "example",
             classes: &classes,
             result: "result",
             failure: "failure",

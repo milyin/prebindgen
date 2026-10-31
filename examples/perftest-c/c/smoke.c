@@ -5,7 +5,12 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+static perftest_buffer_view text_view(const perftest_owned_string *value) { return perftest_owned_string_view(value); }
+static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value) { return perftest_owned_vec_u8_672e72343c1b4cb4_view(value); }
 #include "callback_returns.h"
+#include "borrowed_getters.h"
+#include "runtime_costs.h"
+#include "inline_owners.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -18,10 +23,10 @@ static void sequence_maybe_number(void *context, int32_t present, int64_t value)
     if (!present) assert(value == 0);
     acc->calls++; acc->total += present ? value : 1;
 }
-static void sequence_text(void *context, perftest_buffer value) {
+static void sequence_text(void *context, perftest_owned_string value) {
     struct sequence_acc *acc = context;
-    acc->calls++; acc->total += (int64_t)value.len;
-    perftest_free_buffer(value);
+    acc->calls++; acc->total += (int64_t)text_view(&value).len;
+    perftest_drop_owned_string(&value);
 }
 static void sequence_nested(void *context, perftest_collection_nested_each_ret_w4_rows rows) {
     struct sequence_acc *acc = context;
@@ -29,11 +34,11 @@ static void sequence_nested(void *context, perftest_collection_nested_each_ret_w
     for (size_t i=0; i<rows.len; ++i) acc->total += rows.data[i].v0;
     perftest_collection_nested_each_ret_w4_rows_free(rows);
 }
-static void sequence_part(void *context, int64_t number, perftest_buffer text, perftest_owned_resource *resource) {
+static void sequence_part(void *context, int64_t number, perftest_owned_string text, perftest_owned_resource *resource) {
     struct sequence_acc *acc = context;
     assert(number == perftest_option_resource_id(resource));
-    assert(text.len > 6 && memcmp(text.data, "part ", 5) == 0);
-    perftest_free_buffer(text);
+    assert(text_view(&text).len > 6 && memcmp(text_view(&text).data, "part ", 5) == 0);
+    perftest_drop_owned_string(&text);
     perftest_drop_owned_resource(resource);
     acc->calls++; acc->total += number;
 }
@@ -42,18 +47,18 @@ static void sequence_resource(void *context, perftest_owned_resource *resource) 
     acc->calls++; acc->total += perftest_option_resource_id(resource);
     perftest_drop_owned_resource(resource);
 }
-static void sequence_scalar(void *context, uint8_t flag, int8_t byte, int16_t small, int32_t number, int64_t large, float single, double real, perftest_int128 wide, int32_t present, perftest_buffer text) {
+static void sequence_scalar(void *context, uint8_t flag, int8_t byte, int16_t small, int32_t number, int64_t large, float single, double real, perftest_int128 wide, int32_t present, perftest_owned_string text) {
     struct sequence_acc *acc = context;
     if (acc->calls++ == 0) {
         assert(flag == 1 && byte == -7 && small == -1234 && number == -123456);
         assert(large == INT64_MIN && single == 1.25f && real == -2.5);
-        assert(wide.hi == UINT64_C(0x8000000000000000) && wide.lo == 0 && present == 1 && text.len == 6);
+        assert(wide.hi == UINT64_C(0x8000000000000000) && wide.lo == 0 && present == 1 && text_view(&text).len == 6);
     } else {
         assert(flag == 0 && byte == 7 && small == 1234 && number == 123456);
         assert(large == INT64_MAX && single == -1.25f && real == 2.5);
         assert(wide.hi == UINT64_C(0x7fffffffffffffff) && wide.lo == UINT64_MAX && present == 0);
     }
-    perftest_free_buffer(text);
+    perftest_drop_owned_string(&text);
 }
 static void check_sequence_delivery(void) {
     struct sequence_acc acc = {0};
@@ -124,7 +129,7 @@ static void check_sequence_delivery(void) {
     perftest_free_error(error); error = NULL;
     assert(perftest_owned_resource_drops() == start + 6);
     perftest_collection_handles_each_p0_w1_row owned[] = {{perftest_collection_resource_new(42)}};
-    bool accepted = true;
+    size_t accepted = 1;
     assert(!perftest_collection_handles_each((perftest_collection_handles_each_p0_w1_rows){owned,1},65,0,NULL,&acc,&count,&accepted,&error));
     assert(!accepted && count == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
@@ -155,6 +160,9 @@ static void check_sequence_delivery(void) {
 }
 
 static void check_collections(void) {
+    assert(perftest_collection_input_optional_array(0, (perftest_collection_input_optional_array_p0_w3_rows){NULL, SIZE_MAX}) == -1);
+    perftest_collection_input_optional_array_p0_w3_row fixed[] = {{1}, {2}, {3}, {4}};
+    assert(perftest_collection_input_optional_array(1, (perftest_collection_input_optional_array_p0_w3_rows){fixed, 4}) == 10);
     int64_t tag = 0;
     perftest_collection_numbers_ret_w2_rows observed = perftest_collection_numbers(&tag);
     assert(tag == 42 && observed.len == 2 && observed.data[1].v0 == 9);
@@ -171,8 +179,8 @@ static void check_collections(void) {
     EXPECT_ABORT(perftest_collection_i64(((perftest_collection_i64_p0_w1_rows){values, SIZE_MAX})));
     perftest_collection_text_p0_w1_row texts[] = {{{(const uint8_t *)"hello", 5}}, {{NULL, 0}}};
     perftest_collection_text_ret_w0_rows text = perftest_collection_text((perftest_collection_text_p0_w1_rows){texts, 2});
-    assert(text.len == 2 && text.data[0].v0.len == 5 && memcmp(text.data[0].v0.data, "hello", 5) == 0);
-    for (size_t i = 0; i < text.len; ++i) perftest_free_buffer(text.data[i].v0);
+    assert(text.len == 2 && text_view(&text.data[0].v0).len == 5 && memcmp(text_view(&text.data[0].v0).data, "hello", 5) == 0);
+    for (size_t i = 0; i < text.len; ++i) perftest_drop_owned_string(&text.data[i].v0);
     perftest_collection_text_ret_w0_rows_free(text);
     const uint8_t bad[] = {0xff}; texts[1].v0 = (perftest_buffer){bad, 1};
     EXPECT_ABORT(perftest_collection_text(((perftest_collection_text_p0_w1_rows){texts, 2})));
@@ -197,16 +205,18 @@ static void check_collections(void) {
     perftest_owned_resource *a = perftest_collection_resource_new(1), *b = perftest_collection_resource_new(2);
     perftest_collection_handles_p0_w1_row handles[] = {{a}, {b}};
     perftest_collection_handles_ret_w2_rows moved = {NULL, 12345};
-    bool ownership = true;
+    size_t ownership = 1;
     char *error = NULL;
     assert(!perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 0xd800, 0, &moved, &ownership, &error));
-    assert(!ownership && moved.len == 12345 && error != NULL);
+    assert(ownership == 2 && moved.len == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
-    handles[1].v0 = a;
+    a = perftest_collection_resource_new(1); b = perftest_collection_resource_new(2);
+    handles[0].v0 = a; handles[1].v0 = a;
     assert(!perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved, &ownership, &error));
-    assert(!ownership && moved.len == 12345 && error != NULL);
+    assert(ownership == 0 && moved.len == 12345 && error != NULL);
+    perftest_drop_owned_resource(a); /* the failed group acquired neither alias */
     perftest_free_error(error); error = NULL;
-    handles[1].v0 = b;
+    a = perftest_collection_resource_new(1); handles[0].v0 = a; handles[1].v0 = b;
     perftest_collection_alias_p0_w1_row aliases[] = {{a}};
     EXPECT_ABORT(perftest_collection_alias(((perftest_collection_alias_p0_w1_rows){aliases, 1}), a));
     perftest_collection_resource_ids_p0_w1_row shared[] = {{a}, {a}};
@@ -224,19 +234,20 @@ static void check_collections(void) {
         assert(ownership && moved.len == 12345 && error != NULL);
         perftest_free_error(error); error = NULL;
     }
-    assert(perftest_owned_resource_drops() == start + 8);
+    assert(perftest_owned_resource_drops() == start + 11);
     perftest_collection_try_construct_all_p0_w1_row pending[3];
     for (size_t i = 0; i < 3; ++i) pending[i].v0 = perftest_collection_resource_new((int64_t)i + 1);
     int64_t constructed = 12345;
     assert(!perftest_collection_try_construct_all((perftest_collection_try_construct_all_p0_w1_rows){pending, 3}, &constructed, &ownership, &error));
-    assert(ownership && constructed == 12345 && error != NULL);
+    assert(ownership == 2 && constructed == 12345 && error != NULL);
+    perftest_drop_owned_resource(pending[2].v0);
     perftest_free_error(error); error = NULL;
-    assert(perftest_owned_resource_drops() == start + 11);
+    assert(perftest_owned_resource_drops() == start + 14);
     perftest_collection_try_make_items_ret_w2_rows projected = {NULL, 12345};
     assert(!perftest_collection_try_make_items(&projected, &error));
     assert(projected.len == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
-    assert(perftest_owned_resource_drops() == start + 14);
+    assert(perftest_owned_resource_drops() == start + 17);
     perftest_collection_optional_handles_ret_w2_rows maybe_handles = {0};
     assert(perftest_collection_optional_handles(0, (perftest_collection_optional_handles_p0_w3_rows){NULL, 0}, &maybe_handles) == 0);
     perftest_collection_optional_handles_p0_w3_row maybe_input[] = {{perftest_collection_resource_new(5)}};
@@ -254,7 +265,7 @@ static void check_collections(void) {
     assert(bundle.len == 3 && tag == 42);
     for (size_t i = 0; i < 3; ++i) perftest_drop_owned_resource(bundle.data[i].v0);
     perftest_collection_bundle_ret_w2_rows_free(bundle);
-    assert(perftest_owned_resource_drops() == start + 19);
+    assert(perftest_owned_resource_drops() == start + 22);
 
     perftest_storage *storage = perftest_storage_new();
     perftest_storage_get_vec_ret_w2_rows stored = {0};
@@ -272,14 +283,14 @@ static void check_collections(void) {
     perftest_drop_collection_error(&typed);
     assert(typed.resources.data == NULL && typed.codes.data == NULL);
     perftest_drop_collection_error(&typed);
-    assert(perftest_owned_resource_drops() == start + 21);
+    assert(perftest_owned_resource_drops() == start + 24);
     assert(!perftest_collection_fail(NULL));
-    assert(perftest_owned_resource_drops() == start + 23);
+    assert(perftest_owned_resource_drops() == start + 26);
     perftest_collection_late_drop_ret_w3_rows unpublished = {NULL, 12345};
     perftest_result_error late_error;
     assert(!perftest_collection_late_drop(&unpublished, &late_error));
     assert(unpublished.len == 12345);
-    assert(perftest_owned_resource_drops() == start + 25);
+    assert(perftest_owned_resource_drops() == start + 28);
     perftest_drop_result_error(&late_error);
 }
 
@@ -332,10 +343,9 @@ static void check_enums(void) {
     names = perftest_enum_names_echo(perftest_enum_names_type); assert(names == 14);
 }
 static void check_options(void) {
-    struct { int32_t v0; perftest_buffer v1; } echoed = {0};
+    struct { int32_t v0; perftest_buffer_view v1; } echoed = {0};
     echoed.v0 = perftest_option_str_echo(0, (perftest_buffer){NULL, 0}, &echoed.v1); assert(echoed.v0 == 0);
     echoed.v0 = perftest_option_str_echo(1, (perftest_buffer){(const uint8_t *)"hello", 5}, &echoed.v1); assert(echoed.v0 == 1 && echoed.v1.len == 5 && memcmp(echoed.v1.data, "hello", 5) == 0);
-    perftest_free_buffer(echoed.v1);
     struct { int32_t v0; uintptr_t v1; } slen = {0};
     slen.v0 = perftest_option_str_len(0, (perftest_buffer){(const uint8_t *)1, SIZE_MAX}, &slen.v1); assert(slen.v0 == 0);
     slen.v0 = perftest_option_str_len(1, (perftest_buffer){(const uint8_t *)"hi", 2}, &slen.v1); assert(slen.v0 == 1 && slen.v1 == 2);
@@ -376,13 +386,13 @@ static void check_options(void) {
     nested = perftest_option_nested_char(65); assert(nested == 65);
     EXPECT_ABORT(perftest_option_nested_char(0x110002));
     EXPECT_ABORT(perftest_option_nested_char(UINT32_MAX));
-    struct { int32_t v0; int64_t v1; int32_t v2; perftest_buffer v3; uint32_t v4; } record = {0};
+    struct { int32_t v0; int64_t v1; int32_t v2; perftest_owned_string v3; uint32_t v4; } record = {0};
     record.v0 = perftest_optional_fields_echo(2, 99, 2, (perftest_buffer){(const uint8_t *)1, SIZE_MAX}, 0x110001, &record.v1, &record.v2, &record.v3, &record.v4); assert(record.v4 == 0x110001);
     record.v0 = perftest_optional_fields_echo(1, 99, 0, (perftest_buffer){NULL, 0}, 0x110000, &record.v1, &record.v2, &record.v3, &record.v4); assert(record.v0 == 1 && record.v1 == 99 && record.v2 == 0 && record.v4 == 0x110000);
-    struct { int32_t v0; perftest_buffer v1; } text = {0};
+    struct { int32_t v0; perftest_owned_string v1; } text = {0};
     text.v0 = perftest_option_text(0, (perftest_buffer){(const uint8_t *)1, SIZE_MAX}, &text.v1); assert(text.v0 == 0);
-    text.v0 = perftest_option_text(1, (perftest_buffer){NULL, 0}, &text.v1); assert(text.v0 == 1 && text.v1.len == 0);
-    perftest_free_buffer(text.v1);
+    text.v0 = perftest_option_text(1, (perftest_buffer){NULL, 0}, &text.v1); assert(text.v0 == 1 && text_view(&text.v1).len == 0);
+    perftest_drop_owned_string(&text.v1);
     int32_t unit = {0};
     unit = perftest_option_unit(0); assert(unit == 0);
     unit = perftest_option_unit(1); assert(unit == 1);
@@ -443,12 +453,13 @@ static void check_results(void) {
     perftest_free_error(error); error = NULL;
     assert(perftest_result_optional(0, &error) == -3 && error == NULL);
     assert(perftest_result_optional(1, &error) == perftest_code_Seven);
-    perftest_buffer text = {NULL, 99};
-    assert(!perftest_result_text(0, &text, &error) && text.len == 99);
+    perftest_owned_string text = {{99}};
+    perftest_owned_string untouched = text;
+    assert(!perftest_result_text(0, &text, &error) && memcmp(&text, &untouched, sizeof(text)) == 0);
     perftest_free_error(error); error = NULL;
     assert(perftest_result_text(1, &text, &error));
-    assert(text.len == strlen("héllo 世界") && memcmp(text.data, "héllo 世界", text.len) == 0);
-    perftest_free_buffer(text);
+    assert(text_view(&text).len == strlen("héllo 世界") && memcmp(text_view(&text).data, "héllo 世界", text_view(&text).len) == 0);
+    perftest_drop_owned_string(&text);
     perftest_code code = 12345;
     assert(perftest_result_record(0, &code, &error) == -1 && code == 12345);
     perftest_free_error(error); error = NULL;
@@ -472,12 +483,13 @@ static void check_results(void) {
     for (int32_t mode = 0; mode <= 3; ++mode) {
         perftest_owned_resource * resource = {NULL};
         resource = perftest_option_resource_new(1);
-        bool consumed = true;
+        size_t consumed = 1;
         assert(perftest_result_owned(resource, mode, 65, NULL, &error) == NULL);
         assert(strcmp(error, "null ownership-output pointer") == 0);
         perftest_free_error(error); error = NULL;
-        assert(perftest_result_owned(resource, mode, 0xd800, &consumed, &error) == NULL && !consumed);
+        assert(perftest_result_owned(resource, mode, 0xd800, &consumed, &error) == NULL && consumed == 1);
         perftest_free_error(error); error = NULL;
+        resource = perftest_option_resource_new(1);
         int64_t id = {0};
         id = perftest_option_resource_id(resource); assert(id == 77);
         perftest_owned_resource *moved = perftest_result_owned(resource, mode, 65, &consumed, &error);
@@ -491,7 +503,7 @@ static void check_results(void) {
             perftest_free_error(error); error = NULL;
         }
     }
-    drops = perftest_owned_resource_drops(); assert(drops == start + 4);
+    drops = perftest_owned_resource_drops(); assert(drops == start + 8);
     errors = perftest_result_error_drops(); assert(errors == error_start + 8);
     // Structured errors preserve fields and embedded NUL bytes in their buffer.
     perftest_result_error structured = {0};
@@ -499,15 +511,15 @@ static void check_results(void) {
     assert(!perftest_c_result_structured((perftest_buffer){NULL, 0}, 1, &scalar, &structured));
     assert(scalar == 12345 && structured.code == 7);
     const char message[] = "source 世界\0details";
-    assert(structured.message.len == sizeof(message)-1 && memcmp(structured.message.data, message, sizeof(message)-1) == 0);
+    assert(text_view(&structured.message).len == sizeof(message)-1 && memcmp(text_view(&structured.message).data, message, sizeof(message)-1) == 0);
     perftest_drop_result_error(&structured);
-    perftest_drop_result_error(&structured); assert(structured.message.data == NULL);
+    perftest_drop_result_error(&structured); assert(text_view(&structured.message).len == 0);
     const uint8_t invalid[] = {0xff};
     assert(!perftest_c_result_structured((perftest_buffer){invalid, 1}, 0, &scalar, &structured));
-    assert(structured.code == -1 && structured.message.len == strlen("invalid UTF-8"));
+    assert(structured.code == -1 && text_view(&structured.message).len == strlen("invalid UTF-8"));
     perftest_drop_result_error(&structured);
     assert(!perftest_c_result_structured((perftest_buffer){NULL, 0}, 2, &scalar, &structured));
-    assert(structured.code == -1 && structured.message.len == strlen("Rust operation panicked"));
+    assert(structured.code == -1 && text_view(&structured.message).len == strlen("Rust operation panicked"));
     perftest_drop_result_error(&structured);
     assert(!perftest_c_result_structured((perftest_buffer){NULL, 0}, 1, &scalar, NULL));
     structured.code = 12345;
@@ -519,7 +531,7 @@ static void check_results(void) {
     assert(owned_error.resource != NULL);
     int64_t id = {0};
     id = perftest_option_resource_id(owned_error.resource); assert(id == 91);
-    perftest_drop_resource_error(&owned_error); assert(owned_error.resource == NULL && owned_error.message.data == NULL);
+    perftest_drop_resource_error(&owned_error); assert(owned_error.resource == NULL && text_view(&owned_error.message).len == 0);
     perftest_drop_resource_error(&owned_error);
     assert(!perftest_c_result_resource_error(1, NULL));
     drops = perftest_owned_resource_drops(); assert(drops == start + 2);
@@ -535,14 +547,14 @@ static void check_results(void) {
     perftest_panic_error panic_error;
     memset(&panic_error, 0xa5, sizeof(panic_error));
     assert(!perftest_c_result_panic_error(&panic_error));
-    assert(panic_error.message.data == NULL && panic_error.message.len == 0);
+    assert(text_view(&panic_error.message).len == 0);
     perftest_drop_panic_error(&panic_error);
     perftest_drop_panic_error(&panic_error);
     assert(!perftest_c_result_panic_error(NULL));
     perftest_rich_error rich = {0};
     assert(!perftest_c_result_rich_error(1, &rich));
-    assert(rich.kind == perftest_code_Seven && rich.v1 == 1 && rich.v2.len == strlen("rich error"));
-    perftest_drop_rich_error(&rich); assert(rich.v2.data == NULL);
+    assert(rich.kind == perftest_code_Seven && rich.v1 == 1 && text_view(&rich.v2).len == strlen("rich error"));
+    perftest_drop_rich_error(&rich); assert(text_view(&rich.v2).len == 0);
     assert(!perftest_c_result_rich_error(0, &rich) && rich.kind == perftest_code_Seven && rich.v1 == 0);
     perftest_drop_rich_error(&rich);
     // Option already uses the handle's null niche, so Result must use bool.
@@ -569,6 +581,12 @@ static void check_results(void) {
     perftest_free_error(NULL);
 }
 int main(void) {
+    check_inline_owners();
+    check_borrowed_getters();
+    check_borrowed_pointers();
+    check_mutable_borrowed_pointers();
+    check_owner_backed_views();
+    check_buffer_identity_views();
     check_callback_returns();
     /* Empty typed field overrides omit plain, optional and vector resources. */
     size_t omitted_before = perftest_owned_resource_drops();
@@ -588,22 +606,23 @@ int main(void) {
     perftest_drop_storage(storage);
     perftest_drop_storage(NULL);
     const unsigned char text[] = {'h', 'i', 0, 'x'};
-    perftest_buffer result = {0};
+    perftest_owned_string result = {0};
     result = perftest_string_new((perftest_buffer){text, sizeof(text)});
-    assert(result.len == sizeof(text));
-    assert(memcmp(result.data, text, sizeof(text)) == 0);
-    perftest_free_buffer(result);
+    assert(text_view(&result).len == sizeof(text));
+    assert(memcmp(text_view(&result).data, text, sizeof(text)) == 0);
+    perftest_drop_owned_string(&result);
     uintptr_t len = {0};
     len = perftest_string_len((perftest_buffer){text, sizeof(text)});
     assert(len == sizeof(text));
-    result = (perftest_buffer){NULL, 42};
+    memset(&result, 42, sizeof(result));
+    perftest_owned_string old_result = result;
     const unsigned char invalid[] = {255};
     EXPECT_ABORT(perftest_string_new((perftest_buffer){invalid, 1}));
-    assert(result.data == NULL && result.len == 42);
+    assert(memcmp(&result, &old_result, sizeof(result)) == 0);
     EXPECT_ABORT(perftest_string_new((perftest_buffer){NULL, 1}));
     result = perftest_string_new((perftest_buffer){NULL, 0});
-    assert(result.len == 0);
-    perftest_free_buffer(result);
+    assert(text_view(&result).len == 0);
+    perftest_drop_owned_string(&result);
     const unsigned char bytes[] = {0, 127, 128, 255};
     perftest_blob * blob = {0};
     perftest_blob * echoed = {0};
@@ -611,12 +630,12 @@ int main(void) {
     echoed = perftest_blob_value_echo(blob);
     EXPECT_ABORT(perftest_blob_value_echo(NULL));
     perftest_drop_blob(echoed);
-    struct { int64_t v0; double v1; int64_t v2; int64_t v3; perftest_buffer v4; perftest_report * v5; } report = {0};
+    struct { int64_t v0; double v1; int64_t v2; int64_t v3; perftest_owned_string v4; perftest_report * v5; } report = {0};
     report.v0 = perftest_report_new(42, 3.5, (perftest_buffer){text, sizeof(text)}, &report.v1, &report.v2, &report.v3, &report.v4, &report.v5);
     assert(report.v0 == 42 && report.v1 == 3.5 && report.v2 == 1 && report.v3 == 2);
-    assert(report.v4.len == sizeof(text));
-    assert(memcmp(report.v4.data, text, sizeof(text)) == 0);
-    perftest_free_buffer(report.v4);
+    assert(text_view(&report.v4).len == sizeof(text));
+    assert(memcmp(text_view(&report.v4).data, text, sizeof(text)) == 0);
+    perftest_drop_owned_string(&report.v4);
     perftest_report_struct * parts = {0};
     // Invalid selections abort; valid alternatives still work.
     EXPECT_ABORT(perftest_report_into_struct(2, report.v5, 0, 0.0, (perftest_buffer){NULL, 0}));
@@ -640,31 +659,31 @@ int main(void) {
     unsigned_fields = perftest_unsigned_round_trip(0, 0, 0, 0, 0, 0);
     maybe_unsigned.v0 = perftest_unsigned_data_maybe(unsigned_fields, &maybe_unsigned.v1); assert(maybe_unsigned.v0 == 0);
     perftest_drop_unsigned(unsigned_fields);
-    struct { int32_t v0; perftest_buffer v1; } note = {0};
+    struct { int32_t v0; perftest_owned_string v1; } note = {0};
     note.v0 = perftest_plain_note_echo(0, (perftest_buffer){NULL, 99}, &note.v1); assert(note.v0 == 0);
-    note.v0 = perftest_plain_note_echo(1, (perftest_buffer){NULL, 0}, &note.v1); assert(note.v0 == 1 && note.v1.len == 0);
-    perftest_free_buffer(note.v1);
+    note.v0 = perftest_plain_note_echo(1, (perftest_buffer){NULL, 0}, &note.v1); assert(note.v0 == 1 && text_view(&note.v1).len == 0);
+    perftest_drop_owned_string(&note.v1);
     const uint8_t note_text[] = {'h', 0, 'i'};
     note.v0 = perftest_plain_note_echo(1, (perftest_buffer){note_text, sizeof(note_text)}, &note.v1);
-    assert(note.v0 == 1 && note.v1.len == sizeof(note_text) && memcmp(note.v1.data, note_text, sizeof(note_text)) == 0);
-    perftest_free_buffer(note.v1);
+    assert(note.v0 == 1 && text_view(&note.v1).len == sizeof(note_text) && memcmp(text_view(&note.v1).data, note_text, sizeof(note_text)) == 0);
+    perftest_drop_owned_string(&note.v1);
     struct { int32_t v0; uint64_t v1; } optional_unsigned = {0};
     optional_unsigned.v0 = perftest_unsigned_optional(0, UINT64_MAX, &optional_unsigned.v1); assert(optional_unsigned.v0 == 0);
     optional_unsigned.v0 = perftest_unsigned_optional(1, UINT64_MAX, &optional_unsigned.v1);
     assert(optional_unsigned.v0 == 1 && optional_unsigned.v1 == UINT64_MAX);
     EXPECT_ABORT(perftest_unsigned_optional(2, 0, &optional_unsigned.v1));
     perftest_archive * archive = {0};
-    perftest_summary *latest = NULL, *second_latest = NULL;
+    const perftest_summary *latest = NULL, *second_latest = NULL;
 
     archive = perftest_archive_new();
     latest = perftest_archive_latest(archive); assert(latest == NULL);
     perftest_archive_store(archive, 0, 2, 40.0, NULL);
     latest = perftest_archive_latest(archive); assert(latest != NULL);
-    second_latest = perftest_archive_latest(archive); assert(second_latest != latest);
-    perftest_drop_archive(archive);
+    second_latest = perftest_archive_latest(archive); assert(second_latest == latest);
     double archived_total = {0};
-    archived_total = perftest_summary_total_raw(1, 0, 0.0, latest); assert(archived_total == 40.0);
-    archived_total = perftest_summary_total_raw(1, 0, 0.0, second_latest); assert(archived_total == 40.0);
+    archived_total = perftest_summary_total(latest); assert(archived_total == 40.0);
+    archived_total = perftest_summary_total(second_latest); assert(archived_total == 40.0);
+    perftest_drop_archive(archive);
     perftest_storage * optional_storage = {0};
     struct { int32_t v0; int64_t v1; int32_t v2; double v3; uint8_t v4; } optional_payload = {0};
     uint8_t pushed = {0};
@@ -696,6 +715,13 @@ int main(void) {
     contains = perftest_storage_contains(borrowed, 7); assert(contains == 1);
     int64_t lengths = {0};
     lengths = perftest_storage_total_len(borrowed, borrowed, borrowed); assert(lengths == 3);
+    perftest_storage *target = perftest_storage_with_payload(0, 0, 0.0, 0);
+    assert(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, NULL) == 7);
+    assert(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed) == 15);
+    EXPECT_ABORT(perftest_storage_accumulate_lengths(target, target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, NULL));
+    EXPECT_ABORT(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, target));
+    assert(perftest_storage_contains(target, 15));
+    perftest_drop_storage(target);
     perftest_summary *first = NULL, *second = NULL;
     first = perftest_storage_summary_handle(borrowed);
     second = perftest_storage_summary_handle(borrowed);
@@ -707,12 +733,12 @@ int main(void) {
     merged.v0 = perftest_summary_merge(1, 0, 0, first, 1, 0, 0, second, &merged.v1);
     assert(merged.v0 == 2 && merged.v1 == 8.0);
     perftest_summary * nested = {0};
-    perftest_buffer labeled_report = {0};
+    perftest_owned_string labeled_report = {0};
     nested = perftest_storage_summary_handle(borrowed);
     EXPECT_ABORT(perftest_report_label(1, 0, 0, nested, (perftest_buffer){invalid, 1}));
     labeled_report = perftest_report_label(1, 0, 0, nested, (perftest_buffer){text, sizeof(text)});
-    assert(labeled_report.len == sizeof(text));
-    perftest_free_buffer(labeled_report);
+    assert(text_view(&labeled_report).len == sizeof(text));
+    perftest_drop_owned_string(&labeled_report);
     perftest_drop_storage(borrowed);
 
     int8_t i8 = {0};

@@ -36,6 +36,12 @@ impl Codec for EnumCodec<'_> {
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
+    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
+        CCodec.input_collection_is_leaf(flat, ty, e)
+    }
+    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
+        CCodec.output_collection_is_leaf(flat, ty, e)
+    }
     fn group_metadata(&self) -> CBranch {
         CBranch::Group(CGroup::Values)
     }
@@ -211,6 +217,11 @@ impl Codec for EnumCodec<'_> {
         if let Some((name, m)) = self.mapping(flat, ty) {
             return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
         }
+        if self.return_owners.is_some() {
+            if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
+                return Ok(owned::input(owner, ty, w, v, active, true));
+            }
+        }
         let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
         if plan
             .resources
@@ -247,6 +258,48 @@ impl Codec for EnumCodec<'_> {
             ));
         }
         CCodec.output_leaf(flat, ty, e, w, v, borrowed)
+    }
+
+    fn output_return_reference(
+        &self,
+        flat: &Bindings,
+        reference: &syn::TypeReference,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        CCodec.output_return_reference(flat, reference, extra, wire, value)
+    }
+
+    fn output_owner(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        CCodec.output_owner(flat, ty, extra, wire, value)
+    }
+    fn validate_owner_getter(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        getter: &str,
+        plan: &OutputPlan<CWire>,
+    ) -> Result<()> {
+        CCodec.validate_owner_getter(flat, ty, getter, plan)
+    }
+    fn validate_getter_output(
+        &self,
+        flat: &Bindings,
+        receiver: &syn::Type,
+        borrowed: bool,
+        ty: &syn::Type,
+        plan: &OutputPlan<CWire>,
+        extra: &(),
+    ) -> Result<()> {
+        CCodec.validate_getter_output(flat, receiver, borrowed, ty, plan, extra)
     }
 
     fn optional_niche(
@@ -373,7 +426,7 @@ mod tests {
             .build()
             .err()
             .unwrap()
-            .contains("names collide"));
+            .contains("both opaque_ptr and opaque_owned_struct"));
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {

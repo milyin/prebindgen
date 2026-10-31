@@ -13,6 +13,11 @@ private fun expectInvalid(action: () -> Unit) {
 
 // Exercises the active subset of the migrated source and build declarations.
 fun main() {
+    checkBulk()
+    checkBulkDefaults()
+    checkCollectionInputs()
+    checkBorrowedBuffers()
+    checkBorrowedGetters()
     checkCallbackConfiguration()
     checkCallbackReturns()
     checkCallbackDiagnostics()
@@ -85,8 +90,10 @@ fun main() {
     check(summaryTotalRaw(0, 42, -1.25, null) == -1.25)
     checkOwnership()
     checkPrimitives()
+    checkReturnTransport()
     checkDataClasses()
     checkOwnedRecords()
+    checkRuntimeCosts()
     payloadNew(Long.MIN_VALUE, Int.MAX_VALUE, -0.0, true) { id, seq, value, flag ->
         check(id == Long.MIN_VALUE && seq == Int.MAX_VALUE && value.toRawBits() == (-0.0).toRawBits() && flag)
     }

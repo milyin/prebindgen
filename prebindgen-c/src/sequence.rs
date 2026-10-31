@@ -158,13 +158,13 @@ pub(crate) fn emit_schemas(
         }
         let fields = crate::group::row_fields(element)
             .enumerate()
-            .map(|(i, w)| {
-                let name = format_ident!("v{i}");
-                let ty = w.rust_type();
-                quote!(pub #name:#ty)
-            })
-            .collect::<Vec<_>>();
-        tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
+            .map(|(i, w)| (format_ident!("v{i}"), w.rust_type()));
+        let record = prebindgen_reprc::Record::new(row.clone(), fields)?;
+        let mut definition = record.definition();
+        definition
+            .attrs
+            .push(syn::parse_quote!(#[derive(Clone,Copy)]));
+        tokens.extend(quote!(#definition));
         header.push_str("typedef struct {\n");
         for (i, w) in crate::group::row_fields(element).enumerate() {
             header.push_str(&format!(
@@ -199,13 +199,18 @@ pub(crate) fn release(
     for (wire, value) in fields {
         match &wire.kind {
             CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
-            CWire::Pointer { pointer, .. } => {
+            CWire::Pointer { pointer, .. } if pointer.access == Access::Move => {
                 let ty = &pointer.ty;
                 let drop = quote!(drop(Box::from_raw((#value) as *mut #ty)););
                 let drop = if catch_panics {
                     quote!(let _ = ::prebindgen_runtime::boundary(|| { #drop Ok(()) });)
                 } else { drop };
                 code.extend(quote! { if !(#value).is_null() { #drop } });
+            }
+            CWire::Owned {access:Access::Move,by_value:true,..} => {
+                let drop=quote!(drop((#value).into_rust()););
+                let drop=if catch_panics {quote!(let _=::prebindgen_runtime::boundary(||{#drop Ok(())});)} else {drop};
+                code.extend(drop);
             }
             CWire::Rows => {
                 let row=&context.row_types[&wire.name.to_string()];

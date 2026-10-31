@@ -203,6 +203,11 @@ fn main() {
         .opaque_ptr("foo", pq!(Foo));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    // Exercise explicit target selection independently from Cargo's build target.
+    println!("cargo:rerun-if-env-changed=PREBINDGEN_BINDING_TARGET");
+    if let Ok(target) = std::env::var("PREBINDGEN_BINDING_TARGET") {
+        cbindgen = cbindgen.target(target);
+    }
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();

@@ -1181,6 +1181,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         child.acquire = quote!(acquire(#index););
         child.acknowledgement = Some(ack);
         child.resources.push(Resource {
+            registered: false,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#index)),
             access: Access::Move,
             active: quote!(selected),
@@ -1871,6 +1872,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
             ProjectionMode::Owned,
             child.clone(),
             SequenceDelivery::Value,
+            false,
         )
         .unwrap_err()
         .contains("outermost"));

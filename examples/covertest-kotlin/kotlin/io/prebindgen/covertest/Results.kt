@@ -23,6 +23,8 @@ private inline fun <reified T : Throwable> resultFailure(message: String, action
 }
 
 fun checkResults() {
+    check(resultUnitError(false, onError = { error("unexpected unit error") }) == 42L)
+    check(resultUnitError(true, onError = { 17L }) == 17L)
     // The getter's .name("code") survives preparation into the handler API.
     check(ResultFailureHandler<Long> { it }.run(code = 7L) == 7L)
     check(optionalTextInputLen(true, null, 0, onError = JniErrorHandler { 123L }) == 123L)
@@ -50,10 +52,11 @@ fun checkResults() {
 
     val start = ownedResourceDrops()
     for (mode in listOf(0, 1, 2, 3)) {
-        val value = checkNotNull(optionResourceNew(true))
-        try { resultOwned(value, mode, 0xd800, onError = throwResult); error("invalid char accepted") }
+        val invalid = checkNotNull(optionResourceNew(true))
+        try { resultOwned(invalid, mode, 0xd800, onError = throwResult); error("invalid char accepted") }
         catch (_: IllegalArgumentException) {}
-        check(!value.isClosed && optionResourceId(value) == 77L)
+        check(invalid.isClosed)
+        val value = checkNotNull(optionResourceNew(true))
         when (mode) {
             0 -> {
                 val moved = resultOwned(value, mode, 65, onError = throwResult)
@@ -67,7 +70,7 @@ fun checkResults() {
         check(value.isClosed)
         value.close() // acknowledgement prevents a second native free
     }
-    check(ownedResourceDrops() == start + 4uL)
+    check(ownedResourceDrops() == start + 8uL)
     check(resultErrorDrops() == errorStart + 7uL)
     // Typed callbacks can recover instead of throwing; success never invokes them.
     check(resultScalar(-11) { code -> -code } == 11L)
@@ -83,12 +86,13 @@ fun checkResults() {
     val borrowed = checkNotNull(optionResourceNew(true))
     check(resultOwned(borrowed, 0, 0xd800, onError = throwResult,
         onBindingError = JniErrorHandler {
-            val worker = Thread { check(optionResourceId(borrowed) == 77L) }.also { it.isDaemon = true; it.start() }
+            val checked = java.util.concurrent.atomic.AtomicBoolean(false)
+            val worker = Thread { checked.set(synchronized(borrowed) { borrowed.isClosed }) }.also { it.isDaemon = true; it.start() }
             worker.join(3000)
-            check(!worker.isAlive) { "binding callback ran while the handle monitor was held" }
+            check(!worker.isAlive && checked.get()) { "binding callback ran while the handle monitor was held" }
             borrowed
         }) === borrowed)
-    check(!borrowed.isClosed)
+    check(borrowed.isClosed)
     borrowed.close()
     check(cResultLateNiche(false, onError = CResultErrorHandler { _, _ -> "error" }) { _, _ -> "success" } == "success")
     check(cResultLateNiche(true, onError = CResultErrorHandler { code, message -> "$code:$message" }) { _, _ -> "success" } == "8:late niche")

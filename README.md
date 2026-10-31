@@ -126,9 +126,22 @@ The same declaration works as a type-wide default or a per-function replacement:
 
 `Projection` is available from `prebindgen_declarations` and `prebindgen_jni`.
 Modes propagate recursively unless explicitly overridden; they never depend on
-record contents. Legacy `field_self()` and unexpanded data-class outputs retain
-a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+record contents. Unexpanded data-class outputs and `field_self()` follow the
+source occurrence: owned records move their fields, while borrowed records observe
+them. `field_self_into()` explicitly requires an owned occurrence;
+`field_self_ref()` explicitly requests observing/copying the fields. If a record
+implements `Drop`, Rust may reject moving its fields; select an explicit copy
+projection instead of relying on an implicit cloning fallback. For a nested
+`Drop`-bearing field, put the borrowed override on the containing record; a child
+type's default does not rewrite a data-class property. Multiple owning
+views are rejected: combinations that previously copied through `field_self()`
+should select `field_self_ref()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
+
+Owned `String` and `Vec<u8>` identities also transfer their storage when combined
+with getter views. Getters run before that move, regardless of output order.
+Multiple independent owning identities require explicit copies with
+`field_self_ref()`; adding a getter does not authorize a hidden buffer clone.
 
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
@@ -139,9 +152,90 @@ explicitly omits that field while keeping its Rust cleanup.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
+Getters used by output expansions may return shared values such as `&Child`,
+`&str`, `&[Row]`, `Option<&Child>` or `&Option<Child>`. A borrowed getter result
+uses the referent's output defaults, so nested getters and record projections
+work without cloning the owner or an intermediate object. Text and fields are
+copied as required by the foreign representation. JNI handle leaves clone their
+referents into independent owning allocations and require `Clone`. C opaque
+reference leaves are loans: a getter expansion must retain its owner as described
+below, or explicitly request an independent owning copy. Borrowed
+results cannot satisfy an owned projection. Each getter runs once per configured
+view. Ordinary conversions finish observations before consuming the owner;
+C owner-backed views first place the owner in its final allocation.
+These rules also apply to output projections of callback arguments.
+
+Plain reference returns use the adapter's direct representation unless an
+expansion is selected explicitly. C returns an opaque `&Child` as a non-owning
+`const child *` and an opaque `&mut Child` as a non-owning `child *`, without
+cloning or allocating. Optional references use null for absence. This also works
+in the success value of `Result`. The C caller must
+keep the referenced storage alive at a stable address and obey Rust's aliasing
+rules, including exclusive access while using a mutable borrow. Never free or
+pass a borrowed pointer to a consuming function. JNI still
+clones opaque references into independent owning handles.
+For example, a function returning `&Child` can
+use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
+name instead of a child pointer/handle. Explicit borrowed projections select
+independent owning copies for opaque leaves. Mutable callback arguments and
+mutable value/collection conversions requiring
+copying or write-back remain unsupported. JNI rejects mutable reference returns
+instead of replacing them with independently owned copies.
+For direct loans, reference inputs must use persistent opaque pointers or borrowed
+text/byte buffers. A reference input reconstructed from record fields, a collection
+or a constructor can own temporary storage, so generation rejects lending from
+such a call unless the return is explicitly `'static`. Select an independent copy
+with `.expand_return(expand_return!(Child).field_self_ref())` when `Child: Clone`.
+This check runs during generation and adds no runtime bookkeeping.
+This changes unexpanded C opaque-reference returns from owning copies to loans.
+Existing C callers must stop freeing or consuming these results and retain their
+source owner, or select the explicit copy projection above. Explicit `'static`
+reference lifetimes are accepted on source function returns only; inputs,
+callback signatures and record fields retain their elided-lifetime requirement.
+The generator preserves Rust's move/shared/exclusive access in `CPointer.access`
+(`Access` is re-exported by `prebindgen_c`), replacing `CPointer.mutable`. Both
+move and exclusive access use mutable C pointers, but only move outputs transfer
+ownership and participate in allocation cleanup. This is generation metadata;
+the emitted C pointers have no extra wrapper, ownership flag or runtime tracking.
+
+For C, an owning identity plus getter views returns the original owner and
+borrowed pointers into that owner, without cloning the children:
+
+```rust,ignore
+.function(fun!(owner_new).expand_return(expand_return!(Owner)
+    .field_self_into()
+    .field(fun!(owner_child))))
+```
+
+With opaque `Owner`/`Child` declarations and `owner_child(&Owner) -> &Child`, the
+C signature is `owner *owner_new(..., const child **out_child)`. The generated
+wrapper places the owner in its final allocation before invoking the getters.
+Declaring the getter before `.field_self_into()` changes the C output order, not
+that placement order. `Option` and `Result` wrappers preserve these relationships.
+A mutable getter taking `&mut Owner` and returning `&mut Child` produces `child *`;
+it must be the only getter view, because later owner borrows could invalidate it.
+Multiple shared getter views are supported. Nested/other sibling view operations
+are diagnosed rather than falling back to implicit child copies.
+
+A borrowed opaque getter output without a retained owner is rejected unless its
+source reference is `'static`. Use an explicit owning conversion such as
+`.view(Output::getter("owner_child", Output::Projected(Projection::borrowed())))`
+if an independent copy is intended. Direct pointer outputs of references supplied
+by a Rust function keep the existing borrow contract. Expanding those references
+with getters also requires an explicit owning conversion for opaque children;
+this includes type-wide expansion defaults and callback argument expansions. JNI retains
+its owning-handle conversion and does not implement these C owner-backed loans.
+
+Only the owner is destroyed or consumed by C; every borrowed child becomes invalid
+when its owner is destroyed, moved or otherwise invalidates that child. Mutable
+loans require exclusive access. The normal owner allocation has a Rust cleanup
+guard until ownership transfer; children add no allocation, clone, reference count,
+runtime lifetime registry or C wrapper object. Failure before or after commit
+reclaims owning allocations and never destroys borrowed children separately.
+
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
-and duplicate consuming views are rejected. Observing getters run before consuming
-views regardless of declaration order. Rust checks `Clone` requirements and rejects
+and duplicate consuming views are rejected. Without a retained output allocation,
+observing getters run before consuming views regardless of declaration order. Rust checks `Clone` requirements and rejects
 field moves from records implementing `Drop`. Native conversion or delivery failure
 drops unpublished resources; Kotlin delivery failure closes transferred handles,
 including nested members. Handle-containing records remain unsupported as inputs.
@@ -153,7 +247,7 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
-supported; fixed-size arrays remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+supported; fixed-size array fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -372,8 +466,16 @@ its private preparation metadata through `prefix_layout`. The final converter em
 projections or constructions itself. Wrapper writers never interpret these paths.
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
-The optional staged plans describe allocation participation using emitted Rust
-boolean expressions. Their assembly helper checks allocation aliases. JNI slots
+The optional plans describe resource access using emitted Rust conditions.
+Compiled C/JNI inputs validate every value before using it. Shared-only calls
+need no alias bookkeeping. Small fixed sets compare stack entries; larger fixed
+sets use a stack hash table. Resource-bearing collection rows are decoded once,
+then their addresses are checked together against a sorted native history before
+acquisition and construction. Addresses remain recorded
+even when constructors move or drop the original object. `CheckAliases` collects
+this access profile when generating the wrapper. Manually staged conversions
+retain their deferred checks; mixing deferred resource plans with compiled eager
+resource plans is diagnosed rather than dropping their checks. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.
@@ -423,12 +525,29 @@ variant; JNI also derives Kotlin types and JVM parameter width.
 `read_array_element()`, `output_object()` and `output_argument()` let ordinary
 returns, collection rows and callback delivery share the same field conversion.
 Reads produce native input values; output methods take prepared
-`OutputPlan::values` (for example `Option<String>`, encoded wide-integer bytes,
-or an allocation pointer), rather than JNI input references. They use the
-`environment` template parameter and leave local-reference lifetimes and
-ownership commit to their caller. `output_argument()` returns `JniArgument`:
-emit its preparation statements before using its `jvalue` expression, in the
-same local-reference frame.
+`OutputPlan::values` (for example `JObject` for text/bytes, encoded
+wide-integer bytes, or an allocation pointer), rather than JNI input references.
+The methods use the `environment` template parameter and leave local-reference
+lifetimes and ownership commit to their caller. `output_argument()` returns
+`JniArgument`: emit its preparation statements before using its `jvalue`
+expression, in the same local-reference frame.
+
+Text and byte outputs are copied directly into JVM objects during preparation,
+while their Rust source is alive. Borrowed `str`/`String` and byte slice/vector
+outputs need no intermediate owned Rust buffer. Owned Rust buffers are moved,
+encoded and dropped; getters run before an owning move. This also handles
+optional payloads, record fields, collection rows and source callback arguments
+without keeping references to temporary owners. JVM storage and text encoding
+still have their normal marshalling costs. Independent text/byte output views
+create independent JVM objects without cloning the Rust buffer first.
+
+Custom JNI output plans using text/byte wires must now prepare
+`JObject` in the caller's local-reference frame; null means absent and a present
+value is a non-null object of the matching JVM type. `output_object()` and
+`output_argument()` consume that prepared value without allocating another
+object. Ordinary wrappers reserve local-reference capacity for wide fixed
+buffer outputs; small outputs need no additional capacity call.
+
 All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.
@@ -488,21 +607,31 @@ The call data flow has an explicit ownership boundary:
 
 ```text
 select active alternatives
-    → validate/decode all active leaves and check access conflicts
-    → acquire all consuming inputs
-    → construct arguments and invoke the source function
+    → validate/decode active values and check current/prior accesses before use
+    → acquire and construct, individually or in checked groups
+    → invoke the source function
     → prepare outputs under Rust ownership
     → publish foreign outputs and transfer their ownership
 ```
 
-Before acquisition, failure leaves every input owned by its caller. Acquisition
-is infallible after validation; all consuming leaves become Rust-owned before
-any constructor runs. A constructor/source panic or later delivery failure does
-not restore consumed inputs. Rust guards reclaim acquired inputs and unpublished
-outputs. Borrows last through the call, including constructors. Multiple shared
-borrows of one allocation are allowed; an exclusive borrow or move conflicts
-with every other active use of that allocation. Inactive selector arms neither
-validate nor acquire their inputs.
+Each value is validated before it is used, including checks against earlier
+accesses to the same allocation. Resource-bearing rows can be validated as a group
+before any row is acquired or constructed. If a later value fails, earlier constructors may already
+have run and earlier owned inputs remain consumed. Rust drops initialized values
+and unpublished outputs; it does not undo constructor side effects. Multiple
+shared borrows are allowed; an exclusive borrow or move conflicts with every
+other active use of that allocation. Inactive selector arms neither validate nor
+acquire their inputs.
+
+Consuming C Result calls return an ownership count through `size_t *ownership`.
+The count identifies the consumed prefix of active owned wire values in argument,
+row and field order, including on failure. A callback context counts as one value.
+Callers must not reuse or destroy consumed allocations. JNI uses a private
+one-element `LongArray`: a nonnegative count means completed input preparation;
+a negative value encodes a failed call's count as `-1 - count`. Generated Kotlin
+invalidates consumed wrappers and their aliases before running user error handlers.
+Failure may consume inputs; unread owners remain with their caller, except
+that every alias of a consumed allocation is also invalid.
 
 **C owns pointer semantics.** Each declared opaque type has its own incomplete
 C struct and `T *` / `const T *` inputs. The caller must supply live pointers of
@@ -511,17 +640,20 @@ Consumed pointers become invalid. Destruction accepts null, but destroying a
 non-null pointer twice or using a consumed pointer is undefined behavior, as
 with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
-Both current adapters opt into `prebindgen_conversions::boxed`, which shares pointer
-validation, borrow/move acquisition, cloned observations and output commit.
-C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
+Opaque pointer declarations use `prebindgen_conversions::boxed`, which shares
+pointer validation, borrow/move acquisition, cloned observations and output commit.
+C stores these objects directly in `Box<T>`; its header exposes typed opaque pointers.
+Inline C owners, described below, store the Rust value inside the C value instead.
 Other adapters can choose different storage in their leaf conversions; there is
 no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
 C functions without `Result` return their first boundary value directly; any
 additional values use output pointers. Unit functions and destructors return
-`void`. Text and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow
-that memory, while owned inputs copy it. Callers free returned buffers exactly once.
+`void`. Text and byte inputs use pointer/length buffers by default; `&str` and
+`&[u8]` borrow that memory, while owned inputs copy it. Owned `String` and `Vec<T>`
+returns use inline opaque owners. Borrowed `&str` and `&[u8]` returns use a distinct
+`buffer_view` type: keep the source alive and never free the view.
 
 A non-Result function with a fallible binding conversion must be explicitly
 declared with `.function(fun!(name)).panic()`. Without that declaration, generation
@@ -556,14 +688,174 @@ C source callback parameters, data-carrying enums, maps/sets, mutable text/byte 
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
+## Inline C owners
+
+`opaque_ptr("name", T)` declares a typed pointer to a Rust `Box<T>` and generates
+its destructor. It can also override the ordinary representation of a built-in
+or vector type. `opaque_owned_struct("name", T, layout)` declares a C value that
+contains the Rust value itself. Moving a vector or string into this storage
+preserves its data pointer, length and capacity. The wrapper neither compacts its
+allocation nor allocates a box for its descriptor.
+
+```rust,ignore
+use prebindgen_c::{Cbindgen, OpaqueLayout};
+use prebindgen_declarations::{expand_return, fun};
+use syn::parse_quote;
+
+let bindings = Cbindgen::builder()
+    .source(flat::PREBINDGEN_OUT_DIR)
+    .opaque_owned_struct("bytes", parse_quote!(Vec<u8>), OpaqueLayout::auto::<Vec<u8>>())
+    .function(fun!(make_bytes).expand_return(
+        expand_return!(Vec<u8>)
+            .field_self_into()
+            .field(Cbindgen::owned_view("bytes"))
+            .field(Cbindgen::owned_len("bytes"))))
+    .build()?;
+```
+
+This exports `pb_bytes pb_make_bytes(pb_buffer_view *out1, uintptr_t *out2)`.
+The returned owner and the extra view describe the same allocation:
+
+```c
+pb_buffer_view view;
+uintptr_t length;
+pb_bytes bytes = pb_make_bytes(&view, &length);
+/* Read view.data[0..length], or obtain pb_bytes_view(&bytes) later. */
+pb_drop_bytes(&bytes);
+/* All previous views are now invalid. bytes contains an empty Vec. */
+```
+
+String and vector owners get a generated `*_len` accessor. String and byte-vector
+owners also get `*_view`, returning a borrowed `{ data, len }` byte view; strings
+contain UTF-8 without an added terminator. Other vectors get `*_get(owner, index)`,
+which returns a borrowed element pointer or null for an out-of-range index.
+Primitive elements use their C scalar type; opaque elements use a declared
+`opaque_ptr` type; other elements use `const void *`. No element conversion or
+copy is performed by these accessors. Source getters remain usable in expansions
+for arbitrary owner types.
+
+Owned `String` and `Vec<T>` outputs select this storage automatically, with stable,
+readable generated type names. Explicit declarations give the types predictable
+names and also select native ownership for inputs: `T` consumes an owner through
+a mutable pointer, while `&T`/`&mut T` borrow its storage. Without an explicit
+storage declaration, input buffers and input element conversions retain their
+ordinary forms. Explicit element expansions and `Output::Sequence` still request
+row conversion; they take precedence over native collection defaults.
+
+`OpaqueLayout::auto::<T>()` measures the real Rust type available to the build
+script only for a native build. A cross build must supply an external layout
+artifact; it never falls back to host measurements. `OpaqueLayout::external()`
+requires an artifact even natively and allows types unavailable on the host.
+Custom owners use their declaration name as the artifact key; `.key("other")`
+selects a shared key. Use qualified keys when several binding modules share an
+artifact and reuse short C declaration names. Standard `Vec<T>` owners use `std.vec`, and `String` uses
+its independently measured `std.string` entry. Generic vector ownership does not
+require `Clone` or a C representation for each element. It preserves the original
+allocation and drops elements through Rust; converted element rows remain explicit.
+
+```rust,ignore
+let bindings = Cbindgen::builder()
+    .source(flat::PREBINDGEN_OUT_DIR)
+    .opaque_layouts_file("abi/layouts.json")
+    .opaque_owned_struct("packet", parse_quote!(Packet),
+        OpaqueLayout::auto::<flat::Packet>())
+    .build()?;
+```
+
+The external artifact is ordinary JSON:
+
+```json
+{
+  "format_version": 1,
+  "target": "i686-unknown-linux-gnu",
+  "sources": { "flat": { "features": ["feature_a"] } },
+  "layouts": {
+    "packet": { "size": 32, "alignment": 4 },
+    "std.vec": { "size": 12, "alignment": 4 },
+    "std.string": { "size": 12, "alignment": 4 }
+  }
+}
+```
+
+Probe generation, execution, object-file extraction and caching remain external.
+The producer records the actual source features, not just requested Cargo flags.
+Only required layouts need entries; an opaque pointer alone needs no layout.
+Supplying an artifact makes lookup strict on native builds too. Missing files,
+entries, source features, duplicate keys, invalid layouts and target mismatches
+are errors. No incomplete artifact falls back to native measurements. Watch the
+artifact in `build.rs` with `cargo:rerun-if-changed`.
+
+Cargo's `TARGET` selects the binding platform; outside Cargo it defaults to the
+generator's compiled platform. `.target("triple")` overrides it. A different
+platform always requires external inline-layout data. `.source(...)` registers
+its source for feature verification. With a pre-parsed Flat model, register each
+captured source through `.layout_source(source)`. Source keys use the name from
+`Source::crate_name()`, including dependency aliases. Unused artifact sources are
+allowed. Register sources contributing only types too; function origins are
+checked automatically, but external type paths alone cannot identify captured
+source metadata. `Source::require_features`
+checks probe features against captured declarations and retains the compile-time
+check against the target library's exported `FEATURES` constant. This is not a
+fingerprint of the entire dependency graph or compiler configuration.
+
+The generated Rust checks its compilation target against the selected binding
+target and independently asserts actual size and alignment for every
+owner, including every concrete vector type. Matching feature lists do not bypass
+these checks: a stale layout from different dependency settings still fails if
+its dimensions differ. Rust storage uses `MaybeUninit` byte arrays so padding is
+not interpreted as initialized values and embedded pointers retain provenance.
+C headers use the same measured size and alignment, with C11/C++11 declarations.
+The header records its target in `{prefix}_TARGET` and rejects a different
+pointer width at compile time. This does not distinguish every ABI or feature
+combination: distribute the header matching the Rust library's target and features.
+The header and Rust glue must be regenerated and rebuilt together.
+
+See the example [external layout artifacts](examples/perftest-c/layouts) and
+`python3 examples/check-opaque-layouts.py --target aarch64-unknown-linux-gnu
+--target i686-unknown-linux-gnu` for native, cross, feature-mismatch and stale-data
+checks. These are checked example measurements, not an integrated probe tool.
+
+The default empty value is `T::default()`.
+`opaque_owned_struct_with_empty(..., fun!(empty_factory))` instead selects a
+nullary source factory returning `T`, allowing non-Default types. Consuming inputs
+replace the caller's value with this empty value after validation. Typed drops
+also replace before dropping, so dropping an already emptied owner is valid.
+The empty value must own no resources: the caller may discard it after a drop
+or consuming call. If `T::default()` owns resources, supply a resource-free empty
+factory instead. Types without such an empty state should use `opaque_ptr`.
+Vec and String defaults satisfy this contract and allocate nothing.
+Never fabricate or zero-initialize a live owner. Assigning a C struct transfers
+ownership only if its old copy is never used or dropped again. Failed Result
+calls leave success output storage untouched, so it must not be dropped unless
+it already held a live owner.
+
+Loans into an inline object's own storage cannot accompany a newly returned owner:
+C may move that owner at any time. Such getter expansions are diagnosed. The
+generated String/Vec byte views point into heap allocations and may accompany
+`field_self_into()`. Borrowing an owner already stored by C is also supported;
+keep that storage alive and at a stable address for the duration of its loans.
+Explicit native-owner declarations also select by-value callback results.
+Owned callback arguments use their output representation; automatically selected
+owners keep the ordinary callback input buffer/row conversion for returns. They must not return a pointer to a local owner.
+
 ## Collections
 
-`Vec<T>`, `&Vec<T>` and `&[T]` use the element type's ordinary input and
-output declarations. They can contain scalars, strings, byte arrays, fieldless
+JNI collections, default C collection inputs, and explicit C element expansions
+use the element type's ordinary input and output declarations. They can contain scalars, strings, byte arrays, fieldless
 enums, options, records and owned handles; owned vectors can be nested. Options
 around a collection distinguish absence from an empty collection, and
 `Result<Vec<T>, E>` uses the declared typed error projection or message mapper.
-`Vec<u8>` and byte slices keep their existing byte-buffer transport.
+C native vector returns retain their original allocation through inline owners.
+Byte inputs and JNI byte collections retain their byte-buffer transport.
+
+Collection inputs without handle conflicts reserve their row count and fill
+final native storage directly, including custom constructors. Resource-bearing
+rows are decoded once into prepared native rows. One grouped address check
+precedes acquisition and construction; no intermediate acquired-row vector is
+created. This applies to ordinary and bulk input. JNI local references are
+released after decoding each row, and are never retained for construction.
+Shared-only calls need no alias history. Other calls keep checked addresses so
+later parameters and collections can reject conflicts with earlier inputs.
 
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
@@ -574,7 +866,7 @@ constructor taking borrowed inputs when the source elements need cloning.
 Reference elements, mutable collection views, zero-wire elements, boxed slices,
 maps, sets and nested `Result` values are rejected.
 
-C receives one typed `{ data, len }` carrier. Each row contains the element's
+For an explicit element expansion, C receives one typed `{ data, len }` carrier. Each row contains the element's
 ordinary boundary fields, with generated row definitions and option/field
 comments in the header. Input storage remains caller-owned and must be readable
 for the call. Output row storage belongs to the caller after success. The
@@ -630,6 +922,125 @@ views of that tree, with explicit scope boundaries chosen by the adapter. These
 adapters retain their existing ABI and conversion behavior.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
+
+### Bulk C-representation expansions
+
+JNI uses bulk by default for materialized collection outputs: vectors, slices
+and fixed arrays, including rows containing text, bytes and handles. Nested
+collections share one enclosing frame. This also applies to Rust-to-Kotlin
+callback arguments and automatic collection components of expanded results.
+The choice is made when the existing conversion compiler lowers a collection;
+there is no source-wide inference or speculative conversion pass.
+
+Direct byte buffers keep their existing byte-array representation. Inputs and
+scalar returns keep ordinary transport unless an expansion selects bulk. A single
+record keeps ordinary fields while automatic collection components of an expanded
+result each use bulk. Explicit ordinary collection expansions keep nested automatic
+rows ordinary;
+explicit bulk modifiers and callback/fold delivery retain their own behavior.
+Unsupported conversions report the normal generation diagnostic.
+
+Disable automatic selection project-wide with
+`JniGen::builder().set_bulk_collection_outputs(false)`. Explicit type-wide collection
+expansions and local overrides take precedence. For example, keep one result
+ordinary with:
+
+```rust,ignore
+.fun(fun!(rows).expand_return(expand_return!(Vec<Row>).field_self()))
+```
+
+Register the same expansion through `.expand(...)` to keep that collection type
+ordinary project-wide. Explicit `.bulk()` continues to work with automatic
+selection disabled. Generated public Kotlin types remain the same, but the native
+carrier signatures change; regenerate Kotlin and native bindings together.
+
+Add `.bulk()` to an existing JNI expansion to select bulk transport explicitly:
+
+```rust,ignore
+JniGen::builder()
+    .expand(expand_param!(Packet).variant(fun!(packet_from)).bulk())
+    .expand(expand_return!(Packet)
+        .field(fun!(packet_sequence))
+        .field(fun!(packet_payload))
+        .bulk());
+```
+
+The constructors, getters, conversions and ownership rules remain those of the
+expansion. Kotlin packs the resulting primitive fields and buffer descriptors
+into one byte frame; Rust decodes that frame without inspecting Java objects per
+field or row. Return values use the same frame format in the other direction.
+An ordinary value retains its existing public Kotlin parameters and result build
+lambda. `Vec<T>`, shared slices, shared vectors and fixed-size arrays pack rows
+contiguously; nested sequences and optional values are supported. A bulk element
+default lifts the enclosing collection into the same frame. Fixed arrays reject
+a wrong length before acquiring or consuming any handles.
+
+A per-function expansion replaces the type default, including its bulk setting:
+
+```rust,ignore
+.fun(fun!(send_packet)
+    .expand_param("packet", expand_param!(Packet).variant_self()))
+```
+
+Callback declarations use the same modifier on their argument/result expansions.
+Nested bulk scopes merge into their enclosing frame. Collection elements retain
+their existing public Kotlin type. As with ordinary collection transport, each
+element must expose one Kotlin value. Use a declared data class and a direct
+representation override for collection occurrences when a type-wide expansion
+exposes multiple values.
+Individual multi-value argument/result expansions retain their flattened public
+parameters and result build lambda. `.callback_return()` and
+`.callback_return_only()` remain available: their fold variants use the existing
+per-row callback protocol even when the ordinary materialized return selects bulk
+by default. Explicitly combining `.bulk()` and per-row callback delivery in one
+return recipe is still diagnosed. Callback
+objects themselves cannot be stored in a bulk record.
+
+`prebindgen-reprc` supplies shared generated `Record` schemas and strict external
+`LayoutArtifact` JSON for opaque storage dimensions. C uses these records directly
+for its collection rows, structured errors and result carriers, and shares the
+layout artifact parser. JNI consumes the target-evaluated wire-record measurements.
+C's existing transport is retained; `.bulk()` currently selects the JNI transport.
+
+Every generated native library evaluates `size_of`, `align_of` and `offset_of!`
+for its target. On first use, Kotlin fetches all required layouts with one native
+query and caches them in `BulkLayouts`. Protocol/schema identity, dimensions and
+field extents are checked at initialization. No host offsets are baked into
+Kotlin, so the same Kotlin artifact can accompany different target libraries.
+The measured layout describes the expanded wire fields, independently of the
+source record's Rust representation. Rust constructs source values through the
+existing conversion plans.
+
+External opaque C layouts retain their version 1 JSON format for size/alignment.
+Target and captured source-feature guards remain enforced by the C adapter.
+Probe execution remains external to prebindgen.
+
+Frames contain offsets and lengths rather than process pointers to strings or
+nested rows. Rust accesses individual padding-free carriers with checked,
+unaligned reads and writes; padding in generated frames is initialized to zero.
+No arbitrary bytes are cast into a source struct. Existing primitive/enum/UTF-8
+validation and handle ownership phases still run. Failed input validation leaves
+owned Kotlin handles live; failed output delivery reclaims native allocations.
+
+Bulk text uses UTF-8 and rejects malformed UTF-16 input rather than replacing it.
+128-bit integers use an explicit 16-byte big-endian wire field, preserving the
+existing BigInteger conversion. Other scalar carriers use target byte order.
+
+Outside collection-output defaults, bulk transport is opt-in.
+Kotlin snapshots bulk input collections, allocates a frame,
+and encodes its payloads; the JNI boundary copies the initialized bytes once per
+frame. Rust still constructs the requested source values. Native results allocate
+a frame and one Java byte array; Kotlin constructs the requested result objects.
+The native transport creates no per-element Java object arrays or boxed primitive
+objects and makes no per-element JNI calls. Kotlin public lists still box
+primitive elements when their declared collection type requires it.
+Handles retain the existing locking/acknowledgement policy and require Kotlin
+ownership bookkeeping. Buffer growth, UTF-8 encoding and ordinary source value
+allocation can still allocate; this is not a zero-copy source-vector conversion.
+For a small scalar, ordinary JNI parameters can be cheaper than a bulk frame.
+
+Bulk and ordinary transport benchmarks, including small-call and byte-payload
+counterexamples, are in [the JNI comparison fixture](examples/bench-bulk/README.md).
 
 ### Callback delivery of sequence returns
 
@@ -696,6 +1107,53 @@ accumulator type, and do not invoke the folder.
 Retained source callbacks, including buffered sequence arguments, are described
 below. Byte-buffer returns keep their existing transport and are not selected as
 element-wise sequences by these declarations.
+
+## JNI function returns
+
+Ordinary JNI functions return a single wire directly in its JVM primitive or
+reference type; zero-wire results return `void`. Multiple wires travel as typed
+arguments to a synchronous generated success callback. Binding failures and typed
+source errors use separate methods on the same generated capture. There is no
+intermediate `Object[]` result packet or primitive boxing at this transport
+boundary. Collection row arrays remain part of their selected representation.
+
+Kotlin reconstructs public results and invokes `build`, domain-error handlers and
+binding-error handlers after JNI returns and handle locks are released. Native
+output ownership commits only after callback delivery succeeds. If later Rust
+cleanup panics, Kotlin reclaims committed success outputs before invoking the
+binding-error handler. Typed errors retain their scoped handle cleanup and
+`take()` ownership rules.
+
+Captures are shared by their JVM argument signatures and pooled per calling
+thread and nesting depth. First use of a signature or a deeper nested call can
+allocate a capture; warmed calls reuse it. `finally` releases each frame and
+clears reference fields. Nested calls from source callbacks, destructors and user
+handlers retain independent results. No native-thrown exception is used as the
+ordinary error channel; pending JVM exceptions preserve their original identity.
+
+Very wide callback payloads split into JVM-valid chunks before ownership commits.
+A native signature already using all 255 parameter slots keeps its packet
+transport, as do custom delivery plans that declare their own protocol. The
+internal native signatures change with this transport: regenerate and rebuild
+Rust and Kotlin together.
+
+The public generic `build` function type can still box its logical arguments.
+Handle wrappers, collection snapshots/rows, input ownership acknowledgements and
+representation-required string/byte encoding retain their existing costs. This
+optimization does not make every binding allocation-free.
+
+For a release-library comparison with a checkout of an earlier generator, run:
+
+```sh
+KOTLINC=/path/to/kotlinc python3 examples/bench-jni-returns.py \
+  --baseline /path/to/baseline-checkout --target-dir /tmp/jni-return-bench
+```
+
+The benchmark uses separate Cargo outputs and JVM processes, measures warmed
+scalar, unit, expanded and handle-return calls, and reports JVM bytes/call with
+HotSpot's `ThreadMXBean` alongside median latency. It excludes native Rust
+allocations from the byte count. Scalar/unit probes assert negligible JVM
+allocation after warmup; latency is a local microbenchmark, not packet throughput.
 
 ## Retained JNI source callbacks
 
@@ -935,17 +1393,20 @@ The context must stay live until then, and callback functions and context access
 must support the threads permitted by the Rust signature.
 
 Rust-to-C callback arguments use ordinary output conversions. The C callback owns
-any delivered handles, buffers and row allocations, and releases them with the
-generated typed destructors, buffer freer and row-storage freer. Values returned
+any delivered owning handles, inline owners and row allocations, and releases them
+with the generated typed destructors and row-storage freer. Borrowed byte views
+remain valid only during the callback and must never be freed. Values returned
 from C use ordinary input conversions: one native field is returned directly;
 multiple fields use a generated result structure. The header also provides
 `pb_evaluate_callback_return` and collection argument aliases where applicable.
-Owned handle results move into Rust; returned byte buffers and row storage are
-borrowed while Rust copies or converts them.
+Owned handles and inline owners move into Rust; inline callback results travel
+by value, including when ordinary function inputs use owner pointers. Returned
+input byte buffers and row storage are borrowed while Rust copies or converts them.
 
 For callbacks returning buffers or rows, an optional `release_result(context,
 result)` function runs after decoding, including on conversion failure. It can free
-storage allocated by the C callback. It must not free handles moved into Rust.
+storage allocated by the C callback. It must not drop handles or inline owners
+moved into Rust, including owners whose old descriptors remain in returned rows.
 Without this function, returned storage must remain valid throughout decoding;
 concurrent invocations must not overwrite storage another invocation is using.
 C callback return-conversion failures raise a Rust panic on the invoking thread.
@@ -1009,12 +1470,12 @@ if (!demo_read(&value, &error)) {
 }
 ```
 
-Calls that consume handles additionally require `bool *ownership`: false means
-validation failed before transfer; true means the active handles were consumed,
-including when the source function or a later conversion fails. All success,
-ownership and error output storage must be pairwise disjoint. This explicit
-flag reports whether Rust accepted ownership before returning a Result failure.
-Non-Result calls need no ownership flag because failures abort the process.
+Calls that consume owned values additionally require `size_t *ownership`.
+It reports the number consumed in active argument, row and field order, even
+when a later input, source call or output conversion fails. This consumed prefix
+belongs to Rust; unread inputs remain caller-owned. All success, ownership and
+error output storage must be pairwise disjoint. Non-Result calls need no receipt
+because failures abort the process.
 
 JNI converts `Err(E)` through the ordinary output declarations for `E`, including
 `expand_return!`, data/enum classes and explicit borrowed/owned projections. The generated

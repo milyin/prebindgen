@@ -38,12 +38,14 @@ pub struct Declarations {
 fn input_body(input: Input<InputRequest>) -> Input<InputRequest> {
     match input {
         Input::Selector(mut arms) if arms.len() == 1 => arms.remove(0),
+        Input::Bulk(child) => Input::Bulk(Box::new(input_body(*child))),
         other => other,
     }
 }
 fn output_body(output: Output<OutputRequest>) -> Output<OutputRequest> {
     match output {
         Output::Combine(mut parts) if parts.len() == 1 => parts.remove(0),
+        Output::Bulk(child) => Output::Bulk(Box::new(output_body(*child))),
         other => other,
     }
 }
@@ -124,6 +126,7 @@ impl Declarations {
                     1
                 }
                 Output::Optional(child)
+                | Output::Bulk(child)
                 | Output::Named { output: child, .. }
                 | Output::Getter { output: child, .. }
                 | Output::Into { output: child, .. } => select(child),
@@ -137,7 +140,31 @@ impl Declarations {
             }
         }
         if select(&mut output) != 1 {
-            return Err("callback_return requires exactly one outer sequence".into());
+            fn structural(ty: &syn::Type, output: &Output) -> Option<Output<OutputRequest>> {
+                match output {
+                    Output::Leaf if prebindgen_flat::sequence_parts(ty).is_some() => {
+                        Some(Output::Sequence {
+                            element: Box::new(Output::auto()),
+                            mode: None,
+                            delivery: SequenceDelivery::Callback,
+                        })
+                    }
+                    Output::Optional(child) => Some(Output::Optional(Box::new(structural(
+                        prebindgen_flat::option_inner(ty)?,
+                        child,
+                    )?))),
+                    _ => None,
+                }
+            }
+            if decl.ret.is_none() {
+                if let Some(tree) = structural(ty, &output) {
+                    output = self.resolve_output(flat, codec, ty, &tree, extra)?;
+                } else {
+                    return Err("callback_return requires exactly one outer sequence".into());
+                }
+            } else {
+                return Err("callback_return requires exactly one outer sequence".into());
+            }
         }
         let mut function = flat.function(&decl.name)?.clone();
         function.name = crate::ident(name)?;
@@ -220,6 +247,7 @@ impl Declarations {
                 extra,
                 prebindgen_conversions::source_result_expr(),
                 false,
+                true,
             )?)
         } else {
             None
@@ -311,6 +339,7 @@ impl Declarations {
         extra: &C::Extra,
     ) -> Result<Input> {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
+            .map(lift_input_bulk)
     }
     fn input<C: Codec>(
         &self,
@@ -325,6 +354,11 @@ impl Declarations {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
+            Input::Bulk(child) => Ok(Input::Bulk(Box::new(resolve(
+                ty,
+                &input_body((**child).clone()),
+                stack,
+            )?))),
             Input::Request(InputRequest::Auto) => {
                 let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = self.inputs.get(&key) {
@@ -343,7 +377,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -385,7 +421,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -567,8 +605,10 @@ impl Declarations {
         tree: &Output<OutputRequest>,
         extra: &C::Extra,
     ) -> Result<Output> {
-        self.output(flat, codec, ty, tree, extra, &mut vec![])
+        self.output(flat, codec, ty, tree, extra, &mut vec![], false)
+            .map(lift_output_bulk)
     }
+    #[allow(clippy::too_many_arguments)] // Getter defaults differ from the existing plain-reference ABI.
     fn output<C: Codec>(
         &self,
         flat: &Flat<C::Schema>,
@@ -577,11 +617,27 @@ impl Declarations {
         tree: &Output<OutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
+        getter_result: bool,
     ) -> Result<Output> {
         let resolve = |ty: &syn::Type, tree: &Output<OutputRequest>, stack: &mut Vec<String>| {
-            self.output(flat, codec, ty, tree, extra, stack)
+            self.output(flat, codec, ty, tree, extra, stack, getter_result)
         };
+        if let Some(referent) = crate::output_referent(ty) {
+            if (getter_result || !matches!(tree, Output::Leaf))
+                && !matches!(
+                    tree,
+                    Output::Request(OutputRequest::Auto | OutputRequest::ForType { .. })
+                )
+            {
+                return resolve(referent, tree, stack);
+            }
+        }
         match tree {
+            Output::Bulk(child) => Ok(Output::Bulk(Box::new(resolve(
+                ty,
+                &output_body((**child).clone()),
+                stack,
+            )?))),
             Output::Discard => Ok(Output::Discard),
             Output::Named { name, output } => Ok(Output::Named {
                 name: name.clone(),
@@ -598,6 +654,11 @@ impl Declarations {
                     stack.pop();
                     return result;
                 }
+                if getter_result {
+                    if let Some(referent) = crate::output_referent(ty) {
+                        return resolve(referent, tree, stack);
+                    }
+                }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(
                         inner,
@@ -605,11 +666,13 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Output::Sequence {
                         element: Box::new(resolve(element, &Output::auto(), stack)?),
                         mode: None,
-                        delivery: SequenceDelivery::Value,
+                        delivery: SequenceDelivery::Auto,
                     });
                 }
                 if type_key(ty) == "()" {
@@ -621,6 +684,9 @@ impl Declarations {
                 let target = flat.resolve_type(target)?;
                 if same_type(ty, &target) {
                     return resolve(ty, &output_body((**output).clone()), stack);
+                }
+                if let Some(referent) = crate::output_referent(ty) {
+                    return resolve(referent, tree, stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     let child = resolve(inner, tree, stack)?;
@@ -638,7 +704,7 @@ impl Declarations {
                         Output::Sequence {
                             element: Box::new(child),
                             mode: None,
-                            delivery: SequenceDelivery::Value,
+                            delivery: SequenceDelivery::Auto,
                         }
                     });
                 }
@@ -648,7 +714,9 @@ impl Declarations {
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(inner, tree, stack)?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
+                {
                     let mode = if let Output::Projected(p) = tree {
                         if !p.fields.is_empty() {
                             return Err(
@@ -755,6 +823,9 @@ impl Declarations {
                 let f = flat.function(function)?;
                 let expected = if matches!(tree, Output::Into { .. }) {
                     ty.clone()
+                } else if matches!(f.params.first().map(|p| &p.ty.ty), Some(syn::Type::Reference(r)) if r.mutability.is_some())
+                {
+                    syn::parse_quote!(&mut #ty)
                 } else {
                     syn::parse_quote!(&#ty)
                 };
@@ -764,10 +835,10 @@ impl Declarations {
                         type_key(&expected)
                     ));
                 }
-                if matches!(f.ret.ty, syn::Type::Reference(_)) {
-                    return Err("borrowed getter results are outside this subset".into());
-                }
-                let output = Box::new(resolve(&f.ret.ty, output, stack)?);
+                // Mutable getters require a retained owner. Compilation decides
+                // this once all sibling output views and the codec are known.
+                let output =
+                    Box::new(self.output(flat, codec, &f.ret.ty, output, extra, stack, true)?);
                 Ok(if matches!(tree, Output::Into { .. }) {
                     Output::Into {
                         function: function.clone(),
@@ -1000,7 +1071,8 @@ pub fn source_functions<'a>(
             }
             Input::Request(InputRequest::ForType { input: child, .. })
             | Input::Optional(child)
-            | Input::Sequence(child) => input(child, names),
+            | Input::Sequence(child)
+            | Input::Bulk(child) => input(child, names),
             Input::Fields(children) | Input::Record(children) | Input::Selector(children) => {
                 for child in children {
                     input(child, names)
@@ -1026,7 +1098,8 @@ pub fn source_functions<'a>(
             }
             Output::Request(OutputRequest::ForType { output: child, .. })
             | Output::Optional(child)
-            | Output::Sequence { element: child, .. } => output(child, names),
+            | Output::Sequence { element: child, .. }
+            | Output::Bulk(child) => output(child, names),
             Output::Result { ok, error } => {
                 output(ok, names);
                 if let Some(name) = error {
@@ -1076,4 +1149,110 @@ pub fn source_functions<'a>(
 /// Parse source type syntax without requiring it to be in scope in build.rs.
 pub fn parse_type(text: &str) -> syn::Type {
     syn::parse_str(text).expect("source type syntax")
+}
+
+fn lift_input_bulk(tree: Input) -> Input {
+    match tree {
+        Input::Bulk(c) => Input::Bulk(Box::new(lift_input_bulk(*c))),
+        Input::Sequence(c) => {
+            let child = lift_input_bulk(*c);
+            if input_has_bulk(&child) {
+                Input::Bulk(Box::new(Input::Sequence(Box::new(child))))
+            } else {
+                Input::Sequence(Box::new(child))
+            }
+        }
+        Input::Optional(c) => match lift_input_bulk(*c) {
+            Input::Bulk(c) => Input::Bulk(Box::new(Input::Optional(c))),
+            c => Input::Optional(Box::new(c)),
+        },
+        Input::Fields(c) => Input::Fields(c.into_iter().map(lift_input_bulk).collect()),
+        Input::Record(c) => Input::Record(c.into_iter().map(lift_input_bulk).collect()),
+        Input::Selector(c) => Input::Selector(c.into_iter().map(lift_input_bulk).collect()),
+        Input::Constructor { function, args } => Input::Constructor {
+            function,
+            args: args.into_iter().map(lift_input_bulk).collect(),
+        },
+        c => c,
+    }
+}
+fn lift_output_bulk(tree: Output) -> Output {
+    match tree {
+        Output::Bulk(c) => Output::Bulk(Box::new(lift_output_bulk(*c))),
+        Output::Sequence {
+            element,
+            mode,
+            delivery,
+        } => {
+            let child = lift_output_bulk(*element);
+            if output_has_bulk(&child) {
+                Output::Bulk(Box::new(Output::Sequence {
+                    element: Box::new(child),
+                    mode,
+                    delivery,
+                }))
+            } else {
+                Output::Sequence {
+                    element: Box::new(child),
+                    mode,
+                    delivery,
+                }
+            }
+        }
+        Output::Optional(c) => match lift_output_bulk(*c) {
+            Output::Bulk(c) => Output::Bulk(Box::new(Output::Optional(c))),
+            c => Output::Optional(Box::new(c)),
+        },
+        Output::Fields(c) => Output::Fields(c.into_iter().map(lift_output_bulk).collect()),
+        Output::OwnedFields(c) => {
+            Output::OwnedFields(c.into_iter().map(lift_output_bulk).collect())
+        }
+        Output::Record { fields, mode } => Output::Record {
+            fields: fields.into_iter().map(lift_output_bulk).collect(),
+            mode,
+        },
+        Output::Combine(c) => Output::Combine(c.into_iter().map(lift_output_bulk).collect()),
+        Output::Result { ok, error } => Output::Result {
+            ok: Box::new(lift_output_bulk(*ok)),
+            error,
+        },
+        Output::Getter { function, output } => Output::Getter {
+            function,
+            output: Box::new(lift_output_bulk(*output)),
+        },
+        Output::Into { function, output } => Output::Into {
+            function,
+            output: Box::new(lift_output_bulk(*output)),
+        },
+        Output::Named { name, output } => Output::Named {
+            name,
+            output: Box::new(lift_output_bulk(*output)),
+        },
+        c => c,
+    }
+}
+
+fn input_has_bulk(tree: &Input) -> bool {
+    match tree {
+        Input::Bulk(_) => true,
+        Input::Optional(c) | Input::Sequence(c) => input_has_bulk(c),
+        Input::Fields(c) | Input::Record(c) | Input::Selector(c) => c.iter().any(input_has_bulk),
+        Input::Constructor { args, .. } => args.iter().any(input_has_bulk),
+        _ => false,
+    }
+}
+fn output_has_bulk(tree: &Output) -> bool {
+    match tree {
+        Output::Bulk(_) => true,
+        Output::Optional(c)
+        | Output::Named { output: c, .. }
+        | Output::Getter { output: c, .. }
+        | Output::Into { output: c, .. }
+        | Output::Sequence { element: c, .. } => output_has_bulk(c),
+        Output::Fields(c)
+        | Output::OwnedFields(c)
+        | Output::Combine(c)
+        | Output::Record { fields: c, .. } => c.iter().any(output_has_bulk),
+        _ => false,
+    }
 }
