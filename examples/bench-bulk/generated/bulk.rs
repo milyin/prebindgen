@@ -3811,21 +3811,19 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1numbers_1sum_14754
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_built = if true {
-                            Some({
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                p0_w6
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w2 = p0_w6_built.expect("active input");
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
                         Ok(p0_w2)
                     })();
-                    p0_w2.push(p0_w3_element_built?);
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -4055,123 +4053,57 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1sum_1d4a5ecf
                         String,
                     > {
                         let p0_w6_f0 = if true { Some(p0_w7_f0) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f0_built = if true {
-                            Some({
-                                let p0_w6_f0: i64 = ::core::convert::Into::into(
-                                    p0_w6_f0.expect("active value"),
-                                );
-                                p0_w6_f0
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f1_built = if true {
-                            Some({
-                                let p0_w6_f1: i64 = ::core::convert::Into::into(
-                                    p0_w6_f1.expect("active value"),
-                                );
-                                p0_w6_f1
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f2 = if true { Some(p0_w7_f2) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f2_built = if true {
-                            Some({
-                                let p0_w6_f2: i64 = ::core::convert::Into::into(
-                                    p0_w6_f2.expect("active value"),
-                                );
-                                p0_w6_f2
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f3 = if true { Some(p0_w7_f3) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f3_built = if true {
-                            Some({
-                                let p0_w6_f3: i64 = ::core::convert::Into::into(
-                                    p0_w6_f3.expect("active value"),
-                                );
-                                p0_w6_f3
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f4 = if true { Some(p0_w7_f4) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f4_built = if true {
-                            Some({
-                                let p0_w6_f4: i64 = ::core::convert::Into::into(
-                                    p0_w6_f4.expect("active value"),
-                                );
-                                p0_w6_f4
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f5 = if true { Some(p0_w7_f5) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f5_built = if true {
-                            Some({
-                                let p0_w6_f5: i64 = ::core::convert::Into::into(
-                                    p0_w6_f5.expect("active value"),
-                                );
-                                p0_w6_f5
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f6 = if true { Some(p0_w7_f6) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f6_built = if true {
-                            Some({
-                                let p0_w6_f6: i64 = ::core::convert::Into::into(
-                                    p0_w6_f6.expect("active value"),
-                                );
-                                p0_w6_f6
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f7 = if true { Some(p0_w7_f7) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f7_built = if true {
-                            Some({
-                                let p0_w6_f7: i64 = ::core::convert::Into::into(
-                                    p0_w6_f7.expect("active value"),
-                                );
-                                p0_w6_f7
-                            })
-                        } else {
-                            None
+                        let p0_w6_f0: i64 = ::core::convert::Into::into(
+                            p0_w6_f0.expect("active value"),
+                        );
+                        let p0_w6_f1: i64 = ::core::convert::Into::into(
+                            p0_w6_f1.expect("active value"),
+                        );
+                        let p0_w6_f2: i64 = ::core::convert::Into::into(
+                            p0_w6_f2.expect("active value"),
+                        );
+                        let p0_w6_f3: i64 = ::core::convert::Into::into(
+                            p0_w6_f3.expect("active value"),
+                        );
+                        let p0_w6_f4: i64 = ::core::convert::Into::into(
+                            p0_w6_f4.expect("active value"),
+                        );
+                        let p0_w6_f5: i64 = ::core::convert::Into::into(
+                            p0_w6_f5.expect("active value"),
+                        );
+                        let p0_w6_f6: i64 = ::core::convert::Into::into(
+                            p0_w6_f6.expect("active value"),
+                        );
+                        let p0_w6_f7: i64 = ::core::convert::Into::into(
+                            p0_w6_f7.expect("active value"),
+                        );
+                        let p0_w6: bench_flat::Row = bench_flat::Row {
+                            a: p0_w6_f0,
+                            b: p0_w6_f1,
+                            c: p0_w6_f2,
+                            d: p0_w6_f3,
+                            e: p0_w6_f4,
+                            f: p0_w6_f5,
+                            g: p0_w6_f6,
+                            h: p0_w6_f7,
                         };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_built = if true {
-                            Some({
-                                let p0_w6: bench_flat::Row = bench_flat::Row {
-                                    a: p0_w6_f0_built.expect("active input"),
-                                    b: p0_w6_f1_built.expect("active input"),
-                                    c: p0_w6_f2_built.expect("active input"),
-                                    d: p0_w6_f3_built.expect("active input"),
-                                    e: p0_w6_f4_built.expect("active input"),
-                                    f: p0_w6_f5_built.expect("active input"),
-                                    g: p0_w6_f6_built.expect("active input"),
-                                    h: p0_w6_f7_built.expect("active input"),
-                                };
-                                p0_w6
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w2 = p0_w6_built.expect("active input");
+                        let p0_w2 = p0_w6;
                         Ok(p0_w2)
                     })();
-                    p0_w2.push(p0_w3_element_built?);
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -4883,123 +4815,57 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1echo_15c26c8
                         String,
                     > {
                         let p0_w6_f0 = if true { Some(p0_w7_f0) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f0_built = if true {
-                            Some({
-                                let p0_w6_f0: i64 = ::core::convert::Into::into(
-                                    p0_w6_f0.expect("active value"),
-                                );
-                                p0_w6_f0
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f1_built = if true {
-                            Some({
-                                let p0_w6_f1: i64 = ::core::convert::Into::into(
-                                    p0_w6_f1.expect("active value"),
-                                );
-                                p0_w6_f1
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f2 = if true { Some(p0_w7_f2) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f2_built = if true {
-                            Some({
-                                let p0_w6_f2: i64 = ::core::convert::Into::into(
-                                    p0_w6_f2.expect("active value"),
-                                );
-                                p0_w6_f2
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f3 = if true { Some(p0_w7_f3) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f3_built = if true {
-                            Some({
-                                let p0_w6_f3: i64 = ::core::convert::Into::into(
-                                    p0_w6_f3.expect("active value"),
-                                );
-                                p0_w6_f3
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f4 = if true { Some(p0_w7_f4) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f4_built = if true {
-                            Some({
-                                let p0_w6_f4: i64 = ::core::convert::Into::into(
-                                    p0_w6_f4.expect("active value"),
-                                );
-                                p0_w6_f4
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f5 = if true { Some(p0_w7_f5) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f5_built = if true {
-                            Some({
-                                let p0_w6_f5: i64 = ::core::convert::Into::into(
-                                    p0_w6_f5.expect("active value"),
-                                );
-                                p0_w6_f5
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f6 = if true { Some(p0_w7_f6) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f6_built = if true {
-                            Some({
-                                let p0_w6_f6: i64 = ::core::convert::Into::into(
-                                    p0_w6_f6.expect("active value"),
-                                );
-                                p0_w6_f6
-                            })
-                        } else {
-                            None
-                        };
                         let p0_w6_f7 = if true { Some(p0_w7_f7) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_f7_built = if true {
-                            Some({
-                                let p0_w6_f7: i64 = ::core::convert::Into::into(
-                                    p0_w6_f7.expect("active value"),
-                                );
-                                p0_w6_f7
-                            })
-                        } else {
-                            None
+                        let p0_w6_f0: i64 = ::core::convert::Into::into(
+                            p0_w6_f0.expect("active value"),
+                        );
+                        let p0_w6_f1: i64 = ::core::convert::Into::into(
+                            p0_w6_f1.expect("active value"),
+                        );
+                        let p0_w6_f2: i64 = ::core::convert::Into::into(
+                            p0_w6_f2.expect("active value"),
+                        );
+                        let p0_w6_f3: i64 = ::core::convert::Into::into(
+                            p0_w6_f3.expect("active value"),
+                        );
+                        let p0_w6_f4: i64 = ::core::convert::Into::into(
+                            p0_w6_f4.expect("active value"),
+                        );
+                        let p0_w6_f5: i64 = ::core::convert::Into::into(
+                            p0_w6_f5.expect("active value"),
+                        );
+                        let p0_w6_f6: i64 = ::core::convert::Into::into(
+                            p0_w6_f6.expect("active value"),
+                        );
+                        let p0_w6_f7: i64 = ::core::convert::Into::into(
+                            p0_w6_f7.expect("active value"),
+                        );
+                        let p0_w6: bench_flat::Row = bench_flat::Row {
+                            a: p0_w6_f0,
+                            b: p0_w6_f1,
+                            c: p0_w6_f2,
+                            d: p0_w6_f3,
+                            e: p0_w6_f4,
+                            f: p0_w6_f5,
+                            g: p0_w6_f6,
+                            h: p0_w6_f7,
                         };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w6_built = if true {
-                            Some({
-                                let p0_w6: bench_flat::Row = bench_flat::Row {
-                                    a: p0_w6_f0_built.expect("active input"),
-                                    b: p0_w6_f1_built.expect("active input"),
-                                    c: p0_w6_f2_built.expect("active input"),
-                                    d: p0_w6_f3_built.expect("active input"),
-                                    e: p0_w6_f4_built.expect("active input"),
-                                    f: p0_w6_f5_built.expect("active input"),
-                                    g: p0_w6_f6_built.expect("active input"),
-                                    h: p0_w6_f7_built.expect("active input"),
-                                };
-                                p0_w6
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w2 = p0_w6_built.expect("active input");
+                        let p0_w2 = p0_w6;
                         Ok(p0_w2)
                     })();
-                    p0_w2.push(p0_w3_element_built?);
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
