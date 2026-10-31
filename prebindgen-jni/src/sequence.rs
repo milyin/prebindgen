@@ -142,11 +142,14 @@ pub(crate) fn input_list(
     if values.len() != child.arguments.len() {
         return Err("collection input converter must provide prepared wire values".into());
     }
-    let setup = child
-        .setup
-        .iter()
-        .map(|b| format!("val {} = {}\n", b.name, b.expression))
-        .collect::<String>();
+    let mut setup = String::new();
+    for binding in &child.setup {
+        setup.push_str("val ");
+        setup.push_str(&binding.name);
+        setup.push_str(" = ");
+        setup.push_str(&binding.expression);
+        setup.push('\n');
+    }
     let snapshot = format!("{name}_snapshot");
     let index = format!("{name}_index");
     let rows = format!("kotlin.Array<kotlin.Any?>({snapshot}.size) {{ {index} -> val {parameter} = {snapshot}[{index}]\n{setup}kotlin.arrayOf<kotlin.Any?>({}) }}",values.join(", "));

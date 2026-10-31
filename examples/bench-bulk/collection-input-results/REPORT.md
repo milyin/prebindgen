@@ -1,6 +1,6 @@
 # Kotlin collection input helper removal
 
-Compared with #824 after #854, using identical new handle-collection fixtures: baseline `6cda6fe42da16bbc7c9257f7eeca56838c7824d9` versus updated `d45e560aadc9b35f059c07998a6f3db4eb191db1`. Later commits record generated artifacts, documentation and these results; they do not change the measured generator or fixture.
+Compared with #824 after #854, using identical new handle-collection fixtures: baseline `6cda6fe42da16bbc7c9257f7eeca56838c7824d9` versus updated `d45e560aadc9b35f059c07998a6f3db4eb191db1`. Later commits record generated artifacts, documentation and these results, plus a generation-time string assembly adjustment for Rust 1.85 Clippy. They do not change the generated runtime or measured fixture.
 
 Measured 2026-10-31 on Linux x86-64, AMD EPYC 7713, CPUs 0–1, Rust 1.98.0 release (optimization level 3, debug assertions disabled), Kotlin 2.4.21 and OpenJDK 11.0.29. No local builds or other benchmark processes ran during timing. Both revisions first passed all 56 fixture cases in four diagnostic JVMs each with `-Xcheck:jni`; diagnostic timings are excluded here.
 
