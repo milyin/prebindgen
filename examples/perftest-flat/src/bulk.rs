@@ -343,3 +343,61 @@ pub fn default_bulk_buffers() -> Vec<Vec<u8>> {
 pub fn default_bulk_optional_texts() -> Vec<Option<String>> {
     vec![Some("héllo 世界".into()), None, Some(String::new())]
 }
+
+#[prebindgen]
+pub struct BulkHandleText {
+    pub handle: BulkHandle,
+    pub text: String,
+}
+#[prebindgen]
+pub fn bulk_handle_texts(values: Vec<BulkHandleText>) -> Vec<BulkHandleText> {
+    values
+}
+#[prebindgen]
+pub fn bulk_handle_text_callback(callback: impl Fn() -> Vec<BulkHandleText>) -> usize {
+    callback().len()
+}
+#[prebindgen]
+pub fn bulk_handle_nested(values: Vec<Vec<BulkHandle>>) -> Vec<Vec<BulkHandle>> {
+    values
+}
+#[prebindgen]
+pub struct BulkBorrowPair {
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bulk_borrow_pair_new(handle: &BulkHandle, number: i64) -> BulkBorrowPair {
+    BulkBorrowPair {
+        number: handle.value + number,
+    }
+}
+#[prebindgen]
+pub fn bulk_optional_borrow_pair(value: Option<BulkBorrowPair>) -> i64 {
+    value.map(|v| v.number).unwrap_or(-1)
+}
+
+#[prebindgen]
+pub struct BulkPairText {
+    pub borrowed_handle: BulkHandle,
+    pub owned_handle: BulkHandle,
+    pub text: String,
+}
+#[prebindgen]
+pub fn bulk_handle_copy(value: &BulkHandle) -> BulkHandle {
+    BulkHandle { value: value.value }
+}
+#[prebindgen]
+pub fn bulk_pair_text_callback(callback: impl Fn() -> Vec<BulkPairText>) -> usize {
+    callback().len()
+}
+
+#[prebindgen]
+pub fn bulk_collection_lock_groups(
+    first: Option<Vec<BulkHandle>>,
+    second: Vec<BulkHandle>,
+    probe: impl Fn() -> bool,
+) -> bool {
+    let result = probe();
+    drop((first, second));
+    result
+}

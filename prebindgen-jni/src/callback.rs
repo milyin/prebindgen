@@ -547,17 +547,7 @@ impl CallbackReturn {
                     input.locks.join(", ")
                 );
             } else {
-                let mut handles = if input.locks.is_empty() {
-                    "kotlin.collections.emptyList<Nothing>()".into()
-                } else {
-                    format!(
-                        "kotlin.collections.listOfNotNull({})",
-                        input.locks.join(", ")
-                    )
-                };
-                for group in input.lock_groups {
-                    handles = format!("({handles} + ({group}))");
-                }
+                let handles = crate::kotlin::lock_list(&input.locks, &input.lock_groups);
                 body = format!("{prefix}.withHandleLocks({handles}) {{ {body} }}");
             }
         }
@@ -574,7 +564,8 @@ impl CallbackReturn {
             return Ok(None);
         }
         let prefix = &self.package;
-        Ok(Some(format!("fun releaseReturned(value: Any?) {{ when (value) {{ is {prefix}.NativeHandle -> try {{ value.close() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }}; is Iterable<*> -> value.forEach {{ releaseReturned(it) }} }} }}; releaseReturned({value})")))
+        let collect = returned_handle_cleanup(self.input.input_node(), value, prefix, &mut 0)?;
+        Ok(Some(format!("val returnedOwners = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); {collect}\nval released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) {{ try {{ if (released.add(owner.address)) owner.close() else owner.markConsumed() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }} }}; for (handle in returnedHandles) {{ if (handle.address in released) handle.markConsumed() }}")))
     }
     fn ownership_guard(&self, context: &JniContext) -> Result<(TokenStream, TokenStream)> {
         let fields = self.fields();
@@ -698,6 +689,60 @@ impl CallbackReturn {
 }
 // Only read ownership-bearing fields and their controls during the guard scan.
 // Fallible reads of ordinary fields belong after the guard has been installed.
+// Traverse the configured Kotlin shape on the error path. The wire tree keeps
+// source field names and ownership, so borrowed fields are never reclaimed.
+fn returned_handle_cleanup(
+    node: &crate::kotlin::JniNode,
+    value: &str,
+    prefix: &str,
+    next: &mut usize,
+) -> Result<String> {
+    if !crate::kotlin::input_handles(node, false) {
+        return Ok(String::new());
+    }
+    let local = format!("returnedValue{}", *next);
+    *next += 1;
+    Ok(match node {
+        WireNode::Leaf(wires) => {
+            let owned = wires.iter().any(
+                |w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move),
+            );
+            format!("({value} as? {prefix}.NativeHandle)?.let {{ {local} -> returnedHandles.add({local}); {} }}\n",if owned{format!("returnedOwners.add({local})")}else{String::new()})
+        }
+        WireNode::Chain {
+            meta: crate::JniChain::Sequence(_),
+            child,
+            ..
+        } => {
+            let body = returned_handle_cleanup(child, &local, prefix, next)?;
+            format!("({value} as? Iterable<*>)?.forEach {{ {local} -> {body} }}\n")
+        }
+        WireNode::Chain { child, .. } => returned_handle_cleanup(child, value, prefix, next)?,
+        WireNode::Branch {
+            meta: crate::JniBranch::Group(crate::JniGroup::Fields(Some(data))),
+            children,
+            ..
+        } => {
+            let mut body = String::new();
+            for (field, child) in crate::data::fields(children)? {
+                let expr = format!("{local}.`{}`", field.to_string().trim_start_matches("r#"));
+                body.push_str(&returned_handle_cleanup(child, &expr, prefix, next)?);
+            }
+            format!(
+                "({value} as? {})?.let {{ {local} -> {body} }}\n",
+                data.class_name
+            )
+        }
+        WireNode::Branch { children, .. } => {
+            let mut body = String::new();
+            for child in children {
+                body.push_str(&returned_handle_cleanup(child, value, prefix, next)?);
+            }
+            body
+        }
+    })
+}
+
 fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
     code.clone().into_iter().any(|token| match token {
         proc_macro2::TokenTree::Ident(value) => value == *name,

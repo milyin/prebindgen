@@ -884,7 +884,7 @@ type FieldNode<'a> = (
     &'a syn::Ident,
     &'a prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 );
-fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
+pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
         .iter()
         .map(|node| match node {
@@ -907,6 +907,7 @@ pub(crate) fn input_kotlin(
         .collect::<Vec<_>>();
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_components(nodes, context)?;
+    c.prepare_arguments(nodes.iter().any(|n| kotlin::input_handles(n, false)))?;
     out.parameters.push(format!(
         "{}: {}{}",
         d.root,
@@ -931,6 +932,7 @@ pub(crate) fn input_kotlin(
         for a in c
             .arguments
             .iter_mut()
+            .chain(c.prepared_arguments.iter_mut())
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
@@ -955,6 +957,18 @@ pub(crate) fn input_kotlin(
                 d.condition,
                 optional::default_kt(&inner[j].kind, None)
             )
+        });
+    }
+    for (j, a) in c.prepared_arguments.into_iter().enumerate() {
+        out.prepared_arguments.push(if d.condition == "true" {
+            a
+        } else {
+            let absent = if matches!(inner[j].kind, JniWire::Handle { .. }) {
+                "null".into()
+            } else {
+                optional::default_kt(&inner[j].kind, None)
+            };
+            format!("if ({}) {a} else {absent}", d.condition)
         });
     }
     out.locks.extend(c.locks);
