@@ -71,14 +71,27 @@ fn main() {
         } else {
             (row_make, wide_make, wide_sum, row_callback, wide_callback)
         };
+        let handle_values = fun!(handle_values_sum).expand_param("values", if bulk {
+            expand_param!(i64).variant(fun!(input_handle_value)).bulk()
+        } else { expand_param!(i64).variant(fun!(input_handle_value)) });
+        let handle_records = if bulk {
+            fun!(handle_records_sum).expand_param("values",expand_param!(HandleRecord).variant_self().bulk())
+        } else { fun!(handle_records_sum) };
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
             .set_package_prefix(format!("bench.{mode}"))
             .set_jni_native_init(r#"System.loadLibrary("bulk_bench")"#)
+            .expand(expand_param!(InputHandle).variant(fun!(input_handle_copy)))
             .package(
                 package!()
+                    .class(ptr_class!(InputHandle))
+                    .class(data_class!(HandleRecord))
+                    .fun(fun!(input_handle_new))
+                    .fun(fun!(input_handle_value))
+                    .fun(handle_values)
+                    .fun(handle_records)
                     .class(data_class!(Row))
                     .class(data_class!(WideRow))
                     .class(ptr_class!(RowReturnHandler))
