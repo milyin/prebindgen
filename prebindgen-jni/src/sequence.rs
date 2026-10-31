@@ -30,6 +30,7 @@ pub(crate) fn input(
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
+    let mut prepared_values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
@@ -41,6 +42,14 @@ pub(crate) fn input(
         validation_values.push((
             field.name.clone(),
             quote!(#borrow #name.as_ref().map_err(|e|e.clone())?),
+        ));
+        prepared_values.push((
+            field.name.clone(),
+            if field.kind.is_reference() {
+                None
+            } else {
+                Some(quote!(#borrow #name.as_ref().map_err(|e|e.clone())?))
+            },
         ));
     }
     Ok(SequenceInput {
@@ -55,6 +64,7 @@ pub(crate) fn input(
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
+        prepared_values,
         release: quote!(drop(#frame);),
     })
 }

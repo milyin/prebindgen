@@ -245,7 +245,8 @@ pub(crate) fn sequence_input(
         metadata: JniChain::Sequence(JniSequence::Bulk),
         open: quote!(let(#start,#length)=#reader.rows(#wire,::core::mem::size_of::<#row>())?;),
         bind,
-        validation_values: values,
+        validation_values: values.clone(),
+        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
         release: quote!(),
     })
 }

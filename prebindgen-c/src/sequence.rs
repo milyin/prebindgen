@@ -38,7 +38,8 @@ pub(crate) fn input(
         metadata: CChain::Sequence(CSequence::Buffered),
         open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
         bind,
-        validation_values: values,
+        validation_values: values.clone(),
+        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
         release: quote!(),
     })
 }

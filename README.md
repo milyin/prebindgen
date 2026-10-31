@@ -467,10 +467,11 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional plans describe resource access using emitted Rust conditions.
-Compiled C/JNI inputs validate and construct values eagerly. Shared-only calls
+Compiled C/JNI inputs validate every value before using it. Shared-only calls
 need no alias bookkeeping. Small fixed sets compare stack entries; larger fixed
-sets use a stack hash table. Dynamic consuming/exclusive collections use a native
-address map and check each value before acquisition. Addresses remain recorded
+sets use a stack hash table. Resource-bearing collection rows are decoded once,
+then their addresses are checked together against a sorted native history before
+acquisition and construction. Addresses remain recorded
 even when constructors move or drop the original object. `CheckAliases` collects
 this access profile when generating the wrapper. Manually staged conversions
 retain their deferred checks; mixing deferred resource plans with compiled eager
@@ -606,15 +607,16 @@ The call data flow has an explicit ownership boundary:
 
 ```text
 select active alternatives
-    → for each active value: validate/decode, check prior accesses, acquire, construct
+    → validate/decode active values and check current/prior accesses before use
+    → acquire and construct, individually or in checked groups
     → invoke the source function
     → prepare outputs under Rust ownership
     → publish foreign outputs and transfer their ownership
 ```
 
 Each value is validated before it is used, including checks against earlier
-accesses to the same allocation. Collection rows are constructed immediately
-into their final vector. If a later value fails, earlier constructors may already
+accesses to the same allocation. Resource-bearing rows can be validated as a group
+before any row is acquired or constructed. If a later value fails, earlier constructors may already
 have run and earlier owned inputs remain consumed. Rust drops initialized values
 and unpublished outputs; it does not undo constructor side effects. Multiple
 shared borrows are allowed; an exclusive borrow or move conflicts with every
@@ -846,12 +848,14 @@ around a collection distinguish absence from an empty collection, and
 C native vector returns retain their original allocation through inline owners.
 Byte inputs and JNI byte collections retain their byte-buffer transport.
 
-Collection inputs reserve their known row count and construct each element
-directly into final native storage, for ordinary and bulk inputs alike. Custom
-constructors and handle-bearing records follow the same path. No vectors of
-per-row acquisition or construction closures are retained. Shared-only inputs
-need no alias history; consuming or exclusive handle collections retain only
-native address/access history to reject conflicts before using each wire value.
+Collection inputs without handle conflicts reserve their row count and fill
+final native storage directly, including custom constructors. Resource-bearing
+rows are decoded once into prepared native rows. One grouped address check
+precedes acquisition and construction; no intermediate acquired-row vector is
+created. This applies to ordinary and bulk input. JNI local references are
+released after decoding each row, and are never retained for construction.
+Shared-only calls need no alias history. Other calls keep checked addresses so
+later parameters and collections can reject conflicts with earlier inputs.
 
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit

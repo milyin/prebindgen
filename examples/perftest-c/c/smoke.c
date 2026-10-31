@@ -213,7 +213,8 @@ static void check_collections(void) {
     a = perftest_collection_resource_new(1); b = perftest_collection_resource_new(2);
     handles[0].v0 = a; handles[1].v0 = a;
     assert(!perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved, &ownership, &error));
-    assert(ownership == 1 && moved.len == 12345 && error != NULL);
+    assert(ownership == 0 && moved.len == 12345 && error != NULL);
+    perftest_drop_owned_resource(a); /* the failed group acquired neither alias */
     perftest_free_error(error); error = NULL;
     a = perftest_collection_resource_new(1); handles[0].v0 = a; handles[1].v0 = b;
     perftest_collection_alias_p0_w1_row aliases[] = {{a}};

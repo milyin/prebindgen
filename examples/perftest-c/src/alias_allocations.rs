@@ -245,7 +245,7 @@ fn generated_collection_inputs_allocate_once_without_growth() {
 }
 
 #[test]
-fn consuming_collection_inputs_keep_only_final_values_and_alias_history() {
+fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
     for size in [0usize, 1, 8, 64, 512, 4096] {
         let rows: Vec<_> = (0..size)
             .map(|index| super::__PbRow_collection_try_construct_all_p0_w1 {
@@ -266,7 +266,11 @@ fn consuming_collection_inputs_keep_only_final_values_and_alias_history() {
                 &mut error,
             ));
         });
-        assert_eq!(cost, 2 * usize::from(size != 0));
+        assert_eq!(
+            cost,
+            3 * usize::from(size != 0),
+            "size={size}: prepared rows, grouped addresses and final values"
+        );
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
         assert_eq!(consumed, size);
         assert_eq!(

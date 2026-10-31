@@ -278,6 +278,7 @@ impl Codec for CodecImpl {
                 },
                 quote!(#field),
             )],
+            prepared_values: vec![(field.clone(), Some(quote!(#field)))],
             release: quote!(),
         })
     }

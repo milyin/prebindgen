@@ -82,7 +82,8 @@ fun checkBulk() {
     val unread = bulkHandleNew(22)
     var aliasFailed = false
     check(bulkHandles(listOf(same, alias, unread), JniErrorHandler { aliasFailed = true; emptyList() }).isEmpty())
-    check(aliasFailed && same.isClosed && alias.isClosed && !unread.isClosed)
+    check(aliasFailed && !same.isClosed && !alias.isClosed && !unread.isClosed)
+    alias.markConsumed(); same.close()
     check(bulkHandleValue(unread) == 22L)
     unread.close()
     val live = bulkHandleNew(17)

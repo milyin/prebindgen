@@ -1519,6 +1519,7 @@ fn finalize_output_schema<C: Codec>(
 
 struct Compiler<'a, C: Codec> {
     bulk: std::cell::Cell<bool>,
+    grouped_input: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
@@ -1531,6 +1532,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             bulk: std::cell::Cell::new(false),
+            grouped_input: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
@@ -1585,6 +1587,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             .map(|(_, var)| format_ident!("{var}_built"))
             .unwrap_or_else(|| format_ident!("{}_w{}_built", self.prefix, self.next.get()));
         let mut plan = self.input_unprepared_named(ty, recipe, extra, active, names)?;
+        if self.grouped_input.get() {
+            return Ok(plan);
+        }
         let mut register = TokenStream::new();
         let mut transferred = TokenStream::new();
         for (index, resource) in plan.resources.iter_mut().enumerate() {
@@ -1694,7 +1699,24 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let wire = self.name();
                 let length = self.name();
                 let index = self.name();
-                let child = self.input(element, element_recipe, extra, &Condition::default())?;
+                // Nested sequences manage their own resource lifetime and receipts.
+                fn contains_sequence(input: &Input) -> bool {
+                    match input {
+                        Input::Sequence(_) | Input::Callback(_) => true,
+                        Input::Bulk(inner) | Input::Optional(inner) => contains_sequence(inner),
+                        Input::Record(children)
+                        | Input::Fields(children)
+                        | Input::Selector(children) => children.iter().any(contains_sequence),
+                        Input::Constructor { args, .. } => args.iter().any(contains_sequence),
+                        _ => false,
+                    }
+                }
+                let previous = self
+                    .grouped_input
+                    .replace(!contains_sequence(element_recipe));
+                let child = self.input(element, element_recipe, extra, &Condition::default());
+                self.grouped_input.set(previous);
+                let child = child?;
                 return sequence::input(
                     self.codec,
                     ty,

@@ -92,6 +92,18 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } owner_callback_7a0d2e4eb3c7fbb1;
+typedef struct {
+    owner_packet v0;
+    owner_child * v1;
+} owner_callback_d1e1f55a20f3880c_callback_return_w1_row;
+typedef struct { owner_callback_d1e1f55a20f3880c_callback_return_w1_row *data; size_t len; } owner_callback_d1e1f55a20f3880c_callback_return_w1_rows;
+/* Rust signature: ()->Vec < perftest_flat :: InlineMixed >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    owner_callback_d1e1f55a20f3880c_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const owner_callback_d1e1f55a20f3880c_callback_return_w1_rows *result);
+} owner_callback_d1e1f55a20f3880c;
 /* Rust signature: (Vec < u8 >)->Vec < u8 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     owner_bytes (*run)(void *context, owner_bytes arg0);
@@ -110,6 +122,9 @@ typedef struct {
 } owner_callback_e857880e5782d2cb;
 typedef owner_callback_df547e71faee3c03 owner_inline_bytes_callback_callback;
 typedef owner_bytes owner_inline_bytes_callback_callback_return;
+typedef owner_callback_d1e1f55a20f3880c owner_inline_mixed_rows_sum_callback;
+typedef owner_callback_d1e1f55a20f3880c_callback_return_w1_rows owner_inline_mixed_rows_sum_callback_return;
+typedef owner_callback_d1e1f55a20f3880c_callback_return_w1_row owner_inline_mixed_rows_sum_callback_return_row;
 typedef owner_callback_7a0d2e4eb3c7fbb1 owner_inline_packet_callback_callback;
 typedef owner_packet owner_inline_packet_callback_callback_return;
 typedef owner_callback_e857880e5782d2cb owner_inline_return_catch_callback;
@@ -134,6 +149,7 @@ owner_bytes owner_inline_bytes_mutable(uintptr_t *out1);
 owner_bytes owner_inline_bytes_new(owner_buffer_view *out1, uintptr_t *out2);
 uintptr_t owner_inline_bytes_take(owner_bytes * p0_w1);
 uint64_t owner_inline_child_id(const owner_child * p0_w1);
+uint64_t owner_inline_mixed_rows_sum(owner_callback_d1e1f55a20f3880c p0_callback);
 owner_numbers owner_inline_numbers(void);
 uintptr_t owner_inline_numbers_capacity(const owner_numbers * p0_w1);
 owner_numbers owner_inline_numbers_new(void);

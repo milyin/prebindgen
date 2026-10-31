@@ -855,7 +855,9 @@ fn main() {
         .opaque_ptr("child", pq!(InlineChild))
         .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
         .error_mapper(pq!(String), fun!(inline_packet_error));
-    let mut owners = owners.expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)));
+    let mut owners = owners
+        .expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)))
+        .expand(expand_param!(InlineMixed).variant(fun!(inline_mixed_new)));
     for f in [
         fun!(inline_bytes),
         fun!(inline_text),
@@ -879,6 +881,7 @@ fn main() {
         fun!(inline_bytes_callback),
         fun!(inline_return_catch),
         fun!(inline_rows_catch),
+        fun!(inline_mixed_rows_sum),
         fun!(inline_boxed_numbers_new),
         fun!(inline_boxed_numbers_len),
         fun!(inline_boxed_numbers_take),

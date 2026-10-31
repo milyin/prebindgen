@@ -75,25 +75,27 @@ fun checkCollections() {
     check(collectionHandles(listOf(aliasProbe, aliasProbe), 65, 0,
         onBindingError = JniErrorHandler { aliasRouted = true; emptyList() },
         onError = throwResult).isEmpty())
-    check(aliasRouted && aliasProbe.isClosed)
+    check(aliasRouted && !aliasProbe.isClosed)
     aliasProbe.close()
     var closedRouted = false
     check(collectionHandles(listOf(aliasProbe), 65, 0,
         onBindingError = JniErrorHandler { closedRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(closedRouted)
-    // The valid prefix is consumed before a later closed owner is rejected.
+    // Group validation rejects a closed owner before acquiring any row.
     val liveWithClosed = collectionResourceNew(103)
     val beforeClosedValidation = ownedResourceDrops()
     collectionInvalid { collectionHandles(listOf(liveWithClosed, aliasProbe), 65, 0, onError = throwResult) }
-    check(liveWithClosed.isClosed)
-    check(ownedResourceDrops() == beforeClosedValidation + 1uL)
+    check(!liveWithClosed.isClosed)
+    check(ownedResourceDrops() == beforeClosedValidation)
     liveWithClosed.close()
+    check(ownedResourceDrops() == beforeClosedValidation + 1uL)
     val same = collectionResourceNew(42)
     val sameAlias = io.prebindgen.covertest.resources.OwnedResource(same.raw)
     val unreadAliasTest = collectionResourceNew(43)
     collectionInvalid { collectionHandles(listOf(same, sameAlias, unreadAliasTest), 65, 0, onError = throwResult) }
-    check(same.isClosed && sameAlias.isClosed && !unreadAliasTest.isClosed)
+    check(!same.isClosed && !sameAlias.isClosed && !unreadAliasTest.isClosed)
+    sameAlias.markConsumed(); same.close()
     check(ownedResourceId(unreadAliasTest) == 43L)
     unreadAliasTest.close()
     val start = ownedResourceDrops()
@@ -103,8 +105,8 @@ fun checkCollections() {
     val repeated = collectionResourceNew(1)
     val unread = collectionResourceNew(2)
     collectionInvalid { collectionHandles(listOf(repeated, repeated, unread), 65, 0, onError = throwResult) }
-    check(repeated.isClosed && !unread.isClosed && ownedResourceId(unread) == 2L)
-    unread.close()
+    check(!repeated.isClosed && !unread.isClosed && ownedResourceId(unread) == 2L)
+    repeated.close(); unread.close()
     val crossParameter = listOf(collectionResourceNew(1), collectionResourceNew(2))
     collectionInvalid { collectionAlias(crossParameter, crossParameter[1]) }
     check(crossParameter.all { it.isClosed })

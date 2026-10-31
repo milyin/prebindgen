@@ -19,6 +19,10 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     pub bind: TokenStream,
     /// Raw element expressions keyed by binding name, used during validation.
     pub validation_values: Vec<(syn::Ident, TokenStream)>,
+    /// Wire expressions safe to capture after releasing the row. `None` marks
+    /// JNI local references, which must be decoded during validation. Any locals
+    /// retained by construction must also remain valid after `release`.
+    pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
     /// Per-row cleanup after construction. Generated code runs this before
     /// propagating an ordinary conversion error from the row.
     pub release: TokenStream,
@@ -108,6 +112,30 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         .collect())
 }
 
+fn prepared(
+    code: &TokenStream,
+    values: &[(syn::Ident, Option<TokenStream>)],
+) -> Result<TokenStream> {
+    fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
+        code.into_iter().any(|token| match token {
+            proc_macro2::TokenTree::Ident(id) => id == *name,
+            proc_macro2::TokenTree::Group(group) => mentions(group.stream(), name),
+            _ => false,
+        })
+    }
+    let mut reads = Vec::new();
+    for (name, value) in values {
+        if value.is_none() && mentions(code.clone(), name) {
+            return Err(format!(
+                "collection wire `{}` cannot be read after row validation",
+                name
+            ));
+        }
+        reads.push((name.clone(), value.clone().unwrap_or_else(|| quote!(#name))));
+    }
+    replace(code, &reads)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn input<C: Codec>(
     codec: &C,
@@ -130,11 +158,6 @@ pub(crate) fn input<C: Codec>(
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
     codec.validate_input(&child)?;
-    if !child.acquire.is_empty() || child.resources.iter().any(|resource| !resource.registered) {
-        return Err(
-            "collection elements must be prepared eagerly before selecting their transport".into(),
-        );
-    }
     if !view.is_owned()
         && child
             .resources
@@ -176,17 +199,52 @@ pub(crate) fn input<C: Codec>(
             return Err(format!("unknown collection validation binding `{name}`"));
         }
     }
+    let expected_names = transport
+        .validation_values
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    let prepared_names = transport
+        .prepared_values
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    if expected_names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
+        return Err("collection prepared input names differ from validation bindings".into());
+    }
+    let grouped = child.resources.iter().any(|r| !r.registered);
     let validation = replace(&child.validation, &transport.validation_values)?;
-    let statements = replace(&child.statements, &transport.validation_values)?;
+    let construction = |code: &TokenStream| {
+        if grouped {
+            prepared(code, &transport.prepared_values)
+        } else {
+            replace(code, &transport.validation_values)
+        }
+    };
+    let acquire = construction(&child.acquire)?;
+    let statements = construction(&child.statements)?;
     let child_argument = &child.argument;
-    let argument = replace(
-        &quote!(let #var = #child_argument;),
-        &transport.validation_values,
-    )?;
+    let argument = construction(&quote!(let #var = #child_argument;))?;
+    let group = format_ident!("{wire}_accesses");
+    let staged = format_ident!("{wire}_prepared");
+    let mut collect = TokenStream::new();
+    let mut count = TokenStream::new();
     let resource_count = child.resources.len();
-    let resource_reserve = (!child.resources.is_empty()).then(
-        || quote!(__prebindgen_input_aliases.reserve(#length.saturating_mul(#resource_count));),
-    );
+    for resource in child.resources.iter().filter(|r| !r.registered) {
+        let condition = &resource.active;
+        let addresses = match &resource.identity {
+            ResourceIdentity::Single(value) => quote!(::core::iter::once((#value) as usize)),
+            ResourceIdentity::Many(value) => quote!(#value),
+        };
+        let exclusive = resource.access != prebindgen_conversions::Access::Shared;
+        collect.extend(prepared(
+            &quote!(if #condition {for address in #addresses {#group.push((address,#exclusive));}}),
+            &transport.prepared_values,
+        )?);
+        if resource.access == prebindgen_conversions::Access::Move {
+            count.extend(prepared(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#addresses).count());}), &transport.prepared_values)?);
+        }
+    }
     let resources = child
         .resources
         .into_iter()
@@ -228,6 +286,70 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Mutable => unreachable!(),
     };
     let element_value = format_ident!("{wire}_element_built");
+    let direct = quote! {
+            let mut #var:Vec<#element>=Vec::new();
+            if #condition { #open #length_check
+                #var.reserve_exact(#length);
+                for #index in 0..#length {
+                    #bind
+                    #[allow(clippy::redundant_closure_call)]
+                    let #element_value=(|| -> ::core::result::Result<#element,String> {
+                        #validation #acquire #statements #argument Ok(#var)
+                    })();
+                    #release
+                    let element = #element_value?;
+                    // reserve_exact(length) covers the whole loop; update len after
+                    // each initialized element so ordinary Rust cleanup is sufficient.
+                    // Pointer addition is also valid (and a no-op) for ZSTs.
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = #var.len();
+                        #var.as_mut_ptr().add(initialized).write(element);
+                        #var.set_len(initialized + 1);
+                    }
+                }
+            }
+    };
+    let decode = if grouped {
+        quote! {
+            let #var = if __prebindgen_input_aliases.needs_group() {
+                let mut #var: Vec<#element> = Vec::new();
+
+            if #condition { #open #length_check
+                let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
+                let mut #staged = Vec::with_capacity(#length);
+                for #index in 0..#length {
+                    #bind
+                    #[allow(clippy::redundant_closure_call)]
+                    let prepared = (|| {
+                        #validation #collect
+                        Ok::<_,String>(move || -> ::core::result::Result<#element,String> {
+                            #count #acquire #statements #argument Ok(#var)
+                        })
+                    })();
+                    #release
+                    #staged.push(prepared?);
+                }
+                __prebindgen_input_aliases.accept_group(#group)?;
+                #var.reserve_exact(#length);
+                for build in #staged {
+                    let element = build()?;
+                    // Pointer addition is also valid (and a no-op) for ZSTs.
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = #var.len();
+                        #var.as_mut_ptr().add(initialized).write(element);
+                        #var.set_len(initialized + 1);
+                    }
+                }
+            }
+
+                #var
+            } else { #direct #var };
+        }
+    } else {
+        direct
+    };
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
@@ -237,22 +359,7 @@ pub(crate) fn input<C: Codec>(
             child: Box::new(child.node),
             meta: transport.metadata,
         },
-        validation: quote! {
-            let mut #var:Vec<#element>=Vec::new();
-            if #condition { #open #length_check
-                #var.reserve_exact(#length);
-                #resource_reserve
-                for #index in 0..#length {
-                    #bind
-                    #[allow(clippy::redundant_closure_call)]
-                    let #element_value=(|| -> ::core::result::Result<#element,String> {
-                        #validation #statements #argument Ok(#var)
-                    })();
-                    #release
-                    #var.push(#element_value?);
-                }
-            }
-        },
+        validation: decode,
         acquire: quote!(),
         statements: to_array,
         argument: value,
