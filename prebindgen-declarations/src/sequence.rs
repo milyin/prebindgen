@@ -213,6 +213,10 @@ pub(crate) fn input<C: Codec>(
         return Err("collection prepared input names differ from validation bindings".into());
     }
     let grouped = child.resources.iter().any(|r| !r.registered);
+    let shared_only = child
+        .resources
+        .iter()
+        .all(|r| r.access == prebindgen_conversions::Access::Shared);
     let validation = replace(&child.validation, &transport.validation_values)?;
     let construction = |code: &TokenStream| {
         if grouped {
@@ -311,10 +315,8 @@ pub(crate) fn input<C: Codec>(
             }
     };
     let decode = if grouped {
-        quote! {
-            let #var = if __prebindgen_input_aliases.needs_group() {
-                let mut #var: Vec<#element> = Vec::new();
-
+        let batch = quote! {
+            let mut #var: Vec<#element> = Vec::new();
             if #condition { #open #length_check
                 let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
                 let mut #staged = Vec::with_capacity(#length);
@@ -344,8 +346,15 @@ pub(crate) fn input<C: Codec>(
                 }
             }
 
-                #var
-            } else { #direct #var };
+        };
+        if shared_only {
+            quote! {
+                let #var = if __prebindgen_input_aliases.needs_group() {
+                    #batch #var
+                } else { #direct #var };
+            }
+        } else {
+            batch
         }
     } else {
         direct

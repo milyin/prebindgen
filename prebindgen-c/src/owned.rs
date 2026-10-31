@@ -174,14 +174,24 @@ pub(crate) fn input(
     } else {
         quote!()
     };
+    // A by-value carrier may move into a prepared row. Derive every pointer
+    // where it is used, from that row's captured storage.
+    let borrowed_pointer = if by_value {
+        ptr.clone()
+    } else {
+        quote!(#pointer)
+    };
     let (statements, argument) = match access {
         Access::Move => (
             quote!(let #var: #ty = #var.expect("active inline owner");),
             quote!(#var),
         ),
-        Access::Shared => (quote!(let #var: #ty = unsafe {&*#pointer};), quote!(#var)),
+        Access::Shared => (
+            quote!(let #var: #ty = unsafe {&*(#borrowed_pointer)};),
+            quote!(#var),
+        ),
         Access::Exclusive => (
-            quote!(let #var: #ty = unsafe {&mut *#pointer};),
+            quote!(let #var: #ty = unsafe {&mut *(#borrowed_pointer)};),
             quote!(#var),
         ),
     };
@@ -197,7 +207,7 @@ pub(crate) fn input(
                 by_value,
             },
         }]),
-        validation: if by_value && access == Access::Move {
+        validation: if by_value {
             quote!(#storage)
         } else {
             quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare_empty)
