@@ -565,7 +565,7 @@ impl CallbackReturn {
         }
         let prefix = &self.package;
         let collect = returned_handle_cleanup(self.input.input_node(), value, prefix, &mut 0)?;
-        Ok(Some(format!("val returnedOwners = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); {collect}\nval released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) {{ try {{ if (released.add(owner.address)) owner.close() else owner.markConsumed() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }} }}; for (handle in returnedHandles) {{ if (handle.address in released) handle.markConsumed() }}")))
+        Ok(Some(format!("val returnedOwners = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); {collect}\nval released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) {{ if (owner.isClosed) continue; try {{ if (released.add(owner.address)) owner.close() else owner.markConsumed() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }} }}; for (handle in returnedHandles) {{ if (handle.address in released) handle.markConsumed() }}")))
     }
     fn ownership_guard(&self, context: &JniContext) -> Result<(TokenStream, TokenStream)> {
         let fields = self.fields();

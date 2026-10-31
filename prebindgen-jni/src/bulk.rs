@@ -556,28 +556,13 @@ pub(crate) fn input_kotlin(
         };
         return Ok(input);
     }
-    if condition == "true" {
-        input.setup.push(KotlinBinding {
-            name: writer.clone(),
-            expression: format!("{}.BulkWriter({schema}.size)", context.package),
-            absent: format!("{}.BulkWriter({schema}.size)", context.package),
-        });
-        input.arguments = vec![
-            format!("run {{\n{body}\n{writer}.array }}"),
-            format!("{writer}.length"),
-        ];
-    } else {
-        let state = format!("{writer}_state");
-        input.setup.push(KotlinBinding {
-            name: state.clone(),
-            expression: format!(
-                "if ({condition}) {}.BulkWriter({schema}.size) else null",
-                context.package
-            ),
-            absent: "null".into(),
-        });
-        input.arguments=vec![format!("if ({condition}) run {{val {writer}=requireNotNull({state});\n{body}\n{writer}.array }} else null"),format!("{state}?.length ?: 0")];
-    }
+    let state = format!("{writer}_state");
+    input.setup.push(KotlinBinding {
+        name:state.clone(),
+        expression:format!("if ({condition}) run {{ val {writer} = {}.BulkWriter({schema}.size)\n{body}\n{writer} }} else null",context.package),
+        absent:"null".into(),
+    });
+    input.arguments = vec![format!("{state}?.array"), format!("{state}?.length ?: 0")];
     input.prepared_arguments = input.arguments.clone();
     Ok(input)
 }

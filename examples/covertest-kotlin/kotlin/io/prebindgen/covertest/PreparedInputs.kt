@@ -78,6 +78,15 @@ fun checkPreparedInputs() {
     },JniErrorHandler { 0uL })
     check(original.isClosed && alias.isClosed && bulkDrops() == aliasDrops + 1uL)
 
+    // A consumed wrapper and its live successor legitimately share an address.
+    val previous = bulkHandleNew(34)
+    val successor = previous.take()
+    val reuseDrops = bulkDrops()
+    bulkHandleTextCallback(BulkHandleTextCallback {
+        listOf(BulkHandleText(previous,"ok"),BulkHandleText(successor,"\ud800"))
+    },JniErrorHandler { 0uL })
+    check(previous.isClosed && successor.isClosed && bulkDrops() == reuseDrops + 1uL)
+
     val chosen = bulkHandleNew(21)
     val other = bulkHandleNew(22)
     var reads = 0
@@ -108,5 +117,9 @@ fun checkPreparedInputs() {
     try { collectionI64(throwing, JniErrorHandler { intercepted = true; emptyList() }); error("missing user failure") }
     catch (failure: IllegalArgumentException) { check(failure === sentinel) }
     check(!intercepted)
+    try { bulkNestedEnvelope(listOf(listOf(throwing)), JniErrorHandler { intercepted = true; -1L }); error("missing nested user failure") }
+    catch (failure: IllegalArgumentException) { check(failure === sentinel) }
+    check(!intercepted)
+
     println("prepared inputs PASS: optional niches, null ownership, nested snapshots, encoding rollback and user exceptions")
 }

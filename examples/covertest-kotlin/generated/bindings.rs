@@ -4423,6 +4423,11 @@ pub struct __PbBulk_i64_Range_0b9b7f90ad764db3 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_Range_10bed0e0898eed85 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_Range_112cc4c6f3f785e3 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
@@ -4606,6 +4611,11 @@ pub struct __PbBulk_i64_i32_7bf5c71332a16abd {
 pub struct __PbBulk_i32_Array_807a81a0a53fa8e0 {
     pub v0: i32,
     pub v1: [u8; 16],
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_83cf990f0be55ad5 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4862,7 +4872,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 7706302663819455331i64, if cfg!(target_endian = "big") { 1 } else { 0
+            1i64, - 1983606869447468357i64, if cfg!(target_endian = "big") { 1 } else { 0
             }, ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
@@ -4927,6 +4937,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::align_of::<__PbBulk_i64_Range_0b9b7f90ad764db3>(),
                 ::core::mem::offset_of!(__PbBulk_i64_Range_0b9b7f90ad764db3, v0),
                 ::core::mem::offset_of!(__PbBulk_i64_Range_0b9b7f90ad764db3, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_10bed0e0898eed85>(),
+                ::core::mem::align_of::<__PbBulk_Range_10bed0e0898eed85>(),
+                ::core::mem::offset_of!(__PbBulk_Range_10bed0e0898eed85, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -5245,6 +5264,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::align_of::<__PbBulk_i32_Array_807a81a0a53fa8e0>(),
                 ::core::mem::offset_of!(__PbBulk_i32_Array_807a81a0a53fa8e0, v0),
                 ::core::mem::offset_of!(__PbBulk_i32_Array_807a81a0a53fa8e0, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_83cf990f0be55ad5>(),
+                ::core::mem::align_of::<__PbBulk_Range_83cf990f0be55ad5>(),
+                ::core::mem::offset_of!(__PbBulk_Range_83cf990f0be55ad5, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -9518,6 +9546,246 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                     ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1nested_1envelope_1fac9f0f836298b23<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_10bed0e0898eed85>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_10bed0e0898eed85, v0))?
+            } else {
+                None
+            };
+            let mut p0_w2: Vec<perftest_flat::BulkInputEnvelope> = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_Range_83cf990f0be55ad5>(),
+                    )?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w9 = p0_w1_reader
+                        .range(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_Range_83cf990f0be55ad5>())
+                                + ::core::mem::offset_of!(
+                                    __PbBulk_Range_83cf990f0be55ad5, v0
+                                ),
+                        )?;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<
+                        perftest_flat::BulkInputEnvelope,
+                        String,
+                    > {
+                        let mut p0_w8: Vec<Vec<i64>> = Vec::new();
+                        if true {
+                            let (p0_w9_start, p0_w10) = p0_w1_reader
+                                .rows(
+                                    p0_w9,
+                                    ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
+                                )?;
+                            p0_w8.reserve_exact(p0_w10);
+                            for p0_w11 in 0..p0_w10 {
+                                let p0_w13 = p0_w1_reader
+                                    .range(
+                                        (p0_w9_start
+                                            + p0_w11
+                                                * ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>())
+                                            + ::core::mem::offset_of!(
+                                                __PbBulk_Range_1800d3dd3eceec6d, v0
+                                            ),
+                                    )?;
+                                #[allow(clippy::redundant_closure_call)]
+                                let p0_w9_element_built = (|| -> ::core::result::Result<
+                                    Vec<i64>,
+                                    String,
+                                > {
+                                    let mut p0_w12: Vec<i64> = Vec::new();
+                                    if true {
+                                        let (p0_w13_start, p0_w14) = p0_w1_reader
+                                            .rows(
+                                                p0_w13,
+                                                ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
+                                            )?;
+                                        p0_w12.reserve_exact(p0_w14);
+                                        for p0_w15 in 0..p0_w14 {
+                                            let p0_w17 = p0_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    (p0_w13_start
+                                                        + p0_w15
+                                                            * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
+                                                        + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
+                                                )?;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let p0_w13_element_built = (|| -> ::core::result::Result<
+                                                i64,
+                                                String,
+                                            > {
+                                                let p0_w16 = if true { Some(p0_w17) } else { None };
+                                                let p0_w16: i64 = ::core::convert::Into::into(
+                                                    p0_w16.expect("active value"),
+                                                );
+                                                let p0_w12 = p0_w16;
+                                                Ok(p0_w12)
+                                            })();
+                                            let element = p0_w13_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = p0_w12.len();
+                                                p0_w12.as_mut_ptr().add(initialized).write(element);
+                                                p0_w12.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let p0_w12_built = if true { Some(p0_w12) } else { None };
+                                    let p0_w8 = p0_w12_built.expect("active input");
+                                    Ok(p0_w8)
+                                })();
+                                let element = p0_w9_element_built?;
+                                #[allow(clippy::zst_offset)]
+                                unsafe {
+                                    let initialized = p0_w8.len();
+                                    p0_w8.as_mut_ptr().add(initialized).write(element);
+                                    p0_w8.set_len(initialized + 1);
+                                }
+                            }
+                        }
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w8_built = if true { Some(p0_w8) } else { None };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w7_built = if true {
+                            Some(p0_w8_built.expect("active input"))
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w6_built = if true {
+                            Some({
+                                let p0_w6: perftest_flat::BulkInputEnvelope = perftest_flat::bulk_input_envelope_new(
+                                    p0_w7_built.expect("active input"),
+                                );
+                                p0_w6
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w2 = p0_w6_built.expect("active input");
+                        Ok(p0_w2)
+                    })();
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if true { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w2_built.expect("active input"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::bulk_nested_envelope(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
         }
     }
 }
@@ -81486,6 +81754,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BulkHandleText > () != 0,
     "flat object `BulkHandleText` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BulkInputEnvelope > () != 0,
+    "flat object `BulkInputEnvelope` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BulkKind > () != 0,

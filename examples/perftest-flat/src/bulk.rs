@@ -401,3 +401,17 @@ pub fn bulk_collection_lock_groups(
     drop((first, second));
     result
 }
+
+#[prebindgen]
+pub struct BulkInputEnvelope {
+    pub values: Vec<Vec<i64>>,
+}
+#[prebindgen]
+pub fn bulk_nested_envelope(values: Vec<BulkInputEnvelope>) -> i64 {
+    values.into_iter().flat_map(|v| v.values).flatten().sum()
+}
+
+#[prebindgen]
+pub fn bulk_input_envelope_new(values: Vec<Vec<i64>>) -> BulkInputEnvelope {
+    BulkInputEnvelope { values }
+}
