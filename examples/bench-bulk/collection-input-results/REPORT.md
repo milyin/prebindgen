@@ -85,9 +85,13 @@ Latency is nanoseconds per call; brackets show the range of the four JVM medians
 Build each recorded revision into a separate empty directory using `examples/bench-bulk/run.py --build-only` and the same Kotlin compiler. Those revisions have identical fixture sources. Use the prepared directories below; `compare.py` verifies fixture, compiler, lock, build-profile and artifact hashes before timing, and rechecks JAR/native hashes afterwards.
 
 ```sh
-python3 examples/bench-bulk/collection-input-results/compare.py \
+taskset -c 0,1 python3 examples/bench-bulk/collection-input-results/compare.py \
   --before /tmp/collection-before --after /tmp/collection-after \
   --output /tmp/collection-comparison
 ```
+
+Choose a permitted CPU pair if CPUs 0–1 are unavailable. On systems without
+Linux `taskset`, use the platform's affinity control or omit it and record the
+different placement. `ActiveProcessorCount=2` does not pin CPU placement.
 
 [results.json](results.json) records all process medians, exact build revisions, compiler/profile information, affinity, process commands and artifact hashes. [samples.csv](samples.csv) preserves all 3,888 measured batches. The compared builds used clean, committed source.
