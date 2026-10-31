@@ -148,7 +148,7 @@ impl<'a, T> TransferredBox<'a, T> {
     /// Guard a callback-owned Box allocation, allowing null for inactive slots.
     ///
     /// # Safety
-    /// A nonnull pointer must transfer a live Box<T> allocation to this guard.
+    /// A nonnull pointer must transfer a live `Box<T>` allocation to this guard.
     pub unsafe fn new(pointer: *mut T, consumed: &'a core::cell::Cell<usize>) -> Result<Self> {
         if !pointer.is_null() {
             validate_pointer(pointer)?;

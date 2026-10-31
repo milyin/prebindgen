@@ -55,7 +55,7 @@ impl ParameterAliasCheck {
     }
 
     /// Initialize the alias history before evaluating eager input validation.
-    /// The caller also supplies `__prebindgen_input_consumed`, a shared Cell<usize>,
+    /// The caller also supplies `__prebindgen_input_consumed`, a shared `Cell<usize>`,
     /// for ownership receipts. Deferred resources require the separate emit path.
     pub fn initialize(&self) -> Result<TokenStream> {
         if self.resources.iter().any(|resource| !resource.registered) {
