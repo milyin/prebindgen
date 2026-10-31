@@ -33,6 +33,18 @@ internal object JNINative {
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_collection_input_plain_49edb34e988dff39(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_bulk_7564a92b14e3a524(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_custom_3f5932b5fe2bdeb0(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_custom_bulk_80b5719b93fcace3(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_narrow_a2e0942031835410(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_narrow_bulk_01859c8a0312491b(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_constructions_07412dbe4e08ef68(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_slice_009ff8f8b9e77cd5(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_array_517465a977f1d8a5(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_optional_array_c11bc48fb5ea6c63(p0_w3: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_optional_array_bulk_c810a58a5f8b13ca(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_input_optional_9f143cf5440a4074(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_default_bulk_echo_19271b2932c312bb(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_default_bulk_array_f969bde7cc1c432a(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_default_bulk_optional_ea20da6fc813acee(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
@@ -63,9 +75,9 @@ internal object JNINative {
     @JvmStatic external fun call_bulk_drops_0c93c5a0b1492a12(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_late_051f1ea6dcd2506f(p0_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_handle_views_c1f9da5de20e3fc3(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
-    @JvmStatic external fun call_bulk_handles_0a30179490c49dbc(p0_w1: ByteArray?, p0_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_handles_0a30179490c49dbc(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_borrow_588a078d0466d481(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_bulk_checked_01f9de13d8c4a8b8(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: ByteArray?, p1_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_checked_01f9de13d8c4a8b8(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: ByteArray?, p1_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_wide_6b955d7b4ee7dc0d(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_unsigned_wide_407b0f069bb7ed7a(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_callback_worker_4498defd15d5c1bf(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
@@ -76,7 +88,7 @@ internal object JNINative {
     @JvmStatic external fun call_bulk_point_array_aa3dcf2590ca3a28(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_slice_c30fbd330fdb06e6(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_point_plain_53e7bd65e4464218(p0_w1_f0: Long, p0_w1_f1: Double, returns: Return_Long_Double2_ErrorEmpty_a4ec6c8f44b5ff7d): Unit
-    @JvmStatic external fun call_bulk_optional_handles_f105b0e272c7fda2(p0_w1: ByteArray?, p0_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_optional_handles_f105b0e272c7fda2(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_array_b64f34d955cfbc66(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_array_borrow_08a33cfde93f0897(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_scalar_859e15b07fe6305f(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
@@ -139,6 +151,8 @@ internal object JNINative {
     @JvmStatic external fun call_callback_config_nested_c023613beb216159(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_optional_c1ccbb78d74cca03(p0_w1: Int, p0_w4: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_ordinary_7a1de11aa6329a97(p0_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_return_wire_rows_catch_3a87146de894db6b(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_return_wire_row_catch_0168544f852714f4(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_i64_c08776c9ce71e81d(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_i8_753f4b94dff729a6(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Byte
     @JvmStatic external fun call_callback_return_i16_9b06d1210ff8b2b7(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Short
@@ -163,7 +177,7 @@ internal object JNINative {
     @JvmStatic external fun call_callback_return_owned_optional_29ef924759d7e5bc(p0_callback: Any?, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_callback_return_owned_vector_3ee929da6cb7571b(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_spawn_7212e8a490c09a14(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_callback_return_join_64d9e75305501c53(p0_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_return_join_64d9e75305501c53(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_handler_new_773c695edbbbf41e(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorString1_6b62d91b16305083): Long
     @JvmStatic external fun call_callback_return_handler_call_1b7a8dd7a35a6f9b(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_catch_fb340e4965e59b90(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -201,10 +215,10 @@ internal object JNINative {
     @JvmStatic external fun call_callback_reentry_new_7c866d733e6695ab(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_read_3eac5f6ba179e3a0(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_write_d51c3e7985c5d5b1(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
-    @JvmStatic external fun call_callback_reentry_take_784cf035dcf4a6fe(p0_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_reentry_take_784cf035dcf4a6fe(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_shared_eb391d1c7013a7e0(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_exclusive_c4c879f41d91e189(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_callback_reentry_consuming_ba9f8f27ccfa4a2d(p0_w1: Long, p1_callback: Any?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_reentry_consuming_ba9f8f27ccfa4a2d(p0_w1: Long, p1_callback: Any?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_pair_6ab40de513e04e6c(p0_w1: Long, p1_w1: Long, p2_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_mixed_78bee5923db373fd(p0_w1: Long, p1_w1: Long, p2_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_reentry_worker_c9405aa7f035bc96(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -219,15 +233,15 @@ internal object JNINative {
     @JvmStatic external fun call_callback_constructor_set_fire_66ee90d277a83d28(p0_w2: Any?, p0_w4: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_constructor_nested_cb4b380338cdfee2(p0_w3: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_constructor_spawn_34c96d991b52d675(p0_w2: Any?, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_callback_constructor_run_a024114588f63dc3(p0_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
-    @JvmStatic external fun call_callback_constructor_selected_e1407ac02615a674(p0_w1: Int, p0_w4: Any?, p0_w6: Long, p1_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_constructor_run_a024114588f63dc3(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_constructor_selected_e1407ac02615a674(p0_w1: Int, p0_w4: Any?, p0_w6: Long, p1_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_constructor_optional_7e8221b306fdc76a(p0_w1: Int, p0_w4: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Boolean
     @JvmStatic external fun call_callback_constructor_list_9de391e0ca3c5896(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_constructor_checked_68d8204b4d954b4b(p0_w2: Any?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_set_new_84d26d4b7902b874(p0_callback: Any?, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_set_fire_c9c8320f5ea50f3d(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_set_spawn_b320f0fcb65848c6(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_callback_job_join_c037874626d44faf(p0_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_job_join_c037874626d44faf(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_owned_new_1ad5877d98b31f02(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_owned_id_03a7cb65fe6b1309(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_owned_drops_d617a886f0baab03(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -238,7 +252,7 @@ internal object JNINative {
     @JvmStatic external fun call_callback_transferred_fire_b5720cc21e6a881a(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_projection_fire_fab0fb05d382a2b3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_projected_id_79c245701232b63c(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_callback_preflight_a67d235ef587d6e2(p0_w1: Long, p1_callback: Any?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_preflight_a67d235ef587d6e2(p0_w1: Long, p1_callback: Any?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_scalars_107e667aaf4d1540(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_texts_c776f9ba3bb1e5fa(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_optional_owned_c339b71b13e68762(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
@@ -247,11 +261,11 @@ internal object JNINative {
     @JvmStatic external fun call_callback_enums_b6723b6e70db554a(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_collection_scalars_d9a5730159aaf1ce(p0_w1: Array<Any?>?, p1_w1: Double, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_u128_04e9df44fc750d1f(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
-    @JvmStatic external fun call_collection_construct_all_2135887528f6e1b7(p0_w1: Array<Any?>?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_construct_all_2135887528f6e1b7(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_collection_make_items_c6725210ed9bf318(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_bundle_f76991cc8c87924d(returns: Return_ByteArray_Long2_ErrorEmpty_34705c584e211183): Unit
-    @JvmStatic external fun call_collection_optional_handles_d09dc27d024df24c(p0_w3: Array<Any?>?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
-    @JvmStatic external fun call_collection_nested_handles_a1c0a814a0de57b0(p0_w1: Array<Any?>?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_collection_optional_handles_d09dc27d024df24c(p0_w3: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_collection_nested_handles_a1c0a814a0de57b0(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_numbers_58708da43cac559a(returns: Return_ByteArray_Long2_ErrorEmpty_34705c584e211183): Unit
     @JvmStatic external fun call_collection_resource_ids_25588809310a31d6(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_i64_90bde5aeb8c647ea(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
@@ -266,11 +280,11 @@ internal object JNINative {
     @JvmStatic external fun call_collection_borrow_0edafd22349f21ff(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_slice_00044f8d9833eed8(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_collection_resource_new_7274517961a66222(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_collection_handles_eceeff64e2628ef6(p0_w1: Array<Any?>?, p1_w1: Int, p2_w1: Int, ownership: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): ByteArray?
-    @JvmStatic external fun call_collection_alias_4512077905b51b90(p0_w1: Array<Any?>?, p1_w1: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_collection_handles_eceeff64e2628ef6(p0_w1: Array<Any?>?, p1_w1: Int, p2_w1: Int, ownership: LongArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): ByteArray?
+    @JvmStatic external fun call_collection_alias_4512077905b51b90(p0_w1: Array<Any?>?, p1_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_collection_result_be11b22c862519eb(p0_w1: Array<Any?>?, p1_w1: Boolean, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): ByteArray?
     @JvmStatic external fun call_collection_fail_e960b89bf99875af(returns: Return_Empty_ErrorByteArray_ByteArray2_8bb1103e963f51d1): Unit
-    @JvmStatic external fun call_collection_result_optional_2bf5c4a387d195e5(p0_w1: Array<Any?>?, p1_w1: Int, ownership: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): ByteArray?
+    @JvmStatic external fun call_collection_result_optional_2bf5c4a387d195e5(p0_w1: Array<Any?>?, p1_w1: Int, ownership: LongArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): ByteArray?
     @JvmStatic external fun call_storage_put_slice_0e1853c97ea92d0f(p0_w1: Long, p1_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_storage_get_vec_1f0f8386b7d2b147(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_c_result_error_drop_8c05c7fda32d0f81(returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Unit
@@ -283,7 +297,7 @@ internal object JNINative {
     @JvmStatic external fun call_result_optional_01608adeaf654d25(p0_w1: Int, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Int
     @JvmStatic external fun call_result_text_d4e50fb117070bd3(p0_w1: Boolean, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): String?
     @JvmStatic external fun call_result_record_1be5deeed131a35d(p0_w1: Boolean, returns: Return_Int_Int2_ErrorLong1_d482e1a7516fbcfa): Unit
-    @JvmStatic external fun call_result_owned_ed97ae30ee5fa2ec(p0_w1: Long, p1_w1: Int, p2_w1: Int, ownership: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
+    @JvmStatic external fun call_result_owned_ed97ae30ee5fa2ec(p0_w1: Long, p1_w1: Int, p2_w1: Int, ownership: LongArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
     @JvmStatic external fun call_result_other_bf6ac73e7d98d05c(p0_w1: Boolean, returns: Return_Empty_ErrorString1_6b62d91b16305083): Long
     @JvmStatic external fun call_storage_try_with_label_1db3fb1ae12e2bed(p0_w1: String?, returns: Return_Empty_ErrorString1_6b62d91b16305083): Long
     @JvmStatic external fun call_result_error_drops_37b19328e81c2636(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -300,7 +314,7 @@ internal object JNINative {
     @JvmStatic external fun call_enum_record_echo_1fa3f892fbef60f0(p0_w1_f0: Int, p0_w1_f1_some: Int, returns: Return_Int_Int2_ErrorEmpty_1d2a9157b2d89875): Unit
     @JvmStatic external fun call_enum_names_echo_45deb1696c7faead(p0_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     @JvmStatic external fun call_niche_choice_new_a532294534010060(p0_w3: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_niche_choice_id_ecb04a4cc855b867(p0_w3: Int, p0_w8: Int, p0_w10: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_niche_choice_id_ecb04a4cc855b867(p0_w3: Int, p0_w8: Int, p0_w10: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_option_nested_u32_2e0792d512f0f24f(p0_w5: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_option_triple_text_cae6b50b503944e6(p0_w3: Int, p0_w7: String?, returns: Return_Int_String2_ErrorEmpty_7e68b805da700de5): Unit
     @JvmStatic external fun call_option_triple_bytes_4f662b4b06709c31(p0_w3: Int, p0_w7: ByteArray?, returns: Return_Int_ByteArray2_ErrorEmpty_a2aad6159c8c4c14): Unit
@@ -308,20 +322,20 @@ internal object JNINative {
     @JvmStatic external fun call_option_triple_unit_c0762ed5037f126a(p0_w5: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     @JvmStatic external fun call_optional_text_input_len_5334cfb37cec76c0(p0_w4: String?, p0_w6: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_optional_bytes_input_len_7c4fd8ed8adbd4f7(p0_w4: ByteArray?, p0_w6: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_nested_niche_choice_id_3b8d8d5f9bee3571(p0_w5: Int, p0_w10: Int, p0_w12: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_nested_niche_choice_id_3b8d8d5f9bee3571(p0_w5: Int, p0_w10: Int, p0_w12: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_option_nested_projection_views_d622fb44db024930(p0_w1: Boolean, p1_w1: Boolean, returns: Return_Int_Long_Long3_ErrorEmpty_2e9e07b44c221bd1): Unit
     @JvmStatic external fun call_option_ctor_new_3e8a52ff9fd43303(p0_w1: Int, p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_option_ctor_id_5d244c0e4c436a1a(p0_w1: Int, p0_w4: Int, p0_w6: Long, p0_w8: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_option_nested_resource_b0bbbca600a8c975(p0_w1: Int, p0_w5: Long, ownership: BooleanArray, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
-    @JvmStatic external fun call_option_choice_id_4d12974690909134(p0_w3: Int, p0_w6: Long, p0_w8: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_option_ctor_id_5d244c0e4c436a1a(p0_w1: Int, p0_w4: Int, p0_w6: Long, p0_w8: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_option_nested_resource_b0bbbca600a8c975(p0_w1: Int, p0_w5: Long, ownership: LongArray, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
+    @JvmStatic external fun call_option_choice_id_4d12974690909134(p0_w3: Int, p0_w6: Long, p0_w8: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_option_str_echo_94daf2f0c810e1a7(p0_w3: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
     @JvmStatic external fun call_option_slice_echo_d601bb0588850bdb(p0_w3: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_option_str_len_e1179a8d3f3ccc82(p0_w3: String?, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_option_slice_len_c45226bd8197ca90(p0_w3: ByteArray?, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_option_string_len_5af3d51e1e87974d(p0_w3: String?, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_option_i64_ref_fda4b6cd002e52b6(p0_w1: Int, p0_w3: Long, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
-    @JvmStatic external fun call_option_resource_pair_b954aa61fb636e9b(p0_w3: Long, p1_w3: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_resource_choice_id_7f8664c9adf8ecee(p0_w4: Long, p0_w6: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_option_resource_pair_b954aa61fb636e9b(p0_w3: Long, p1_w3: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_resource_choice_id_7f8664c9adf8ecee(p0_w4: Long, p0_w6: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_optional_pair_new_a373cf8922fb383f(returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
     @JvmStatic external fun call_option_projection_views_5f2b052a4aadad2a(p0_w1: Boolean, returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
     @JvmStatic external fun call_optional_bytes_echo_16b56811763936ed(p0_w1_f0_some: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
@@ -337,7 +351,7 @@ internal object JNINative {
     @JvmStatic external fun call_option_nested_3c7b2ba952e35029(p0_w3: Int, p0_w5: Long, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_option_nested_char_0fbb5a6359c6a2ee(p0_w5: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     @JvmStatic external fun call_option_resource_new_cd6aa3cab1e8ab93(p0_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_option_resource_echo_92588c87a7537517(p0_w3: Long, p1_w1: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_option_resource_echo_92588c87a7537517(p0_w3: Long, p1_w1: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_option_resource_id_3befc66c4766a89e(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_optional_fields_echo_303b818252f2c60b(p0_w1: Int, p0_w3_f0_present: Int, p0_w3_f0_some: Long, p0_w3_f1_some: String?, p0_w3_f2_some: Int, returns: Return_Int_Int_Long5_ErrorEmpty_072908d3b52dbcec): Unit
     @JvmStatic external fun call_optional_field_new_16797b4e790c764e(p0_w1: Boolean, p1_w1: Int, p1_w3: Long, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
@@ -349,7 +363,7 @@ internal object JNINative {
     @JvmStatic external fun call_blob_value_new_34260fb08c70acda(p0_w1: Long, p1_w1: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
     @JvmStatic external fun call_blob_value_echo_711e78e87dab6447(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f1: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
     @JvmStatic external fun call_archive_new_e55a20288bf01013(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_archive_store_9db71c711db0bbcf(p0_w1: Long, p1_w1: Int, p1_w4: Long, p1_w6: Double, p1_w8: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_archive_store_9db71c711db0bbcf(p0_w1: Long, p1_w1: Int, p1_w4: Long, p1_w6: Double, p1_w8: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_archive_latest_479f37d3e4b70496(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_storage_new_a15b46920214a065(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_storage_get_b7f3d4a82ad753f5(p0_w1: Long, returns: Return_Int_Long_Int5_ErrorEmpty_1e88956ed04b15f0): Unit
@@ -360,11 +374,11 @@ internal object JNINative {
     @JvmStatic external fun call_text_echo_219b404084eaf51f(p0_w1: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
     @JvmStatic external fun call_bytes_echo_a8ab3cbd8140d73a(p0_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_report_new_8c29e03007e0b826(p0_w1: Long, p1_w1: Double, p2_w1: String?, returns: Return_Long_Double_Long6_ErrorEmpty_a10857827755376a): Unit
-    @JvmStatic external fun call_report_into_struct_47f91854fc7dffba(p0_w1: Int, p0_w3: Long, p0_w6: Long, p0_w8: Double, p0_w10: String?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_report_into_struct_47f91854fc7dffba(p0_w1: Int, p0_w3: Long, p0_w6: Long, p0_w8: Double, p0_w10: String?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_payload_new_4db541865be00283(p0_w1: Long, p1_w1: Int, p2_w1: Double, p3_w1: Boolean, returns: Return_Long_Int_Double4_ErrorEmpty_f89d68e81a93e976): Unit
     @JvmStatic external fun call_storage_with_payload_b44f150bf309e573(p0_w2: Long, p0_w4: Int, p0_w6: Double, p0_w8: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_summary_new_c8a7979c4a30e563(p0_w1: Long, p1_w1: Double, returns: Return_Long_Double2_ErrorEmpty_a4ec6c8f44b5ff7d): Unit
-    @JvmStatic external fun call_summary_total_raw_1331b588e0f6bb8b(p0_w1: Int, p0_w4: Long, p0_w6: Double, p0_w8: Long, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Double
+    @JvmStatic external fun call_summary_total_raw_1331b588e0f6bb8b(p0_w1: Int, p0_w4: Long, p0_w6: Double, p0_w8: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Double
     @JvmStatic external fun call_primitive_i8_8b845afaa2c2b930(p0_w1: Byte, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Byte
     @JvmStatic external fun call_primitive_i16_f014be4488893e1b(p0_w1: Short, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Short
     @JvmStatic external fun call_primitive_i32_47001a8bec684907(p0_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
@@ -382,14 +396,14 @@ internal object JNINative {
     @JvmStatic external fun call_primitive_bool_044d0aea7d03630a(p0_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Boolean
     @JvmStatic external fun call_primitive_char_60d88328057d650a(p0_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     @JvmStatic external fun call_primitive_unit_d880ab199b1d4c5a(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
-    @JvmStatic external fun call_report_label_66cca46db0773f04(p0_w2: Int, p0_w5: Long, p0_w7: Double, p0_w9: Long, p0_w11: String?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
-    @JvmStatic external fun call_report_relabel_f546697a9cc1715a(p0_w1: Long, p1_w1: String?, ownership: BooleanArray, returns: Return_Long_Double_Long6_ErrorEmpty_a10857827755376a): Unit
+    @JvmStatic external fun call_report_label_66cca46db0773f04(p0_w2: Int, p0_w5: Long, p0_w7: Double, p0_w9: Long, p0_w11: String?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
+    @JvmStatic external fun call_report_relabel_f546697a9cc1715a(p0_w1: Long, p1_w1: String?, ownership: LongArray, returns: Return_Long_Double_Long6_ErrorEmpty_a10857827755376a): Unit
     @JvmStatic external fun call_storage_len_f00c3742e1e3063f(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_storage_contains_8645f2f664fd853c(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Boolean
     @JvmStatic external fun call_storage_total_len_1b16bba6fbe4c9d3(p0_w1: Long, p1_w1: Long, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_storage_accumulate_lengths_422059e479322e31(p0_w1: Long, p1_w1: Long, p2_w1: Long, p3_w1: Long, p4_w1: Long, p5_w1: Long, p6_w1: Long, p7_w1: Long, p8_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_storage_put_by_take_6be9a8d4b7a5eb93(p0_w1: Long, p1_w2: Long, p1_w4: Int, p1_w6: Double, p1_w8: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
-    @JvmStatic external fun call_summary_merge_ac6a9002e0a4eec5(p0_w1: Int, p0_w4: Long, p0_w6: Double, p0_w8: Long, p1_w1: Int, p1_w4: Long, p1_w6: Double, p1_w8: Long, ownership: BooleanArray, returns: Return_Long_Double2_ErrorEmpty_a4ec6c8f44b5ff7d): Unit
+    @JvmStatic external fun call_summary_merge_ac6a9002e0a4eec5(p0_w1: Int, p0_w4: Long, p0_w6: Double, p0_w8: Long, p1_w1: Int, p1_w4: Long, p1_w6: Double, p1_w8: Long, ownership: LongArray, returns: Return_Long_Double2_ErrorEmpty_a4ec6c8f44b5ff7d): Unit
     @JvmStatic external fun call_storage_summary_handle_7c23e0abb4322c29(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_projection_pair_borrowed_bc9032fce77ca56f(returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
     @JvmStatic external fun call_projection_pair_owned_eda94d58bc123b34(returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
@@ -409,7 +423,7 @@ internal object JNINative {
     @JvmStatic external fun call_data_primitives_echo_c1f83db309ac8aab(p0_w1: Int, p0_w3_f0: Byte, p0_w3_f1: Short, p0_w3_f2: Int, p0_w3_f3: Long, p0_w3_f4: ByteArray?, p0_w3_f5: Long, p0_w3_f6: Int, p0_w3_f7: Int, p0_w3_f8: Long, p0_w3_f9: Long, p0_w3_f10: ByteArray?, p0_w3_f11: Long, p0_w3_f12: Float, p0_w3_f13: Double, p0_w3_f14: Boolean, p0_w3_f15: Int, returns: Return_Byte_Short_Int16_ErrorEmpty_4320f95dddb29024): Unit
     @JvmStatic external fun call_data_primitives_zero_52866d71f82311ff(returns: Return_Byte_Short_Int16_ErrorEmpty_4320f95dddb29024): Unit
     @JvmStatic external fun call_data_envelope_echo_3968cde0709118c6(p0_w1_f0: String?, p0_w1_f1_f0_f0: Long, p0_w1_f1_f0_f1: Long, p0_w1_f1_f1: ByteArray?, p0_w1_f2_f0: Int, p0_w1_f2_f1: Int, p0_w1_f2_f2: Long, p0_w1_f2_f3: Long, p0_w1_f2_f4_present: Int, p0_w1_f2_f4_some: Long, p0_w1_f3: Boolean, p0_w1_f4: Int, p0_w1_f5: ByteArray?, p0_w1_f6: ByteArray?, returns: Return_String_Long_Long14_ErrorEmpty_f6cccd4cd56d1dfa): Unit
-    @JvmStatic external fun call_data_with_storage_e7325638663f3d59(p0_w1: Long, p1_w1_f0: String?, p1_w1_f1_f0_f0: Long, p1_w1_f1_f0_f1: Long, p1_w1_f1_f1: ByteArray?, p1_w1_f2_f0: Int, p1_w1_f2_f1: Int, p1_w1_f2_f2: Long, p1_w1_f2_f3: Long, p1_w1_f2_f4_present: Int, p1_w1_f2_f4_some: Long, p1_w1_f3: Boolean, p1_w1_f4: Int, p1_w1_f5: ByteArray?, p1_w1_f6: ByteArray?, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_data_with_storage_e7325638663f3d59(p0_w1: Long, p1_w1_f0: String?, p1_w1_f1_f0_f0: Long, p1_w1_f1_f0_f1: Long, p1_w1_f1_f1: ByteArray?, p1_w1_f2_f0: Int, p1_w1_f2_f1: Int, p1_w1_f2_f2: Long, p1_w1_f2_f3: Long, p1_w1_f2_f4_present: Int, p1_w1_f2_f4_some: Long, p1_w1_f3: Boolean, p1_w1_f4: Int, p1_w1_f5: ByteArray?, p1_w1_f6: ByteArray?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_data_envelope_constructed_dab47fa5443a2b68(p0_w2_f0_f0: Long, p0_w2_f0_f1: Long, p0_w2_f1: ByteArray?, returns: Return_String_Long_Long14_ErrorEmpty_f6cccd4cd56d1dfa): Unit
     @JvmStatic external fun call_data_floats_echo_cfa4c7cc9e4653c8(p0_w1_f0: ByteArray?, p0_w1_f1: Float, p0_w1_f2: Double, returns: Return_ByteArray_Float_Double3_ErrorEmpty_796e683dacd5930a): Unit
     @JvmStatic external fun call_blob_value_selected_bb0c7d8f79d57c4b(p0_w1: Int, p0_w3_f0_f0: Long, p0_w3_f0_f1: Long, p0_w3_f1: ByteArray?, p0_w6: Long, p0_w8: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
@@ -425,9 +439,9 @@ internal object JNINative {
     internal fun interface SequenceSink_collection_u128_fold_6f48cddbc993447a { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_u128_fold_5aa4076e5dce00fc(p0_w1: Array<Any?>?, callback: SequenceSink_collection_u128_fold_6f48cddbc993447a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_optional_handles_fold_0322a075b01009ab { fun run(v0: Long) }
-    @JvmStatic external fun call_collection_optional_handles_fold_f02c8c63b4591395(p0_w3: Array<Any?>?, ownership: BooleanArray, callback: SequenceSink_collection_optional_handles_fold_0322a075b01009ab, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_collection_optional_handles_fold_f02c8c63b4591395(p0_w3: Array<Any?>?, ownership: LongArray, callback: SequenceSink_collection_optional_handles_fold_0322a075b01009ab, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_nested_handles_fold_0692fa392fcf7c3f { fun run(v0: Array<Any?>?) }
-    @JvmStatic external fun call_collection_nested_handles_fold_b65f6cde439e67ad(p0_w1: Array<Any?>?, ownership: BooleanArray, callback: SequenceSink_collection_nested_handles_fold_0692fa392fcf7c3f, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_collection_nested_handles_fold_b65f6cde439e67ad(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_collection_nested_handles_fold_0692fa392fcf7c3f, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_i64_fold_7481b0c247e22a81 { fun run(v0: Long) }
     @JvmStatic external fun call_collection_i64_fold_808c7d955e03904b(p0_w1: Array<Any?>?, callback: SequenceSink_collection_i64_fold_7481b0c247e22a81, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_text_fold_eee532ef372c2cc4 { fun run(v0: String?) }
@@ -449,11 +463,11 @@ internal object JNINative {
     internal fun interface SequenceSink_collection_slice_fold_2b262532b9b8b02f { fun run(v0: Long) }
     @JvmStatic external fun call_collection_slice_fold_6f331d2d69f04ead(p0_w1: Array<Any?>?, callback: SequenceSink_collection_slice_fold_2b262532b9b8b02f, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_handles_fold_94b94355358878bd { fun run(v0: Long) }
-    @JvmStatic external fun call_collection_handles_fold_31a24f87629a2d5f(p0_w1: Array<Any?>?, p1_w1: Int, p2_w1: Int, ownership: BooleanArray, callback: SequenceSink_collection_handles_fold_94b94355358878bd, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
+    @JvmStatic external fun call_collection_handles_fold_31a24f87629a2d5f(p0_w1: Array<Any?>?, p1_w1: Int, p2_w1: Int, ownership: LongArray, callback: SequenceSink_collection_handles_fold_94b94355358878bd, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_collection_result_fold_8dc1da1d06d04f3a { fun run(v0: Long) }
     @JvmStatic external fun call_collection_result_fold_72fabc4d8e10f6c8(p0_w1: Array<Any?>?, p1_w1: Boolean, callback: SequenceSink_collection_result_fold_8dc1da1d06d04f3a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c { fun run(v0: Long) }
-    @JvmStatic external fun call_collection_result_optional_fold_a6c94691b7ce90de(p0_w1: Array<Any?>?, p1_w1: Int, ownership: BooleanArray, callback: SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
+    @JvmStatic external fun call_collection_result_optional_fold_a6c94691b7ce90de(p0_w1: Array<Any?>?, p1_w1: Int, ownership: LongArray, callback: SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d { fun run(v0: Long) }
     @JvmStatic external fun call_sequence_late_drop_fold_7e360d29a6fc0d5f(callback: SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { fun run(v0: Boolean, v1: Byte, v2: Short, v3: Int, v4: Long, v5: Float, v6: Double, v7: ByteArray?, v8: String?) }

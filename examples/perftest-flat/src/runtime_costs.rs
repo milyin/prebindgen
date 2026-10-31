@@ -53,3 +53,64 @@ pub fn buffer_views_optional_bytes(present: bool) -> Option<Vec<u8>> {
 pub fn buffer_views_optional_bytes_len(value: &Option<Vec<u8>>) -> usize {
     value.as_ref().map(buffer_views_bytes_len).unwrap_or(0)
 }
+
+static COLLECTION_INPUT_CONSTRUCTIONS: AtomicUsize = AtomicUsize::new(0);
+
+#[prebindgen]
+pub fn collection_input_plain(values: Vec<i64>, marker: u8) -> i64 {
+    values.into_iter().sum::<i64>() + i64::from(marker)
+}
+#[prebindgen]
+pub fn collection_input_bulk(values: Vec<i64>, marker: u8) -> i64 {
+    collection_input_plain(values, marker)
+}
+#[prebindgen]
+pub fn collection_input_custom(values: Vec<i64>, marker: u8) -> i64 {
+    collection_input_plain(values, marker)
+}
+#[prebindgen]
+pub fn collection_input_custom_bulk(values: Vec<i64>, marker: u8) -> i64 {
+    collection_input_plain(values, marker)
+}
+#[prebindgen]
+pub fn collection_input_value(value: i64) -> i64 {
+    COLLECTION_INPUT_CONSTRUCTIONS.fetch_add(1, Ordering::Relaxed);
+    value
+}
+#[prebindgen]
+pub fn collection_input_constructions() -> usize {
+    COLLECTION_INPUT_CONSTRUCTIONS.load(Ordering::Relaxed)
+}
+#[prebindgen]
+pub fn collection_input_slice(values: &[i64]) -> i64 {
+    values.iter().sum()
+}
+#[prebindgen]
+pub fn collection_input_array(values: [i64; 4]) -> i64 {
+    values.into_iter().sum()
+}
+#[prebindgen]
+pub fn collection_input_optional(values: Option<Vec<i64>>) -> i64 {
+    values.map(|v| v.into_iter().sum()).unwrap_or(-1)
+}
+#[prebindgen]
+pub fn collection_input_narrow(values: Vec<i64>) -> i64 {
+    values.into_iter().sum()
+}
+#[prebindgen]
+pub fn collection_input_narrow_bulk(values: Vec<i64>) -> i64 {
+    collection_input_narrow(values)
+}
+#[prebindgen]
+pub fn collection_input_narrow_value(value: u8) -> i64 {
+    collection_input_value(i64::from(value))
+}
+
+#[prebindgen]
+pub fn collection_input_optional_array(values: Option<[i64; 4]>) -> i64 {
+    values.map(|values| values.into_iter().sum()).unwrap_or(-1)
+}
+#[prebindgen]
+pub fn collection_input_optional_array_bulk(values: Option<[i64; 4]>) -> i64 {
+    collection_input_optional_array(values)
+}

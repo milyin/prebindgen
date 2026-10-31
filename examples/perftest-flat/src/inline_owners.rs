@@ -217,3 +217,20 @@ pub fn inline_packets_getter(_value: &i64) -> Vec<InlinePacket> {
 pub fn inline_packets_late(_value: &i64) -> usize {
     panic!("expected failure after preparing native owner rows")
 }
+
+#[prebindgen]
+pub struct InlineMixed {
+    pub packet: InlinePacket,
+    pub child: InlineChild,
+}
+#[prebindgen]
+pub fn inline_mixed_new(packet: InlinePacket, child: InlineChild) -> InlineMixed {
+    InlineMixed { packet, child }
+}
+#[prebindgen]
+pub fn inline_mixed_rows_sum(callback: impl Fn() -> Vec<InlineMixed>) -> u64 {
+    callback()
+        .into_iter()
+        .map(|row| row.child.id + row.packet.bytes.len() as u64)
+        .sum()
+}

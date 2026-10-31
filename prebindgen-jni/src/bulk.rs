@@ -523,7 +523,7 @@ pub(crate) fn input_list(
             .iter()
             .fold(locks, |s, g| format!("({s} + ({g}))"));
         let body = pack(element, &input.arguments, "writer", "base", context)?;
-        expr.push_str(&format!("{}.BulkInputRow({{ writer, base ->\n{body}}}, {{ {locks} }}, {{ {}; kotlin.Unit }})\n}}",context.package,input.consumed.join("; ")));
+        expr.push_str(&format!("{}.BulkInputRow({{ writer, base ->\n{body}}}, {{ {locks} }}, {{ __pb_consume -> {}; kotlin.Unit }})\n}}",context.package,input.consumed.join("; ")));
     }
     expr.push_str(" else null");
     Ok(KotlinInput {
@@ -546,7 +546,9 @@ pub(crate) fn input_list(
         consumed: if input.consumed.is_empty() {
             vec![]
         } else {
-            vec![format!("{state}.orEmpty().forEach {{ it.consume() }}")]
+            vec![format!(
+                "{state}.orEmpty().forEach {{ it.consume(__pb_consume) }}"
+            )]
         },
     })
 }

@@ -110,7 +110,11 @@ For the exact original fixture, check out its recorded source commit and use the
 first command above with `--warmup 10`. The current fixture includes six additional
 cases (41 total); the focused run below measures the added cases and two controls.
 `ActiveProcessorCount=2` alone does not restrict CPU placement.
-These are single-host measurements of the current generated wrappers, not a
+The recorded reports describe their pinned source revisions. Current generation
+also preallocates final collection storage and directly constructs every input
+element, including custom constructors and handles; the recorded timings do
+not measure that optimization.
+These are single-host measurements, not a
 platform-independent speedup guarantee or end-to-end network throughput.
 
 Times below are median **[minimum–maximum JVM median]**. Ratios divide ordinary

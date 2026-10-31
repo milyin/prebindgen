@@ -104,6 +104,7 @@ callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.of
 callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[7], callback_return_w3.`h`)
 
 callback_return_w1_writer.array }, callback_return_w1_writer.length)
+val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -177,6 +178,7 @@ callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.of
 callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[31], callback_return_w3.`f31`)
 
 callback_return_w1_writer.array }, callback_return_w1_writer.length)
+val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -471,6 +473,7 @@ callbackOutput0_bulkList!!.add(bench.bulk.Row((requireNotNull(callbackOutput0_bu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }

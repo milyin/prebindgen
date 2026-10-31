@@ -466,18 +466,16 @@ its private preparation metadata through `prefix_layout`. The final converter em
 projections or constructions itself. Wrapper writers never interpret these paths.
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
-The optional staged plans describe allocation participation using emitted Rust
-boolean expressions. Their assembly helper checks allocation aliases across all parameters.
-Shared-only calls emit no alias check. Fixed sets of up to eight addresses use
-only the necessary pairwise comparisons; larger fixed sets sort a stack array.
-Dynamic sets with exclusive accesses retain a vector-based check, sorted once
-per call. Active conditions still guard every address read, and all checks run
-before ownership acknowledgement or acquisition. The optional staged protocol's
-`CheckAliases` request registers parameter accesses in a generation-time
-`ParameterAliasCheck`; emit its expression once after input validation. Custom
-staged conversions should use `CheckAliases { context, check }` and include their
-parameter's access requirements; this replaces the previous per-parameter `seen`
-vector field. JNI slots
+The optional plans describe resource access using emitted Rust conditions.
+Compiled C/JNI inputs validate every value before using it. Shared-only calls
+need no alias bookkeeping. Small fixed sets compare stack entries; larger fixed
+sets use a stack hash table. Resource-bearing collection rows are decoded once,
+then their addresses are checked together against a sorted native history before
+acquisition and construction. Addresses remain recorded
+even when constructors move or drop the original object. `CheckAliases` collects
+this access profile when generating the wrapper. Manually staged conversions
+retain their deferred checks; mixing deferred resource plans with compiled eager
+resource plans is diagnosed rather than dropping their checks. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.
@@ -609,21 +607,31 @@ The call data flow has an explicit ownership boundary:
 
 ```text
 select active alternatives
-    → validate/decode all active leaves and check access conflicts
-    → acquire all consuming inputs
-    → construct arguments and invoke the source function
+    → validate/decode active values and check current/prior accesses before use
+    → acquire and construct, individually or in checked groups
+    → invoke the source function
     → prepare outputs under Rust ownership
     → publish foreign outputs and transfer their ownership
 ```
 
-Before acquisition, failure leaves every input owned by its caller. Acquisition
-is infallible after validation; all consuming leaves become Rust-owned before
-any constructor runs. A constructor/source panic or later delivery failure does
-not restore consumed inputs. Rust guards reclaim acquired inputs and unpublished
-outputs. Borrows last through the call, including constructors. Multiple shared
-borrows of one allocation are allowed; an exclusive borrow or move conflicts
-with every other active use of that allocation. Inactive selector arms neither
-validate nor acquire their inputs.
+Each value is validated before it is used, including checks against earlier
+accesses to the same allocation. Resource-bearing rows can be validated as a group
+before any row is acquired or constructed. If a later value fails, earlier constructors may already
+have run and earlier owned inputs remain consumed. Rust drops initialized values
+and unpublished outputs; it does not undo constructor side effects. Multiple
+shared borrows are allowed; an exclusive borrow or move conflicts with every
+other active use of that allocation. Inactive selector arms neither validate nor
+acquire their inputs.
+
+Consuming C Result calls return an ownership count through `size_t *ownership`.
+The count identifies the consumed prefix of active owned wire values in argument,
+row and field order, including on failure. A callback context counts as one value.
+Callers must not reuse or destroy consumed allocations. JNI uses a private
+one-element `LongArray`: a nonnegative count means completed input preparation;
+a negative value encodes a failed call's count as `-1 - count`. Generated Kotlin
+invalidates consumed wrappers and their aliases before running user error handlers.
+Failure may consume inputs; unread owners remain with their caller, except
+that every alias of a consumed allocation is also invalid.
 
 **C owns pointer semantics.** Each declared opaque type has its own incomplete
 C struct and `T *` / `const T *` inputs. The caller must supply live pointers of
@@ -839,6 +847,15 @@ around a collection distinguish absence from an empty collection, and
 `Result<Vec<T>, E>` uses the declared typed error projection or message mapper.
 C native vector returns retain their original allocation through inline owners.
 Byte inputs and JNI byte collections retain their byte-buffer transport.
+
+Collection inputs without handle conflicts reserve their row count and fill
+final native storage directly, including custom constructors. Resource-bearing
+rows are decoded once into prepared native rows. One grouped address check
+precedes acquisition and construction; no intermediate acquired-row vector is
+created. This applies to ordinary and bulk input. JNI local references are
+released after decoding each row, and are never retained for construction.
+Shared-only calls need no alias history. Other calls keep checked addresses so
+later parameters and collections can reject conflicts with earlier inputs.
 
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
@@ -1453,12 +1470,12 @@ if (!demo_read(&value, &error)) {
 }
 ```
 
-Calls that consume handles additionally require `bool *ownership`: false means
-validation failed before transfer; true means the active handles were consumed,
-including when the source function or a later conversion fails. All success,
-ownership and error output storage must be pairwise disjoint. This explicit
-flag reports whether Rust accepted ownership before returning a Result failure.
-Non-Result calls need no ownership flag because failures abort the process.
+Calls that consume owned values additionally require `size_t *ownership`.
+It reports the number consumed in active argument, row and field order, even
+when a later input, source call or output conversion fails. This consumed prefix
+belongs to Rust; unread inputs remain caller-owned. All success, ownership and
+error output storage must be pairwise disjoint. Non-Result calls need no receipt
+because failures abort the process.
 
 JNI converts `Err(E)` through the ordinary output declarations for `E`, including
 `expand_return!`, data/enum classes and explicit borrowed/owned projections. The generated

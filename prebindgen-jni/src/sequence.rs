@@ -48,7 +48,7 @@ pub(crate) fn input(
             if field.kind.is_reference() {
                 None
             } else {
-                Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
+                Some(quote!(#borrow #name.as_ref().map_err(|e|e.clone())?))
             },
         ));
     }
@@ -146,7 +146,7 @@ pub(crate) fn input_list(
     for group in &child.lock_groups {
         locks = format!("({locks} + ({group}))");
     }
-    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),child.consumed.join("; "));
+    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ __pb_consume: ({}.NativeHandle) -> Unit -> {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),context.package,child.consumed.join("; "));
     Ok(KotlinInput {
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
@@ -169,7 +169,9 @@ pub(crate) fn input_list(
         consumed: if child.consumed.is_empty() {
             vec![]
         } else {
-            vec![format!("{state}.orEmpty().forEach {{ it.third() }}")]
+            vec![format!(
+                "{state}.orEmpty().forEach {{ it.third(__pb_consume) }}"
+            )]
         },
     })
 }

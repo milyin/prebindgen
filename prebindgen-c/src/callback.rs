@@ -144,6 +144,7 @@ pub(crate) fn input(
             panic!("callback failed: {}", error)
         }))
     };
+    let consumed = prebindgen_conversions::template_parameter("input_consumed");
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
@@ -154,7 +155,7 @@ pub(crate) fn input(
         }]),
         acknowledgement: None,
         validation: quote!(let #run = if #condition {Some(#wire.run.ok_or("null callback function")?)} else {None};),
-        acquire: quote!(#release_capture let #owned = if #condition {Some(__PbCallbackOwner::new(#wire.context, #wire.drop))} else {None};),
+        acquire: quote!(#release_capture let #owned = if #condition {{(#consumed).set((#consumed).get()+1); Some(__PbCallbackOwner::new(#wire.context, #wire.drop))}} else {None};),
         statements: quote!(let #run = #run.expect("validated active callback"); let #owned = #owned.expect("validated active callback"); let #var=move |#(#params),*| {let result = ::prebindgen_runtime::boundary(|| #invocation); #handled};),
         argument: quote!(#var),
     })
@@ -249,6 +250,25 @@ impl CCallback {
         let Some((_, plan)) = &self.returned else {
             return Ok((quote!(), quote!()));
         };
+        for field in prebindgen_flat::wire_definitions(std::iter::once(&plan.node)) {
+            let tracked = match &field.kind {
+                CWire::Pointer { pointer, .. } if pointer.access == Access::Move => {
+                    self.return_owners.contains_key(&field.name.to_string())
+                }
+                CWire::Owned {
+                    access: Access::Move,
+                    by_value,
+                    ..
+                } => *by_value,
+                CWire::Callback { .. } => false,
+                _ => true,
+            };
+            if !tracked {
+                return Err(
+                    "callback return ownership requires a tracked pointer or inline value".into(),
+                );
+            }
+        }
         let fields = self.return_fields();
         if let [field] = fields.as_slice() {
             if let CWire::Owned {
@@ -260,8 +280,8 @@ impl CCallback {
                 let guard = owner.guard_ident();
                 let name = &field.name;
                 return Ok((
-                    quote!(let callback_return_owner=#guard(#name);),
-                    quote!(::core::mem::forget(callback_return_owner);),
+                    quote!(let _callback_return_owner=::prebindgen_runtime::TransferredOwner::new(#guard(#name), __prebindgen_input_consumed, 0);),
+                    quote!(),
                 ));
             }
             if let CWire::Pointer { pointer, .. } = &field.kind {
@@ -269,8 +289,8 @@ impl CCallback {
                     let name = &field.name;
                     let ty = &pointer.ty;
                     return Ok((
-                        quote!(let callback_return_owner=if #name.is_null(){None}else {::prebindgen_runtime::validate_pointer(#name)?;Some(unsafe {Box::<#ty>::from_raw(#name)})};),
-                        quote!(let _=callback_return_owner.map(Box::into_raw);),
+                        quote!(let _callback_return_owner=unsafe {::prebindgen_runtime::TransferredBox::<#ty>::new(#name, __prebindgen_input_consumed)}?;),
+                        quote!(),
                     ));
                 }
             }
@@ -278,6 +298,11 @@ impl CCallback {
         // Fixed inline return fields need only stack guards, even beside scalars.
         if self.return_owners.is_empty() {
             if let Some((guards, commits)) = inline_return_guards(&plan.node, quote!(true)) {
+                let guards = if guards.is_empty() {
+                    guards
+                } else {
+                    quote!(let mut __pb_guard_index=0usize; #guards)
+                };
                 return Ok((guards, commits));
             }
         }
@@ -287,8 +312,8 @@ impl CCallback {
             return Ok((quote!(), quote!()));
         }
         Ok((
-            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::default();#scan callback_return_owners.check()?;),
-            quote!(callback_return_owners.commit();),
+            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);#scan callback_return_owners.check()?;),
+            quote!(),
         ))
     }
     fn invocation(
@@ -378,7 +403,16 @@ impl CCallback {
             .zip(&values)
             .map(|(name, value)| quote!(let #name=#value;));
         let protect_result=self.has_release().then(||quote!(let callback_result=__PbCallbackResult {value:raw_result,context:#owner.context(),release:#release};let raw_result=callback_result.value;));
-        let mut body = quote!({ #(#snapshots)* #commits let raw_result=unsafe {#run(#owner.context(), #(#names),*)}; #protect_result #decode #owners #result });
+        let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
+        if let Some((_, plan)) = &self.returned {
+            alias_check.include_parameter(context, &plan.resources)?;
+        }
+        let aliases = alias_check.initialize()?;
+        let mut body = quote!({
+            let __pb_callback_consumed=::core::cell::Cell::new(0usize);
+            let __prebindgen_input_consumed=&__pb_callback_consumed;
+            #aliases
+            #(#snapshots)* #commits let raw_result=unsafe {#run(#owner.context(), #(#names),*)}; #protect_result #decode #owners #result });
         for (index, arg) in self.arguments.iter().enumerate().rev() {
             let source = format_ident!("callback_source_{index}");
             body = arg.output.code_fragment_slot(
@@ -411,8 +445,7 @@ fn inline_return_guards(
                     let name = &field.name;
                     let guard = format_ident!("{name}_return_guard");
                     let ty = owner.guard_ident();
-                    prepare.extend(quote!(let #guard=if #active {Some(#ty(#name))} else {None};));
-                    commit.extend(quote!(::core::mem::forget(#guard);));
+                    prepare.extend(quote!(let #guard=if #active {let ordinal=__pb_guard_index; __pb_guard_index+=1; Some(::prebindgen_runtime::TransferredOwner::new(#ty(#name), __prebindgen_input_consumed, ordinal))} else {None};));
                 }
             }
         }
@@ -675,7 +708,7 @@ pub(crate) fn emit(
             )
             .expect("writing to a String");
         }
-        header.push_str(&format!("/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
+        header.push_str(&format!("/* Rust signature: {}. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
     }
     Ok(())
 }

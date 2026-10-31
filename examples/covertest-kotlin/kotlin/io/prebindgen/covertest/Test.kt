@@ -15,6 +15,7 @@ private fun expectInvalid(action: () -> Unit) {
 fun main() {
     checkBulk()
     checkBulkDefaults()
+    checkCollectionInputs()
     checkBorrowedBuffers()
     checkBorrowedGetters()
     checkCallbackConfiguration()

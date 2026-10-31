@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    static OWNERS: std::sync::Mutex<()> = std::sync::Mutex::new(());
     unsafe extern "C" fn echo_packet(
         _: *mut core::ffi::c_void,
         packet: __PbOwned_packet,
@@ -22,8 +23,30 @@ mod tests {
             len: rows.len(),
         }
     }
+    unsafe extern "C" fn mixed_rows(context: *mut core::ffi::c_void) -> __PbRows {
+        let rows = &*(context as *const Vec<__PbRow_callback_d1e1f55a20f3880c_callback_return_w1>);
+        __PbRows { data: rows.as_ptr().cast(), len: rows.len() }
+    }
+    #[test]
+    fn grouped_rows_move_inline_storage_before_deriving_its_pointer() {
+        let _guard = OWNERS.lock().unwrap();
+        unsafe {
+            let before = owner_inline_packet_drops();
+            let mut rows: Vec<_> = (0..32).map(|i| __PbRow_callback_d1e1f55a20f3880c_callback_return_w1 {
+                v0: owner_inline_packet_new(),
+                v1: Box::into_raw(Box::new(perftest_flat::InlineChild { id: i })),
+            }).collect();
+            let total = owner_inline_mixed_rows_sum(owner_callback_d1e1f55a20f3880c {
+                run: Some(mixed_rows), context: (&mut rows as *mut Vec<_>).cast(),
+                drop: None, release_result: None,
+            });
+            assert_eq!(total, (0..32).sum::<u64>() + 32 * 3);
+            assert_eq!(owner_inline_packet_drops(), before + 32);
+        }
+    }
     #[test]
     fn padded_native_owners_survive_wire_moves_callbacks_and_rollback() {
+        let _guard = OWNERS.lock().unwrap();
         unsafe {
             let mut capacity = 0;
             let mut bytes = owner_inline_bytes_mutable(&mut capacity);

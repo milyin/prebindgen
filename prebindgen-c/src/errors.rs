@@ -370,9 +370,9 @@ pub(crate) fn result_function(
         display.push(format!("*{id}"));
     }
     let acknowledgement = if consumes {
-        params.push(quote!(ownership:*mut bool));
-        cparams.push("bool *ownership".into());
-        quote!(if !ownership.is_null(){std::ptr::write(ownership,#accepted);})
+        params.push(quote!(ownership:*mut usize));
+        cparams.push("size_t *ownership".into());
+        quote!(if !ownership.is_null(){std::ptr::write(ownership,#accepted.get());})
     } else {
         quote!()
     };
@@ -402,7 +402,7 @@ pub(crate) fn result_function(
         header.push_str("/* Result: true = success; false = failure. Success outputs are unchanged on failure. */\n");
     }
     if consumes {
-        header.push_str("/* ownership is required: false before acceptance; true after active owned inputs transfer, including on failure. */\n");
+        header.push_str("/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */\n");
     }
     header.push_str("/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n");
     header.push_str(&format!("{c_return} {name}({});\n", cparams.join(", ")));
@@ -423,7 +423,7 @@ pub(crate) fn result_function(
         #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."]
         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
         #[no_mangle]pub unsafe extern "C" fn #name(#(#params),*)->#rust_return {
-            #[allow(unused_mut)]let mut #accepted=false;
+            #[allow(unused_mut)]let #accepted=::core::cell::Cell::new(0usize);
             #[allow(unused_mut)]let mut #reported=false;
             let mut success_committed=false;
             let mut storage=std::mem::MaybeUninit::<#internal>::uninit();

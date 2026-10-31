@@ -156,26 +156,42 @@ pub(crate) fn input(
     } else {
         quote!(#wire as *mut #native)
     };
-    let storage = by_value.then(|| quote!(#[allow(unused_parens)] let mut #local=#wire;));
+    let storage = by_value.then(|| {
+        if access == Access::Move {
+            quote!(#[allow(unused_parens)] let #local=#wire;)
+        } else {
+            quote!(#[allow(unused_parens)] let mut #local=#wire;)
+        }
+    });
     let empty_var = format_ident!("{wire}_empty");
     let empty = &owner.empty;
     let prepare_empty = (access == Access::Move && !by_value)
         .then(|| quote!(let #empty_var = if #condition {Some(#empty)} else {None};));
     let acquire = if access == Access::Move && by_value {
-        quote!(let #var=if #condition {Some(unsafe {::core::ptr::read(#pointer)})} else {None};)
+        quote!(let #var=if #condition {let #pointer=::core::ptr::addr_of!(#local).cast::<#native>(); let value=unsafe {::core::ptr::read(#pointer)}; __prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); Some(value)} else {None};)
     } else if access == Access::Move {
         quote!(let #var = if #condition {Some(unsafe {::core::ptr::replace(#pointer, #empty_var.expect("prepared empty owner"))})} else {None};)
     } else {
         quote!()
+    };
+    // A by-value carrier may move into a prepared row. Derive every pointer
+    // where it is used, from that row's captured storage.
+    let borrowed_pointer = if by_value {
+        ptr.clone()
+    } else {
+        quote!(#pointer)
     };
     let (statements, argument) = match access {
         Access::Move => (
             quote!(let #var: #ty = #var.expect("active inline owner");),
             quote!(#var),
         ),
-        Access::Shared => (quote!(let #var: #ty = unsafe {&*#pointer};), quote!(#var)),
+        Access::Shared => (
+            quote!(let #var: #ty = unsafe {&*(#borrowed_pointer)};),
+            quote!(#var),
+        ),
         Access::Exclusive => (
-            quote!(let #var: #ty = unsafe {&mut *#pointer};),
+            quote!(let #var: #ty = unsafe {&mut *(#borrowed_pointer)};),
             quote!(#var),
         ),
     };
@@ -191,11 +207,16 @@ pub(crate) fn input(
                 by_value,
             },
         }]),
-        validation: quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare_empty),
+        validation: if by_value {
+            quote!(#storage)
+        } else {
+            quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare_empty)
+        },
         acquire,
         statements,
         argument,
         resources: vec![prebindgen_conversions::Resource {
+            registered: by_value,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#pointer.addr())),
             active: condition,
             access,

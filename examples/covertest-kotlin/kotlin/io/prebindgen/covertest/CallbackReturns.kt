@@ -6,6 +6,10 @@ import io.prebindgen.covertest.callbacks.callbackRowResourceLive
 import java.math.BigInteger
 import java.util.concurrent.atomic.AtomicInteger
 
+private class RawReturnedFields(private val body: () -> Array<Any?>) {
+    fun run(): Array<Any?> = body()
+}
+
 private fun invalidCallbackReturn(action: () -> Unit) {
     try { action() } catch (_: IllegalArgumentException) { return }
     error("expected callback result failure")
@@ -83,6 +87,35 @@ fun checkCallbackReturns() {
         }
     }) == 83L)
     check(vectorCalls == 2 && callbackReturnResourceLive() == 0UL)
+    // A malformed non-owning wire must not bypass cleanup of the returned owner.
+    val rawMethod = JNINative::class.java.declaredMethods.single { it.name.startsWith("call_callback_return_wire_row_catch_") }.also { it.isAccessible = true }
+    var rawCalls = 0
+    val rawBridge = RawReturnedFields {
+        if (rawCalls > 0) check(callbackReturnResourceLive() == 0UL)
+        val resource = callbackReturnResourceNew(84)
+        val address = resource.raw
+        resource.markConsumed()
+        rawCalls++
+        arrayOf<Any?>(address, if (rawCalls == 1) "wrong boxed class" else 'c'.code)
+    }
+    val rawPacket = rawMethod.invokePacket(rawBridge)
+    check(rawPacket[0] == null && rawPacket[1] == 84L)
+    check(rawCalls == 2 && callbackReturnResourceLive() == 0UL)
+    val rawRowsMethod = JNINative::class.java.declaredMethods.single { it.name.startsWith("call_callback_return_wire_rows_catch_") }.also { it.isAccessible = true }
+    var rowsCalls = 0
+    val rowsBridge = RawReturnedFields {
+        check(callbackReturnResourceLive() == 0UL)
+        rowsCalls++
+        Array<Any?>(if (rowsCalls == 1) 3 else 1) { index ->
+            val resource = callbackReturnResourceNew(87)
+            val address = resource.raw
+            resource.markConsumed()
+            arrayOf<Any?>(address, if (rowsCalls == 1 && index == 1) "wrong boxed class" else 'c'.code)
+        }
+    }
+    val rowsPacket = rawRowsMethod.invokePacket(rowsBridge)
+    check(rowsPacket[0] == null && rowsPacket[1] == 87L)
+    check(rowsCalls == 2 && callbackReturnResourceLive() == 0UL)
     var unit = 0L
     callbackReturnUnit({ unit = it })
     check(unit == 21L)

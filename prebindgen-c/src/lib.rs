@@ -130,8 +130,7 @@ impl Codec for CCodec {
             || prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
                 .any(|w| matches!(w.kind, CWire::Callback { .. }))
         {
-            let accepted = prebindgen_conversions::template_parameter("acknowledgement");
-            plan.acknowledgement = Some(quote!(#accepted = true;));
+            plan.acknowledgement = Some(quote!());
         }
         Ok(())
     }
@@ -278,6 +277,7 @@ impl Codec for CCodec {
         !matches!(ty, syn::Type::Reference(_))
             && (owned::native_output(_flat, ty) || !matches!(Value::of(ty), Some(Value::Scalar(_))))
     }
+
     fn input_leaf(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -749,14 +749,15 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// conversions require explicit [`Self::panic`] and abort on failure; source
 /// panics also abort. Destructors return void. Result calls report failures
 /// through their explicit error output.
-/// Owned pointer inputs transfer ownership after all active inputs validate;
-/// later source failures do not restore ownership. References borrow for the
+/// Each owned input transfers after its own validation and alias checks.
+/// Later failures do not restore consumed inputs. References borrow for the
 /// call and require the caller to obey Rust aliasing and lifetime rules.
 /// Result calls use an optional explicit error output, with owned messages or a
 /// declared error record. A success wire with an available niche is returned
 /// directly; otherwise the return is bool and success values use output pointers.
 /// Unit success needs no output pointer. Consuming Result calls additionally
-/// require a bool ownership output, indicating transfer even on failure.
+/// require a `size_t` ownership output counting consumed owned values in
+/// argument, row and field order, including on failure.
 /// Owned returned pointers, buffers and errors require their matching destructors.
 /// Direct reference returns of opaque types use non-owning pointers: `const` for
 /// shared references and mutable for exclusive references. Options use null for absence.
@@ -2066,7 +2067,7 @@ The pointer must be null or a live allocation of the declared type returned by t
          #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
          #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
          #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {
-            #[allow(unused_mut)] let mut #accepted=false;
+            #[allow(unused_mut)] let #accepted=::core::cell::Cell::new(0usize);
             let mut storage=std::mem::MaybeUninit::<#result>::uninit();
             let #out=storage.as_mut_ptr();
             if let Err(error)=::prebindgen_runtime::boundary(||{#validate_outputs #body}) {panic!("C binding failed: {}",error);}

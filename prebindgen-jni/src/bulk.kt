@@ -2,7 +2,7 @@ package __PACKAGE__
 
 internal class BulkLayout(val size: Int, val alignment: Int, val offsets: IntArray)
 internal class BulkRange(val offset: Int, val length: Int)
-internal class BulkInputRow(val pack: (BulkWriter, Int) -> Unit, val locks: () -> List<NativeHandle>, val consume: () -> Unit)
+internal class BulkInputRow(val pack: (BulkWriter, Int) -> Unit, val locks: () -> List<NativeHandle>, val consume: ((NativeHandle) -> Unit) -> Unit)
 
 internal class BulkWriter(initial: Int) {
     var array = ByteArray(initial.coerceAtLeast(16)); private set

@@ -12,8 +12,10 @@ pub trait TemplateContext {
 
 impl TemplateContext for () {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        render_template(code, &|name| {
-            Err(format!("unknown emission parameter `{name}`"))
+        render_template(code, &|name| match name {
+            "input_consumed" => Ok(quote!(&::core::cell::Cell::new(0usize))),
+            "input_aliases" => Ok(quote!(__prebindgen_input_aliases)),
+            _ => Err(format!("unknown emission parameter `{name}`")),
         })
     }
 }

@@ -596,11 +596,13 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
     let code = validate_resources(&[
         Resource {
+            registered: false,
             identity: crate::ResourceIdentity::Single(quote!(left)),
             access: Access::Move,
             active: quote!(enabled && count > 0),
         },
         Resource {
+            registered: false,
             identity: crate::ResourceIdentity::Single(quote!(
                 right.expect("inactive identity must not be evaluated")
             )),
@@ -621,11 +623,13 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             let name = quote::format_ident!("pair_{i}_{j}");
             let pair = validate_resources(&[
                 Resource {
+                    registered: false,
                     identity: crate::ResourceIdentity::Single(quote!(left)),
                     access: first,
                     active: quote!(true),
                 },
                 Resource {
+                    registered: false,
                     identity: crate::ResourceIdentity::Single(quote!(right)),
                     access: second,
                     active: quote!(true),
@@ -896,11 +900,13 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
 #[test]
 fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
     let single = |access| Resource {
+        registered: false,
         identity: ResourceIdentity::Single(quote!(left)),
         access,
         active: quote!(enabled),
     };
     let many = |access| Resource {
+        registered: false,
         // Dynamic-set scratch storage must not shadow this validation local.
         identity: ResourceIdentity::Many(quote!(__prebindgen_resources.iter().copied())),
         access,
@@ -1041,6 +1047,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                     .include_parameter(
                         &(),
                         &[Resource {
+                            registered: false,
                             identity: ResourceIdentity::Single(
                                 quote!(__prebindgen_alias_0[#index]),
                             ),
@@ -1095,6 +1102,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                 .include_parameter(
                     &(),
                     &[Resource {
+                        registered: false,
                         identity: ResourceIdentity::Single(quote!(__prebindgen_resources[#index])),
                         active: quote!(true),
                         access: if index == 2 {
@@ -1165,5 +1173,37 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
         run.status.success(),
         "{}",
         String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn eager_resource_conversions_reject_deferred_resource_neighbors() {
+    let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 {a+b}").unwrap();
+    let mut flat =
+        Flat::<syn::Type>::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+    let function = flat.function_mut("add").unwrap();
+    for (index, parameter) in function.params.iter_mut().enumerate() {
+        let mut plan = Input(index).plan();
+        plan.resources.push(Resource {
+            registered: index == 0,
+            identity: ResourceIdentity::Single(quote!(8usize)),
+            access: Access::Move,
+            active: quote!(true),
+        });
+        parameter.ty.slot = Some(plan);
+    }
+    function.ret.slot = Some(Output.plan());
+    let function = flat.function("add").unwrap();
+    let error = emit_call(
+        function,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(function),
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("cannot mix deferred resource conversions"),
+        "{error}"
     );
 }

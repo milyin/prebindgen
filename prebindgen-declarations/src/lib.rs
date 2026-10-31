@@ -947,8 +947,7 @@ pub trait Codec {
     /// `index`. Raw reads may defer errors until the active conversion.
     ///
     /// Choose additional names fresh against the element and outer boundary
-    /// values. The shared helper reserves `{wire}_staged`, `{wire}_acquired` and
-    /// `{wire}_identities_N` (for each resource index N) for its own locals.
+    /// values. The shared helper reserves `{wire}_element_built` for its row result.
     fn sequence_input(
         &self,
         _extra: &Self::Extra,
@@ -1520,6 +1519,7 @@ fn finalize_output_schema<C: Codec>(
 
 struct Compiler<'a, C: Codec> {
     bulk: std::cell::Cell<bool>,
+    grouped_input: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
@@ -1532,6 +1532,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             bulk: std::cell::Cell::new(false),
+            grouped_input: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
@@ -1575,6 +1576,60 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.input_named(ty, recipe, extra, active, None)
     }
     fn input_named(
+        &self,
+        ty: &Type,
+        recipe: &Input,
+        extra: &C::Extra,
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInput<C>> {
+        let ready = names
+            .map(|(_, var)| format_ident!("{var}_built"))
+            .unwrap_or_else(|| format_ident!("{}_w{}_built", self.prefix, self.next.get()));
+        let mut plan = self.input_unprepared_named(ty, recipe, extra, active, names)?;
+        if self.grouped_input.get() {
+            return Ok(plan);
+        }
+        let mut register = TokenStream::new();
+        let mut transferred = TokenStream::new();
+        for (index, resource) in plan.resources.iter_mut().enumerate() {
+            if resource.registered {
+                continue;
+            }
+            let condition = &resource.active;
+            let exclusive = resource.access != prebindgen_conversions::Access::Shared;
+            let count = format_ident!("{ready}_transferred_{index}");
+            let addresses = match &resource.identity {
+                prebindgen_conversions::ResourceIdentity::Single(value) => {
+                    quote!(::core::iter::once((#value) as usize))
+                }
+                prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
+            };
+            if resource.access == prebindgen_conversions::Access::Move {
+                register.extend(quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}));
+                transferred.extend(quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);));
+            } else {
+                register.extend(quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}));
+            }
+            resource.registered = true;
+        }
+        let validation = plan.validation;
+        let acquire = plan.acquire;
+        let statements = plan.statements;
+        let argument = plan.argument;
+        let condition = active.rust();
+        let built = if statements.is_empty() {
+            quote!(Some(#argument))
+        } else {
+            quote!(Some({#statements #argument}))
+        };
+        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #register #acquire #transferred #built } else {None};);
+        plan.acquire = quote!();
+        plan.statements = quote!();
+        plan.argument = quote!(#ready.expect("active input"));
+        Ok(plan)
+    }
+    fn input_unprepared_named(
         &self,
         ty: &Type,
         recipe: &Input,
@@ -1644,7 +1699,24 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let wire = self.name();
                 let length = self.name();
                 let index = self.name();
-                let child = self.input(element, element_recipe, extra, &Condition::default())?;
+                // Nested sequences manage their own resource lifetime and receipts.
+                fn contains_sequence(input: &Input) -> bool {
+                    match input {
+                        Input::Sequence(_) | Input::Callback(_) => true,
+                        Input::Bulk(inner) | Input::Optional(inner) => contains_sequence(inner),
+                        Input::Record(children)
+                        | Input::Fields(children)
+                        | Input::Selector(children) => children.iter().any(contains_sequence),
+                        Input::Constructor { args, .. } => args.iter().any(contains_sequence),
+                        _ => false,
+                    }
+                }
+                let previous = self
+                    .grouped_input
+                    .replace(!contains_sequence(element_recipe));
+                let child = self.input(element, element_recipe, extra, &Condition::default());
+                self.grouped_input.set(previous);
+                let child = child?;
                 return sequence::input(
                     self.codec,
                     ty,

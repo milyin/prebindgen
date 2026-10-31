@@ -3,7 +3,7 @@ package io.prebindgen.covertest.defaults
 
 public fun `defaultBulkEcho`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.defaults.DefaultBulkRow>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.defaults.DefaultBulkRow>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.defaults.DefaultBulkRow> = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`number`, p0_w5.`fraction`) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5.`number`, p0_w5.`fraction`) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
