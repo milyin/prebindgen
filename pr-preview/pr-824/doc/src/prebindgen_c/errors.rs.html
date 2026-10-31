@@ -370,9 +370,9 @@
 <a href=#370 id=370 data-nosnippet>370</a>        display.push(<span class="macro">format!</span>(<span class="string">"*{id}"</span>));
 <a href=#371 id=371 data-nosnippet>371</a>    }
 <a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">let </span>acknowledgement = <span class="kw">if </span>consumes {
-<a href=#373 id=373 data-nosnippet>373</a>        params.push(<span class="macro">quote!</span>(ownership:<span class="kw-2">*mut </span>bool));
-<a href=#374 id=374 data-nosnippet>374</a>        cparams.push(<span class="string">"bool *ownership"</span>.into());
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="macro">quote!</span>(<span class="kw">if </span>!ownership.is_null(){std::ptr::write(ownership,#accepted);})
+<a href=#373 id=373 data-nosnippet>373</a>        params.push(<span class="macro">quote!</span>(ownership:<span class="kw-2">*mut </span>usize));
+<a href=#374 id=374 data-nosnippet>374</a>        cparams.push(<span class="string">"size_t *ownership"</span>.into());
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="macro">quote!</span>(<span class="kw">if </span>!ownership.is_null(){std::ptr::write(ownership,#accepted.get());})
 <a href=#376 id=376 data-nosnippet>376</a>    } <span class="kw">else </span>{
 <a href=#377 id=377 data-nosnippet>377</a>        <span class="macro">quote!</span>()
 <a href=#378 id=378 data-nosnippet>378</a>    };
@@ -402,7 +402,7 @@
 <a href=#402 id=402 data-nosnippet>402</a>        header.push_str(<span class="string">"/* Result: true = success; false = failure. Success outputs are unchanged on failure. */\n"</span>);
 <a href=#403 id=403 data-nosnippet>403</a>    }
 <a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">if </span>consumes {
-<a href=#405 id=405 data-nosnippet>405</a>        header.push_str(<span class="string">"/* ownership is required: false before acceptance; true after active owned inputs transfer, including on failure. */\n"</span>);
+<a href=#405 id=405 data-nosnippet>405</a>        header.push_str(<span class="string">"/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */\n"</span>);
 <a href=#406 id=406 data-nosnippet>406</a>    }
 <a href=#407 id=407 data-nosnippet>407</a>    header.push_str(<span class="string">"/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n"</span>);
 <a href=#408 id=408 data-nosnippet>408</a>    header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{c_return} {name}({});\n"</span>, cparams.join(<span class="string">", "</span>)));
@@ -423,7 +423,7 @@
 <a href=#423 id=423 data-nosnippet>423</a>        <span class="attr">#[doc=<span class="string">"# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."</span>]
 <a href=#424 id=424 data-nosnippet>424</a>        #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
 <a href=#425 id=425 data-nosnippet>425</a>        #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params),<span class="kw-2">*</span>)-&gt;#rust_return {
-<a href=#426 id=426 data-nosnippet>426</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span><span class="kw-2">mut </span>#accepted=<span class="bool-val">false</span>;
+<a href=#426 id=426 data-nosnippet>426</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span>#accepted=::core::cell::Cell::new(<span class="number">0usize</span>);
 <a href=#427 id=427 data-nosnippet>427</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span><span class="kw-2">mut </span>#reported=<span class="bool-val">false</span>;
 <a href=#428 id=428 data-nosnippet>428</a>            <span class="kw">let </span><span class="kw-2">mut </span>success_committed=<span class="bool-val">false</span>;
 <a href=#429 id=429 data-nosnippet>429</a>            <span class="kw">let </span><span class="kw-2">mut </span>storage=std::mem::MaybeUninit::&lt;#internal&gt;::uninit();
