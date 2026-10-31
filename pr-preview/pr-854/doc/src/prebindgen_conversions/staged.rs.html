@@ -55,7 +55,7 @@
 <a href=#55 id=55 data-nosnippet>55</a>    }
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Initialize the alias history before evaluating eager input validation.
-<a href=#58 id=58 data-nosnippet>58</a>    /// The caller also supplies `__prebindgen_input_consumed`, a shared Cell&lt;usize&gt;,
+<a href=#58 id=58 data-nosnippet>58</a>    /// The caller also supplies `__prebindgen_input_consumed`, a shared `Cell&lt;usize&gt;`,
 <a href=#59 id=59 data-nosnippet>59</a>    /// for ownership receipts. Deferred resources require the separate emit path.
 <a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub fn </span>initialize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#61 id=61 data-nosnippet>61</a>        <span class="kw">if </span><span class="self">self</span>.resources.iter().any(|resource| !resource.registered) {

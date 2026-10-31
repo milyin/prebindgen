@@ -148,7 +148,7 @@
 <a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// Guard a callback-owned Box allocation, allowing null for inactive slots.
 <a href=#149 id=149 data-nosnippet>149</a>    ///
 <a href=#150 id=150 data-nosnippet>150</a>    /// # Safety
-<a href=#151 id=151 data-nosnippet>151</a>    /// A nonnull pointer must transfer a live Box&lt;T&gt; allocation to this guard.
+<a href=#151 id=151 data-nosnippet>151</a>    /// A nonnull pointer must transfer a live `Box&lt;T&gt;` allocation to this guard.
 <a href=#152 id=152 data-nosnippet>152</a>    </span><span class="kw">pub unsafe fn </span>new(pointer: <span class="kw-2">*mut </span>T, consumed: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>core::cell::Cell&lt;usize&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
 <a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">if </span>!pointer.is_null() {
 <a href=#154 id=154 data-nosnippet>154</a>            validate_pointer(pointer)<span class="question-mark">?</span>;
