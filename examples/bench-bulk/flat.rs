@@ -267,3 +267,6 @@ pub fn handle_values_sum(values:Vec<i64>)->i64 { std::hint::black_box(values).in
 pub fn handle_records_sum(values:Vec<HandleRecord>)->i64 {
     std::hint::black_box(values).into_iter().map(|row|row.handle.value+row.tag).sum()
 }
+
+#[prebindgen]
+pub fn owned_handles_echo(values:Vec<InputHandle>)->Vec<InputHandle> { std::hint::black_box(values) }

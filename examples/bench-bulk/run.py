@@ -15,7 +15,7 @@ import tempfile
 FIXTURE = Path(__file__).resolve().parent
 MODES = ("plain", "bulk")
 SINGLE_CASES = ("control", "scalar", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
-KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input")
+KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip")
 
 
 def command_version(command, cwd=None):

@@ -40,6 +40,7 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
     })
     val wide = wideRowPlain(BASE)
     val one = bench.plain.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
+    val cycleCleanup = mutableListOf<AutoCloseable>()
     val inputHandles = mutableListOf<bench.plain.InputHandle>()
     val cases = mutableListOf(
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.plain.control(BASE + (i and MASK)) }),
@@ -82,6 +83,15 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
         cases.add(Case("handle_records_input",size,size * BASE + size.toLong() * (size - 1),0,
             Operation { _ -> bench.plain.handleRecordsSum(rows) }))
     }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.plain.inputHandleNew(BASE + it) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.close() } })
+        cases.add(Case("owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.plain.ownedHandlesEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.plain.inputHandleValue(cycle[0][0])+cycle[0].size
+            }))
+    }
     for (size in payloads) {
         val packet = bench.plain.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256
@@ -90,6 +100,7 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
         cases.add(Case("packet_input", size, expected, 0, Operation { _ -> bench.plain.packetSum(packet) }))
     }
     return cases to AutoCloseable {
+        cycleCleanup.forEach { it.close() }
         inputHandles.forEach { it.close() }
         try { handler.close() } finally {
             try { rowReturn.close() } finally { wideReturn.close() }
@@ -120,6 +131,7 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
     })
     val wide = wideRowBulk(BASE)
     val one = bench.bulk.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
+    val cycleCleanup = mutableListOf<AutoCloseable>()
     val inputHandles = mutableListOf<bench.bulk.InputHandle>()
     val cases = mutableListOf(
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.bulk.control(BASE + (i and MASK)) }),
@@ -162,6 +174,15 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
         cases.add(Case("handle_records_input",size,size * BASE + size.toLong() * (size - 1),0,
             Operation { _ -> bench.bulk.handleRecordsSum(rows) }))
     }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.bulk.inputHandleNew(BASE + it) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.close() } })
+        cases.add(Case("owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.bulk.ownedHandlesEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.bulk.inputHandleValue(cycle[0][0])+cycle[0].size
+            }))
+    }
     for (size in payloads) {
         val packet = bench.bulk.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256
@@ -170,6 +191,7 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
         cases.add(Case("packet_input", size, expected, 0, Operation { _ -> bench.bulk.packetSum(packet) }))
     }
     return cases to AutoCloseable {
+        cycleCleanup.forEach { it.close() }
         inputHandles.forEach { it.close() }
         try { handler.close() } finally {
             try { rowReturn.close() } finally { wideReturn.close() }
