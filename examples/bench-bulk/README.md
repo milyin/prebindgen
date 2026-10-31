@@ -46,6 +46,9 @@ The matrix includes batches of 0, 1, 8, 64 and 512 elements:
 | `packet_input` | Eight-field header plus 64 B, 4 KiB or 64 KiB byte payload, to a Rust checksum | Bulk adds Kotlin-frame and native decoding copies; ordinary transport can be better for payload-heavy packets. |
 | `numbers_input` | `Vec<i64>` to a Rust sum | Bulk can avoid object-array/boxed-number access for each input element. |
 | `records_input` | Shared record slice to a Rust sum | Bulk can combine many expanded fields in one byte frame. |
+| `handles_input` | Borrow existing handles and read their values in Rust | Exercises collection input preparation and handle locks; handles are created outside timing and reused. |
+| `handle_records_input` | Records containing a borrowed handle and a scalar tag | Exercises record preparation and locks. An explicit Rust constructor copies only the scalar payload from each borrowed handle into the owned record; that construction remains timed in both modes. |
+| `owned_handles_roundtrip` | Consume a handle list and return its owners, then read the first value | Exercises ownership acknowledgement and both input/output conversion. Each call reuses the owners returned by the preceding call; one extra scalar JNI call checks the result. Initial handle creation and final cleanup are outside timing. |
 | `records_output` | Rust constructs records; Kotlin materializes a list and sums fields | Bulk can avoid native-side per-row object arrays and primitive boxing. |
 | `records_roundtrip` | Kotlin list to Rust `Vec<Row>` and back, then checksum | Measures conversion in both directions. |
 | `callback_records` | Fire a pre-registered Rust callback with a record batch; Kotlin sums it | Both registration and handler destruction are outside the timed path. |
@@ -107,8 +110,9 @@ The [full report](results.json) contains all 35 cases and every per-JVM median.
 [Raw samples](samples.csv) contain all 2,520 measured batches; the report records
 their SHA-256. Build and measurement inherited that affinity from the execution environment.
 For the exact original fixture, check out its recorded source commit and use the
-first command above with `--warmup 10`. The current fixture includes six additional
-cases (41 total); the focused run below measures the added cases and two controls.
+first command above with `--warmup 10`. The single-record extension added six
+cases (41 total at that revision); the focused run below measures those cases and
+two controls. The current fixture also has 15 handle-collection cases (56 total).
 `ActiveProcessorCount=2` alone does not restrict CPU placement.
 The recorded reports describe their pinned source revisions. Current generation
 also preallocates final collection storage and directly constructs every input
@@ -270,3 +274,13 @@ Both modes call the same Rust source functions. Plain uses the generator default
 bulk uses the explicit overrides in `bindings.rs`. The generated native
 callback-fire and control wrappers are identical after normalizing package names. Generated function returns and callback adapters were
 also inspected to verify that every intended bulk override changed transport.
+
+## Collection input helper removal
+
+[The before/after report](collection-input-results/REPORT.md) measures #824 after
+#854 against the Kotlin input-helper removal, using identical benchmark fixtures.
+It includes primitive and record inputs, borrowed handles, records containing
+handles and consuming handle round trips in both JNI transport modes. It records
+allocation reductions, bulk handle-input speedups, and the cases where latency
+was unchanged or slower. The comparison runner, all process medians and raw
+samples are included.
