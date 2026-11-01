@@ -16,13 +16,16 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         }
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5.`resource`?.raw ?: 0L, callback_return_w5.`character`) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5.`resource`) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5.`resource`!!); kotlin.Unit })
-} else null
- io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { callback_return_w5.`resource` }, io.prebindgen.covertest.InputValidation.value { callback_return_w5.`character` }) }, intArrayOf(2, 0)) } else null
+ io.prebindgen.covertest.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.callbackreturns.CallbackWireRow)?.let { returnedValue1 -> (returnedValue1.`resource` as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue3 -> returnedHandles.add(returnedValue3); returnedOwners.add(returnedValue3) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_wire_rows_catch_3a87146de894db6b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -50,7 +53,10 @@ return kotlin.run { val callback_return_w1 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1.`resource`) { "null handle" } else null) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.`resource`?.raw ?: 0L, callback_return_w1.`character`)
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 if (true) __pb_consume(callback_return_w1.`resource`!!)
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.callbackreturns.CallbackWireRow)?.let { returnedValue0 -> (returnedValue0.`resource` as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue2 -> returnedHandles.add(returnedValue2); returnedOwners.add(returnedValue2) }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_wire_row_catch_0168544f852714f4(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -535,10 +541,9 @@ callbackOutput0_bulkList!!.add((requireNotNull(callbackOutput0_bulkReader).long(
         }
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
- val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
-} else null
- val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+ val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { callback_return_w5 }) } } else null
+ val callbackReturnWire = callback_return_w1_elements
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
@@ -673,7 +678,9 @@ return kotlin.run { val callback_return_w1 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 if (true) __pb_consume(callback_return_w1!!)
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue0 -> returnedHandles.add(returnedValue0); returnedOwners.add(returnedValue0) }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_856115d8ce303838(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -715,12 +722,16 @@ var callbackReturnReady = false
             try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
                 callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
             }
-        } } catch (failure: Throwable) { if (callbackReturnReady) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callbackReturned) }; throw failure }
+        } } catch (failure: Throwable) { if (callbackReturnReady) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callbackReturned as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue0 -> returnedHandles.add(returnedValue0); returnedOwners.add(returnedValue0) }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() } }; throw failure }
 return kotlin.run { val callback_return_w1 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 if (true) __pb_consume(callback_return_w1!!)
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue0 -> returnedHandles.add(returnedValue0); returnedOwners.add(returnedValue0) }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_take_affc1f4d290ade63(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -748,7 +759,9 @@ return kotlin.run { val callback_return_w3 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (callback_return_w3 != null) if (true) requireNotNull(requireNotNull(callback_return_w3)) { "null handle" } else null else null) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 if (callback_return_w3 != null) { if (true) __pb_consume(requireNotNull(callback_return_w3)) }
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w3); throw failure } }
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w3 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue1 -> returnedHandles.add(returnedValue1); returnedOwners.add(returnedValue1) }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_optional_29ef924759d7e5bc(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 == 1) {
@@ -783,13 +796,15 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         }
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5!!); kotlin.Unit })
-} else null
- io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { callback_return_w5 }) }, intArrayOf(2)) } else null
+ io.prebindgen.covertest.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue1 -> returnedHandles.add(returnedValue1); returnedOwners.add(returnedValue1) }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_vector_3ee929da6cb7571b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -936,8 +951,8 @@ callbackReturnWire }
 }
 
 public fun `callbackReturnHandlerMany`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.i64Toi64Callback?>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
-    val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w6 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(if (p0_w6 == null) null else object {
+    val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w6 = p0_w1_snapshot[p0_w1_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { if (p0_w6 == null) null else object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -956,11 +971,10 @@ val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markCons
 
 callbackReturnWire }
     }
-}) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
-} else null
+} }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_handler_many_8518ace5a4249c8b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_handler_many_8518ace5a4249c8b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
@@ -1011,13 +1025,15 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         }
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5!!); kotlin.Unit })
-} else null
- io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { callback_return_w5 }) }, intArrayOf(2)) } else null
+ io.prebindgen.covertest.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
-callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue1 -> returnedHandles.add(returnedValue1); returnedOwners.add(returnedValue1) }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_vector_catch_0161633ca648736c(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {

@@ -2144,7 +2144,8 @@ fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks()
         let wrapper = &generated.kotlin["test/Functions.kt"];
         assert!(wrapper.contains("test.withHandleLocks("));
         if returned == "Vec<Handle>" {
-            assert!(wrapper.contains("flatMap"));
+            assert!(wrapper.contains(".handles.orEmpty()"));
+            assert!(!wrapper.contains("kotlin.Triple("));
         } else {
             assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
             assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");

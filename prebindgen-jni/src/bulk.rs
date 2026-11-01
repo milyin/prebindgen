@@ -406,8 +406,105 @@ fn sequence_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNod
         _ => None,
     }
 }
-fn has_handles(input: &KotlinInput) -> bool {
-    !input.locks.is_empty() || !input.lock_groups.is_empty() || !input.consumed.is_empty()
+
+fn input_writer(layout: &BulkRecord) -> String {
+    format!(
+        "Input{}",
+        layout.name.to_string().trim_start_matches("__PbBulk")
+    )
+}
+
+/// Recompute handle positions from measured record offsets and packed row ranges.
+/// Only handle-bearing ranges are visited; no source objects are read again.
+fn patch_handles(node: &JniNode, package: &str, base: &str, next: &mut usize) -> Result<String> {
+    let layout = record(node)?;
+    let layout = format!(
+        "{package}.BulkLayouts.r{:016x}",
+        prebindgen_reprc::schema_id(&layout.key)
+    );
+    let mut code = String::new();
+    for (field, wire) in crate::group::row_fields(node).enumerate() {
+        let at = format!("({base}) + {layout}.offsets[{field}]");
+        match &wire.kind {
+            JniWire::Handle { .. } => {
+                code.push_str(&format!("handleIndex = patchHandle({at}, handleIndex)\n"));
+            }
+            JniWire::NativeRows { .. } => {
+                let child =
+                    sequence_child(node, &wire.name).ok_or("missing bulk collection element")?;
+                if !crate::kotlin::input_handles(child, false) {
+                    continue;
+                }
+                let child_layout = record(child)?;
+                let child_layout = format!(
+                    "{package}.BulkLayouts.r{:016x}",
+                    prebindgen_reprc::schema_id(&child_layout.key)
+                );
+                let id = *next;
+                *next += 1;
+                let start = format!("rows{id}Start");
+                let count = format!("rows{id}Count");
+                let index = format!("rows{id}Index");
+                code.push_str(&format!("val {start} = long({at}).toInt()\nif ({start} >= 0) {{\nval {count} = long(({at}) + 8).toInt()\nvar {index} = 0\nwhile ({index} < {count}) {{\n"));
+                code.push_str(&patch_handles(
+                    child,
+                    package,
+                    &format!("{start} + {index} * {child_layout}.size"),
+                    next,
+                )?);
+                code.push_str(&format!("{index}++\n}}\n}}\n"));
+            }
+            _ => {}
+        }
+    }
+    Ok(code)
+}
+
+fn input_writers(
+    node: &JniNode,
+    input: bool,
+    package: &str,
+    out: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    match node {
+        WireNode::Chain {
+            meta: JniChain::Bulk(layout),
+            child,
+            ..
+        } => {
+            if input && crate::kotlin::input_handles(child, false) {
+                let name = input_writer(layout);
+                let patch = patch_handles(child, package, "0", &mut 0)?;
+                let class = format!("internal class {name} : BulkHandleWriter(BulkLayouts.r{:016x}.size) {{\noverride fun patchHandles() {{\nvar handleIndex = 0\n{patch}}}\n}}\n",prebindgen_reprc::schema_id(&layout.key));
+                if let Some(previous) = out.get(&name) {
+                    if previous != &class {
+                        return Err(
+                            "bulk input schema has incompatible handle patching layouts".into()
+                        );
+                    }
+                } else {
+                    out.insert(name, class);
+                }
+            }
+            input_writers(child, input, package, out)?;
+        }
+        WireNode::Chain { child, .. } => input_writers(child, input, package, out)?,
+        WireNode::Branch { children, .. } => {
+            for child in children {
+                input_writers(child, input, package, out)?;
+            }
+        }
+        WireNode::Leaf(wires) => {
+            for wire in wires {
+                if let JniWire::Callback { callback } = &wire.kind {
+                    for (input, node) in callback.bulk_nodes() {
+                        input_writers(node, input, package, out)?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 fn pack(
     node: &JniNode,
@@ -424,6 +521,7 @@ fn pack(
     }
     let mut code = String::new();
     for (i, (w, arg)) in wires.iter().zip(args).enumerate() {
+        let arg = format!("{}.InputValidation.value {{ {arg} }}", context.package);
         let at = format!("({base}) + {layout}.offsets[{i}]");
         match &w.kind {
             JniWire::NativeBuffer { text } => code.push_str(&format!(
@@ -448,9 +546,7 @@ fn pack(
                 let start = format!("{}_bulkStart", w.name);
                 let index = format!("{}_bulkIndex", w.name);
                 code.push_str(&format!("val {list} = {arg}\nif ({list} == null) {{ {writer}.absent({at}) }} else {{\nval {start} = {writer}.rows({list}.size, {child_layout})\n{writer}.range({at}, {start}, {list}.size)\n"));
-                if has_handles(&input) {
-                    code.push_str(&format!("{list}.forEachIndexed {{ {index}, row -> row.pack({writer}, {start} + {index} * {child_layout}.size) }}\n"));
-                } else {
+                {
                     code.push_str(&format!(
                         "{list}.forEachIndexed {{ {index}, {variable} ->\n"
                     ));
@@ -459,7 +555,7 @@ fn pack(
                     }
                     code.push_str(&pack(
                         child,
-                        &input.arguments,
+                        &input.prepared_arguments,
                         writer,
                         &format!("{start} + {index} * {child_layout}.size"),
                         context,
@@ -480,7 +576,10 @@ fn pack(
             JniWire::Enum { .. } | JniWire::Selector { .. } => {
                 code.push_str(&format!("{writer}.int({at}, {arg})\n"))
             }
-            JniWire::Handle { .. } => code.push_str(&format!("{writer}.long({at}, {arg})\n")),
+            JniWire::Handle { handle, .. } => code.push_str(&format!(
+                "{writer}.handle({at}, {arg}, {})\n",
+                handle.access == Access::Move
+            )),
             _ => return Err("unsupported field in bulk Kotlin writer".into()),
         }
     }
@@ -497,35 +596,12 @@ pub(crate) fn input_list(
             "bulk collection elements must expose one Kotlin value; declare a data class".into(),
         );
     }
-    let (variable, ty) = input.parameters[0].split_once(": ").unwrap();
+    let (_, ty) = input.parameters[0].split_once(": ").unwrap();
     let name = carrier.name.to_string();
     let state = format!("{name}_elements");
     let JniWire::NativeRows { condition } = &carrier.kind else {
         return Err("bulk sequence requires native rows".into());
     };
-    let resources = has_handles(&input);
-    let mut expr = format!("if ({condition}) {name}?.toList()");
-    if resources {
-        expr.push_str(&format!("?.map {{ {variable} ->\n"));
-        for setup in &input.setup {
-            expr.push_str(&format!("val {} = {}\n", setup.name, setup.expression));
-        }
-        let locks = if input.locks.is_empty() {
-            "kotlin.collections.emptyList<Nothing>()".into()
-        } else {
-            format!(
-                "kotlin.collections.listOfNotNull({})",
-                input.locks.join(", ")
-            )
-        };
-        let locks = input
-            .lock_groups
-            .iter()
-            .fold(locks, |s, g| format!("({s} + ({g}))"));
-        let body = pack(element, &input.arguments, "writer", "base", context)?;
-        expr.push_str(&format!("{}.BulkInputRow({{ writer, base ->\n{body}}}, {{ {locks} }}, {{ __pb_consume -> {}; kotlin.Unit }})\n}}",context.package,input.consumed.join("; ")));
-    }
-    expr.push_str(" else null");
     Ok(KotlinInput {
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
@@ -533,25 +609,15 @@ pub(crate) fn input_list(
         )],
         setup: vec![KotlinBinding {
             name: state.clone(),
-            expression: expr,
+            expression: format!("if ({condition}) {name}?.toList() else null"),
             absent: "null".into(),
         }],
         arguments: vec![state.clone()],
-        locks: vec![],
-        lock_groups: if resources {
-            vec![format!("{state}.orEmpty().flatMap {{ it.locks() }}")]
-        } else {
-            vec![]
-        },
-        consumed: if input.consumed.is_empty() {
-            vec![]
-        } else {
-            vec![format!(
-                "{state}.orEmpty().forEach {{ it.consume(__pb_consume) }}"
-            )]
-        },
+        prepared_arguments: vec![state],
+        ..Default::default()
     })
 }
+
 pub(crate) fn input_kotlin(
     layout: &BulkRecord,
     controls: &[Wire<JniWire>],
@@ -561,33 +627,43 @@ pub(crate) fn input_kotlin(
     let mut input = crate::kotlin::input_kotlin(child, context)?;
     let writer = format!("{}_writer", controls[0].name);
     let schema = kt_layout(layout, context);
-    let body = pack(child, &input.arguments, &writer, "0", context)?;
+    input.prepare_arguments(crate::kotlin::input_handles(child, false))?;
+    let body = pack(child, &input.prepared_arguments, &writer, "0", context)?;
+    let handles = crate::kotlin::input_handles(child, false);
+    let owned = crate::kotlin::input_handles(child, true);
     let condition = match &controls[0].kind {
         JniWire::BulkBuffer { condition, .. } => condition.as_str(),
         _ => return Err("missing bulk input carrier".into()),
     };
-    if condition == "true" {
-        input.setup.push(KotlinBinding {
-            name: writer.clone(),
-            expression: format!("{}.BulkWriter({schema}.size)", context.package),
-            absent: format!("{}.BulkWriter({schema}.size)", context.package),
-        });
-        input.arguments = vec![
-            format!("run {{\n{body}\n{writer}.array }}"),
-            format!("{writer}.length"),
-        ];
-    } else {
+    if handles {
         let state = format!("{writer}_state");
         input.setup.push(KotlinBinding {
-            name: state.clone(),
-            expression: format!(
-                "if ({condition}) {}.BulkWriter({schema}.size) else null",
-                context.package
-            ),
-            absent: "null".into(),
+            name:state.clone(),
+            expression:format!("if ({condition}) run {{ val {writer} = {}.BulkInputs.{}()\n{body}\n{writer} }} else null",context.package,input_writer(layout)),
+            absent:"null".into(),
         });
-        input.arguments=vec![format!("if ({condition}) run {{val {writer}=requireNotNull({state});\n{body}\n{writer}.array }} else null"),format!("{state}?.length ?: 0")];
+        input.arguments = vec![
+            format!("{state}?.encode()"),
+            format!("{state}?.length ?: 0"),
+        ];
+        input.prepared_arguments = vec![state.clone(), format!("{state}?.length ?: 0")];
+        input.locks.clear();
+        input.lock_groups = vec![format!("{state}?.handles.orEmpty()")];
+        input.consumed = if owned {
+            vec![format!("{state}?.consume(__pb_consume)")]
+        } else {
+            vec![]
+        };
+        return Ok(input);
     }
+    let state = format!("{writer}_state");
+    input.setup.push(KotlinBinding {
+        name:state.clone(),
+        expression:format!("if ({condition}) run {{ val {writer} = {}.BulkWriter({schema}.size)\n{body}\n{writer} }} else null",context.package),
+        absent:"null".into(),
+    });
+    input.arguments = vec![format!("{state}?.array"), format!("{state}?.length ?: 0")];
+    input.prepared_arguments = input.arguments.clone();
     Ok(input)
 }
 fn unpack_expression(w: &Wire<JniWire>, reader: &str, at: &str) -> Result<String> {
@@ -811,7 +887,7 @@ pub(crate) fn emit(
     for f in flat.functions.values() {
         for p in &f.params {
             if let Some(plan) = &p.ty.slot {
-                nodes.push(plan.input_node());
+                nodes.push((true, plan.input_node()));
             }
         }
         if let Some(plan) = &f.ret.slot {
@@ -819,23 +895,29 @@ pub(crate) fn emit(
             nodes.extend(
                 std::iter::once(&outcomes.success)
                     .chain(outcomes.source_error.iter())
-                    .chain(outcomes.binding_failure.iter()),
+                    .chain(outcomes.binding_failure.iter())
+                    .map(|node| (false, node)),
             );
         }
         if let Some(error) = f.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            nodes.push(&error.output.output_outcomes().success);
+            nodes.push((false, &error.output.output_outcomes().success));
         }
     }
     for input in &flat.metadata.callbacks {
-        nodes.push(input.input_node());
+        nodes.push((true, input.input_node()));
     }
-    for node in nodes {
+    let prefix = &flat.metadata.package;
+    let mut writers = BTreeMap::new();
+    for (input, node) in nodes {
         records(node, &mut catalogue)?;
+        input_writers(node, input, prefix, &mut writers)?;
     }
     if catalogue.is_empty() {
         return Ok(());
     }
-    let prefix = &flat.metadata.package;
+    if !writers.is_empty() {
+        files.insert(format!("{}/BulkInputs.kt",prefix.replace('.',"/")),format!("@file:Suppress(\"ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE\", \"UNUSED_VALUE\")\npackage {prefix}\n\ninternal object BulkInputs {{\n{}}}\n",writers.values().cloned().collect::<String>()));
+    }
     let schema = catalogue
         .values()
         .map(|r| r.key.as_str())
@@ -886,6 +968,7 @@ pub(crate) fn emit(
 
 fn row_input(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     let mut input = crate::kotlin::input_kotlin(node, context)?;
+    input.prepare_arguments(crate::kotlin::input_handles(node, false))?;
     if input.parameters.is_empty() {
         input.parameters.push("bulkUnit: kotlin.Unit".into());
     }

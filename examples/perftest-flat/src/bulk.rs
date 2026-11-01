@@ -343,3 +343,129 @@ pub fn default_bulk_buffers() -> Vec<Vec<u8>> {
 pub fn default_bulk_optional_texts() -> Vec<Option<String>> {
     vec![Some("héllo 世界".into()), None, Some(String::new())]
 }
+
+#[prebindgen]
+pub struct BulkHandleText {
+    pub handle: BulkHandle,
+    pub text: String,
+}
+#[prebindgen]
+pub fn bulk_handle_texts(values: Vec<BulkHandleText>) -> Vec<BulkHandleText> {
+    values
+}
+#[prebindgen]
+pub fn bulk_handle_text_callback(callback: impl Fn() -> Vec<BulkHandleText>) -> usize {
+    callback().len()
+}
+#[prebindgen]
+pub fn bulk_handle_nested(values: Vec<Vec<BulkHandle>>) -> Vec<Vec<BulkHandle>> {
+    values
+}
+
+#[prebindgen]
+pub struct BulkPatchRow {
+    pub first: Option<BulkHandle>,
+    pub children: Option<Vec<Option<Vec<Option<BulkHandle>>>>>,
+    pub last: BulkHandle,
+}
+#[prebindgen]
+pub fn bulk_patch_row_new(
+    first: Option<BulkHandle>,
+    children: Option<Vec<Option<Vec<Option<BulkHandle>>>>>,
+    last: BulkHandle,
+) -> BulkPatchRow {
+    BulkPatchRow {
+        first,
+        children,
+        last,
+    }
+}
+#[prebindgen]
+pub fn bulk_patch_rows(row: BulkPatchRow) -> Vec<i64> {
+    let mut values = Vec::new();
+    values.push(row.first.as_ref().map_or(-1, |h| h.value));
+    if let Some(rows) = &row.children {
+        values.push(rows.len() as i64);
+        for children in rows {
+            if let Some(children) = children {
+                values.push(children.len() as i64);
+                values.extend(children.iter().map(|h| h.as_ref().map_or(-3, |h| h.value)));
+            } else {
+                values.push(-4);
+            }
+        }
+    } else {
+        values.push(-2);
+    }
+    values.push(row.last.value);
+    values
+}
+#[prebindgen]
+pub fn bulk_patch_callback(
+    callback: impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>>,
+) -> Vec<i64> {
+    let mut values = Vec::new();
+    for children in callback() {
+        if let Some(children) = children {
+            values.push(children.len() as i64);
+            values.extend(children.iter().map(|h| h.as_ref().map_or(-3, |h| h.value)));
+        } else {
+            values.push(-4);
+        }
+    }
+    values
+}
+#[prebindgen]
+pub struct BulkBorrowPair {
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bulk_borrow_pair_new(handle: &BulkHandle, number: i64) -> BulkBorrowPair {
+    BulkBorrowPair {
+        number: handle.value + number,
+    }
+}
+#[prebindgen]
+pub fn bulk_optional_borrow_pair(value: Option<BulkBorrowPair>) -> i64 {
+    value.map(|v| v.number).unwrap_or(-1)
+}
+
+#[prebindgen]
+pub struct BulkPairText {
+    pub borrowed_handle: BulkHandle,
+    pub owned_handle: BulkHandle,
+    pub text: String,
+}
+#[prebindgen]
+pub fn bulk_handle_copy(value: &BulkHandle) -> BulkHandle {
+    BulkHandle { value: value.value }
+}
+#[prebindgen]
+pub fn bulk_pair_text_callback(callback: impl Fn() -> Vec<BulkPairText>) -> usize {
+    callback().len()
+}
+
+#[prebindgen]
+pub fn bulk_collection_lock_groups(
+    first: Option<Vec<BulkHandle>>,
+    second: Vec<BulkHandle>,
+    probe: impl Fn() -> bool,
+) -> bool {
+    let result = probe();
+    drop((first, second));
+    result
+}
+
+#[prebindgen]
+pub struct BulkInputEnvelope {
+    pub values: Vec<Vec<i64>>,
+}
+#[prebindgen]
+pub fn bulk_nested_envelope(values: Vec<BulkInputEnvelope>) -> i64 {
+    values.into_iter().flat_map(|v| v.values).flatten().sum()
+}
+
+#[prebindgen]
+pub fn bulk_input_envelope_new(values: Vec<Vec<i64>>) -> BulkInputEnvelope {
+    BulkInputEnvelope { values }
+}

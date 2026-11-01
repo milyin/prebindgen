@@ -250,3 +250,23 @@ pub fn wide_row_return_fire(handler: &WideRowReturnHandler, seed: i64) -> i64 {
 pub fn control(value: i64) -> i64 {
     std::hint::black_box(value) + 1
 }
+
+#[prebindgen]
+pub struct InputHandle { pub value: i64 }
+#[prebindgen]
+pub fn input_handle_new(value:i64)->InputHandle { InputHandle {value} }
+#[prebindgen]
+pub fn input_handle_value(value:&InputHandle)->i64 { value.value }
+#[prebindgen]
+pub fn input_handle_copy(value:&InputHandle)->InputHandle { InputHandle { value:value.value } }
+#[prebindgen]
+pub struct HandleRecord { pub handle:InputHandle, pub tag:i64 }
+#[prebindgen]
+pub fn handle_values_sum(values:Vec<i64>)->i64 { std::hint::black_box(values).into_iter().sum() }
+#[prebindgen]
+pub fn handle_records_sum(values:Vec<HandleRecord>)->i64 {
+    std::hint::black_box(values).into_iter().map(|row|row.handle.value+row.tag).sum()
+}
+
+#[prebindgen]
+pub fn owned_handles_echo(values:Vec<InputHandle>)->Vec<InputHandle> { std::hint::black_box(values) }

@@ -15,6 +15,20 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1Handler_1bb814c411
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1InputHandle_17cc67535bbd4a8ee(
+    mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+    id: i64,
+) {
+    if let Err(e) = ::prebindgen_runtime::boundary(|| unsafe {
+        ::prebindgen_jni_runtime::drop_pointer::<bench_flat::InputHandle>(id)
+    }) {
+        ::prebindgen_jni_runtime::fail(&mut env, &e);
+    }
+}
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1RowReturnHandler_10972ff7cb1556afa(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
@@ -42,7 +56,18 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1WideRowReturnHandl
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_i64_i64_06de1c5aa99699f6 {
+    pub v0: i64,
+    pub v1: i64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_Range_1800d3dd3eceec6d {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_49da87bb4c377b9a {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
@@ -100,6 +125,21 @@ pub struct __PbBulk_i64_a60d3960993b9a77 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_i64_b2426f0d5f2715c0 {
+    pub v0: i64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_cb0e46a0a248e38c {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_i64_d159346acd2a185e {
+    pub v0: i64,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i64_i64_e5733c882bf9c317 {
     pub v0: i64,
     pub v1: i64,
@@ -116,6 +156,11 @@ pub struct __PbBulk_i64_i64_e5733c882bf9c317 {
 pub struct __PbBulk_Range_f4d5524a08b9867b {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_Range_f738f16d97296060 {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
 #[no_mangle]
 pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv,
@@ -123,14 +168,33 @@ pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 6794024638180570187i64, if cfg!(target_endian = "big") { 1 } else { 0
+            1i64, - 6323889771241021259i64, if cfg!(target_endian = "big") { 1 } else { 0
             }, ::core::mem::size_of:: < usize > () as i64
         ];
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+                ::core::mem::align_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+                ::core::mem::offset_of!(__PbBulk_i64_i64_06de1c5aa99699f6, v0),
+                ::core::mem::offset_of!(__PbBulk_i64_i64_06de1c5aa99699f6, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
         data.extend(
             ([
                 ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
                 ::core::mem::align_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
                 ::core::mem::offset_of!(__PbBulk_Range_1800d3dd3eceec6d, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>(),
+                ::core::mem::align_of::<__PbBulk_Range_49da87bb4c377b9a>(),
+                ::core::mem::offset_of!(__PbBulk_Range_49da87bb4c377b9a, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -202,6 +266,33 @@ pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
         );
         data.extend(
             ([
+                ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                ::core::mem::align_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_cb0e46a0a248e38c>(),
+                ::core::mem::align_of::<__PbBulk_Range_cb0e46a0a248e38c>(),
+                ::core::mem::offset_of!(__PbBulk_Range_cb0e46a0a248e38c, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
+                ::core::mem::align_of::<__PbBulk_i64_d159346acd2a185e>(),
+                ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
                 ::core::mem::size_of::<__PbBulk_i64_i64_e5733c882bf9c317>(),
                 ::core::mem::align_of::<__PbBulk_i64_i64_e5733c882bf9c317>(),
                 ::core::mem::offset_of!(__PbBulk_i64_i64_e5733c882bf9c317, v0),
@@ -226,6 +317,15 @@ pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
                 .into_iter()
                 .map(|v| v as i64),
         );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_f738f16d97296060>(),
+                ::core::mem::align_of::<__PbBulk_Range_f738f16d97296060>(),
+                ::core::mem::offset_of!(__PbBulk_Range_f738f16d97296060, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
         let array = env.new_long_array(data.len() as i32).map_err(|e| e.to_string())?;
         env.set_long_array_region(&array, 0, &data).map_err(|e| e.to_string())?;
         Ok(array.into_raw())
@@ -235,6 +335,983 @@ pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
         Err(message) => {
             let _ = env.throw_new("java/lang/IllegalStateException", message);
             std::ptr::null_mut()
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1new_1d7aa473c3cabcfa5<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i64,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::input_handle_new(__prebindgen_argument_0);
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: source_value,
+            });
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ((&mut *ret_w0)
+                        as *mut ::prebindgen_jni_runtime::Allocation<
+                            bench_flat::InputHandle,
+                        >) as i64,
+                })
+                    .j
+            };
+            let _: () = {
+                let _ = Box::into_raw(ret_w0);
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1value_19dacbaa67102b1db<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i64,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<bench_flat::InputHandle>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &bench_flat::InputHandle = unsafe {
+                        &(*p0_w1_pointer).value
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::input_handle_value(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1sum_1cc53b2df8a803a98<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_f738f16d97296060>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_f738f16d97296060, v0))?
+            } else {
+                None
+            };
+            let p0_w2 = if __prebindgen_input_aliases.needs_group() {
+                let mut p0_w2: Vec<i64> = Vec::new();
+                if true {
+                    let (p0_w3_start, p0_w4) = p0_w1_reader
+                        .rows(
+                            p0_w3,
+                            ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
+                        )?;
+                    let mut p0_w3_accesses = __prebindgen_input_aliases
+                        .begin_group(p0_w4.saturating_mul(1usize));
+                    let mut p0_w3_prepared = Vec::with_capacity(p0_w4);
+                    for p0_w5 in 0..p0_w4 {
+                        let p0_w9 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
+                                    + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
+                            )?;
+                        #[allow(clippy::redundant_closure_call)]
+                        let prepared = (|| {
+                            let p0_w9_pointer = if true {
+                                (p0_w9)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        bench_flat::InputHandle,
+                                    >
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
+                            }
+                            if true {
+                                for address in ::core::iter::once(
+                                    (p0_w9_pointer.addr()) as usize,
+                                ) {
+                                    p0_w3_accesses.push((address, false));
+                                }
+                            }
+                            Ok::<
+                                _,
+                                String,
+                            >(move || -> ::core::result::Result<i64, String> {
+                                let p0_w8: &bench_flat::InputHandle = unsafe {
+                                    &(*p0_w9_pointer).value
+                                };
+                                let p0_w7: i64 = bench_flat::input_handle_value(p0_w8);
+                                let p0_w2 = p0_w7;
+                                Ok(p0_w2)
+                            })
+                        })();
+                        p0_w3_prepared.push(prepared?);
+                    }
+                    __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
+                    p0_w2.reserve_exact(p0_w4);
+                    for build in p0_w3_prepared {
+                        let element = build()?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p0_w2.len();
+                            p0_w2.as_mut_ptr().add(initialized).write(element);
+                            p0_w2.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p0_w2
+            } else {
+                let mut p0_w2: Vec<i64> = Vec::new();
+                if true {
+                    let (p0_w3_start, p0_w4) = p0_w1_reader
+                        .rows(
+                            p0_w3,
+                            ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
+                        )?;
+                    p0_w2.reserve_exact(p0_w4);
+                    for p0_w5 in 0..p0_w4 {
+                        let p0_w9 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
+                                    + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
+                            )?;
+                        #[allow(clippy::redundant_closure_call)]
+                        let p0_w3_element_built = (|| -> ::core::result::Result<
+                            i64,
+                            String,
+                        > {
+                            let p0_w9_pointer = if true {
+                                (p0_w9)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        bench_flat::InputHandle,
+                                    >
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
+                            }
+                            let p0_w8: &bench_flat::InputHandle = unsafe {
+                                &(*p0_w9_pointer).value
+                            };
+                            let p0_w7: i64 = bench_flat::input_handle_value(p0_w8);
+                            let p0_w2 = p0_w7;
+                            Ok(p0_w2)
+                        })();
+                        let element = p0_w3_element_built?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p0_w2.len();
+                            p0_w2.as_mut_ptr().add(initialized).write(element);
+                            p0_w2.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p0_w2
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if true { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w2_built.expect("active input"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::handle_values_sum(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1sum_1cabe62d5ee2df7d3<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_cb0e46a0a248e38c>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_cb0e46a0a248e38c, v0))?
+            } else {
+                None
+            };
+            let p0_w2 = if __prebindgen_input_aliases.needs_group() {
+                let mut p0_w2: Vec<bench_flat::HandleRecord> = Vec::new();
+                if true {
+                    let (p0_w3_start, p0_w4) = p0_w1_reader
+                        .rows(
+                            p0_w3,
+                            ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+                        )?;
+                    let mut p0_w3_accesses = __prebindgen_input_aliases
+                        .begin_group(p0_w4.saturating_mul(1usize));
+                    let mut p0_w3_prepared = Vec::with_capacity(p0_w4);
+                    for p0_w5 in 0..p0_w4 {
+                        let p0_w9 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<
+                                            __PbBulk_i64_i64_06de1c5aa99699f6,
+                                        >())
+                                    + ::core::mem::offset_of!(
+                                        __PbBulk_i64_i64_06de1c5aa99699f6, v0
+                                    ),
+                            )?;
+                        let p0_w7_f1 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<
+                                            __PbBulk_i64_i64_06de1c5aa99699f6,
+                                        >())
+                                    + ::core::mem::offset_of!(
+                                        __PbBulk_i64_i64_06de1c5aa99699f6, v1
+                                    ),
+                            )?;
+                        #[allow(clippy::redundant_closure_call)]
+                        let prepared = (|| {
+                            let p0_w9_pointer = if true {
+                                (p0_w9)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        bench_flat::InputHandle,
+                                    >
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
+                            }
+                            let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
+                            if true {
+                                for address in ::core::iter::once(
+                                    (p0_w9_pointer.addr()) as usize,
+                                ) {
+                                    p0_w3_accesses.push((address, false));
+                                }
+                            }
+                            Ok::<
+                                _,
+                                String,
+                            >(move || -> ::core::result::Result<
+                                bench_flat::HandleRecord,
+                                String,
+                            > {
+                                let p0_w8: &bench_flat::InputHandle = unsafe {
+                                    &(*p0_w9_pointer).value
+                                };
+                                let p0_w6_f0: bench_flat::InputHandle = bench_flat::input_handle_copy(
+                                    p0_w8,
+                                );
+                                let p0_w6_f1: i64 = ::core::convert::Into::into(
+                                    p0_w6_f1.expect("active value"),
+                                );
+                                let p0_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                                    handle: p0_w6_f0,
+                                    tag: p0_w6_f1,
+                                };
+                                let p0_w2 = p0_w6;
+                                Ok(p0_w2)
+                            })
+                        })();
+                        p0_w3_prepared.push(prepared?);
+                    }
+                    __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
+                    p0_w2.reserve_exact(p0_w4);
+                    for build in p0_w3_prepared {
+                        let element = build()?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p0_w2.len();
+                            p0_w2.as_mut_ptr().add(initialized).write(element);
+                            p0_w2.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p0_w2
+            } else {
+                let mut p0_w2: Vec<bench_flat::HandleRecord> = Vec::new();
+                if true {
+                    let (p0_w3_start, p0_w4) = p0_w1_reader
+                        .rows(
+                            p0_w3,
+                            ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+                        )?;
+                    p0_w2.reserve_exact(p0_w4);
+                    for p0_w5 in 0..p0_w4 {
+                        let p0_w9 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<
+                                            __PbBulk_i64_i64_06de1c5aa99699f6,
+                                        >())
+                                    + ::core::mem::offset_of!(
+                                        __PbBulk_i64_i64_06de1c5aa99699f6, v0
+                                    ),
+                            )?;
+                        let p0_w7_f1 = p0_w1_reader
+                            .read::<
+                                i64,
+                            >(
+                                (p0_w3_start
+                                    + p0_w5
+                                        * ::core::mem::size_of::<
+                                            __PbBulk_i64_i64_06de1c5aa99699f6,
+                                        >())
+                                    + ::core::mem::offset_of!(
+                                        __PbBulk_i64_i64_06de1c5aa99699f6, v1
+                                    ),
+                            )?;
+                        #[allow(clippy::redundant_closure_call)]
+                        let p0_w3_element_built = (|| -> ::core::result::Result<
+                            bench_flat::HandleRecord,
+                            String,
+                        > {
+                            let p0_w9_pointer = if true {
+                                (p0_w9)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        bench_flat::InputHandle,
+                                    >
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
+                            }
+                            let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
+                            let p0_w8: &bench_flat::InputHandle = unsafe {
+                                &(*p0_w9_pointer).value
+                            };
+                            let p0_w6_f0: bench_flat::InputHandle = bench_flat::input_handle_copy(
+                                p0_w8,
+                            );
+                            let p0_w6_f1: i64 = ::core::convert::Into::into(
+                                p0_w6_f1.expect("active value"),
+                            );
+                            let p0_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                                handle: p0_w6_f0,
+                                tag: p0_w6_f1,
+                            };
+                            let p0_w2 = p0_w6;
+                            Ok(p0_w2)
+                        })();
+                        let element = p0_w3_element_built?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p0_w2.len();
+                            p0_w2.as_mut_ptr().add(initialized).write(element);
+                            p0_w2.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p0_w2
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if true { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w2_built.expect("active input"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::handle_records_sum(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1echo_1951038e1201850d3<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {
+                if jni_environment
+                    .get_array_length(&ownership_accepted)
+                    .map_err(|e| e.to_string())? != 1
+                {
+                    return Err("invalid ownership acknowledgement".into());
+                }
+                __pb_receipt_valid.set(true);
+            };
+            let p0_w1_bytes = if true {
+                ::prebindgen_jni_runtime::bulk::input(
+                    &mut jni_environment,
+                    &p0_w1,
+                    p0_w1_length,
+                )?
+            } else {
+                Vec::new()
+            };
+            let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_49da87bb4c377b9a, v0))?
+            } else {
+                None
+            };
+            let mut p0_w2: Vec<bench_flat::InputHandle> = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                    )?;
+                let mut p0_w3_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w4.saturating_mul(1usize));
+                let mut p0_w3_prepared = Vec::with_capacity(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w8 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>())
+                                + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
+                        )?;
+                    #[allow(clippy::redundant_closure_call)]
+                    let prepared = (|| {
+                        let p0_w8_pointer = if true {
+                            (p0_w8)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    bench_flat::InputHandle,
+                                >
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w8_pointer.addr()) as usize,
+                            ) {
+                                p0_w3_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<
+                            _,
+                            String,
+                        >(move || -> ::core::result::Result<
+                            bench_flat::InputHandle,
+                            String,
+                        > {
+                            if true {
+                                __prebindgen_input_consumed
+                                    .set(
+                                        __prebindgen_input_consumed.get()
+                                            + (::core::iter::once((p0_w8_pointer.addr()) as usize))
+                                                .count(),
+                                    );
+                            }
+                            let p0_w7 = if true {
+                                Some(unsafe { Box::from_raw(p0_w8_pointer) })
+                            } else {
+                                None
+                            };
+                            let p0_w7: bench_flat::InputHandle = p0_w7
+                                .expect("active allocation")
+                                .value;
+                            let p0_w2 = p0_w7;
+                            Ok(p0_w2)
+                        })
+                    })();
+                    p0_w3_prepared.push(prepared?);
+                }
+                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
+                p0_w2.reserve_exact(p0_w4);
+                for build in p0_w3_prepared {
+                    let element = build()?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if true { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w2_built.expect("active input"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::owned_handles_echo(__prebindgen_argument_0);
+            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>(),
+            );
+            let ret_w1_source = source_value;
+            let ret_w3 = ret_w1_source.len();
+            let mut ret_w1_commits = Vec::with_capacity(ret_w3);
+            let ret_w1 = ret_w0_writer
+                .rows(
+                    ret_w3,
+                    ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                    ::core::mem::align_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                )?;
+            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+                let mut ret_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w2,
+                });
+                ret_w0_writer
+                    .write(
+                        (ret_w1.offset as usize
+                            + ret_w4
+                                * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>())
+                            + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
+                        ((&mut *ret_w5)
+                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                bench_flat::InputHandle,
+                            >) as i64,
+                    )?;
+                ret_w1_commits
+                    .push(move || {
+                        let _ = Box::into_raw(ret_w5);
+                    });
+            }
+            let ret_w1 = Some(ret_w1);
+            ret_w0_writer
+                .range(
+                    ::core::mem::offset_of!(__PbBulk_Range_49da87bb4c377b9a, v0),
+                    ret_w1,
+                )?;
+            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                jni_environment
+                    .byte_array_from_slice(ret_w0_writer.bytes())
+                    .map_err(|e| e.to_string())?,
+            );
+            let __pb_direct_object = ret_w0;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                for commit in ret_w1_commits {
+                    commit();
+                }
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
         }
     }
 }
@@ -5817,8 +6894,16 @@ const _: () = {
     );
 };
 const _: () = assert!(
+    ::core::mem::size_of:: < bench_flat::HandleRecord > () != 0,
+    "flat object `HandleRecord` must have nonzero size"
+);
+const _: () = assert!(
     ::core::mem::size_of:: < bench_flat::Handler > () != 0,
     "flat object `Handler` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < bench_flat::InputHandle > () != 0,
+    "flat object `InputHandle` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < bench_flat::Packet > () != 0,

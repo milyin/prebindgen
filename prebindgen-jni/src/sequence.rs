@@ -119,7 +119,8 @@ pub(crate) fn input_list(
             "callback sequence is only supported as the function's successful return".into(),
         );
     }
-    let child = input_kotlin(element, context)?;
+    let mut child = input_kotlin(element, context)?;
+    child.prepare_arguments(crate::kotlin::input_handles(element, false))?;
     if child.parameters.len() != 1 {
         return Err("Kotlin collection elements must expose exactly one value; declare a data class for expanded fields".into());
     }
@@ -131,22 +132,48 @@ pub(crate) fn input_list(
     let JniWire::Rows { condition, .. } = &carrier.kind else {
         return Err("sequence requires an object-array control".into());
     };
-    let mut code = String::new();
+    let resources = crate::kotlin::input_handles(element, false);
+    let owned = crate::kotlin::input_handles(element, true);
+    let values = child
+        .prepared_arguments
+        .iter()
+        .map(|value| format!("{}.InputValidation.value {{ {value} }}", context.package))
+        .collect::<Vec<_>>();
+    if values.len() != child.arguments.len() {
+        return Err("collection input converter must provide prepared wire values".into());
+    }
+    let mut setup = String::new();
     for binding in &child.setup {
-        code.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
+        setup.push_str("val ");
+        setup.push_str(&binding.name);
+        setup.push_str(" = ");
+        setup.push_str(&binding.expression);
+        setup.push('\n');
     }
-    let mut locks = if child.locks.is_empty() {
-        "kotlin.collections.emptyList<Nothing>()".into()
+    let snapshot = format!("{name}_snapshot");
+    let index = format!("{name}_index");
+    let rows = format!("kotlin.Array<kotlin.Any?>({snapshot}.size) {{ {index} -> val {parameter} = {snapshot}[{index}]\n{setup}kotlin.arrayOf<kotlin.Any?>({}) }}",values.join(", "));
+    let columns =
+        if crate::group::row_fields(element).any(|w| matches!(w.kind, JniWire::Handle { .. })) {
+            format!(
+                "intArrayOf({})",
+                crate::group::row_fields(element)
+                    .map(|w| match &w.kind {
+                        JniWire::Handle { handle, .. } if handle.access == Access::Move => "2",
+                        JniWire::Handle { .. } => "1",
+                        _ => "0",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        } else {
+            "null".into()
+        };
+    let expression = if resources {
+        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {}.InputRows({rows}, {columns}) }} else null",context.package)
     } else {
-        format!(
-            "kotlin.collections.listOfNotNull({})",
-            child.locks.join(", ")
-        )
+        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {rows} }} else null")
     };
-    for group in &child.lock_groups {
-        locks = format!("({locks} + ({group}))");
-    }
-    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ __pb_consume: ({}.NativeHandle) -> Unit -> {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),context.package,child.consumed.join("; "));
     Ok(KotlinInput {
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
@@ -157,21 +184,22 @@ pub(crate) fn input_list(
             expression,
             absent: "null".into(),
         }],
-        arguments: vec![format!(
-            "{state}?.map {{ it.first() }}?.toTypedArray<kotlin.Any?>()"
-        )],
-        locks: Vec::new(),
-        lock_groups: if child.locks.is_empty() && child.lock_groups.is_empty() {
-            vec![]
+        arguments: vec![if resources {
+            format!("{state}?.encode()")
         } else {
-            vec![format!("{state}.orEmpty().flatMap {{ it.second() }}")]
+            state.clone()
+        }],
+        prepared_arguments: vec![state.clone()],
+        locks: vec![],
+        lock_groups: if resources {
+            vec![format!("{state}?.handles.orEmpty()")]
+        } else {
+            vec![]
         },
-        consumed: if child.consumed.is_empty() {
-            vec![]
+        consumed: if owned {
+            vec![format!("{state}?.consume(__pb_consume)")]
         } else {
-            vec![format!(
-                "{state}.orEmpty().forEach {{ it.third(__pb_consume) }}"
-            )]
+            vec![]
         },
     })
 }

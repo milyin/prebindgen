@@ -57,3 +57,70 @@ internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R 
         else synchronized(ordered[index]) { acquire(index + 1) }
     return acquire(0)
 }
+
+/** Distinguish generated wire validation from exceptions in user list implementations. */
+internal object InputValidation {
+    inline fun <T> value(body: () -> T): T = try { body() }
+        catch (failure: IllegalArgumentException) { throw HandleValidationFailure(failure.message ?: "invalid input") }
+    inline fun require(value: Boolean, message: () -> String) {
+        if (!value) throw HandleValidationFailure(message())
+    }
+}
+
+/** One-call input preparation, local to one generated invocation.
+ * encode encodes under the handle locks; the generated invocation calls it once.
+ * The cached references remain live for ownership-receipt handling afterwards.
+ */
+internal interface PreparedInput {
+    val handles: List<NativeHandle>
+    val owners: List<NativeHandle>
+    fun encode(): Any
+    fun consume(visit: (NativeHandle) -> Unit) { for (owner in owners) visit(owner) }
+}
+
+/** The row arrays are the actual JNI carrier, rather than per-row callback objects. */
+internal class InputRows(private val rows: Array<Any?>, private val handleKinds: IntArray?) : PreparedInput {
+    private var savedHandles: ArrayList<NativeHandle>? = null
+    private var savedOwners: ArrayList<NativeHandle>? = null
+    override val handles: List<NativeHandle> get() = savedHandles ?: emptyList()
+    override val owners: List<NativeHandle> get() = savedOwners ?: emptyList()
+    init {
+        for (raw in rows) {
+            val row = raw as Array<*>
+            for (column in row.indices) {
+                val value = row[column]
+                if (value is NativeHandle) {
+                    if (savedHandles == null) savedHandles = ArrayList()
+                    savedHandles!!.add(value)
+                    if (handleKinds?.get(column) == 2) {
+                        if (savedOwners == null) savedOwners = ArrayList()
+                        savedOwners!!.add(value)
+                    }
+                } else if (value is PreparedInput) {
+                    if (value.handles.isNotEmpty()) {
+                        if (savedHandles == null) savedHandles = ArrayList()
+                        savedHandles!!.addAll(value.handles)
+                    }
+                    if (value.owners.isNotEmpty()) {
+                        if (savedOwners == null) savedOwners = ArrayList()
+                        savedOwners!!.addAll(value.owners)
+                    }
+                }
+            }
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    override fun encode(): Array<Any?> {
+        for (raw in rows) {
+            val row = raw as Array<Any?>
+            for (column in row.indices) {
+                val value = row[column]
+                if ((handleKinds?.get(column) ?: 0) != 0) {
+                    if (value is NativeHandle) row[column] = value.raw
+                    else if (value == null) row[column] = 0L
+                } else if (value is PreparedInput) row[column] = value.encode()
+            }
+        }
+        return rows
+    }
+}

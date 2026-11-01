@@ -79,7 +79,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
         if c.is_ascii_alphanumeric() || c == '_' {
             word.push(c)
         } else {
-            if word == from {
+            if word == from && !out.trim_end().ends_with('.') && !out.trim_end().ends_with('`') {
                 out.push_str(to)
             } else {
                 out.push_str(&word)
@@ -100,6 +100,7 @@ pub(crate) fn input_kotlin(
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_kotlin(nodes, context)?;
+    c.prepare_arguments(kotlin::input_handles(nodes, false))?;
     // A single converted value is idiomatic T?. Multiple views retain an
     // explicit presence argument so Some with nullable components is distinct.
     let presence = if c.parameters.len() == 1 && !kotlin::has_optional(nodes) {
@@ -110,6 +111,7 @@ pub(crate) fn input_kotlin(
         for a in c
             .arguments
             .iter_mut()
+            .chain(c.prepared_arguments.iter_mut())
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
@@ -131,6 +133,7 @@ pub(crate) fn input_kotlin(
     for a in c
         .arguments
         .iter_mut()
+        .chain(c.prepared_arguments.iter_mut())
         .chain(c.locks.iter_mut())
         .chain(c.consumed.iter_mut())
         .chain(c.lock_groups.iter_mut())
@@ -141,7 +144,8 @@ pub(crate) fn input_kotlin(
         *a = replace(a, root, "1");
     }
     if matches!(o, JniOptional::Flag(_)) {
-        out.arguments.push(tag);
+        out.arguments.push(tag.clone());
+        out.prepared_arguments.push(tag);
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
         let niche = o.niche().filter(|_| inner[j].name == *o.discriminator());
@@ -157,6 +161,30 @@ pub(crate) fn input_kotlin(
         };
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
+    }
+    let offset = usize::from(matches!(o, JniOptional::Flag(_)));
+    for (j, a) in c.prepared_arguments.into_iter().enumerate() {
+        if !matches!(
+            inner[j].kind,
+            JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+        ) {
+            out.prepared_arguments
+                .push(out.arguments[j + offset].clone());
+            continue;
+        }
+        let a = if o
+            .niche()
+            .is_some_and(|_| inner[j].name == *o.discriminator())
+            && matches!(
+                inner[j].kind,
+                JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+            ) {
+            format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
+        } else {
+            a
+        };
+        out.prepared_arguments
+            .push(format!("if ({presence}) {a} else null"));
     }
     out.setup.extend(c.setup.into_iter().map(|mut b| {
         b.expression = format!("if ({presence}) ({}) else ({})", b.expression, b.absent);
@@ -279,4 +307,19 @@ pub(crate) fn remaining(wire: &JniWire, niche: &JniNiche) -> Option<JniNiche> {
     // Stop at the carrier boundary or the next valid payload value. Do not
     // advertise a reserved range's neighbour merely because it fits an integer.
     wire.validate_niche(&next).ok().map(|()| next)
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    #[test]
+    fn optional_replacement_keeps_member_and_property_identifiers() {
+        assert_eq!(
+            super::replace(
+                "pkg.InputValidation.value { value } + row.`value` + value.raw",
+                "value",
+                "checked"
+            ),
+            "pkg.InputValidation.value { checked } + row.`value` + checked.raw"
+        );
+    }
 }
