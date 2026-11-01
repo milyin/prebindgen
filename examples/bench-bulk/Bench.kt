@@ -92,6 +92,22 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
                 if (cycle[0].isEmpty()) 0L else bench.plain.inputHandleValue(cycle[0][0])+cycle[0].size
             }))
     }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE + it), it.toLong()) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.handle.close() } })
+        cases.add(Case("owned_handle_records_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.plain.ownedHandleRecordsEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.plain.inputHandleValue(cycle[0][0].handle)+cycle[0].size
+            }))
+        val nested = arrayOf(listOf(emptyList<bench.plain.InputHandle>(),List(size) { bench.plain.inputHandleNew(BASE + it) },emptyList()))
+        cycleCleanup.add(AutoCloseable { nested[0].forEach { row -> row.forEach { it.close() } } })
+        cases.add(Case("nested_owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                nested[0]=bench.plain.nestedOwnedHandlesEcho(nested[0])
+                if (nested[0][1].isEmpty()) 0L else bench.plain.inputHandleValue(nested[0][1][0])+nested[0][1].size
+            }))
+    }
     for (size in payloads) {
         val packet = bench.plain.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256
@@ -181,6 +197,22 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
             Operation { _ ->
                 cycle[0]=bench.bulk.ownedHandlesEcho(cycle[0])
                 if (cycle[0].isEmpty()) 0L else bench.bulk.inputHandleValue(cycle[0][0])+cycle[0].size
+            }))
+    }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE + it), it.toLong()) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.handle.close() } })
+        cases.add(Case("owned_handle_records_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.bulk.ownedHandleRecordsEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.bulk.inputHandleValue(cycle[0][0].handle)+cycle[0].size
+            }))
+        val nested = arrayOf(listOf(emptyList<bench.bulk.InputHandle>(),List(size) { bench.bulk.inputHandleNew(BASE + it) },emptyList()))
+        cycleCleanup.add(AutoCloseable { nested[0].forEach { row -> row.forEach { it.close() } } })
+        cases.add(Case("nested_owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                nested[0]=bench.bulk.nestedOwnedHandlesEcho(nested[0])
+                if (nested[0][1].isEmpty()) 0L else bench.bulk.inputHandleValue(nested[0][1][0])+nested[0][1].size
             }))
     }
     for (size in payloads) {

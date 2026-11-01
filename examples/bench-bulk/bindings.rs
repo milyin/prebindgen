@@ -83,6 +83,13 @@ fn main() {
             fun!(owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
                 .expand_return(expand_return!(InputHandle).field_self_into().bulk())
         } else { fun!(owned_handles_echo) };
+        let owned_records_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let owned_records = fun!(owned_handle_records_echo).expand_param("values",if bulk {owned_records_input.bulk()} else {owned_records_input});
+        let owned_records = if bulk {owned_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {owned_records};
+        let nested_owners = if bulk {
+            fun!(nested_owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
+                .expand_return(expand_return!(InputHandle).field_self_into().bulk())
+        } else {fun!(nested_owned_handles_echo)};
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
@@ -98,6 +105,8 @@ fn main() {
                     .fun(handle_values)
                     .fun(handle_records)
                     .fun(owned_handles)
+                    .fun(owned_records)
+                    .fun(nested_owners)
                     .class(data_class!(Row))
                     .class(data_class!(WideRow))
                     .class(ptr_class!(RowReturnHandler))

@@ -270,3 +270,13 @@ pub fn handle_records_sum(values:Vec<HandleRecord>)->i64 {
 
 #[prebindgen]
 pub fn owned_handles_echo(values:Vec<InputHandle>)->Vec<InputHandle> { std::hint::black_box(values) }
+
+
+#[prebindgen]
+pub fn owned_handle_records_echo(values: Vec<HandleRecord>) -> Vec<HandleRecord> {
+    std::hint::black_box(values)
+}
+#[prebindgen]
+pub fn nested_owned_handles_echo(values: Vec<Vec<InputHandle>>) -> Vec<Vec<InputHandle>> {
+    std::hint::black_box(values)
+}
