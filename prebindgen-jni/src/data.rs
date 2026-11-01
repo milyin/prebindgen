@@ -981,8 +981,9 @@ pub(crate) fn output_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let mut c = kotlin::output_components(nodes, context)?;
+    let mut c = kotlin::output_components(nodes, context, owners)?;
     if c.delivered.len() != fields(nodes)?.len() {
         return Err("incomplete data-class output occurrence".into());
     }

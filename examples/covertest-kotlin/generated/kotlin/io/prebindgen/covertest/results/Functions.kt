@@ -65,20 +65,10 @@ public fun `cResultRichError`(p0_w1: Boolean, onBindingError: io.prebindgen.cove
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_c_result_rich_error_e97eeeaedd2fcd23(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
-    if (returnCapture.status == 3) return@run run {
-var cleanupFailure: Throwable? = null
-var callbackFailed = false
-try {
-            if (returnCapture.d1 != null) {
+    if (returnCapture.status == 3) return@run run {             if (returnCapture.d1 != null) {
             }
 
-onError.run(io.prebindgen.covertest.enums.Code.fromWire(returnCapture.d0), if (returnCapture.d1 != null) returnCapture.d1 as String else null)
-} catch (failure: Throwable) { callbackFailed = true; cleanupFailure = failure; throw failure } finally {
-            if (returnCapture.d1 != null) {
-            }
-
-if (!callbackFailed) cleanupFailure?.let { throw it }
-} }
+onError.run(io.prebindgen.covertest.enums.Code.fromWire(returnCapture.d0), if (returnCapture.d1 != null) returnCapture.d1 as String else null) }
     Unit
     } finally { returnCapture.release() }
 }
@@ -123,21 +113,14 @@ public fun `resultOptional`(p0_w1: Int, onBindingError: io.prebindgen.covertest.
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_result_optional_01608adeaf654d25(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (nativeResult != -3) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-            try {
-            if (nativeResult != -3) {
+                if (nativeResult != -3) {
             }
-            if (nativeResult != -3) io.prebindgen.covertest.enums.Code.fromWire(nativeResult) else null
-        } catch (failure: Throwable) {
-            if (nativeResult != -3) {
-            }
-            throw failure
-        }
+
+if (nativeResult != -3) io.prebindgen.covertest.enums.Code.fromWire(nativeResult) else null
     } finally { returnCapture.release() }
 }
 
@@ -157,21 +140,14 @@ public fun `resultRecord`(p0_w1: Boolean, onBindingError: io.prebindgen.covertes
     val returnCapture = io.prebindgen.covertest.Return_Int_Int2_ErrorLong1_d482e1a7516fbcfa.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_result_record_1be5deeed131a35d(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s1 != -3) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-            try {
-            if (returnCapture.s1 != -3) {
+                if (returnCapture.s1 != -3) {
             }
-            io.prebindgen.covertest.enums.EnumRecord(io.prebindgen.covertest.enums.Priority.fromWire(returnCapture.s0), if (returnCapture.s1 != -3) io.prebindgen.covertest.enums.Code.fromWire(returnCapture.s1) else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s1 != -3) {
-            }
-            throw failure
-        }
+
+io.prebindgen.covertest.enums.EnumRecord(io.prebindgen.covertest.enums.Priority.fromWire(returnCapture.s0), if (returnCapture.s1 != -3) io.prebindgen.covertest.enums.Code.fromWire(returnCapture.s1) else null)
     } finally { returnCapture.release() }
 }
 

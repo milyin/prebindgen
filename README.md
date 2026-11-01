@@ -871,6 +871,15 @@ encoded once; callback returns prepare fresh state for every invocation.
 Partial-consumption receipts use the retained owners, including nested owners in
 native acquisition order. Exceptions from user-provided lists propagate unchanged.
 
+Kotlin collection outputs create no per-row cleanup closures. Collections without
+native owners need no cleanup state. Handle-bearing collection trees share one
+list retaining the wrappers already constructed, including wrappers inside nested
+or optional rows. If reconstruction fails, cleanup closes those wrappers and scans
+the original wire values to reclaim only the unwrapped suffix. A completed
+collection needs no wire scan. A wrapper consumed by user code stays consumed;
+cleanup does not reclaim the new owner produced by `take()`. Ordinary JNI output
+lists reserve the known row count rather than growing their storage repeatedly.
+
 Low-level `KotlinInput` converters can provide `prepared_arguments` for collection
 preparation: use handle objects instead of their addresses and retain nested
 prepared inputs. Nonempty metadata must match the wire argument count.

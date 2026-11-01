@@ -343,6 +343,7 @@ impl KotlinOutputConversion for JniOutput {
 pub(crate) fn output_leaves(
     wires: &[&Wire<JniWire>],
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     let result = context.result;
     let suppress_cleanup = record_cleanup_failure(context, "cleanup");
@@ -388,10 +389,22 @@ pub(crate) fn output_leaves(
         if let JniWire::Handle { handle, .. } = &w.kind {
             let c = context.class_name(&handle.ty)?;
             output_locals.push_str(&format!("        var {output}{i}: {c}? = null\n"));
-            materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));
+            let value = if let Some(owners) = owners {
+                format!("requireNotNull({owners}).own({})", delivered[i])
+            } else {
+                delivered[i].clone()
+            };
+            materialize.push_str(&format!("            {output}{i} = {value}\n"));
             delivered[i] = format!("requireNotNull({output}{i})");
             let drop = context.drop_handle(&handle.ty, &format!("{result}[{i}] as Long"))?;
-            cleanup.push_str(&format!("            try {{ val owner = {output}{i}; if (owner != null) owner.close() else {drop} }} catch (cleanup: Throwable) {{ {suppress_cleanup} }}\n"));
+            let release = if let Some(owners) = owners {
+                // Materialization and cleanup visit active handles in the same
+                // schema order. Only unwrapped owners still belong to the wire.
+                format!("if ({owners}?.unread() != false) {{ {drop} }}")
+            } else {
+                format!("val owner = {output}{i}; if (owner != null) owner.close() else {drop}")
+            };
+            cleanup.push_str(&format!("            try {{ {release} }} catch (cleanup: Throwable) {{ {suppress_cleanup} }}\n"));
         }
     }
     Ok(KotlinOutput {
@@ -560,13 +573,23 @@ pub(crate) fn remap_output(
     }
 }
 pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
+    output_kotlin_scoped(node, context, None)
+}
+
+/// A collection tree shares one ownership list. Wrappers are registered in wire
+/// traversal order, so failure cleanup can skip that prefix of native owners.
+pub(crate) fn output_kotlin_scoped(
+    node: &JniNode,
+    context: &KotlinContext<'_>,
+    owners: Option<&str>,
+) -> Result<KotlinOutput> {
     match node {
-        JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners),
         JniNode::Chain {
             meta: JniChain::Bulk(record),
             child,
             ..
-        } => crate::bulk::output_kotlin(record, child, context),
+        } => crate::bulk::output_kotlin(record, child, context, owners),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             ..
@@ -575,26 +598,53 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
             child: element,
             meta: JniChain::Sequence(metadata),
             ..
-        } => match metadata {
-            JniSequence::Buffered => crate::sequence::output_list(element, context),
-            JniSequence::Bulk => crate::bulk::output_list(element, context),
-            JniSequence::Callback => {
-                Err("callback sequence requires function-level callback delivery".into())
+        } => {
+            let name = format!("{}owners", context.output_prefix);
+            let root = owners.is_none() && input_handles(element, false);
+            let scope = if root { Some(name.as_str()) } else { owners };
+            let mut output = match metadata {
+                JniSequence::Buffered => crate::sequence::output_list(element, context, scope)?,
+                JniSequence::Bulk => crate::bulk::output_list(element, context, scope)?,
+                JniSequence::Callback => {
+                    return Err(
+                        "callback sequence requires function-level callback delivery".into(),
+                    )
+                }
+            };
+            if root {
+                output.output_locals = format!(
+                    "var {name}: {}.CollectionOwners? = null\n{}",
+                    context.package, output.output_locals
+                );
+                output.materialize = format!(
+                    "{name} = {}.CollectionOwners()\n{}\n{name}!!.complete = true\n",
+                    context.package, output.materialize
+                );
+                let close = if let Some(failure) = context.cleanup_failure {
+                    format!("{failure} = {name}?.close({failure}) ?: {failure}")
+                } else {
+                    format!("{name}?.close({})", context.failure)
+                };
+                output.cleanup = format!(
+                    "{close}\nif ({name}?.complete != true) {{\n{}\n}}\n",
+                    output.cleanup
+                );
             }
-        },
+            Ok(output)
+        }
         JniNode::Chain {
             child: element,
             meta: JniChain::Optional(metadata),
             ..
-        } => optional::output_kotlin(element, metadata, context),
+        } => optional::output_kotlin(element, metadata, context, owners),
         JniNode::Branch {
             children: elements,
             meta: JniBranch::Group(metadata),
             ..
         } => match metadata {
-            JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context),
+            JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context, owners),
             JniGroup::Named(name) => {
-                let mut out = output_components(elements, context)?;
+                let mut out = output_components(elements, context, owners)?;
                 out.result_names = (0..out.result_types.len())
                     .map(|i| {
                         Some(if out.result_types.len() == 1 {
@@ -606,17 +656,18 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
                     .collect();
                 Ok(out)
             }
-            _ => output_components(elements, context),
+            _ => output_components(elements, context, owners),
         },
     }
 }
 pub(crate) fn output_components(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     if nodes.iter().all(|n| matches!(n, JniNode::Leaf(_))) {
         let wires = nodes.iter().flat_map(leaf_wires).collect::<Vec<_>>();
-        return output_leaves(&wires, context);
+        return output_leaves(&wires, context, owners);
     }
     let mut out = KotlinOutput::default();
     let mut offset = 0;
@@ -629,7 +680,7 @@ pub(crate) fn output_components(
             ..*context
         };
         let count = crate::group::kotlin_result_fields(node).len();
-        let mut c = output_kotlin(node, &ctx)?;
+        let mut c = output_kotlin_scoped(node, &ctx, owners)?;
         remap_output(&mut c, &local, context.result, offset, count);
         c.result_names.resize(c.result_types.len(), None);
         out.result_names.extend(c.result_names);

@@ -3727,3 +3727,84 @@ pub fn result_unit_error(fail: bool) -> Result<i64, ()> {
 pub fn projection_pair_callback(callback: impl Fn(ProjectionPair) + Send + Sync + 'static) {
     callback(projection_pair_owned());
 }
+
+// Returned collections used to inject Kotlin-constructor failures after native
+// ownership transfer. Optional fields exercise skipped entries in the owner walk.
+#[prebindgen]
+pub struct OutputCleanupRow {
+    pub id: i64,
+    pub first: Option<OwnedResource>,
+    pub second: Option<OwnedResource>,
+}
+fn output_cleanup_values() -> Vec<OutputCleanupRow> {
+    vec![
+        OutputCleanupRow {
+            id: 0,
+            first: None,
+            second: Some(OwnedResourceImpl { id: 10 }),
+        },
+        OutputCleanupRow {
+            id: 1,
+            first: Some(OwnedResourceImpl { id: 11 }),
+            second: Some(OwnedResourceImpl { id: 12 }),
+        },
+        OutputCleanupRow {
+            id: 2,
+            first: Some(OwnedResourceImpl { id: 13 }),
+            second: None,
+        },
+    ]
+}
+fn output_cleanup_nested_values() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    let mut rows = output_cleanup_values().into_iter();
+    vec![
+        None,
+        Some(vec![]),
+        Some(vec![rows.next().unwrap(), rows.next().unwrap()]),
+        None,
+        Some(vec![rows.next().unwrap()]),
+    ]
+}
+#[prebindgen]
+pub fn output_cleanup_rows() -> Vec<OutputCleanupRow> {
+    output_cleanup_values()
+}
+#[prebindgen]
+pub fn output_cleanup_rows_bulk() -> Vec<OutputCleanupRow> {
+    output_cleanup_values()
+}
+#[prebindgen]
+pub fn output_cleanup_nested() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    output_cleanup_nested_values()
+}
+#[prebindgen]
+pub fn output_cleanup_nested_bulk() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    output_cleanup_nested_values()
+}
+#[prebindgen]
+pub fn output_cleanup_callback(callback: impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)) {
+    callback(output_cleanup_nested_values());
+}
+#[prebindgen]
+pub fn output_cleanup_callback_bulk(callback: impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)) {
+    callback(output_cleanup_nested_values());
+}
+
+#[prebindgen]
+pub struct OutputCleanupSurround {
+    pub before: OwnedResource,
+    pub values: Vec<Option<Vec<OutputCleanupRow>>>,
+    pub after: OwnedResource,
+}
+#[prebindgen]
+pub fn output_cleanup_surround() -> OutputCleanupSurround {
+    OutputCleanupSurround {
+        before: OwnedResourceImpl { id: 90 },
+        values: output_cleanup_nested_values(),
+        after: OwnedResourceImpl { id: 91 },
+    }
+}
+#[prebindgen]
+pub fn output_cleanup_surround_bulk() -> OutputCleanupSurround {
+    output_cleanup_surround()
+}

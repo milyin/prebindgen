@@ -48,54 +48,60 @@ public fun `jniBufferResourceRows`(onError: io.prebindgen.covertest.JniErrorHand
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_jni_buffer_resource_rows_54fd0c38ecd1f227(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.buffers.JniBufferResourceRow>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.buffers.JniBufferResourceRow>? = null
+ outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
 try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-            try { val owner = outputitem_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
 }
 } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
  }
         return@run onError.run(returnCapture.message) }
 
-    var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.buffers.JniBufferResourceRow>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+    var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.buffers.JniBufferResourceRow>? = null
         try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+outputowners = io.prebindgen.covertest.CollectionOwners()
+outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {             try { val owner = outputitem_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
- } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
-            outputitem_g0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(output_row[0] as Long)
+            outputitem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackOwned(output_row[0] as Long))
 
 outputlist.add(io.prebindgen.covertest.buffers.JniBufferResourceRow(requireNotNull(outputitem_g0_0), output_row[1] as String, output_row[2] as ByteArray))
 }
+
+outputowners!!.complete = true
             requireNotNull(outputlist)
         } catch (failure: Throwable) {
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
 try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
 try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-            try { val owner = outputitem_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
 }
 } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
             throw failure
         }
     } finally { returnCapture.release() }
@@ -149,26 +155,15 @@ public fun <R> `jniBufferOptionalText`(p0_w1: Int, onError: io.prebindgen.covert
     val returnCapture = io.prebindgen.covertest.Return_Int_String2_ErrorEmpty_7e68b805da700de5.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_jni_buffer_optional_text_d47e68fa29b4bf83(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 == 1) {
-            if (returnCapture.s1 != null) {
-            }
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s0 == 1) {
+                if (returnCapture.s0 == 1) {
             if (returnCapture.s1 != null) {
             }
             }
-            build(returnCapture.s0 == 1, if (returnCapture.s0 == 1) if (returnCapture.s1 != null) returnCapture.s1 as String else null else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s0 == 1) {
-            if (returnCapture.s1 != null) {
-            }
-            }
-            throw failure
-        }
+
+build(returnCapture.s0 == 1, if (returnCapture.s0 == 1) if (returnCapture.s1 != null) returnCapture.s1 as String else null else null)
     } finally { returnCapture.release() }
 }
 
@@ -176,26 +171,15 @@ public fun <R> `jniBufferOptionalBytes`(p0_w1: Int, onError: io.prebindgen.cover
     val returnCapture = io.prebindgen.covertest.Return_Int_ByteArray2_ErrorEmpty_a2aad6159c8c4c14.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_jni_buffer_optional_bytes_2e41382fb70d4d62(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 == 1) {
-            if (returnCapture.s1 != null) {
-            }
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s0 == 1) {
+                if (returnCapture.s0 == 1) {
             if (returnCapture.s1 != null) {
             }
             }
-            build(returnCapture.s0 == 1, if (returnCapture.s0 == 1) if (returnCapture.s1 != null) returnCapture.s1 as ByteArray else null else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s0 == 1) {
-            if (returnCapture.s1 != null) {
-            }
-            }
-            throw failure
-        }
+
+build(returnCapture.s0 == 1, if (returnCapture.s0 == 1) if (returnCapture.s1 != null) returnCapture.s1 as ByteArray else null else null)
     } finally { returnCapture.release() }
 }
 
@@ -203,26 +187,15 @@ public fun <R> `jniBufferOwnedOptional`(p0_w1: Int, onError: io.prebindgen.cover
     val returnCapture = io.prebindgen.covertest.Return_Int_String_ByteArray3_ErrorEmpty_e58bbdba0f222ca2.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_jni_buffer_owned_optional_3ea9b140c39283fe(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 != -1) {
-            if (returnCapture.s0 == 1) {
-            }
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s0 != -1) {
+                if (returnCapture.s0 != -1) {
             if (returnCapture.s0 == 1) {
             }
             }
-            build(returnCapture.s0 != -1, if (returnCapture.s0 != -1) if (returnCapture.s0 == 1) io.prebindgen.covertest.buffers.JniBufferRow(returnCapture.s1 as String, returnCapture.s2 as ByteArray) else null else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s0 != -1) {
-            if (returnCapture.s0 == 1) {
-            }
-            }
-            throw failure
-        }
+
+build(returnCapture.s0 != -1, if (returnCapture.s0 != -1) if (returnCapture.s0 == 1) io.prebindgen.covertest.buffers.JniBufferRow(returnCapture.s1 as String, returnCapture.s2 as ByteArray) else null else null)
     } finally { returnCapture.release() }
 }
 
@@ -283,10 +256,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         lateinit var callbackArgument1_0: ByteArray
         var callbackArgument2_0: String? = null
         var callbackArgument3_0: ByteArray? = null
-        var callbackFailure: Throwable? = null
-        var callbackReady = false
         try {
-            try {
             callbackArgument0_0 = raw0 as String
             callbackArgument1_0 = raw1 as ByteArray
             if (raw2 != null) {
@@ -296,27 +266,10 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
             }
             callbackArgument3_0 = if (raw3 != null) raw3 as ByteArray else null
         } catch (failure: Throwable) {
-            if (raw2 != null) {
-            }
-            if (raw3 != null) {
-            }
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }
-            callbackReady = true
-            p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0, callbackArgument3_0)
-        } catch (failure: Throwable) {
-            callbackFailure = failure
-            throw failure
-        } finally {
-            if (callbackReady) {
-            if (raw2 != null) {
-            }
-            if (raw3 != null) {
-            }
-                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
-            }
-        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0, callbackArgument3_0)
 
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_jni_buffer_callback_a41319fcdf187075(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -414,8 +367,6 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
             callbackArgument0_0 = if (raw0 != null) raw0 as String else null
             callbackArgument0_1 = if (raw0 != null) raw1 as ByteArray else null
         } catch (failure: Throwable) {
-            if (raw0 != null) {
-            }
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }

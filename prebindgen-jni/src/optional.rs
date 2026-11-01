@@ -211,6 +211,7 @@ pub(crate) fn output_kotlin(
     nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     let wires = kotlin::leaf_wires(nodes);
     let flag = usize::from(matches!(o, JniOptional::Flag(_)));
@@ -229,7 +230,7 @@ pub(crate) fn output_kotlin(
         result: &local,
         ..*context
     };
-    let mut c = kotlin::output_kotlin(nodes, &ctx)?;
+    let mut c = kotlin::output_kotlin_scoped(nodes, &ctx, owners)?;
     kotlin::remap_output(&mut c, &local, context.result, flag, wires.len());
     let mut out = KotlinOutput {
         output_locals: c.output_locals,
@@ -241,7 +242,9 @@ pub(crate) fn output_kotlin(
         out.result_names.push(None);
     }
     out.materialize = format!("            if ({p}) {{\n{}            }}\n", c.materialize);
-    out.cleanup = format!("            if ({p}) {{\n{}            }}\n", c.cleanup);
+    if !c.cleanup.is_empty() {
+        out.cleanup = format!("            if ({p}) {{\n{}            }}\n", c.cleanup);
+    }
     c.result_names.resize(c.result_types.len(), None);
     out.result_names.extend(c.result_names);
     for (v, t) in c.delivered.into_iter().zip(c.result_types) {
