@@ -105,59 +105,272 @@ val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.
         try { run { val nativeArgument0 = try { p0_w1_writer_state?.encode() } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer_state?.length ?: 0 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_owned_handles_echo_951038e1201850d3(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume); handles.forEach { if (it.address in taken) it.markConsumed() } } }
     } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
 var outputbulkRange: bench.bulk.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<bench.bulk.InputHandle>? = null
-var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
  if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
  }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
 try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
-for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
-for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
 var outputbulkFailure: Throwable? = failure
 try {         var outputbulkItem_0: bench.bulk.InputHandle? = null
 
-            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
  } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
 } } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
  }
         return@run onError.run(returnCapture.message) }
 
     var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
 var outputbulkRange: bench.bulk.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<bench.bulk.InputHandle>? = null
-var outputbulkActions: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null
         try {
 outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+outputowners = bench.bulk.CollectionOwners()
 outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
-outputbulkActions = kotlin.collections.mutableListOf()
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
         var outputbulkItem_0: bench.bulk.InputHandle? = null
 
-outputbulkActions!!.add { initial -> var outputbulkFailure = initial; try {             try { val owner = outputbulkItem_0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
- } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }; outputbulkFailure }
-            outputbulkItem_0 = bench.bulk.InputHandle((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long)
+            outputbulkItem_0 = requireNotNull(outputowners).own(bench.bulk.InputHandle((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long))
 
 outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 }
+
+outputowners!!.complete = true
             requireNotNull(outputbulkList)
         } catch (failure: Throwable) {
 if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
  }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
 try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
-for (action in outputbulkActions.orEmpty()) { try { action(failure) } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) } }
-for (outputbulkIndex in (outputbulkActions?.size ?: 0) until outputbulkRange!!.length) {
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
 var outputbulkFailure: Throwable? = failure
 try {         var outputbulkItem_0: bench.bulk.InputHandle? = null
 
-            try { val owner = outputbulkItem_0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
  } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
 
 } } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `ownedHandleRecordsEcho`(p0_w3: kotlin.collections.List<bench.bulk.HandleRecord>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<bench.bulk.HandleRecord>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.bulk.HandleRecord> = run {
+    val p0_w3_elements = try { if (true) p0_w3?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_71300b84e922dbba()
+val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
+if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + bench.bulk.BulkLayouts.r71300b84e922dbba.offsets[0]) } else {
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, bench.bulk.BulkLayouts.rb3c08eb92fbbc74c)
+p0_w1_writer.range((0) + bench.bulk.BulkLayouts.r71300b84e922dbba.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
+p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w7 ->
+p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0], bench.bulk.InputValidation.value { p0_w7.`handle` }, true)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[1], bench.bulk.InputValidation.value { p0_w7.`tag` })
+}
+}
+
+p0_w1_writer } else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handles) {
+        val ownership = LongArray(1) { -1L }
+        try { run { val nativeArgument0 = try { p0_w1_writer_state?.encode() } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer_state?.length ?: 0 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_owned_handle_records_echo_afd2d16618028a6f(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume); handles.forEach { if (it.address in taken) it.markConsumed() } } }
+    } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
+var outputbulkRange: bench.bulk.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<bench.bulk.HandleRecord>? = null
+ if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r71300b84e922dbba.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: bench.bulk.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
+var outputbulkRange: bench.bulk.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<bench.bulk.HandleRecord>? = null
+        try {
+outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+outputowners = bench.bulk.CollectionOwners()
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r71300b84e922dbba.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size
+        var outputbulkItem_g0_0: bench.bulk.InputHandle? = null
+
+            outputbulkItem_g0_0 = requireNotNull(outputowners).own(bench.bulk.InputHandle((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long))
+
+outputbulkList!!.add(bench.bulk.HandleRecord(requireNotNull(outputbulkItem_g0_0), (requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[1])) as Long))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputbulkList)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r71300b84e922dbba.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: bench.bulk.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkBase) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `nestedOwnedHandlesEcho`(p0_w3: kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle?>>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>> = run {
+    val p0_w3_elements = try { if (true) p0_w3?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_5e24e8a1a6fd1960()
+val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
+if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + bench.bulk.BulkLayouts.r5e24e8a1a6fd1960.offsets[0]) } else {
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, bench.bulk.BulkLayouts.r49da87bb4c377b9a)
+p0_w1_writer.range((0) + bench.bulk.BulkLayouts.r5e24e8a1a6fd1960.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
+p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
+val p0_w8_elements = if (true) p0_w8?.toList() else null
+val p0_w8_bulkList = bench.bulk.InputValidation.value { p0_w8_elements }
+if (p0_w8_bulkList == null) { p0_w1_writer.absent((p0_w3_bulkStart + p0_w3_bulkIndex * bench.bulk.BulkLayouts.r49da87bb4c377b9a.size) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0]) } else {
+val p0_w8_bulkStart = p0_w1_writer.rows(p0_w8_bulkList.size, bench.bulk.BulkLayouts.rb2426f0d5f2715c0)
+p0_w1_writer.range((p0_w3_bulkStart + p0_w3_bulkIndex * bench.bulk.BulkLayouts.r49da87bb4c377b9a.size) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0], p0_w8_bulkStart, p0_w8_bulkList.size)
+p0_w8_bulkList.forEachIndexed { p0_w8_bulkIndex, p0_w13 ->
+p0_w1_writer.handle((p0_w8_bulkStart + p0_w8_bulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0], bench.bulk.InputValidation.value { p0_w13 }, true)
+}
+}
+}
+}
+
+p0_w1_writer } else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handles) {
+        val ownership = LongArray(1) { -1L }
+        try { run { val nativeArgument0 = try { p0_w1_writer_state?.encode() } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer_state?.length ?: 0 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_nested_owned_handles_echo_47d054d07c837967(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume); handles.forEach { if (it.address in taken) it.markConsumed() } } }
+    } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
+var outputbulkRange: bench.bulk.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<bench.bulk.InputHandle>>? = null
+ if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r5e24e8a1a6fd1960.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.r49da87bb4c377b9a.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.r49da87bb4c377b9a.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: bench.bulk.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<bench.bulk.InputHandle>? = null
+
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_0: bench.bulk.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: bench.bulk.BulkReader? = null
+var outputowners: bench.bulk.CollectionOwners? = null
+var outputbulkRange: bench.bulk.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<bench.bulk.InputHandle>>? = null
+        try {
+outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+outputowners = bench.bulk.CollectionOwners()
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r5e24e8a1a6fd1960.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.r49da87bb4c377b9a.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.r49da87bb4c377b9a.size
+var outputbulkItem_bulkRange: bench.bulk.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<bench.bulk.InputHandle>? = null
+
+outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
+outputbulkItem_bulkList = kotlin.collections.ArrayList(outputbulkItem_bulkRange!!.length)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
+        var outputbulkItem_bulkItem_0: bench.bulk.InputHandle? = null
+
+            outputbulkItem_bulkItem_0 = requireNotNull(outputowners).own(bench.bulk.InputHandle((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long))
+
+outputbulkItem_bulkList!!.add(requireNotNull(outputbulkItem_bulkItem_0))
+}
+
+outputbulkList!!.add(requireNotNull(outputbulkItem_bulkList))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputbulkList)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + bench.bulk.BulkLayouts.r5e24e8a1a6fd1960.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.r49da87bb4c377b9a.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * bench.bulk.BulkLayouts.r49da87bb4c377b9a.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: bench.bulk.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<bench.bulk.InputHandle>? = null
+
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0])) as bench.bulk.BulkRange?), bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * bench.bulk.BulkLayouts.rb2426f0d5f2715c0.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_0: bench.bulk.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + bench.bulk.BulkLayouts.rb2426f0d5f2715c0.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
             throw failure
         }
     } finally { returnCapture.release() }

@@ -124,3 +124,40 @@ internal class InputRows(private val rows: Array<Any?>, private val handleKinds:
         return rows
     }
 }
+
+
+/** Retain only constructed owners; native fields keep the unread suffix alive.
+ * Registration and failure scanning follow the same schema order, including
+ * nested lists and active optional fields. No per-row cleanup objects are needed.
+ */
+internal class CollectionOwners {
+    private var owners: ArrayList<NativeHandle>? = null
+    private var scanned = 0
+    var complete = false
+    fun <T : NativeHandle> own(owner: T): T {
+        try {
+            if (owners == null) owners = ArrayList()
+            owners!!.add(owner)
+        } catch (failure: Throwable) {
+            // Registration failed: the native field must remain the sole owner.
+            owner.markConsumed()
+            throw failure
+        }
+        return owner
+    }
+    fun unread(): Boolean {
+        if (scanned >= (owners?.size ?: 0)) return true
+        scanned++
+        return false
+    }
+    fun close(initial: Throwable?): Throwable? {
+        var failure = initial
+        for (owner in owners.orEmpty()) {
+            try { owner.close() } catch (cleanup: Throwable) {
+                if (failure == null) failure = cleanup
+                else if (failure !== cleanup) failure.addSuppressed(cleanup)
+            }
+        }
+        return failure
+    }
+}
