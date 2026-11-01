@@ -188,6 +188,12 @@ fn main() {
             .class(data_class!(BulkNative)).class(data_class!(BulkExpanded))
             .class(ptr_class!(BulkHandle))
             .class(data_class!(BulkHandleText)).class(data_class!(BulkPairText))
+            .fun(fun!(bulk_patch_rows).expand_param("row",Input::Constructor{function:"bulk_patch_row_new".into(),args:vec![
+                Input::Optional(Box::new(Input::Leaf)),
+                Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))))),
+                Input::Leaf,
+            ]}.bulk()))
+            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))).bulk())))
             .fun(fun!(bulk_nested_envelope).expand_param("values",Input::Sequence(Box::new(Input::Constructor{function:"bulk_input_envelope_new".into(),args:vec![Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Leaf)))).bulk()]}))))
             .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Constructor{function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]))).bulk())))
             .fun(fun!(bulk_handle_texts).expand_param("values",Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()))

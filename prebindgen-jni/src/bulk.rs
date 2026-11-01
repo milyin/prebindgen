@@ -406,6 +406,106 @@ fn sequence_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNod
         _ => None,
     }
 }
+
+fn input_writer(layout: &BulkRecord) -> String {
+    format!(
+        "Input{}",
+        layout.name.to_string().trim_start_matches("__PbBulk")
+    )
+}
+
+/// Recompute handle positions from measured record offsets and packed row ranges.
+/// Only handle-bearing ranges are visited; no source objects are read again.
+fn patch_handles(node: &JniNode, package: &str, base: &str, next: &mut usize) -> Result<String> {
+    let layout = record(node)?;
+    let layout = format!(
+        "{package}.BulkLayouts.r{:016x}",
+        prebindgen_reprc::schema_id(&layout.key)
+    );
+    let mut code = String::new();
+    for (field, wire) in crate::group::row_fields(node).enumerate() {
+        let at = format!("({base}) + {layout}.offsets[{field}]");
+        match &wire.kind {
+            JniWire::Handle { .. } => {
+                code.push_str(&format!("handleIndex = patchHandle({at}, handleIndex)\n"));
+            }
+            JniWire::NativeRows { .. } => {
+                let child =
+                    sequence_child(node, &wire.name).ok_or("missing bulk collection element")?;
+                if !crate::kotlin::input_handles(child, false) {
+                    continue;
+                }
+                let child_layout = record(child)?;
+                let child_layout = format!(
+                    "{package}.BulkLayouts.r{:016x}",
+                    prebindgen_reprc::schema_id(&child_layout.key)
+                );
+                let id = *next;
+                *next += 1;
+                let start = format!("rows{id}Start");
+                let count = format!("rows{id}Count");
+                let index = format!("rows{id}Index");
+                code.push_str(&format!("val {start} = long({at}).toInt()\nif ({start} >= 0) {{\nval {count} = long(({at}) + 8).toInt()\nvar {index} = 0\nwhile ({index} < {count}) {{\n"));
+                code.push_str(&patch_handles(
+                    child,
+                    package,
+                    &format!("{start} + {index} * {child_layout}.size"),
+                    next,
+                )?);
+                code.push_str(&format!("{index}++\n}}\n}}\n"));
+            }
+            _ => {}
+        }
+    }
+    Ok(code)
+}
+
+fn input_writers(
+    node: &JniNode,
+    input: bool,
+    package: &str,
+    out: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    match node {
+        WireNode::Chain {
+            meta: JniChain::Bulk(layout),
+            child,
+            ..
+        } => {
+            if input && crate::kotlin::input_handles(child, false) {
+                let name = input_writer(layout);
+                let patch = patch_handles(child, package, "0", &mut 0)?;
+                let class = format!("internal class {name} : BulkHandleWriter(BulkLayouts.r{:016x}.size) {{\noverride fun patchHandles() {{\nvar handleIndex = 0\n{patch}}}\n}}\n",prebindgen_reprc::schema_id(&layout.key));
+                if let Some(previous) = out.get(&name) {
+                    if previous != &class {
+                        return Err(
+                            "bulk input schema has incompatible handle patching layouts".into()
+                        );
+                    }
+                } else {
+                    out.insert(name, class);
+                }
+            }
+            input_writers(child, input, package, out)?;
+        }
+        WireNode::Chain { child, .. } => input_writers(child, input, package, out)?,
+        WireNode::Branch { children, .. } => {
+            for child in children {
+                input_writers(child, input, package, out)?;
+            }
+        }
+        WireNode::Leaf(wires) => {
+            for wire in wires {
+                if let JniWire::Callback { callback } = &wire.kind {
+                    for (input, node) in callback.bulk_nodes() {
+                        input_writers(node, input, package, out)?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
 fn pack(
     node: &JniNode,
     args: &[String],
@@ -539,7 +639,7 @@ pub(crate) fn input_kotlin(
         let state = format!("{writer}_state");
         input.setup.push(KotlinBinding {
             name:state.clone(),
-            expression:format!("if ({condition}) run {{ val {writer} = {}.BulkHandleWriter({schema}.size)\n{body}\n{writer} }} else null",context.package),
+            expression:format!("if ({condition}) run {{ val {writer} = {}.BulkInputs.{}()\n{body}\n{writer} }} else null",context.package,input_writer(layout)),
             absent:"null".into(),
         });
         input.arguments = vec![
@@ -787,7 +887,7 @@ pub(crate) fn emit(
     for f in flat.functions.values() {
         for p in &f.params {
             if let Some(plan) = &p.ty.slot {
-                nodes.push(plan.input_node());
+                nodes.push((true, plan.input_node()));
             }
         }
         if let Some(plan) = &f.ret.slot {
@@ -795,23 +895,29 @@ pub(crate) fn emit(
             nodes.extend(
                 std::iter::once(&outcomes.success)
                     .chain(outcomes.source_error.iter())
-                    .chain(outcomes.binding_failure.iter()),
+                    .chain(outcomes.binding_failure.iter())
+                    .map(|node| (false, node)),
             );
         }
         if let Some(error) = f.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            nodes.push(&error.output.output_outcomes().success);
+            nodes.push((false, &error.output.output_outcomes().success));
         }
     }
     for input in &flat.metadata.callbacks {
-        nodes.push(input.input_node());
+        nodes.push((true, input.input_node()));
     }
-    for node in nodes {
+    let prefix = &flat.metadata.package;
+    let mut writers = BTreeMap::new();
+    for (input, node) in nodes {
         records(node, &mut catalogue)?;
+        input_writers(node, input, prefix, &mut writers)?;
     }
     if catalogue.is_empty() {
         return Ok(());
     }
-    let prefix = &flat.metadata.package;
+    if !writers.is_empty() {
+        files.insert(format!("{}/BulkInputs.kt",prefix.replace('.',"/")),format!("@file:Suppress(\"ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE\", \"UNUSED_VALUE\")\npackage {prefix}\n\ninternal object BulkInputs {{\n{}}}\n",writers.values().cloned().collect::<String>()));
+    }
     let schema = catalogue
         .values()
         .map(|r| r.key.as_str())

@@ -58,6 +58,8 @@ internal object JNINative {
     @JvmStatic external fun call_default_bulk_plain_e53a41329b22bbda(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_default_bulk_callback_af0d489a7a6a5660(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_default_bulk_callback_mixed_d29393bf89d94532(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_bulk_patch_rows_bd28790e27d45db7(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_patch_callback_214b38a510d58cfb(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_nested_envelope_fac9f0f836298b23(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_pair_text_callback_387f8bdd6e114920(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_handle_texts_695fb56c918fa85b(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?

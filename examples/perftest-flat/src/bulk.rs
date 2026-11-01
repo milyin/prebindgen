@@ -361,6 +361,60 @@ pub fn bulk_handle_text_callback(callback: impl Fn() -> Vec<BulkHandleText>) -> 
 pub fn bulk_handle_nested(values: Vec<Vec<BulkHandle>>) -> Vec<Vec<BulkHandle>> {
     values
 }
+
+#[prebindgen]
+pub struct BulkPatchRow {
+    pub first: Option<BulkHandle>,
+    pub children: Option<Vec<Option<Vec<Option<BulkHandle>>>>>,
+    pub last: BulkHandle,
+}
+#[prebindgen]
+pub fn bulk_patch_row_new(
+    first: Option<BulkHandle>,
+    children: Option<Vec<Option<Vec<Option<BulkHandle>>>>>,
+    last: BulkHandle,
+) -> BulkPatchRow {
+    BulkPatchRow {
+        first,
+        children,
+        last,
+    }
+}
+#[prebindgen]
+pub fn bulk_patch_rows(row: BulkPatchRow) -> Vec<i64> {
+    let mut values = Vec::new();
+    values.push(row.first.as_ref().map_or(-1, |h| h.value));
+    if let Some(rows) = &row.children {
+        values.push(rows.len() as i64);
+        for children in rows {
+            if let Some(children) = children {
+                values.push(children.len() as i64);
+                values.extend(children.iter().map(|h| h.as_ref().map_or(-3, |h| h.value)));
+            } else {
+                values.push(-4);
+            }
+        }
+    } else {
+        values.push(-2);
+    }
+    values.push(row.last.value);
+    values
+}
+#[prebindgen]
+pub fn bulk_patch_callback(
+    callback: impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>>,
+) -> Vec<i64> {
+    let mut values = Vec::new();
+    for children in callback() {
+        if let Some(children) = children {
+            values.push(children.len() as i64);
+            values.extend(children.iter().map(|h| h.as_ref().map_or(-3, |h| h.value)));
+        } else {
+            values.push(-4);
+        }
+    }
+    values
+}
 #[prebindgen]
 pub struct BulkBorrowPair {
     pub number: i64,

@@ -860,8 +860,12 @@ later parameters and collections can reject conflicts with earlier inputs.
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level
 state until address encoding under the existing locks. Bulk handle inputs pack
-primitive and buffer fields into their byte frame and retain handle offsets;
-addresses are filled under the locks. Neither path creates per-element Triple or
+primitive and buffer fields into their byte frame, retaining handle wrappers.
+Generated schema-specific methods recompute pointer positions from measured field
+offsets, row strides and packed nested-row ranges, then fill addresses under the
+locks. Null slots use zero and non-null slots use a temporary nonzero marker, so
+absent optional fields do not consume a handle entry. No per-handle offset table
+is stored. Neither path creates per-element Triple or
 BulkInputRow callback helpers. Prepared state belongs to one invocation and is
 encoded once; callback returns prepare fresh state for every invocation.
 Partial-consumption receipts use the retained owners, including nested owners in

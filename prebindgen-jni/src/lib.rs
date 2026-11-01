@@ -1144,6 +1144,7 @@ fn validate_class_name(name: &str) -> Result<()> {
         "BulkReader",
         "BulkInputRow",
         "BulkHandleWriter",
+        "BulkInputs",
         "InputRows",
         "PreparedInput",
         "InputValidation",

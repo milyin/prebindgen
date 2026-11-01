@@ -4,6 +4,34 @@ import io.prebindgen.covertest.bulk.*
 import io.prebindgen.covertest.collections.collectionI64
 
 fun checkPreparedInputs() {
+    // Recomputed positions must preserve the packer's depth-first order across
+    // handles before/after nested rows, absent/empty ranges and nullable slots.
+    run {
+        val patchOwners = List(8) { bulkHandleNew(100L+it) }
+        val patchDrops = bulkDrops()
+        check(bulkPatchRows(patchOwners[0],listOf(null,emptyList(),listOf(null,patchOwners[1],null,patchOwners[2])),patchOwners[3])==listOf(100L,3L,-4L,0L,4L,-3L,101L,-3L,102L,103L))
+        check(bulkPatchRows(null,null,patchOwners[4])==listOf(-1L,-2L,104L))
+        check(bulkPatchRows(patchOwners[5],emptyList(),patchOwners[6])==listOf(105L,0L,106L))
+        check(bulkPatchRows(null,listOf(listOf(null)),patchOwners[7])==listOf(-1L,1L,1L,-3L,107L))
+        check(patchOwners.all { it.isClosed } && bulkDrops()==patchDrops+8uL)
+    }
+    val callbackOwners=List(3) { bulkHandleNew(200L+it) }
+    val callbackDrops=bulkDrops()
+    check(bulkPatchCallback(BulkPatchCallback { listOf(null,emptyList(),listOf(null,callbackOwners[0],null,callbackOwners[1]),null,listOf(callbackOwners[2]),null) })==listOf(-4L,0L,4L,-3L,200L,-3L,201L,-4L,1L,202L,-4L))
+    check(callbackOwners.all { it.isClosed } && bulkDrops()==callbackDrops+3uL)
+    val mixedBorrowed=bulkHandleNew(210)
+    val mixedOwned=bulkHandleNew(211)
+    val mixedPatchDrops=bulkDrops()
+    check(bulkPairTextCallback(BulkPairTextCallback { listOf(BulkPairText(mixedBorrowed,mixedOwned,"ok")) })==1uL)
+    check(!mixedBorrowed.isClosed && mixedOwned.isClosed && bulkHandleValue(mixedBorrowed)==210L)
+    check(bulkDrops()==mixedPatchDrops+2uL)
+    mixedBorrowed.close()
+    val closedPatch=List(4) { bulkHandleNew(220L+it) }
+    closedPatch[1].close()
+    var closedRejected=false
+    check(bulkPatchRows(closedPatch[0],listOf(listOf(null,closedPatch[1],closedPatch[2])),closedPatch[3],JniErrorHandler {closedRejected=true;emptyList()}).isEmpty())
+    check(closedRejected && listOf(0,2,3).none {closedPatch[it].isClosed})
+    closedPatch.forEach {it.close()}
     val before = bulkDrops()
     val handle = bulkHandleNew(7)
     check(bulkOptionalBorrowPair(false, null, 3) == -1L)
