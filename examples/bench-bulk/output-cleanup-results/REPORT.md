@@ -1,6 +1,6 @@
 # Kotlin collection output cleanup
 
-Compared #824 after #855 with identical added benchmark fixtures: baseline `7956e5e058be6fc28273540b35366498156ace85` versus cleanup change `86991f627d211415770a33710331b8fb77283ab1`. Later commits record generated artifacts, benchmark results and documentation; they do not change the measured generator or fixtures. Both revisions retain the existing sorted handle monitors and recompute bulk pointer positions under those monitors. This comparison does not use `main`.
+Compared #824 after #855 with identical added benchmark fixtures: baseline `7956e5e058be6fc28273540b35366498156ace85` versus cleanup change `86991f627d211415770a33710331b8fb77283ab1`. Later commits record generated artifacts, benchmark results and documentation; they do not change the measured generator or fixtures. Both revisions retain the existing sorted handle monitors and recompute bulk pointer positions under those monitors.
 
 Generated native JNI source (`plain.rs` and `bulk.rs`) is byte-for-byte identical between these builds. The Kotlin changes remove per-row cleanup closures/closure-captured mutable cells, share one list of constructed native-owner wrappers across nested collections, omit resource-free cleanup state, and preallocate ordinary result-list storage. Normal handle wrappers, marshalling carriers, locking, input ownership receipts, native work and output reconstruction remain timed.
 
@@ -24,7 +24,7 @@ Measured 2026-11-01 on Linux x86-64, AMD EPYC 7713, affinity CPUs 0–1, Rust 1.
 
 The **broad** comparison runs ordinary JNI object rows (`plain`) and packed byte frames (`bulk`), four fresh JVMs per revision/mode: 16 JVMs, six warmup and nine measured batches targeting 20 ms, 37 cases per process, **5,328 measured batches**. Four treatment orders balance revisions/modes, and case order rotates/reverses between trials. Large ordinary cases can exceed the target due to the minimum batch size; every sample remains included.
 
-The **focused** follow-up investigates the broad run’s latency variation using bulk only, four fresh JVMs per revision: eight JVMs, 20 warmup and 15 measured batches targeting 30 ms, 13 cases per process, **1,560 measured batches**. It adds an unchanged borrowed-handle input control. This is an additional profile; it does not replace the broad results.
+The **focused** follow-up investigates the broad run’s latency variation using bulk only, four fresh JVMs per revision: eight JVMs, 20 warmup and 15 measured batches targeting 30 ms, 13 cases per process, **1,560 measured batches**. It includes the same unchanged borrowed-handle input control. This is an additional profile; it does not replace the broad results.
 
 Both compiled revisions first passed all **66 benchmark cases in four diagnostic JVMs each with `-Xcheck:jni`**. Diagnostic timings are excluded. The generated Kotlin/Rust boundary tests separately cover partial construction, optional/nested rows, callback arguments, take/close before failure, allocation failure while registering an owner and destructor exceptions.
 
