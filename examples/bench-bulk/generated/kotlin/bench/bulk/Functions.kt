@@ -36,7 +36,7 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w
 
 public fun `handleValuesSum`(p0_w3: kotlin.collections.List<bench.bulk.InputHandle?>, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w3_elements = try { if (true) p0_w3?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
-val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkHandleWriter(bench.bulk.BulkLayouts.rf738f16d97296060.size)
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_f738f16d97296060()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + bench.bulk.BulkLayouts.rf738f16d97296060.offsets[0]) } else {
 val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, bench.bulk.BulkLayouts.rd159346acd2a185e)
@@ -61,7 +61,7 @@ val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.
 
 public fun `handleRecordsSum`(p0_w3: kotlin.collections.List<bench.bulk.HandleRecord>, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w3_elements = try { if (true) p0_w3?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
-val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkHandleWriter(bench.bulk.BulkLayouts.rcb0e46a0a248e38c.size)
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_cb0e46a0a248e38c()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + bench.bulk.BulkLayouts.rcb0e46a0a248e38c.offsets[0]) } else {
 val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, bench.bulk.BulkLayouts.r06de1c5aa99699f6)
@@ -87,7 +87,7 @@ val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.
 
 public fun `ownedHandlesEcho`(p0_w3: kotlin.collections.List<bench.bulk.InputHandle?>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<bench.bulk.InputHandle>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.bulk.InputHandle> = run {
     val p0_w3_elements = try { if (true) p0_w3?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
-val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkHandleWriter(bench.bulk.BulkLayouts.r49da87bb4c377b9a.size)
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_49da87bb4c377b9a()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + bench.bulk.BulkLayouts.r49da87bb4c377b9a.offsets[0]) } else {
 val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, bench.bulk.BulkLayouts.rb2426f0d5f2715c0)

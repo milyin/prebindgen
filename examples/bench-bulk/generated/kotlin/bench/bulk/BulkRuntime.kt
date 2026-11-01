@@ -36,6 +36,7 @@ internal open class BulkWriter(initial: Int) {
     fun short(at: Int, value: Short) { view.putShort(at, value) }
     fun int(at: Int, value: Int) { view.putInt(at, value) }
     fun long(at: Int, value: Long) { view.putLong(at, value) }
+    protected fun long(at: Int): Long = view.getLong(at)
     fun float(at: Int, value: Float) { view.putFloat(at, value) }
     fun double(at: Int, value: Double) { view.putDouble(at, value) }
     fun wide(at: Int, input: ByteArray?, signed: Boolean) {
@@ -80,29 +81,31 @@ internal class BulkReader(val array: ByteArray) {
     fun text(at: Int): String? = buffer(at)?.let { array.decodeToString(it.offset, it.offset + it.length, throwOnInvalidSequence = true) }
 }
 
-/** Pack values once; resolve only native addresses after the wrapper acquires locks. */
-internal class BulkHandleWriter(initial: Int) : BulkWriter(initial), PreparedInput {
+/** Pack once; generated schema walks resolve native addresses under the locks. */
+internal abstract class BulkHandleWriter(initial: Int) : BulkWriter(initial), PreparedInput {
     private var savedHandles: ArrayList<NativeHandle>? = null
     private var savedOwners: ArrayList<NativeHandle>? = null
-    private var offsets = EMPTY_OFFSETS
-    private companion object { val EMPTY_OFFSETS = IntArray(0) }
     override val handles: List<NativeHandle> get() = savedHandles ?: emptyList()
     override val owners: List<NativeHandle> get() = savedOwners ?: emptyList()
     fun handle(at: Int, value: NativeHandle?, owned: Boolean) {
-        long(at, 0L)
+        // A nonzero placeholder distinguishes a retained wrapper from a null slot.
+        long(at, if (value == null) 0L else 1L)
         if (value == null) return
         if (savedHandles == null) savedHandles = ArrayList()
-        val index = savedHandles!!.size
-        if (index == offsets.size) offsets = offsets.copyOf(maxOf(8, index * 2))
-        offsets[index] = at
         savedHandles!!.add(value)
         if (owned) {
             if (savedOwners == null) savedOwners = ArrayList()
             savedOwners!!.add(value)
         }
     }
-    override fun encode(): ByteArray {
-        for (index in handles.indices) long(offsets[index], handles[index].raw)
+    protected fun patchHandle(at: Int, index: Int): Int {
+        if (long(at) == 0L) return index
+        long(at, handles[index].raw)
+        return index + 1
+    }
+    protected abstract fun patchHandles()
+    final override fun encode(): ByteArray {
+        if (savedHandles != null) patchHandles()
         return array
     }
 }

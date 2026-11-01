@@ -27,11 +27,14 @@ fun checkPreparedInputs() {
     check(bulkDrops()==mixedPatchDrops+2uL)
     mixedBorrowed.close()
     val closedPatch=List(4) { bulkHandleNew(220L+it) }
+    val closedPatchDrops=bulkDrops()
     closedPatch[1].close()
     var closedRejected=false
     check(bulkPatchRows(closedPatch[0],listOf(listOf(null,closedPatch[1],closedPatch[2])),closedPatch[3],JniErrorHandler {closedRejected=true;emptyList()}).isEmpty())
-    check(closedRejected && listOf(0,2,3).none {closedPatch[it].isClosed})
+    // Earlier constructor arguments may already be consumed; unread owners stay live.
+    check(closedRejected && !closedPatch[2].isClosed && !closedPatch[3].isClosed)
     closedPatch.forEach {it.close()}
+    check(bulkDrops()==closedPatchDrops+4uL)
     val before = bulkDrops()
     val handle = bulkHandleNew(7)
     check(bulkOptionalBorrowPair(false, null, 3) == -1L)
