@@ -1314,7 +1314,8 @@ unsafe fn __pb_report_collection_error(
     }
     {
         let ret_w0 = source_error;
-        let ret_w1_source = ret_w0.resources;
+        let ret_w1_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0
+            .resources;
         let ret_w3 = ret_w1_source.len();
         let mut ret_w1_commits = Vec::with_capacity(ret_w3);
         let mut ret_w1: Vec<__PbRow_error_collection_error_ret_w1> = Vec::with_capacity(
@@ -1335,14 +1336,14 @@ unsafe fn __pb_report_collection_error(
                 });
         }
         let ret_w1 = ret_w1.into_boxed_slice();
-        let ret_w6_source = ret_w0.codes;
+        let ret_w6_source: ::std::vec::Vec<Vec<i64>> = ret_w0.codes;
         let ret_w8 = ret_w6_source.len();
         let mut ret_w6_commits = Vec::with_capacity(ret_w8);
         let mut ret_w6: Vec<__PbRow_error_collection_error_ret_w6> = Vec::with_capacity(
             ret_w8,
         );
         for (ret_w9, ret_w7) in ret_w6_source.into_iter().enumerate() {
-            let ret_w10_source = ret_w7;
+            let ret_w10_source: ::std::vec::Vec<i64> = ret_w7;
             let ret_w12 = ret_w10_source.len();
             let mut ret_w10_commits = Vec::with_capacity(ret_w12);
             let mut ret_w10: Vec<__PbRow_error_collection_error_ret_w10> = Vec::with_capacity(
@@ -7571,7 +7572,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                         .expect("validated active callback");
                     let p0_callback_value = move |callback_source_0: Vec<i64>| {
                         let result = ::prebindgen_runtime::boundary(|| {
-                            let callback_arg_0_w0_source = callback_source_0;
+                            let callback_arg_0_w0_source: ::std::vec::Vec<i64> = callback_source_0;
                             let callback_arg_0_w2 = callback_arg_0_w0_source.len();
                             let mut callback_arg_0_w0_commits = Vec::with_capacity(
                                 callback_arg_0_w2,
@@ -7694,7 +7695,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
             let source_value = perftest_flat::callback_return_vector(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_callback_return_vector_ret_w0> = Vec::with_capacity(
@@ -8325,6 +8326,12 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
                 let ret_w4: &i64 = ret_w1;
                 let ret_w4 = *ret_w4;
                 let __pb_callback_value_0 = ret_w4;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -8394,7 +8401,8 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
             let source_value = perftest_flat::collection_bundle();
             let ret_w0 = perftest_flat::collection_bundle_into(source_value);
             let ret_w1 = ret_w0;
-            let ret_w2_source = ret_w1.values;
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1
+                .values;
             let ret_w4 = ret_w2_source.len();
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_bundle_ret_w2> = Vec::with_capacity(
@@ -8533,7 +8541,7 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_bytes(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<u8>> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_bytes_ret_w0> = Vec::with_capacity(
@@ -8658,12 +8666,19 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_bytes(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<u8>> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
                 let __pb_callback_value_0 = ret_w4.0;
-                ::core::mem::forget(ret_w4);
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w4);
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -8907,7 +8922,7 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_enum(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::SparseCode> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_enum_ret_w0> = Vec::with_capacity(
@@ -9041,7 +9056,7 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_enum(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::SparseCode> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4: i32 = match &(ret_w1) {
@@ -9054,6 +9069,12 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
                     perftest_flat::SparseCode::Top => 2147483647i32,
                 };
                 let __pb_callback_value_0 = ret_w4;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -9361,7 +9382,7 @@ pub unsafe extern "C" fn perftest_collection_handles(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_handles_ret_w2> = Vec::with_capacity(
@@ -9622,7 +9643,7 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                 let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -9630,7 +9651,14 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                 );
                 let ret_w6_owner = __PbOutputOwner(ret_w6);
                 let __pb_callback_value_0 = ret_w6;
-                ::core::mem::forget(ret_w6_owner);
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w6_owner);
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -9749,7 +9777,7 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_i64_ret_w0> = Vec::with_capacity(
@@ -9859,11 +9887,17 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ret_w1;
                 let __pb_callback_value_0 = ret_w4;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -10541,14 +10575,14 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
                 }
             };
             let ret_w2 = perftest_flat::collection_late_values(&ret_w0);
-            let ret_w3_source = ret_w2;
+            let ret_w3_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = ret_w2;
             let ret_w5 = ret_w3_source.len();
             let mut ret_w3_commits = Vec::with_capacity(ret_w5);
             let mut ret_w3: Vec<__PbRow_collection_late_drop_ret_w3> = Vec::with_capacity(
                 ret_w5,
             );
             for (ret_w6, ret_w4) in ret_w3_source.into_iter().enumerate() {
-                let ret_w7_source = ret_w4;
+                let ret_w7_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w4;
                 let ret_w9 = ret_w7_source.len();
                 let mut ret_w7_commits = Vec::with_capacity(ret_w9);
                 let mut ret_w7: Vec<__PbRow_collection_late_drop_ret_w7> = Vec::with_capacity(
@@ -10717,7 +10751,7 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::collection_make_items();
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::CollectionItem> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_make_items_ret_w0> = Vec::with_capacity(
@@ -10909,14 +10943,14 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<i64>> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_nested_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4_source = ret_w1;
+                let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w6 = ret_w4_source.len();
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_ret_w4> = Vec::with_capacity(
@@ -11110,10 +11144,10 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<i64>> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4_source = ret_w1;
+                let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w6 = ret_w4_source.len();
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_each_ret_w4> = Vec::with_capacity(
@@ -11136,10 +11170,17 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                     },
                     len: ret_w4.len(),
                 };
-                let _ = Box::into_raw(ret_w4);
-                for commit in ret_w4_commits {
-                    commit();
-                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    let _ = Box::into_raw(ret_w4);
+                    for commit in ret_w4_commits {
+                        commit();
+                    }
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -11355,14 +11396,14 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_nested_handles_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4_source = ret_w1;
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w6 = ret_w4_source.len();
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_handles_ret_w4> = Vec::with_capacity(
@@ -11607,10 +11648,10 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4_source = ret_w1;
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w6 = ret_w4_source.len();
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_handles_each_ret_w4> = Vec::with_capacity(
@@ -11639,10 +11680,17 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                     },
                     len: ret_w4.len(),
                 };
-                let _ = Box::into_raw(ret_w4);
-                for commit in ret_w4_commits {
-                    commit();
-                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    let _ = Box::into_raw(ret_w4);
+                    for commit in ret_w4_commits {
+                        commit();
+                    }
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -11712,7 +11760,7 @@ pub unsafe extern "C" fn perftest_collection_numbers(out1: *mut i64) -> __PbRows
             let source_value = perftest_flat::collection_numbers();
             let ret_w0 = perftest_flat::collection_numbers_view(&source_value);
             let ret_w1 = &(ret_w0);
-            let ret_w2_source = &(&ret_w1.values);
+            let ret_w2_source: &::std::vec::Vec<i64> = &(&ret_w1.values);
             let ret_w4 = ret_w2_source.len();
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_numbers_ret_w2> = Vec::with_capacity(
@@ -11867,7 +11915,7 @@ pub unsafe extern "C" fn perftest_collection_optional(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_ret_w2> = Vec::with_capacity(
@@ -12028,11 +12076,17 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                     let ret_w6 = ret_w3;
                     let __pb_callback_value_0 = ret_w6;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
                     unsafe {
                         __pb_callback
                             .expect(
@@ -12221,7 +12275,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_handles_ret_w2> = Vec::with_capacity(
@@ -12435,7 +12489,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                     let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -12443,7 +12497,14 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                     );
                     let ret_w6_owner = __PbOutputOwner(ret_w6);
                     let __pb_callback_value_0 = ret_w6;
-                    ::core::mem::forget(ret_w6_owner);
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w6_owner);
+                    })();
                     unsafe {
                         __pb_callback
                             .expect(
@@ -12605,7 +12666,7 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<Option<i64>> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_items_ret_w2> = Vec::with_capacity(
@@ -12799,7 +12860,7 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
                 __prebindgen_argument_0,
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<Option<i64>> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                     let (ret_w6, (ret_w6_value0,), ret_w6_commit) = if let Some(
@@ -12813,9 +12874,16 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
                     };
                     let __pb_callback_value_0 = ret_w6;
                     let __pb_callback_value_1 = ret_w6_value0;
-                    if let Some(ret_w6_action) = ret_w6_commit {
-                        ret_w6_action();
-                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        if let Some(ret_w6_action) = ret_w6_commit {
+                            ret_w6_action();
+                        }
+                    })();
                     unsafe {
                         __pb_callback
                             .expect(
@@ -12971,7 +13039,7 @@ pub unsafe extern "C" fn perftest_collection_options(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Option<i64>> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_options_ret_w0> = Vec::with_capacity(
@@ -13127,7 +13195,7 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<Option<i64>> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let (ret_w4, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w1 {
@@ -13139,9 +13207,16 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                 };
                 let __pb_callback_value_0 = ret_w4;
                 let __pb_callback_value_1 = ret_w4_value0;
-                if let Some(ret_w4_action) = ret_w4_commit {
-                    ret_w4_action();
-                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    if let Some(ret_w4_action) = ret_w4_commit {
+                        ret_w4_action();
+                    }
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -13281,7 +13356,7 @@ pub unsafe extern "C" fn perftest_collection_probe(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<char> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_probe_ret_w0> = Vec::with_capacity(
@@ -13494,7 +13569,7 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
             let source_value = perftest_flat::collection_resource_ids(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_resource_ids_ret_w0> = Vec::with_capacity(
@@ -13720,7 +13795,7 @@ pub unsafe extern "C" fn perftest_collection_result(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_result_ret_w2> = Vec::with_capacity(
@@ -13894,11 +13969,17 @@ pub unsafe extern "C" fn perftest_collection_result_each(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                 let ret_w6 = ret_w3;
                 let __pb_callback_value_0 = ret_w6;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -14117,7 +14198,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                 }
             };
             let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
-                let ret_w4_source = ret_w3;
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
                 let ret_w6 = ret_w4_source.len();
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_result_optional_ret_w4> = Vec::with_capacity(
@@ -14393,7 +14474,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                 }
             };
             let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
-                let ret_w4_source = ret_w3;
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
                 let ret_w6 = ret_w4_source.len();
                 for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
                     let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -14401,7 +14482,14 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                     );
                     let ret_w8_owner = __PbOutputOwner(ret_w8);
                     let __pb_callback_value_0 = ret_w8;
-                    ::core::mem::forget(ret_w8_owner);
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w8_owner);
+                    })();
                     unsafe {
                         __pb_callback
                             .expect(
@@ -14532,7 +14620,7 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
             let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_slice_ret_w0> = Vec::with_capacity(
@@ -14642,11 +14730,17 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
             let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ret_w1;
                 let __pb_callback_value_0 = ret_w4;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -14758,7 +14852,7 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_text(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<String> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_text_ret_w0> = Vec::with_capacity(
@@ -14883,12 +14977,19 @@ pub unsafe extern "C" fn perftest_collection_text_each(
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_text(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<String> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
                 let __pb_callback_value_0 = ret_w4.0;
-                ::core::mem::forget(ret_w4);
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w4);
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -15155,7 +15256,7 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::CollectionItem> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_try_make_items_ret_w2> = Vec::with_capacity(
@@ -15773,7 +15874,7 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::getter_counts();
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<usize> = source_value;
             let ret_w2 = ret_w0_source.len();
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_getter_counts_ret_w0> = Vec::with_capacity(
@@ -23703,7 +23804,7 @@ pub unsafe extern "C" fn perftest_sequence_late_drop_each(
                 }
             };
             let ret_w2 = perftest_flat::sequence_late_view(&ret_w0);
-            let ret_w3_source = ret_w2;
+            let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w2;
             let ret_w5 = ret_w3_source.len();
             for (ret_w6, ret_w4) in ret_w3_source.into_iter().enumerate() {
                 let ret_w7: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -23711,7 +23812,14 @@ pub unsafe extern "C" fn perftest_sequence_late_drop_each(
                 );
                 let ret_w7_owner = __PbOutputOwner(ret_w7);
                 let __pb_callback_value_0 = ret_w7;
-                ::core::mem::forget(ret_w7_owner);
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w7_owner);
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -23821,7 +23929,7 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
                     });
                 }
             };
-            let ret_w2_source = ret_w0;
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::SequencePart> = ret_w0;
             let ret_w4 = ret_w2_source.len();
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                 let ret_w6 = perftest_flat::sequence_part_into(ret_w3);
@@ -23835,8 +23943,15 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
                 let __pb_callback_value_0 = ret_w8;
                 let __pb_callback_value_1 = ret_w9.0;
                 let __pb_callback_value_2 = ret_w10;
-                ::core::mem::forget(ret_w9);
-                ::core::mem::forget(ret_w10_owner);
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w9);
+                    ::core::mem::forget(ret_w10_owner);
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -23919,7 +24034,7 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
         }
         {
             let source_value = perftest_flat::sequence_scalars();
-            let ret_w0_source = source_value;
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::SequenceScalars> = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = perftest_flat::sequence_scalars_into(ret_w1);
@@ -23964,9 +24079,16 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
                 let __pb_callback_value_7 = ret_w13;
                 let __pb_callback_value_8 = ret_w14;
                 let __pb_callback_value_9 = ret_w14_value0;
-                if let Some(ret_w14_action) = ret_w14_commit {
-                    ret_w14_action();
-                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    if let Some(ret_w14_action) = ret_w14_commit {
+                        ret_w14_action();
+                    }
+                })();
                 unsafe {
                     __pb_callback
                         .expect(
@@ -25038,7 +25160,7 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<perftest_flat::Payload> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_storage_get_vec_ret_w2> = Vec::with_capacity(
@@ -25179,7 +25301,7 @@ pub unsafe extern "C" fn perftest_storage_get_vec_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2_source = ret_w1;
+                let ret_w2_source: ::std::vec::Vec<perftest_flat::Payload> = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                     let ret_w6 = perftest_flat::payload_to_struct(&ret_w3);
@@ -25196,6 +25318,12 @@ pub unsafe extern "C" fn perftest_storage_get_vec_each(
                     let __pb_callback_value_1 = ret_w9;
                     let __pb_callback_value_2 = ret_w10;
                     let __pb_callback_value_3 = ret_w11;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
                     unsafe {
                         __pb_callback
                             .expect(

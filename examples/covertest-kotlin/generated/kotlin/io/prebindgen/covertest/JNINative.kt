@@ -268,6 +268,10 @@ internal object JNINative {
     @JvmStatic external fun call_callback_envelope_bede25767fde1a47(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_primitives_ff126f0005bfa2b5(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_enums_b6723b6e70db554a(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_native_bulk_rows_f3ef23b4e405ea00(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_native_bulk_nested_a866f03d6554ae4e(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_native_bulk_pair_a4a8c00804a0cda0(p0_w1: Long, returns: Return_ByteArray_ByteArray2_ErrorEmpty_cdd3629414305251): Unit
+    @JvmStatic external fun call_native_bulk_callback_b0aa3d8beb220a07(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_output_cleanup_surround_58e43f8fdb96cdf0(returns: Return_Long_Array_Any___Long3_ErrorEmpty_2b0b20baf8d8d1fd): Unit
     @JvmStatic external fun call_output_cleanup_surround_bulk_f8fb155e97de0ce3(returns: Return_Long_ByteArray_Long3_ErrorEmpty_1d2a2254ab7aac6e): Unit
     @JvmStatic external fun call_output_cleanup_rows_d61c4972dafc1c15(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?

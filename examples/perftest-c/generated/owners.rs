@@ -2467,7 +2467,7 @@ pub unsafe extern "C" fn owner_inline_packets_rows(
                 }
             };
             let ret_w2 = perftest_flat::inline_packets_getter(&ret_w0);
-            let ret_w3_source = ret_w2;
+            let ret_w3_source: ::std::vec::Vec<perftest_flat::InlinePacket> = ret_w2;
             let ret_w5 = ret_w3_source.len();
             let mut ret_w3_commits = Vec::with_capacity(ret_w5);
             let mut ret_w3: Vec<__PbRow_inline_packets_rows_ret_w3> = Vec::with_capacity(

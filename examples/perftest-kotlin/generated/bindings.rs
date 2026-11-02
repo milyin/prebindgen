@@ -51,7 +51,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -508,7 +508,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };

@@ -29,8 +29,12 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
 pub struct SequenceOutput<W: prebindgen_flat::WireKind, G> {
-    /// Commit each element inside `store`, after capturing its prepared wire values
-    /// and before invoking a foreign visitor. `store` must contain exactly one
+    /// Transfer each element inside `store`, after capturing its prepared wire
+    /// values, into a rollback-capable carrier or to a foreign visitor. A carrier
+    /// must reclaim transferred owners if outer output delivery fails.
+    /// Every fallible row store must precede the marker. Element commit code is
+    /// evaluated in an infallible, unit-returning closure.
+    /// `store` must contain exactly one
     /// `template_parameter("commit_element")` marker when true. When false, all
     /// element owners remain in Rust until the outer slot commits.
     pub commit_each: bool,
@@ -439,6 +443,19 @@ pub(crate) fn output<C: Codec>(
     } else {
         (quote!(&(#value)), quote!(#owner.iter()))
     };
+    // Fix the binding's type, rather than relying on a custom Vec name or
+    // Deref target to give len and iteration the standard collection semantics.
+    let binding = if matches!(view, SequenceView::Owned | SequenceView::Vector) {
+        let vector = quote!(::std::vec::Vec<#element_type>);
+        let vector = if mode == ProjectionMode::Owned {
+            vector
+        } else {
+            quote!(&#vector)
+        };
+        quote!(let #owner: #vector = #binding;)
+    } else {
+        quote!(let #owner = #binding;)
+    };
     let prepare = child.statements;
     let child_commit = child.commit;
     let SequenceOutput {
@@ -458,7 +475,10 @@ pub(crate) fn output<C: Codec>(
         let store = prebindgen_conversions::render_template(&store, &|name| {
             if name == "commit_element" {
                 count.set(count.get() + 1);
-                Ok(child_commit.clone())
+                Ok(quote!(
+                    #[allow(clippy::redundant_closure_call, clippy::let_unit_value, clippy::unused_unit)]
+                    let _: () = (|| -> () { #child_commit })();
+                ))
             } else {
                 Ok(prebindgen_conversions::template_parameter(name))
             }
@@ -494,7 +514,7 @@ pub(crate) fn output<C: Codec>(
             binding_failure: None,
         },
         statements: quote! {
-            let #owner=#binding; let #length=#owner.len(); #declarations
+            #binding let #length=#owner.len(); #declarations
             #begin
             for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
             #finish
