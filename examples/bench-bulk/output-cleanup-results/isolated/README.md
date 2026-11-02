@@ -15,9 +15,10 @@ The generated binding code and native libraries are not modified for measurement
   input and scalar JNI calls serve as controls.
 - Each case/revision pair runs consecutively. Before/after order alternates by
   fork, and case order uses a recorded deterministic shuffle per fork.
-- Warmup makes 256 short sampling calls, then full-sized calls for at least three
-  seconds and until compiler CPU time has remained unchanged for one second
-  (20-second cap). Compilation logs independently record methods compiled during
+- Warmup makes 256 short sampling calls, then full-sized calls until total warmup
+  has lasted at least three seconds and cumulative compilation time reported by
+  `CompilationMXBean` has remained unchanged for one second (20-second cap).
+  Compilation logs independently record methods compiled during
   the measured phase; the quiet-period heuristic alone does not establish stability.
 - The sampling loop cannot be inlined into the driver controller, and only that
   sampling method uses a reduced compilation threshold. The controller and GC
@@ -29,6 +30,8 @@ The generated binding code and native libraries are not modified for measurement
 - Fixed 256 MiB G1 heap, two active processors, affinity CPUs 0–1, one JVM at a
   time. No builds or other benchmarks run concurrently. Compiler, native/JAR and
   source hashes are verified and preserved in the metadata.
+- Compilation and GC/safepoint logging remain enabled during timing in both
+  revisions. CPU frequency/turbo and core isolation are not controlled.
 
 The primary score is total timed wall nanoseconds divided by total operations in
 one JVM, then the median of four JVM scores. Per-fork ranges and paired changes
@@ -66,7 +69,8 @@ large XML files; no batches are removed based on those logs.
 
 ## Isolated results (2026-11-02)
 
-Every JVM met its warmup conditions and had an active C2-compiled entry for the
+All 144 JVMs met their warmup conditions and had an active entry compiled by
+HotSpot's optimizing compiler (C2) for the
 sampling loop before measurement. The compilation/deoptimization logs show no
 measured-phase compilation or deoptimization of the sampling loop, benchmark
 operations or generated binding methods. JDK/Kotlin runtime helpers still changed:
@@ -109,18 +113,19 @@ control is +5.9%, and individual paired forks overlap or disagree. The nested
 one-element case improves in all four pairs (-14.7%, -16.6%, -11.4%, -48.1%);
 its median score is 25.8% lower, with a wide before range.
 
-Two slower cases deserve investigation. The one-element bulk flat-handle round
+Two cells show unresolved slowdowns. The one-element bulk flat-handle round
 trip is +5.4% by the aggregate score; every paired fork is slower
 (+1.8%, +6.1%, +4.6%, +3.2%). The ordinary JNI 512-element handle-record
 round trip is +7.1% (+7.2% calling-thread CPU), with paired changes
-+10.0%, +3.3%, +8.9%, +5.2%. These are observed regressions, not evidence
-that every output path is slower. Four forks on one host and the remaining
++10.0%, +3.3%, +8.9%, +5.2%. These changes are comparable to control drift;
+four paired forks across 18 cells do not establish a cleanup-code regression.
+Four forks on one host and the remaining
 runtime-helper changes do not establish the cause. The unchanged one-element
 bulk input control also moves consistently (-7.4% by aggregate score), so
 paired direction alone is not proof of a cleanup-code effect.
 
-The supported outcome remains lower allocation with case-dependent latency. This
-follow-up does not support a general latency-speedup claim or identify the cause
+The supported outcome is lower allocation; latency attribution remains unresolved.
+This follow-up does not support a general latency-speedup claim or identify the cause
 of the slower cases. All 3,456 batches, including GC pauses and slower forks, are
 retained in [samples.csv](samples.csv). [results.json](results.json) records every
 process, score, command and compilation event; [diagnostics.json](diagnostics.json)
@@ -135,4 +140,120 @@ For the additional deoptimization summary after a reproduced run:
 ```sh
 python3 examples/bench-bulk/output-cleanup-results/isolated/diagnostics.py \
   /tmp/cleanup-isolated
+```
+
+## Diagnostic attribution
+
+The `compiled_method` owning each runtime trap/retirement event is used for
+attribution, rather than its innermost inline frame. None belongs to the
+benchmark or generated binding methods. All generated classes and runtime
+helpers, including handle monitors, live in `bench.plain` or `bench.bulk`, which
+the method-prefix filter includes. Kotlin/JDK library helpers remain separate.
+Counts below include all four forks per cell. They can differ by revision and
+therefore remain a latency confound.
+
+| Mode | Case | Size | Before traps / retirements | After traps / retirements |
+|---|---|---:|---:|---:|
+| bulk | control | 1 | 0 / 4 | 0 / 1 |
+| bulk | handles_input | 1 | 16 / 4 | 16 / 4 |
+| bulk | handles_input | 64 | 4 / 4 | 0 / 5 |
+| bulk | handles_input | 512 | 8 / 7 | 8 / 3 |
+| bulk | nested_owned_handles_roundtrip | 1 | 16 / 7 | 16 / 5 |
+| bulk | nested_owned_handles_roundtrip | 64 | 16 / 9 | 16 / 7 |
+| bulk | nested_owned_handles_roundtrip | 512 | 0 / 7 | 0 / 5 |
+| bulk | owned_handle_records_roundtrip | 1 | 16 / 6 | 16 / 4 |
+| bulk | owned_handle_records_roundtrip | 64 | 4 / 4 | 4 / 5 |
+| bulk | owned_handle_records_roundtrip | 512 | 4 / 4 | 4 / 6 |
+| bulk | owned_handles_roundtrip | 1 | 16 / 4 | 16 / 5 |
+| bulk | owned_handles_roundtrip | 64 | 16 / 5 | 12 / 5 |
+| bulk | owned_handles_roundtrip | 512 | 4 / 2 | 5 / 4 |
+| plain | nested_owned_handles_roundtrip | 512 | 0 / 3 | 0 / 6 |
+| plain | owned_handle_records_roundtrip | 512 | 0 / 5 | 0 / 7 |
+| plain | owned_handles_roundtrip | 512 | 0 / 1 | 1 / 7 |
+| plain | records_output | 512 | 0 / 0 | 0 / 1 |
+
+The initial 144-JVM result uses the runner committed at `7169e3405`; its recorded
+SHA-256 matches that source. The runner was subsequently extended for explicit
+A/A and shared-native-library controls. The driver is unchanged.
+
+A separate compilation against the after binding JAR produced byte-identical
+classes and Kotlin metadata to compilation against the before JAR (all five
+entries). [driver-identity.json](driver-identity.json) records the command and
+class hashes. This checks that the shared driver does not silently inline
+different binding code or constants from one revision.
+
+## A/A and identical-native-library follow-ups
+
+The additional profiles use the same driver, JVM flags, warmup, 24 measured
+batches per process and four paired forks. An A/A comparison labels the same
+baseline JAR/native image as both A and B (24 JVMs); the second comparison
+loads the exact same baseline native image with each Kotlin revision (40 JVMs).
+The generated JNI interfaces match. Each process command and its effective
+artifacts are recorded separately from the original build provenance.
+
+Together with the initial profile this is **208 timing JVMs and 4,992 measured
+batches**. No timing samples are dropped. The A/A data demonstrates variation;
+it does not define a universal confidence bound or a threshold for significance.
+
+The shared driver was recompiled against both binding JARs and its classes
+and Kotlin metadata are identical. This excludes different inlined binding
+functions or constants in the driver as an explanation. The native library
+files and their `.text` sections differ across the original builds despite
+identical generated Rust source; the shared-library profile removes that
+particular build difference.
+
+### Same code against itself (A/A)
+
+Positive changes below mean B is slower. Both labels execute the same code.
+
+| Mode | Case | Size | A ns | B ns | Wall change | Paired changes |
+|---|---|---:|---:|---:|---:|---|
+| bulk | control | 1 | 14.3 | 15.0 | +5.2% | -4.7%, +10.7%, +4.9%, +11.7% |
+| bulk | owned_handles_roundtrip | 1 | 916.8 | 935.2 | +2.0% | -7.5%, +19.5%, -2.1%, +6.2% |
+| plain | owned_handle_records_roundtrip | 512 | 3711250.1 | 3602170.9 | -2.9% | -40.8%, -2.6%, -1.0%, +12.3% |
+
+The aggregate scores move by 2–5% even with identical code. Individual paired
+changes reach -40.8% / +19.5%, so four-fork aggregates must not be treated as
+precise causal estimates. In particular, the initial +5.4% / +7.1% cells do
+not establish cleanup-code regressions.
+
+### Both Kotlin revisions with one native image
+
+Positive changes mean slower with the new Kotlin decoder. Controls are unchanged
+Kotlin input methods. The ordinary JNI handle-record slowdown does not reproduce;
+the sign reverses. The one-element bulk flat-handle score remains slower in
+aggregate, but one paired fork is faster. Nested one-element handles improve in
+all four pairs in both profiles, making that the strongest latency candidate.
+Neither profile establishes a universal speedup or the cause of its slowdowns.
+
+| Mode | Case | Size | Before ns | After ns | Wall change | CPU change | Paired changes |
+|---|---|---:|---:|---:|---:|---:|---|
+| bulk | handles_input | 1 | 229.6 | 236.0 | +2.8% | +2.7% | +4.6%, -13.9%, +1.1%, +12.9% |
+| bulk | handles_input | 512 | 13891.9 | 13993.5 | +0.7% | +0.7% | -9.0%, +1.4%, +5.6%, +3.8% |
+| bulk | nested_owned_handles_roundtrip | 1 | 1631.9 | 1448.8 | -11.2% | -10.9% | -7.4%, -15.1%, -1.8%, -11.5% |
+| bulk | owned_handles_roundtrip | 1 | 889.0 | 964.7 | +8.5% | +8.0% | +8.6%, +35.1%, +7.2%, -8.9% |
+| plain | owned_handle_records_roundtrip | 512 | 4072635.4 | 3761047.7 | -7.7% | -8.1% | -4.9%, +8.7%, -10.6%, -13.3% |
+
+Allocation reductions remain the supported finding. The shared-native profile
+also confirms 768 → 736 B for one flat handle and 1,640 → 1,216 B for one
+nested handle. The initial 512-element output reductions remain about 20–21 KB
+per call. A/A allocation can also vary with JVM optimization, especially in the
+ordinary JNI row path; allocation comparisons must stay within each profile.
+
+[All A/A metadata and scores](aa/results.json), [A/A batches](aa/samples.csv),
+[all shared-native metadata and scores](common-native/results.json), and
+[shared-native batches](common-native/samples.csv) retain each process and sample.
+
+The shared-native configuration separately passed six smoke JVMs with
+`-Xcheck:jni` (twelve checked batches). No builds ran during timing.
+
+To reproduce the additional profiles with the current runner:
+
+```sh
+taskset -c 0,1 python3 examples/bench-bulk/output-cleanup-results/isolated/compare.py \
+  --driver /tmp/cleanup-driver --output /tmp/cleanup-aa --same-build before \
+  --cells bulk:control:1,bulk:owned_handles_roundtrip:1,plain:owned_handle_records_roundtrip:512
+taskset -c 0,1 python3 examples/bench-bulk/output-cleanup-results/isolated/compare.py \
+  --driver /tmp/cleanup-driver --output /tmp/cleanup-common-native --native-version before \
+  --cells bulk:handles_input:1,bulk:handles_input:512,bulk:owned_handles_roundtrip:1,plain:owned_handle_records_roundtrip:512,bulk:nested_owned_handles_roundtrip:1
 ```

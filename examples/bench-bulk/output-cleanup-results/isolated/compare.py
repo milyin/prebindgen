@@ -25,6 +25,9 @@ p.add_argument('--compile-quiet-ms', type=int, default=1000)
 p.add_argument('--max-warmup-ms', type=int, default=20000)
 p.add_argument('--smoke', action='store_true')
 p.add_argument('--pilot', action='store_true')
+p.add_argument('--cells', help='Comma-separated mode:case:size combinations')
+p.add_argument('--same-build', choices=['before', 'after'], help='A/A comparison using one frozen build for both labels')
+p.add_argument('--native-version', choices=['before', 'after'], help='Use one frozen native library with both Kotlin revisions')
 a = p.parse_args()
 assert a.forks > 0 and min(a.warmup, a.batches, a.target_ms) > 0
 assert 0 <= a.min_warmup_ms <= a.max_warmup_ms and a.compile_quiet_ms >= 0
@@ -34,11 +37,18 @@ assert not list(root.iterdir()), 'Use an empty output directory'
 raw = root / 'raw'
 raw.mkdir()
 driver = json.loads((a.driver / 'driver.json').read_text())
-info = driver['builds']
+info = {v: dict(d) for v, d in driver['builds'].items()}
 sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
 assert sha(driver['driver_jar']) == driver['driver_jar_sha256']
 for d in info.values():
     assert sha(d['jar']) == d['jar_sha256'] and sha(d['library']) == d['native_sha256']
+assert not (a.same_build and a.native_version)
+if a.same_build:
+    info = {v: dict(driver['builds'][a.same_build]) for v in info}
+if a.native_version:
+    for d in info.values():
+        for key in ['library', 'native_sha256']:
+            d[key] = driver['builds'][a.native_version][key]
 flags = ['-Xms256m', '-Xmx256m', '-XX:+UseG1GC', '-XX:ActiveProcessorCount=2',
          '-XX:+UnlockDiagnosticVMOptions', '-XX:+LogCompilation', '-XX:+PrintCommandLineFlags',
          '-XX:CompileCommand=exclude,BenchKt::main',
@@ -61,6 +71,11 @@ if a.pilot:
              ('bulk', 'owned_handle_records_roundtrip', 512),
              ('bulk', 'nested_owned_handles_roundtrip', 512),
              ('plain', 'owned_handles_roundtrip', 512)]
+if a.cells:
+    assert not (a.smoke or a.pilot)
+    cells = [(mode, case, int(size)) for mode, case, size in
+             (cell.split(':') for cell in a.cells.split(','))]
+    assert len(cells) == len(set(cells)) and cells
 env = dict(os.environ, PB_MIN_WARMUP_MS=str(a.min_warmup_ms),
            PB_COMPILE_QUIET_MS=str(a.compile_quiet_ms), PB_MAX_WARMUP_MS=str(a.max_warmup_ms))
 samples, runs = [], []
@@ -106,6 +121,7 @@ for fork in range(a.forks):
                     assert (actual_mode, actual_case, int(actual_size)) == (mode, case, size)
                     values[int(batch)] = dict(iterations=int(iterations), nanos=int(nanos), jvm_allocated_bytes=int(allocated))
             assert warm is not None and set(phases) == {'start', 'end'}
+            assert warm['stable'] or a.smoke, f'{ident}: warmup conditions not met'
             assert set(values) == set(diag) == set(range(a.batches))
             for batch in values:
                 s = dict(version=version, mode=mode, case=case, size=size, fork=fork, batch=batch,
@@ -160,7 +176,8 @@ with (root / 'samples.csv').open('w') as f:
 for d in info.values():
     assert sha(d['jar']) == d['jar_sha256'] and sha(d['library']) == d['native_sha256']
 assert sha(driver['driver_jar']) == driver['driver_jar_sha256']
-report = dict(driver=driver, settings=vars(a) | {'driver': str(a.driver), 'output': str(a.output)},
+report = dict(driver=driver, effective_builds=info,
+              settings=vars(a) | {'driver': str(a.driver), 'output': str(a.output)},
               cells=cells, jvm_flags=flags, warmup_environment={k:v for k,v in env.items() if k.startswith('PB_')},
               affinity=sorted(os.sched_getaffinity(0)), platform=platform.platform(),
               java_environment={k:os.environ[k] for k in ['JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS','MALLOC_ARENA_MAX'] if k in os.environ},

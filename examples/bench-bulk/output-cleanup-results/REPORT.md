@@ -6,25 +6,35 @@ Generated native JNI source (`plain.rs` and `bulk.rs`) is byte-for-byte identica
 
 ## Isolated follow-up
 
-The [isolated comparison](isolated/README.md) adds 144 fresh JVMs, each running
-one case and size, with longer adaptive warmup, wall/CPU/allocation measurements
-and compilation/GC diagnostics. All 3,456 measured batches are retained. Every
-sampling loop reached C2 before measurement; no benchmark or generated-binding
-compilation/deoptimization occurred during measurement. JDK helpers still changed,
-and unchanged controls still varied, so this does not establish a noise-free result.
+The [isolated comparison](isolated/README.md) first runs one case and size per
+fresh JVM (144 JVMs), then adds same-code A/A controls (24 JVMs) and both Kotlin
+revisions against one identical native library (40 JVMs). All **4,992 measured
+batches** from **208 JVMs** are retained, with wall/CPU/allocation and
+compilation/GC diagnostics. Every sampling loop reached HotSpot's optimizing
+compiler (C2) before measurement; no benchmark or generated-binding
+compilation/deoptimization occurred during timing. JDK helpers still changed.
+The identical driver was verified by recompiling against both binding JARs.
 
-At 512 elements, bulk flat/record/nested round-trip wall scores change by
-**-3.2% / -4.2% / +0.7%**. Their calling-thread JVM allocation falls by about
-20–21 KB per call. Two slower cases repeat in every paired fork: the one-element
-bulk flat-handle round trip (**+5.4%**) and ordinary JNI 512-element handle records
-(**+7.1%**, **+7.2% CPU**). These warrant investigation; lower allocation does not
-imply uniformly faster calls. The unchanged bulk input control also shifts
-(-7.4% at one element; +5.9% at 512), limiting causal conclusions.
+At 512 elements, calling-thread JVM allocation in the first isolated bulk
+flat/record/nested round trips falls by about **20–21 KB per call**; wall scores
+change by -3.2% / -4.2% / +0.7%. Those small timing changes are inconclusive.
+A/A aggregates move by 2–5% with identical code and individual paired changes
+are much wider. Two initially slower cells (+5.4% one-element bulk flat handles;
++7.1% ordinary JNI 512-element handle records) therefore do not establish
+cleanup-code regressions.
 
-This follow-up uses total timed nanoseconds / operations within a JVM, then the
-median of four JVM scores, including GC pauses. The earlier tables below use
-batch medians; compare before/after within each profile. See the isolated report
-for ranges, all paired changes, raw samples, exact protocol and remaining limits.
+With both Kotlin revisions using one native image, the ordinary-record result
+reverses to -7.7%. One-element bulk flat handles remain slower in aggregate
+(+8.5%), with mixed paired directions. Nested one-element handles improve in
+every pair in both profiles (-25.8% initially; -11.2% with a shared native image).
+That is the strongest latency candidate, but the evidence does not establish a
+universal latency improvement or explain the slower cases. Lower allocation is
+the supported finding; precise latency attribution remains unresolved.
+
+These follow-ups use total timed nanoseconds / operations within a JVM, then
+the median of four JVM scores, including GC pauses. The earlier tables below
+use batch medians; compare before/after within each profile. See the isolated
+report for all ranges, paired changes, samples, commands and diagnostic limits.
 
 ## Earlier broad/focused results and limits
 
