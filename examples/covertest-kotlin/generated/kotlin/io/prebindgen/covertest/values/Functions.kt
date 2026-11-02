@@ -27,20 +27,13 @@ public fun `dataEnvelopeEcho`(p0_w1: io.prebindgen.covertest.values.Envelope, on
     val returnCapture = io.prebindgen.covertest.Return_String_Long_Long14_ErrorEmpty_f6cccd4cd56d1dfa.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1.`label` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1.`blob`.`stamp`.`secs` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { p0_w1.`blob`.`stamp`.`nanos` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { p0_w1.`blob`.`id` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { p0_w1.`unsigned`.`byte` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument5 = try { p0_w1.`unsigned`.`short` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument6 = try { p0_w1.`unsigned`.`int` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument7 = try { p0_w1.`unsigned`.`long`.toLong() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument8 = try { (if (p0_w1.`unsigned`.`maybe_long` != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument9 = try { if (p0_w1.`unsigned`.`maybe_long` != null) requireNotNull(p0_w1.`unsigned`.`maybe_long`).toLong() else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument10 = try { p0_w1.`enabled` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument11 = try { p0_w1.`code` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument12 = try { p0_w1.`signed`.toByteArray() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument13 = try { p0_w1.`wide`.toByteArray() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument14 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_data_envelope_echo_3968cde0709118c6(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4, nativeArgument5, nativeArgument6, nativeArgument7, nativeArgument8, nativeArgument9, nativeArgument10, nativeArgument11, nativeArgument12, nativeArgument13, nativeArgument14) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s8 == 1) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s8 == 1) {
+                if (returnCapture.s8 == 1) {
             }
-            io.prebindgen.covertest.values.Envelope(returnCapture.s0 as String, io.prebindgen.covertest.model.BlobValue(io.prebindgen.covertest.model.Stamp(returnCapture.s1, returnCapture.s2), returnCapture.s3 as ByteArray), io.prebindgen.covertest.model.Unsigned(returnCapture.s4, returnCapture.s5, returnCapture.s6, (returnCapture.s7).toULong(), if (returnCapture.s8 == 1) (returnCapture.s9).toULong() else null), returnCapture.s10, returnCapture.s11, java.math.BigInteger(returnCapture.s12 as ByteArray), java.math.BigInteger(1, returnCapture.s13 as ByteArray))
-        } catch (failure: Throwable) {
-            if (returnCapture.s8 == 1) {
-            }
-            throw failure
-        }
+
+io.prebindgen.covertest.values.Envelope(returnCapture.s0 as String, io.prebindgen.covertest.model.BlobValue(io.prebindgen.covertest.model.Stamp(returnCapture.s1, returnCapture.s2), returnCapture.s3 as ByteArray), io.prebindgen.covertest.model.Unsigned(returnCapture.s4, returnCapture.s5, returnCapture.s6, (returnCapture.s7).toULong(), if (returnCapture.s8 == 1) (returnCapture.s9).toULong() else null), returnCapture.s10, returnCapture.s11, java.math.BigInteger(returnCapture.s12 as ByteArray), java.math.BigInteger(1, returnCapture.s13 as ByteArray))
     } finally { returnCapture.release() }
 }
 
@@ -71,20 +64,13 @@ public fun `dataEnvelopeConstructed`(p0_w2: io.prebindgen.covertest.model.BlobVa
     val returnCapture = io.prebindgen.covertest.Return_String_Long_Long14_ErrorEmpty_f6cccd4cd56d1dfa.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w2.`stamp`.`secs` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w2.`stamp`.`nanos` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { p0_w2.`id` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_data_envelope_constructed_dab47fa5443a2b68(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s8 == 1) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s8 == 1) {
+                if (returnCapture.s8 == 1) {
             }
-            io.prebindgen.covertest.values.Envelope(returnCapture.s0 as String, io.prebindgen.covertest.model.BlobValue(io.prebindgen.covertest.model.Stamp(returnCapture.s1, returnCapture.s2), returnCapture.s3 as ByteArray), io.prebindgen.covertest.model.Unsigned(returnCapture.s4, returnCapture.s5, returnCapture.s6, (returnCapture.s7).toULong(), if (returnCapture.s8 == 1) (returnCapture.s9).toULong() else null), returnCapture.s10, returnCapture.s11, java.math.BigInteger(returnCapture.s12 as ByteArray), java.math.BigInteger(1, returnCapture.s13 as ByteArray))
-        } catch (failure: Throwable) {
-            if (returnCapture.s8 == 1) {
-            }
-            throw failure
-        }
+
+io.prebindgen.covertest.values.Envelope(returnCapture.s0 as String, io.prebindgen.covertest.model.BlobValue(io.prebindgen.covertest.model.Stamp(returnCapture.s1, returnCapture.s2), returnCapture.s3 as ByteArray), io.prebindgen.covertest.model.Unsigned(returnCapture.s4, returnCapture.s5, returnCapture.s6, (returnCapture.s7).toULong(), if (returnCapture.s8 == 1) (returnCapture.s9).toULong() else null), returnCapture.s10, returnCapture.s11, java.math.BigInteger(returnCapture.s12 as ByteArray), java.math.BigInteger(1, returnCapture.s13 as ByteArray))
     } finally { returnCapture.release() }
 }
 

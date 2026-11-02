@@ -1,8 +1,6 @@
 //! Array row transport and Kotlin list conversion; schemas live in sequence nodes.
 use super::*;
-use crate::kotlin::{
-    input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
-};
+use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
 /// Selected delivery of a logical sequence.
@@ -207,18 +205,21 @@ pub(crate) fn input_list(
 pub(crate) fn output_list(
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
+    if owners.is_none() && crate::kotlin::input_handles(element, false) {
+        return Err("handle collection output requires an ownership scope".into());
+    }
     let row = format!("{}_row", context.output_prefix);
-    let prefix = format!("{}item_", context.output_prefix);
     let failure = format!("{}failure", context.output_prefix);
     let ctx = KotlinContext {
         failure: &failure,
         cleanup_failure: Some(&failure),
         result: &row,
-        output_prefix: &prefix,
+        output_prefix: &format!("{}item_", context.output_prefix),
         ..*context
     };
-    let child = output_kotlin(element, &ctx)?;
+    let child = crate::kotlin::output_kotlin_scoped(element, &ctx, owners)?;
     if child.delivered.len() != 1 {
         return Err("Kotlin collection elements must deliver exactly one value; declare a data class for expanded outputs".into());
     }
@@ -226,20 +227,11 @@ pub(crate) fn output_list(
     let value = &child.delivered[0];
     let raw = format!("({}[0] as kotlin.Array<*>)", context.result);
     let output = format!("{}list", context.output_prefix);
-    let actions = format!("{}cleanups", context.output_prefix);
-    let initial = format!("{}initialFailure", context.output_prefix);
-    let action = format!("{}cleanupAction", context.output_prefix);
-    let raw_row = format!("{}rawRow", context.output_prefix);
     let index = format!("{}index", context.output_prefix);
     let cleanup = format!("{}cleanupError", context.output_prefix);
     let record_row_failure = kotlin::record_cleanup_failure(&ctx, &cleanup);
     let record_outer_failure = kotlin::record_cleanup_failure(context, &cleanup);
     let current_failure = context.cleanup_failure.unwrap_or(context.failure);
-    let run_action = if let Some(target) = context.cleanup_failure {
-        format!("{target} = {action}({target})")
-    } else {
-        format!("{action}({current_failure})")
-    };
     let finish_row = context
         .cleanup_failure
         .map(|target| format!("{target} = {failure}"))
@@ -248,15 +240,15 @@ pub(crate) fn output_list(
         result_names: vec![None],
         delivered: vec![format!("requireNotNull({output})")],
         result_types: vec![format!("kotlin.collections.List<{ty}>")],
-        output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\nvar {actions}: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null\n"),
+        output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\n"),
         materialize: format!(
-            "{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor ({raw_row} in {raw}) {{\nval {row} = {raw_row} as kotlin.Array<*>\n{}\n{actions}.add {{ {initial} -> var {failure} = {initial}; try {{ {} }} catch ({cleanup}: Throwable) {{ {record_row_failure} }}; {failure} }}\n{}\n{output}.add({value})\n}}\n",
-            child.output_locals, child.cleanup, child.materialize
+            "{output} = kotlin.collections.ArrayList({raw}.size)\nfor ({index} in {raw}.indices) {{\nval {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n{output}.add({value})\n}}\n",
+            child.output_locals, child.materialize
         ),
-        cleanup: format!(
-            "try {{\nfor ({action} in {actions}.orEmpty()) {{ try {{ {run_action} }} catch ({cleanup}: Throwable) {{ {record_outer_failure} }} }}\nfor ({index} in ({actions}?.size ?: 0) until {raw}.size) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
+        cleanup: if child.cleanup.is_empty() { String::new() } else { format!(
+            "try {{\nfor ({index} in {raw}.indices) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
             child.output_locals, child.cleanup
-        ),
+        ) },
     })
 }
 

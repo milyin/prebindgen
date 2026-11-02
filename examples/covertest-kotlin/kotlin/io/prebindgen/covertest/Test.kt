@@ -27,6 +27,7 @@ fun main() {
     checkSharedCallbackReentry()
     checkCallbackBoundaryFailures()
     checkCollections()
+    checkOutputCleanup()
     checkSequenceDelivery()
     checkResults()
     checkOptions()

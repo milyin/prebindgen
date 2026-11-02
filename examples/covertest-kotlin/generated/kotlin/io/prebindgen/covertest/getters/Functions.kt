@@ -11,10 +11,6 @@ var outputg4_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputg4_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.getters.GetterDetails>? = null
         var outputg5_0: io.prebindgen.covertest.getters.GetterLeaf? = null
              try { val owner = outputg0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterOwner_bc1803eb5b8c76ef(returnCapture.s0) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-            if (returnCapture.s4 != null) {
-            }
-            if (returnCapture.s5 == 1) {
-            }
             try { val owner = outputg5_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterLeaf_b28f97ae79569aa8(returnCapture.s9) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
  }
         return@run onError.run(returnCapture.message) }
@@ -43,10 +39,6 @@ outputg4_g0_bulkList!!.add(io.prebindgen.covertest.getters.GetterDetails((requir
             build(requireNotNull(outputg0_0), returnCapture.s1, returnCapture.s2 as String, if (returnCapture.s4 != null) returnCapture.s3 else null, if (returnCapture.s4 != null) returnCapture.s4 as String else null, if (returnCapture.s5 == 1) io.prebindgen.covertest.getters.GetterDetails(returnCapture.s6, returnCapture.s7 as String) else null, requireNotNull(outputg4_g0_bulkList), requireNotNull(outputg5_0))
         } catch (failure: Throwable) {
             try { val owner = outputg0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterOwner_bc1803eb5b8c76ef(returnCapture.s0) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-            if (returnCapture.s4 != null) {
-            }
-            if (returnCapture.s5 == 1) {
-            }
             try { val owner = outputg5_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterLeaf_b28f97ae79569aa8(returnCapture.s9) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
             throw failure
         }
@@ -247,10 +239,6 @@ callbackOutput0_g3_g0_bulkList!!.add(io.prebindgen.covertest.getters.GetterDetai
             callbackArgument0_5 = requireNotNull(callbackOutput0_g3_g0_bulkList)
             callbackArgument0_6 = requireNotNull(callbackOutput0_g4_0)
         } catch (failure: Throwable) {
-            if (raw3 != null) {
-            }
-            if (raw4 == 1) {
-            }
             try { val owner = callbackOutput0_g4_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterLeaf_b28f97ae79569aa8(raw8 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure

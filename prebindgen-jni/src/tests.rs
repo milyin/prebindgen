@@ -2746,3 +2746,50 @@ fn explicit_nested_outputs_have_no_hidden_bulk_frames_in_rows_or_callbacks() {
         .unwrap();
     assert!(!fallible.rust.contains("bulk::Writer::new"));
 }
+
+#[test]
+fn collection_output_owners_are_shared_without_row_cleanup_closures() {
+    for bulk in [false, true] {
+        let mut declaration = fun!(values);
+        if bulk {
+            declaration = declaration.expand_return(expand_return!(Owner).field_self_into().bulk());
+        }
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Vec<Option<Vec<Option<Owner>>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(declaration))
+            .build()
+            .unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        assert_eq!(
+            text.matches("= test.CollectionOwners()").count(),
+            1,
+            "{text}"
+        );
+        assert!(text.contains(".own("));
+        assert!(!text.contains("cleanups"));
+        assert!(!text.contains("bulkActions"));
+        assert!(!text.contains("MutableList<("));
+    }
+}
+
+#[test]
+fn resource_free_collection_outputs_have_no_cleanup_bookkeeping() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub struct Row {pub number:i64,pub text:String}pub fn values()->Vec<Option<Row>>{}",
+        ))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(data_class!(Row)).fun(fun!(values)))
+        .build()
+        .unwrap();
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("CollectionOwners"));
+    assert!(!text.contains("cleanups"));
+    assert!(!text.contains("cleanupError"));
+    assert!(text.contains("kotlin.collections.ArrayList("));
+}

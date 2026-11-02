@@ -415,6 +415,24 @@ fn main() {
             .fun(fun!(callback_scalars)).fun(fun!(callback_texts))
             .fun(fun!(callback_optional_owned)).fun(fun!(callback_envelope)).fun(fun!(callback_primitives))
             .fun(fun!(callback_enums)))
+        .package(package!("cleanup")
+            .class(data_class!(OutputCleanupRow))
+            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::OwnedFields(vec![
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Sequence {delivery: prebindgen_declarations::SequenceDelivery::Value,mode:None,element:Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto))},
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            ])))
+            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::Output::OwnedFields(vec![
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            ])))
+            .fun(fun!(output_cleanup_rows).output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            .fun(fun!(output_cleanup_rows_bulk).expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_nested).output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            .fun(fun!(output_cleanup_nested_bulk).expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) })))
+            .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             let mut probe = flat.clone();
@@ -1666,7 +1684,14 @@ fn main() {
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let jni = binding.build().expect("build supported declarations");
+    let mut jni = binding.build().expect("build supported declarations");
+    // Test-only constructor fault injection: handwritten OutputCleanupRow has
+    // the exact generated fields plus an init hook that can throw or take a
+    // handle. All Rust/JNI and collection-decoder code remains generated.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
+        .is_some());
     jni.write_rust("bindings.rs").unwrap();
     let kotlin = out.join("kotlin");
     if kotlin.exists() {

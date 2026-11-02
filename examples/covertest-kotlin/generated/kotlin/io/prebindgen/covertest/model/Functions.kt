@@ -16,20 +16,13 @@ public fun `plainNoteEcho`(p0_w3: String?, onError: io.prebindgen.covertest.JniE
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(requireNotNull(p0_w3)) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_plain_note_echo_04effec8337b6f4f(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (nativeResult != null) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (nativeResult != null) {
+                if (nativeResult != null) {
             }
-            if (nativeResult != null) nativeResult as String else null
-        } catch (failure: Throwable) {
-            if (nativeResult != null) {
-            }
-            throw failure
-        }
+
+if (nativeResult != null) nativeResult as String else null
     } finally { returnCapture.release() }
 }
 
@@ -37,20 +30,13 @@ public fun `unsignedRoundTrip`(p0_w1: Int, p1_w1: Int, p2_w1: Long, p3_w1: ULong
     val returnCapture = io.prebindgen.covertest.Return_Int_Int_Long6_ErrorEmpty_b3ecce38dd00826e.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { p2_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { p3_w1.toLong() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { (if (p4_w3 != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument5 = try { if (p4_w3 != null) requireNotNull(p4_w3).toLong() else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument6 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_unsigned_round_trip_b59be7bd92f5b575(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4, nativeArgument5, nativeArgument6) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s4 == 1) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s4 == 1) {
+                if (returnCapture.s4 == 1) {
             }
-            io.prebindgen.covertest.model.Unsigned(returnCapture.s0, returnCapture.s1, returnCapture.s2, (returnCapture.s3).toULong(), if (returnCapture.s4 == 1) (returnCapture.s5).toULong() else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s4 == 1) {
-            }
-            throw failure
-        }
+
+io.prebindgen.covertest.model.Unsigned(returnCapture.s0, returnCapture.s1, returnCapture.s2, (returnCapture.s3).toULong(), if (returnCapture.s4 == 1) (returnCapture.s5).toULong() else null)
     } finally { returnCapture.release() }
 }
 
@@ -58,20 +44,13 @@ public fun `unsignedOptional`(p0_w3: ULong?, onError: io.prebindgen.covertest.Jn
     val returnCapture = io.prebindgen.covertest.Return_Int_Long2_ErrorEmpty_62eb913ef507b63c.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { (if (p0_w3 != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p0_w3 != null) requireNotNull(p0_w3).toLong() else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_unsigned_optional_7f17c540c43bf08f(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 == 1) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s0 == 1) {
+                if (returnCapture.s0 == 1) {
             }
-            if (returnCapture.s0 == 1) (returnCapture.s1).toULong() else null
-        } catch (failure: Throwable) {
-            if (returnCapture.s0 == 1) {
-            }
-            throw failure
-        }
+
+if (returnCapture.s0 == 1) (returnCapture.s1).toULong() else null
     } finally { returnCapture.release() }
 }
 

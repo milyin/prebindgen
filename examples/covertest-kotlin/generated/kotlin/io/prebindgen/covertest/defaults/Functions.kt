@@ -55,18 +55,12 @@ public fun `defaultBulkOptional`(p0_w1: Long, onError: io.prebindgen.covertest.J
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_default_bulk_optional_ea20da6fc813acee(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
-var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
-var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.defaults.DefaultBulkRow>? = null
-             if (nativeResult != null) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.defaults.DefaultBulkRow>? = null
-        try {
             if (nativeResult != null) {
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
 outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rd59a56236bfd5111.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1962afe2ac010549.size)
@@ -78,12 +72,8 @@ val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.
 outputbulkList!!.add(io.prebindgen.covertest.defaults.DefaultBulkRow((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1962afe2ac010549.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r1962afe2ac010549.offsets[1])) as Double))
 }
             }
-            if (nativeResult != null) requireNotNull(outputbulkList) else null
-        } catch (failure: Throwable) {
-            if (nativeResult != null) {
-            }
-            throw failure
-        }
+
+if (nativeResult != null) requireNotNull(outputbulkList) else null
     } finally { returnCapture.release() }
 }
 
@@ -271,49 +261,19 @@ public fun `defaultBulkPlain`(onError: io.prebindgen.covertest.JniErrorHandler<k
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_default_bulk_plain_e53a41329b22bbda(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.defaults.DefaultBulkRow>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
- try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
-
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.defaults.DefaultBulkRow>? = null
-var outputcleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-        try {
-outputcleanups = kotlin.collections.mutableListOf()
-outputlist = kotlin.collections.mutableListOf()
-for (outputrawRow in (nativeResult as kotlin.Array<*>)) {
-val output_row = outputrawRow as kotlin.Array<*>
+outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-outputcleanups.add { outputinitialFailure -> var outputfailure = outputinitialFailure; try {  } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }; outputfailure }
 
 outputlist.add(io.prebindgen.covertest.defaults.DefaultBulkRow(output_row[0] as Long, output_row[1] as Double))
 }
-            requireNotNull(outputlist)
-        } catch (failure: Throwable) {
-try {
-for (outputcleanupAction in outputcleanups.orEmpty()) { try { outputcleanupAction(failure) } catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) } }
-for (outputindex in (outputcleanups?.size ?: 0) until (nativeResult as kotlin.Array<*>).size) {
-var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
 
-
-} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
-
-}
-} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
-            throw failure
-        }
+requireNotNull(outputlist)
     } finally { returnCapture.release() }
 }
 
@@ -362,38 +322,21 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
     fun run(raw0: Array<Any?>?, raw1: ByteArray?) {
         var callbackCleanupFailure: Throwable? = null
 var callbackOutput0_list: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
-var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
         lateinit var callbackArgument0_0: kotlin.collections.List<kotlin.collections.List<Long>>
 var callbackOutput1_bulkReader: io.prebindgen.covertest.BulkReader? = null
 var callbackOutput1_bulkRange: io.prebindgen.covertest.BulkRange? = null
 var callbackOutput1_bulkList: kotlin.collections.MutableList<kotlin.collections.List<Long>>? = null
         lateinit var callbackArgument1_0: kotlin.collections.List<kotlin.collections.List<Long>>
         try {
-callbackOutput0_cleanups = kotlin.collections.mutableListOf()
-callbackOutput0_list = kotlin.collections.mutableListOf()
-for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
-val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+callbackOutput0_list = kotlin.collections.ArrayList((raw0 as kotlin.Array<*>).size)
+for (callbackOutput0_index in (raw0 as kotlin.Array<*>).indices) {
+val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
 var callbackOutput0_item_list: kotlin.collections.MutableList<Long>? = null
-var callbackOutput0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
 
-callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try { try {
-for (callbackOutput0_item_cleanupAction in callbackOutput0_item_cleanups.orEmpty()) { try { callbackOutput0_failure = callbackOutput0_item_cleanupAction(callbackOutput0_failure) } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) } }
-for (callbackOutput0_item_index in (callbackOutput0_item_cleanups?.size ?: 0) until (callbackOutput0__row[0] as kotlin.Array<*>).size) {
-var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
-try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+callbackOutput0_item_list = kotlin.collections.ArrayList((callbackOutput0__row[0] as kotlin.Array<*>).size)
+for (callbackOutput0_item_index in (callbackOutput0__row[0] as kotlin.Array<*>).indices) {
+val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
 
-
-} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
-callbackOutput0_failure = callbackOutput0_item_failure
-}
-} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
- } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
-callbackOutput0_item_cleanups = kotlin.collections.mutableListOf()
-callbackOutput0_item_list = kotlin.collections.mutableListOf()
-for (callbackOutput0_item_rawRow in (callbackOutput0__row[0] as kotlin.Array<*>)) {
-val callbackOutput0_item__row = callbackOutput0_item_rawRow as kotlin.Array<*>
-
-callbackOutput0_item_cleanups.add { callbackOutput0_item_initialFailure -> var callbackOutput0_item_failure = callbackOutput0_item_initialFailure; try {  } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }; callbackOutput0_item_failure }
 
 callbackOutput0_item_list.add(callbackOutput0_item__row[0] as Long)
 }
@@ -422,30 +365,6 @@ callbackOutput1_bulkList!!.add(requireNotNull(callbackOutput1_bulkItem_bulkList)
 }
             callbackArgument1_0 = requireNotNull(callbackOutput1_bulkList)
         } catch (failure: Throwable) {
-try {
-for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
-for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
-var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
-try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
-var callbackOutput0_item_list: kotlin.collections.MutableList<Long>? = null
-var callbackOutput0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
-
-try {
-for (callbackOutput0_item_cleanupAction in callbackOutput0_item_cleanups.orEmpty()) { try { callbackOutput0_failure = callbackOutput0_item_cleanupAction(callbackOutput0_failure) } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) } }
-for (callbackOutput0_item_index in (callbackOutput0_item_cleanups?.size ?: 0) until (callbackOutput0__row[0] as kotlin.Array<*>).size) {
-var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
-try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
-
-
-} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
-callbackOutput0_failure = callbackOutput0_item_failure
-}
-} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
-
-} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
-callbackCleanupFailure = callbackOutput0_failure
-}
-} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }

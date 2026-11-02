@@ -715,6 +715,7 @@ pub(crate) fn output_kotlin(
     _layout: &BulkRecord,
     child: &JniNode,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     let token = format!("{}bulkRow", context.output_prefix);
     let reader_state = format!("{}bulkReader", context.output_prefix);
@@ -723,7 +724,7 @@ pub(crate) fn output_kotlin(
         result: &token,
         ..*context
     };
-    let mut output = crate::kotlin::output_kotlin(child, &ctx)?;
+    let mut output = crate::kotlin::output_kotlin_scoped(child, &ctx, owners)?;
     remap(&mut output, child, &token, &reader, "0", context)?;
     for text in output.delivered.iter_mut().chain([
         &mut output.output_locals,
@@ -750,18 +751,20 @@ pub(crate) fn output_kotlin(
 
     Ok(output)
 }
-fn owned_fields(node: &JniNode) -> bool {
-    prebindgen_flat::wire_definitions(std::iter::once(node))
-        .any(|w| matches!(w.kind, JniWire::Handle { .. }))
-}
-pub(crate) fn output_list(element: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
+pub(crate) fn output_list(
+    element: &JniNode,
+    context: &KotlinContext<'_>,
+    owners: Option<&str>,
+) -> Result<KotlinOutput> {
+    if owners.is_none() && crate::kotlin::input_handles(element, false) {
+        return Err("handle collection output requires an ownership scope".into());
+    }
     let prefix = context.output_prefix;
     let row = format!("{prefix}bulkRow");
     let base = format!("{prefix}bulkBase");
     let index = format!("{prefix}bulkIndex");
     let range = format!("{prefix}bulkRange");
     let list = format!("{prefix}bulkList");
-    let actions = format!("{prefix}bulkActions");
     let failure = format!("{prefix}bulkFailure");
     let reader = "__PB_BULK_READER__";
     let layout = record(element)?;
@@ -773,7 +776,7 @@ pub(crate) fn output_list(element: &JniNode, context: &KotlinContext<'_>) -> Res
         cleanup_failure: Some(&failure),
         ..*context
     };
-    let mut child = row_output(element, &child_context)?;
+    let mut child = row_output(element, &child_context, owners)?;
     if child.delivered.len() != 1 {
         return Err(
             "bulk collection outputs must expose one Kotlin value; declare a data class".into(),
@@ -782,39 +785,15 @@ pub(crate) fn output_list(element: &JniNode, context: &KotlinContext<'_>) -> Res
     remap(&mut child, element, &row, reader, &base, context)?;
     let ty = &child.result_types[0];
     let value = &child.delivered[0];
-    let resources = owned_fields(element);
     let raw = format!("({}[0] as {}.BulkRange?)", context.result, context.package);
-    let mut locals=format!("var {range}: {}.BulkRange? = null\nvar {list}: kotlin.collections.MutableList<{ty}>? = null\n",context.package);
-    if resources {
-        locals.push_str(&format!(
-            "var {actions}: kotlin.collections.MutableList<(Throwable?) -> Throwable?>? = null\n"
-        ));
-    }
-    let mut materialize=format!("{range} = {reader}.rows({raw}, {schema}.size)\n{list} = kotlin.collections.ArrayList({range}!!.length)\n");
-    if resources {
-        materialize.push_str(&format!("{actions} = kotlin.collections.mutableListOf()\n"));
-    }
-    materialize.push_str(&format!("for ({index} in 0 until {range}!!.length) {{\nval {base} = {range}!!.offset + {index} * {schema}.size\n{}\n",child.output_locals));
+    let locals=format!("var {range}: {}.BulkRange? = null\nvar {list}: kotlin.collections.MutableList<{ty}>? = null\n",context.package);
+    let materialize = format!("{range} = {reader}.rows({raw}, {schema}.size)\n{list} = kotlin.collections.ArrayList({range}!!.length)\nfor ({index} in 0 until {range}!!.length) {{\nval {base} = {range}!!.offset + {index} * {schema}.size\n{}\n{}\n{list}!!.add({value})\n}}\n", child.output_locals, child.materialize);
     let cleanup_error = format!("{prefix}bulkCleanupError");
     let record_row_failure = crate::kotlin::record_cleanup_failure(&child_context, &cleanup_error);
     let record_outer_failure = crate::kotlin::record_cleanup_failure(context, &cleanup_error);
-    if resources {
-        materialize.push_str(&format!(
-            "{actions}!!.add {{ initial -> var {failure} = initial; try {{ {} }} catch ({cleanup_error}: Throwable) {{ {record_row_failure} }}; {failure} }}\n",
-            child.cleanup
-        ));
-    }
-    materialize.push_str(&format!(
-        "{}\n{list}!!.add({value})\n}}\n",
-        child.materialize
-    ));
-    let cleanup = if resources {
+    let cleanup = if !child.cleanup.is_empty() {
         let initial = context.cleanup_failure.unwrap_or(context.failure);
-        let assignment = context
-            .cleanup_failure
-            .map(|f| format!("{f} = "))
-            .unwrap_or_default();
-        format!("try {{ if ({range} == null) {range} = {reader}.rows({raw}, {schema}.size)\nfor (action in {actions}.orEmpty()) {{ try {{ {assignment}action({initial}) }} catch ({cleanup_error}: Throwable) {{ {record_outer_failure} }} }}\nfor ({index} in ({actions}?.size ?: 0) until {range}!!.length) {{\nval {base} = {range}!!.offset + {index} * {schema}.size\nvar {failure}: Throwable? = {initial}\ntry {{ {}\n{} }} catch ({cleanup_error}: Throwable) {{ {record_row_failure} }}\n{}\n}} }} catch ({cleanup_error}: Throwable) {{ {record_outer_failure} }}\n",child.output_locals,child.cleanup,context.cleanup_failure.map(|f|format!("{f} = {failure}")).unwrap_or_default())
+        format!("try {{ if ({range} == null) {range} = {reader}.rows({raw}, {schema}.size)\nfor ({index} in 0 until {range}!!.length) {{\nval {base} = {range}!!.offset + {index} * {schema}.size\nvar {failure}: Throwable? = {initial}\ntry {{ {}\n{} }} catch ({cleanup_error}: Throwable) {{ {record_row_failure} }}\n{}\n}} }} catch ({cleanup_error}: Throwable) {{ {record_outer_failure} }}\n",child.output_locals,child.cleanup,context.cleanup_failure.map(|f|format!("{f} = {failure}")).unwrap_or_default())
     } else {
         String::new()
     };
@@ -827,6 +806,7 @@ pub(crate) fn output_list(element: &JniNode, context: &KotlinContext<'_>) -> Res
         cleanup,
     })
 }
+
 fn register(record: Rc<BulkRecord>, out: &mut BTreeMap<String, Rc<BulkRecord>>) -> Result<()> {
     let id = format!("{:016x}", prebindgen_reprc::schema_id(&record.key));
     if let Some(previous) = out.get(&id) {
@@ -974,8 +954,12 @@ fn row_input(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput>
     }
     Ok(input)
 }
-fn row_output(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-    let mut output = crate::kotlin::output_kotlin(node, context)?;
+fn row_output(
+    node: &JniNode,
+    context: &KotlinContext<'_>,
+    owners: Option<&str>,
+) -> Result<KotlinOutput> {
+    let mut output = crate::kotlin::output_kotlin_scoped(node, context, owners)?;
     if output.delivered.is_empty() {
         output.delivered.push("kotlin.Unit".into());
         output.result_types.push("kotlin.Unit".into());

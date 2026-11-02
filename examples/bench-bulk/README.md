@@ -112,7 +112,7 @@ their SHA-256. Build and measurement inherited that affinity from the execution 
 For the exact original fixture, check out its recorded source commit and use the
 first command above with `--warmup 10`. The single-record extension added six
 cases (41 total at that revision); the focused run below measures those cases and
-two controls. The current fixture also has 15 handle-collection cases (56 total).
+two controls. The current fixture also has 25 handle-collection cases (66 total).
 `ActiveProcessorCount=2` alone does not restrict CPU placement.
 The recorded reports describe their pinned source revisions. Current generation
 also preallocates final collection storage and directly constructs every input
@@ -284,3 +284,14 @@ handles and consuming handle round trips in both JNI transport modes. It records
 allocation reductions, bulk handle-input speedups, and the cases where latency
 was unchanged or slower. The comparison runner, all process medians and raw
 samples are included.
+
+
+## Collection output cleanup
+
+`owned_handle_records_roundtrip` consumes and returns records containing a handle
+and a scalar tag. `nested_owned_handles_roundtrip` does the same for an outer list
+with empty rows surrounding one handle list. Both reuse the preceding result as
+the next input; initial handle creation and final cleanup stay outside timing.
+One scalar JNI read verifies the first result, as in `owned_handles_roundtrip`.
+These cases include normal input locking and conversion, so comparisons report
+the end-to-end effect of changing output cleanup bookkeeping.

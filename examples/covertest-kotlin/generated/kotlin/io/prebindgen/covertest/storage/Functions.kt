@@ -27,20 +27,13 @@ public fun <R> `storageGet`(p0_w1: io.prebindgen.covertest.Storage?, onError: io
 val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
         run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_storage_get_b7f3d4a82ad753f5(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);              if (returnCapture.s0 == 1) {
-            }
- }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-            try {
-            if (returnCapture.s0 == 1) {
+                if (returnCapture.s0 == 1) {
             }
-            build(if (returnCapture.s0 == 1) returnCapture.s1 else null, if (returnCapture.s0 == 1) returnCapture.s2 else null, if (returnCapture.s0 == 1) returnCapture.s3 else null, if (returnCapture.s0 == 1) returnCapture.s4 else null)
-        } catch (failure: Throwable) {
-            if (returnCapture.s0 == 1) {
-            }
-            throw failure
-        }
+
+build(if (returnCapture.s0 == 1) returnCapture.s1 else null, if (returnCapture.s0 == 1) returnCapture.s2 else null, if (returnCapture.s0 == 1) returnCapture.s3 else null, if (returnCapture.s0 == 1) returnCapture.s4 else null)
     } finally { returnCapture.release() }
 }
 
