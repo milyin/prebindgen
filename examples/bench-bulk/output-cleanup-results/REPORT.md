@@ -23,12 +23,14 @@ are much wider. Two initially slower cells (+5.4% one-element bulk flat handles;
 +7.1% ordinary JNI 512-element handle records) therefore do not establish
 cleanup-code regressions.
 
-With both Kotlin revisions using one native image, the ordinary-record result
-reverses to -7.7%. One-element bulk flat handles remain slower in aggregate
-(+8.5%), with mixed paired directions. Nested one-element handles improve in
-every pair in both profiles (-25.8% initially; -11.2% with a shared native image).
-That is the strongest latency candidate, but the evidence does not establish a
-universal latency improvement or explain the slower cases. Lower allocation is
+With both Kotlin revisions using one native image, the ordinary-record comparison
+changes to -7.7%, but the byte-identical baseline also drifts +10.5% between
+sessions. This does not identify a native-build effect. One-element bulk flat
+handles are slower in 7 of 8 pairs (+8.5% aggregate with one native image);
+nested one-element handles are faster in all 8 (-11.2% with one native image).
+Both are latency candidates, one slower and one faster; neither is established
+as a cleanup-code effect. The initial nested aggregate was -25.8%, influenced
+by an outlier; its median paired change was -15.6%. Lower bulk allocation is
 the supported finding; precise latency attribution remains unresolved.
 
 These follow-ups use total timed nanoseconds / operations within a JVM, then
