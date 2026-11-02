@@ -4,7 +4,29 @@ Compared #824 after #855 with identical added benchmark fixtures: baseline `7956
 
 Generated native JNI source (`plain.rs` and `bulk.rs`) is byte-for-byte identical between these builds. The Kotlin changes remove per-row cleanup closures/closure-captured mutable cells, share one list of constructed native-owner wrappers across nested collections, omit resource-free cleanup state, and preallocate ordinary result-list storage. Normal handle wrappers, marshalling carriers, locking, input ownership receipts, native work and output reconstruction remain timed.
 
-## Results and limits
+## Isolated follow-up
+
+The [isolated comparison](isolated/README.md) adds 144 fresh JVMs, each running
+one case and size, with longer adaptive warmup, wall/CPU/allocation measurements
+and compilation/GC diagnostics. All 3,456 measured batches are retained. Every
+sampling loop reached C2 before measurement; no benchmark or generated-binding
+compilation/deoptimization occurred during measurement. JDK helpers still changed,
+and unchanged controls still varied, so this does not establish a noise-free result.
+
+At 512 elements, bulk flat/record/nested round-trip wall scores change by
+**-3.2% / -4.2% / +0.7%**. Their calling-thread JVM allocation falls by about
+20–21 KB per call. Two slower cases repeat in every paired fork: the one-element
+bulk flat-handle round trip (**+5.4%**) and ordinary JNI 512-element handle records
+(**+7.1%**, **+7.2% CPU**). These warrant investigation; lower allocation does not
+imply uniformly faster calls. The unchanged bulk input control also shifts
+(-7.4% at one element; +5.9% at 512), limiting causal conclusions.
+
+This follow-up uses total timed nanoseconds / operations within a JVM, then the
+median of four JVM scores, including GC pauses. The earlier tables below use
+batch medians; compare before/after within each profile. See the isolated report
+for ranges, all paired changes, raw samples, exact protocol and remaining limits.
+
+## Earlier broad/focused results and limits
 
 - The longer-warmup bulk run saves **20,480 calling-thread JVM bytes per call** at 512 elements for both flat handles and records containing one handle: 73,240 → 52,760 B and 93,720 → 73,240 B. Nested handles save **20,864 B**, 74,024 → 53,160 B. At 64 elements the corresponding savings are 2,560 / 2,560 / 2,944 B. Required wrappers and result lists still allocate.
 
@@ -28,7 +50,7 @@ The **focused** follow-up investigates the broad run’s latency variation using
 
 Both compiled revisions first passed all **66 benchmark cases in four diagnostic JVMs each with `-Xcheck:jni`**. Diagnostic timings are excluded. The generated Kotlin/Rust boundary tests separately cover partial construction, optional/nested rows, callback arguments, take/close before failure, allocation failure while registering an owner and destructor exceptions.
 
-Latency is the median of four JVM medians. Brackets are the range of those medians, not confidence intervals. Ratios divide **before by after in the same transport/profile**, so above 1 means faster after. JVM bytes count calling-thread allocation, excluding native allocations, other threads and retained input objects; native allocations remain part of elapsed time. Initial handles/source collections and final cleanup are outside timing. Consuming round trips use the preceding result as the next input and include one extra scalar JNI read to check the first handle. The record case also carries a scalar tag; the nested case has empty lists before/after a handle list.
+In these earlier tables, latency is the median of four JVM medians. Brackets are the range of those medians, not confidence intervals. Ratios divide **before by after in the same transport/profile**, so above 1 means faster after. JVM bytes count calling-thread allocation, excluding native allocations, other threads and retained input objects; native allocations remain part of elapsed time. Initial handles/source collections and final cleanup are outside timing. Consuming round trips use the preceding result as the next input and include one extra scalar JNI read to check the first handle. The record case also carries a scalar tag; the nested case has empty lists before/after a handle list.
 
 ## Longer-warmup bulk results
 
