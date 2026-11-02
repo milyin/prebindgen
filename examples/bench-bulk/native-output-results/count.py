@@ -24,8 +24,16 @@ assert not list(root.iterdir()), 'Use an empty output directory'
 (root / 'raw').mkdir()
 sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
 info = {v: json.loads((d / 'build.json').read_text()) for v, d in [('before', a.before), ('after', a.after)]}
-for key in ['fixture_sha256', 'rustc', 'kotlin', 'dependency_lock_sha256', 'cargo_config_sha256', 'cargo_profile', 'profile_environment']:
+for key in ['fixture_sha256', 'rustc', 'dependency_lock_sha256', 'cargo_config_sha256', 'cargo_profile', 'profile_environment']:
     assert info['before'][key] == info['after'][key], key
+# Namespace-local JVM PIDs can collide in the shared hsperfdata directory and
+# prepend a startup warning. Preserve raw metadata, compare the compiler line.
+versions = []
+for d in info.values():
+    lines = [line for line in d['kotlin'].splitlines() if line.startswith('info: kotlinc-jvm ')]
+    assert len(lines) == 1
+    versions.append(lines[0])
+assert versions[0] == versions[1]
 for d in info.values():
     assert d['native_allocations'] is True
     assert sha(d['jar']) == d['jar_sha256'] and sha(d['library']) == d['native_sha256']

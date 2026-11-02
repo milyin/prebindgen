@@ -96,6 +96,7 @@ impl<'a> Reader<'a> {
 pub struct Writer {
     bytes: Vec<u8>,
     first_owner: Option<RowOwners>,
+    second_owner: Option<RowOwners>,
     other_owners: Vec<RowOwners>,
     transferred: bool,
 }
@@ -114,12 +115,13 @@ impl Writer {
         Self {
             bytes: vec![0; size],
             first_owner: None,
+            second_owner: None,
             other_owners: Vec::new(),
             transferred: false,
         }
     }
-    /// Register rollback for a collection's rows, including nested owners. The first
-    /// nonempty collection needs no allocation for ownership metadata.
+    /// Register rollback for a collection's rows, including nested owners. Two
+    /// pending ranges fit inline, covering flat and singly nested collections.
     ///
     /// # Safety
     /// `range` must be a row allocation made by this writer with this `stride`.
@@ -150,9 +152,12 @@ impl Writer {
         if self.first_owner.is_none() {
             self.first_owner = Some(owner);
             0
+        } else if self.second_owner.is_none() {
+            self.second_owner = Some(owner);
+            1
         } else {
             self.other_owners.push(owner);
-            self.other_owners.len()
+            self.other_owners.len() + 1
         }
     }
     /// Transfer a completed row prefix to this frame's rollback protection.
@@ -170,17 +175,20 @@ impl Writer {
         debug_assert!(!self.transferred);
         let rows = if owner == 0 {
             self.first_owner.as_mut().unwrap_unchecked()
+        } else if owner == 1 {
+            self.second_owner.as_mut().unwrap_unchecked()
         } else {
-            self.other_owners.get_unchecked_mut(owner - 1)
+            self.other_owners.get_unchecked_mut(owner - 2)
         };
         debug_assert!(initialized >= rows.initialized && initialized <= rows.range.length as usize);
         rows.initialized = initialized;
         // RowOwners contains no user values or destructors. Truncating retained
         // capacity is infallible and does not visit transferred handle fields.
         if owner == 0 {
+            self.second_owner = None;
             self.other_owners.clear();
         } else {
-            self.other_owners.truncate(owner);
+            self.other_owners.truncate(owner - 1);
         }
     }
     /// Transfer every registered handle to the output recipient. Until this
@@ -223,6 +231,7 @@ impl Writer {
                 || self
                     .first_owner
                     .iter()
+                    .chain(&self.second_owner)
                     .chain(&self.other_owners)
                     .all(|rows| {
                         rows.initialized == 0
@@ -277,7 +286,12 @@ impl Drop for Writer {
             return;
         }
         let reader = Reader::new(&self.bytes);
-        for rows in self.first_owner.iter().chain(&self.other_owners) {
+        for rows in self
+            .first_owner
+            .iter()
+            .chain(&self.second_owner)
+            .chain(&self.other_owners)
+        {
             for index in 0..rows.initialized {
                 let base = rows.range.offset as usize + index * rows.stride;
                 // Rollback must continue even if a user destructor panics.
@@ -425,7 +439,7 @@ mod tests {
                 writer.commit_rows(parent_owners, i + 1);
             }
             assert!(writer.other_owners.is_empty());
-            assert!(writer.other_owners.capacity() <= 4);
+            assert_eq!(writer.other_owners.capacity(), 0);
         }
         drop(writer);
         assert_eq!(drops.load(Ordering::SeqCst), 512);
