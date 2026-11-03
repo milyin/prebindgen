@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Access","ResourceIdentity"],"fn":["match_output_fields","render_template","source_result_expr","template_parameter","validate_value_bindings","validate_wire_names"],"mod":["boxed","staged","value"],"struct":["Delivery","InputPlan","OutputPlan","PlanSchema","Resource"],"trait":["TemplateContext"]};
