@@ -1,18 +1,9 @@
 --- Bench.kt
 +++ isolated/Bench.kt
-@@ -14,7 +14,7 @@
-         return constant * iterations + coefficient * indices
-     }
- }
+@@ -17 +17 @@
 -private data class Sample(val nanos: Long, val allocated: Long)
 +private data class Sample(val nanos: Long, val allocated: Long, val cpuNanos: Long)
- private fun rowsTotal(size: Int) = size * (8 * BASE + 28) + 4L * size * (size - 1)
- 
- private fun checksumPlain(rows: List<bench.plain.Row>): Long {
-@@ -245,27 +245,41 @@
-     check(bean.isThreadAllocatedMemorySupported)
-     bean.isThreadAllocatedMemoryEnabled = true
-     val thread = Thread.currentThread().id
+@@ -247,0 +248,11 @@
 +    check(bean.isCurrentThreadCpuTimeSupported)
 +    bean.isThreadCpuTimeEnabled = true
 +    val runtime = ManagementFactory.getRuntimeMXBean()
@@ -24,38 +15,16 @@
 +    val minWarmup = System.getenv("PB_MIN_WARMUP_MS").toLong() * 1000000L
 +    val quietPeriod = System.getenv("PB_COMPILE_QUIET_MS").toLong() * 1000000L
 +    val maxWarmup = System.getenv("PB_MAX_WARMUP_MS").toLong() * 1000000L
-     val callbacks = longArrayOf(0)
-     val (allCases, handler) = if (mode == "plain") casesPlain(sizes, payloads, callbacks) else casesBulk(sizes, payloads, callbacks)
-     val selectedNames = args[7].split(',').toSet()
-     val selectedCases = allCases.filter { it.name in selectedNames }
-     require(selectedCases.isNotEmpty() && selectedCases.map { it.name }.toSet() == selectedNames)
+@@ -252,0 +264 @@
 +    require(selectedCases.size == 1) { "one case and size per JVM required" }
-     val ordered = if (trial % 2 == 0) selectedCases else selectedCases.reversed()
-     val shift = (trial / 2) % ordered.size
-     val cases = ordered.drop(shift) + ordered.take(shift)
-     fun sample(case: Case, iterations: Int): Sample {
-         val beforeCallbacks = callbacks[0]
-         val beforeBytes = bean.getThreadAllocatedBytes(thread)
+@@ -258,0 +271 @@
 +        val cpuStart = bean.currentThreadCpuTime
-         val start = System.nanoTime()
-         var sum = 0L
-         var i = 0
-         while (i < iterations) { sum += case.operation.run(i); i++ }
-         val elapsed = System.nanoTime() - start
+@@ -263,0 +277 @@
 +        val cpuNanos = bean.currentThreadCpuTime - cpuStart
-         val allocated = bean.getThreadAllocatedBytes(thread) - beforeBytes
-         observed = observed xor sum
-         check(sum == case.expected(iterations)) { "${case.name}/${case.size}: incorrect checksum $sum" }
-         check(callbacks[0] - beforeCallbacks == if (case.callback) iterations.toLong() else 0L)
+@@ -268 +282 @@
 -        return Sample(elapsed, allocated)
 +        return Sample(elapsed, allocated, cpuNanos)
-     }
-     try {
-         repeat(2) { for (case in cases) sample(case, 256) }
-@@ -274,13 +288,43 @@
-             fun calibrate(nanos: Long): Int = (iterations * (targetNanos.toDouble() / nanos).coerceIn(0.25, 8.0)).toInt().coerceIn(16, 5000000)
-             repeat(3) { iterations = calibrate(sample(case, iterations).nanos) }
-             var last = 1L
+@@ -277 +291,22 @@
 -            repeat(warmup) { last = sample(case, iterations).nanos }
 +            val warmStart = System.nanoTime()
 +            var compilation = compiler.totalCompilationTime
@@ -79,21 +48,16 @@
 +            val stable = warmBatches > warmup && System.nanoTime() - warmStart >= minWarmup && System.nanoTime() - lastCompilation >= quietPeriod
 +            check(warmBatches > warmup) { "warmup did not reach full-sized batches" }
 +            println("BENCH_WARMUP,${case.name},${case.size},$warmBatches,${runtime.uptime},$quietMillis,$stable")
-             iterations = calibrate(last)
+@@ -278,0 +314 @@
 +            println("BENCH_PHASE,${case.name},${case.size},start,${runtime.uptime},${compiler.totalCompilationTime}")
-             repeat(batches) { batch ->
+@@ -279,0 +316,3 @@
 +                val gcBefore = gcCount(); val gcMillisBefore = gcTime()
 +                val compilationBefore = compiler.totalCompilationTime
 +                val startMillis = runtime.uptime
-                 val s = sample(case, iterations)
+@@ -280,0 +320,4 @@
 +                val endMillis = runtime.uptime
 +                val compilationAfter = compiler.totalCompilationTime
 +                val gcAfter = gcCount(); val gcMillisAfter = gcTime()
 +                println("BENCH_DIAG,${case.name},${case.size},$batch,$startMillis,$endMillis,${s.cpuNanos},$compilationBefore,$compilationAfter,$gcBefore,$gcAfter,$gcMillisBefore,$gcMillisAfter")
-                 println("BULK_BENCH,$mode,${case.name},${case.size},$batch,$iterations,${s.nanos},${s.allocated}")
-             }
-         }
+@@ -283,0 +327 @@
 +        println("BENCH_PHASE,${cases.single().name},${cases.single().size},end,${runtime.uptime},${compiler.totalCompilationTime}")
-         println("SINK,$observed")
-     } finally { handler.close() }
- }
