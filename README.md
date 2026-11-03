@@ -1116,9 +1116,13 @@ val sum = numbersFold(0L) { acc, number -> acc + number }
 
 Rust calls a generated JNI bridge once per element, passing primitive fields as
 JVM primitives and object fields as references. The method is resolved once per
-native invocation. The bridge retains raw rows in Kotlin; Rust keeps element
-owners until the complete native delivery succeeds. It does not allocate a
-JNI array containing all element rows or box primitive callback arguments in Rust. User folders run
+native invocation. The bridge retains raw rows in Kotlin and takes ownership of
+each accepted row. If a later row fails, Rust reclaims the rejected row and Kotlin
+reclaims the previously accepted rows. Ordinary JNI object-array returns instead
+retain native ownership through a guard that can walk their completed rows on
+failure. Both paths avoid retaining native commit closures per row. Callback
+delivery does not allocate a JNI array containing all element rows or box
+primitive callback arguments in Rust. User folders run
 after JNI returns, input ownership is acknowledged and handle locks are released.
 This prevents user re-entry while Rust borrows are live. It deliberately buffers
 the result before running user code; it does not provide constant-memory streaming

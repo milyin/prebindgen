@@ -79,6 +79,20 @@ pub(crate) fn output(
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
     let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
     let frame = format_ident!("{wire}_frame");
+    let owner = format_ident!("{wire}_owner");
+    let release = crate::cleanup::helper(element, crate::cleanup::Carrier::Objects)?;
+    let (own, complete, commit) = if let Some(release) = release {
+        (
+            quote! {
+                let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new(&mut #env, &#wire, #release)}?;
+            },
+            quote!(unsafe {#owner.complete_row();}),
+            quote!(#owner.commit();),
+        )
+    } else {
+        (quote!(), quote!(), quote!())
+    };
+    let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
@@ -87,19 +101,21 @@ pub(crate) fn output(
                 null_niche_available: true,
             },
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: true,
         metadata: JniChain::Sequence(JniSequence::Buffered),
-        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
+        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
             let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;#encode
             #env.set_object_array_element(&#wire,#index as i32,&#row).map_err(|e|e.to_string())?;
+            #commit_element
+            #complete
             drop(#frame);
         },
         finish: quote!(let #wire=Some(#wire);),
         values: vec![(wire.clone(), quote!(#wire))],
-        commit: quote!(),
+        commit,
     })
 }
 

@@ -131,6 +131,13 @@ use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
 fn main() {
+    use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
+    let ordinary_rows = |element| Output::Sequence {
+        delivery: SequenceDelivery::Value,
+        mode: None,
+        element: Box::new(element),
+    };
+    let row = || Output::Request(OutputRequest::Auto);
     let getter_views = || {
         expand_return!(GetterOwner)
             .field(fun!(getter_owner_child))
@@ -293,6 +300,22 @@ fn main() {
         .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
         .expand(expand_return!(CallbackBoundaryPanic).field(fun!(callback_boundary_view)))
         .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
+        .package(package!("nativeoutputs")
+            .fun(fun!(jni_output_optional)
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(Output::Optional(Box::new(ordinary_rows(row()))))))
+            .fun(fun!(jni_output_mixed))
+            .fun(fun!(c_output_rows).name("jniOutputRows")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(row())))
+            .fun(fun!(c_output_nested).name("jniOutputNested")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(ordinary_rows(row()))))
+            .fun(fun!(c_output_pair).name("jniOutputPair")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(Output::OwnedFields(vec![ordinary_rows(row()); 2])))
+            .fun(fun!(jni_output_fold).name("jniOutput")
+                .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
         .package(package!("callbackboundaries")
             .class(ptr_class!(CallbackBoundaryHandler))
             .fun(fun!(callback_boundary_register)).fun(fun!(callback_boundary_fire))
@@ -439,6 +462,12 @@ fn main() {
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
+            // Compile a mixed prepared tree directly: declaration defaults
+            // deliberately lift inner bulk modifiers to the enclosing sequence.
+            let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
+            let recipe=sequence(prebindgen_declarations::Output::Combine(vec![prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed))))]),None);
+            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec,"jni_output_mixed",&recipe,&())?;
+            flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;

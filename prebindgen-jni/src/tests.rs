@@ -2793,3 +2793,128 @@ fn resource_free_collection_outputs_have_no_cleanup_bookkeeping() {
     assert!(!text.contains("cleanupError"));
     assert!(text.contains("kotlin.collections.ArrayList("));
 }
+
+#[test]
+fn jni_collection_outputs_transfer_rows_without_native_commit_queues() {
+    for callback in [false, true] {
+        let function = if callback {
+            fun!(values).callback_return_only()
+        } else {
+            fun!(values)
+        };
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Vec<Option<Vec<Owner>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(function))
+            .build()
+            .unwrap();
+        assert!(!generated.rust.contains("_commits"), "{}", generated.rust);
+        assert!(generated.rust.contains("OutputRows::new"));
+        assert!(generated.rust.contains("complete_row"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+    let generated = JniGen::builder()
+        .flat(flat("pub fn values()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(values).callback_return()))
+        .build()
+        .unwrap();
+    assert!(!generated.rust.contains("_commits"));
+    assert!(!generated.rust.contains("OutputRows::new"));
+}
+
+#[test]
+fn cleanup_helpers_share_resolved_shapes_across_functions_callbacks_and_nested_rows() {
+    fn generate(reverse: bool) -> JniGen {
+        let mut functions = vec![
+            fun!(first),
+            fun!(second),
+            fun!(nested),
+            fun!(callback),
+            fun!(projected).expand_return(expand_return!(Row).field(fun!(row_owner))),
+            fun!(swapped),
+            fun!(bulk_first).expand_return(expand_return!(Row).field_self_into().bulk()),
+            fun!(bulk_second).expand_return(expand_return!(Row).field_self_into().bulk()),
+        ];
+        if reverse {
+            functions.reverse();
+        }
+        let mut package = package!()
+            .class(ptr_class!(Owner))
+            .class(ptr_class!(Other))
+            .class(data_class!(Row))
+            .class(data_class!(Swapped));
+        for function in functions {
+            package = package.fun(function);
+        }
+        JniGen::builder()
+            .flat(flat(
+                "
+            pub type Owner=String; pub type Other=String;
+            pub struct Row { pub owner:Owner, pub value:i64, pub other:Other }
+            pub struct Swapped { pub other:Other, pub value:i64, pub owner:Owner }
+            pub fn first()->Vec<Row>{} pub fn second()->Vec<Row>{}
+            pub fn nested()->Vec<Option<Vec<Row>>>{}
+            pub fn callback(callback:impl Fn(Vec<Row>)){}
+            pub fn projected()->Vec<Row>{} pub fn row_owner(row:&Row)->&Owner{}
+            pub fn swapped()->Vec<Swapped>{}
+            pub fn bulk_first()->Vec<Row>{} pub fn bulk_second()->Vec<Row>{}
+        ",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package)
+            .build()
+            .unwrap()
+    }
+    fn helpers(generated: &JniGen) -> BTreeMap<String, String> {
+        use quote::ToTokens;
+        syn::parse_file(&generated.rust)
+            .unwrap()
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                let syn::Item::Fn(function) = item else {
+                    return None;
+                };
+                let name = function.sig.ident.to_string();
+                name.starts_with("__pb_cleanup_")
+                    .then(|| (name, function.to_token_stream().to_string()))
+            })
+            .collect()
+    }
+    let generated = generate(false);
+    let definitions = helpers(&generated);
+    // Original Row, swapped handle types, a local single-owner projection and
+    // the enclosing optional nested-array row each have one object helper.
+    assert_eq!(
+        definitions
+            .keys()
+            .filter(|name| name.starts_with("__pb_cleanup_objects_"))
+            .count(),
+        4
+    );
+    assert_eq!(
+        definitions
+            .keys()
+            .filter(|name| name.starts_with("__pb_cleanup_native_"))
+            .count(),
+        1
+    );
+    assert_eq!(definitions, helpers(&generate(true)));
+}
+
+#[test]
+fn input_collections_and_callback_results_do_not_emit_output_cleanup_helpers() {
+    let generated=JniGen::builder()
+        .flat(flat("pub type Owner=String;pub fn consume(values:Vec<Owner>)->i64{}pub fn run(callback:impl Fn()->Vec<Owner>)->i64{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(consume)).fun(fun!(run)))
+        .build().unwrap();
+    assert!(!generated.rust.contains("__pb_cleanup_"));
+}

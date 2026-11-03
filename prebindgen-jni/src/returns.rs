@@ -37,20 +37,8 @@ pub(crate) fn packet_delivery(plan: &OutputPlan<JniWire>) -> Result<Delivery> {
         result: quote!(result.into_raw()),
     })
 }
-fn acknowledge_rows(plan: &OutputPlan<JniWire>) -> Result<TokenStream> {
-    if sequence::callback_delivery(&plan.outcomes.success)? {
-        let env = prebindgen_conversions::template_parameter("environment");
-        Ok(
-            quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;),
-        )
-    } else {
-        Ok(TokenStream::new())
-    }
-}
-
 pub(crate) fn select(plan: &OutputPlan<JniWire>) -> Option<NativeReturn> {
-    let mut packet = packet_delivery(plan).ok()?;
-    packet.statements.extend(acknowledge_rows(plan).ok()?);
+    let packet = packet_delivery(plan).ok()?;
     if plan.delivery.statements.to_string() != packet.statements.to_string()
         || plan.delivery.result.to_string() != packet.result.to_string()
     {
@@ -129,9 +117,7 @@ pub(crate) fn delivery(
     if domain {
         return callback_delivery(plan, sink, true);
     }
-    let mut delivery = match select(plan)
-        .ok_or("custom output protocol cannot use a return capture")?
-    {
+    let delivery = match select(plan).ok_or("custom output protocol cannot use a return capture")? {
         NativeReturn::Unit => Delivery::default(),
         NativeReturn::Direct(wire) => {
             let fields = crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
@@ -146,7 +132,6 @@ pub(crate) fn delivery(
         }
         NativeReturn::Callback => callback_delivery(plan, sink, false)?,
     };
-    delivery.statements.extend(acknowledge_rows(plan)?);
     Ok(delivery)
 }
 

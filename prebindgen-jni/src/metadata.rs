@@ -1,6 +1,36 @@
 //! Kotlin/JNI declarations stored on their Flat owners.
 use super::*;
+use prebindgen_flat::InputConversion;
 use std::rc::Rc;
+
+/// Prepared boundary roots, including typed error converters and declarations
+/// whose callback interfaces are emitted without a direct exported occurrence.
+pub(crate) fn nodes(flat: &Bindings) -> Vec<(bool, &kotlin::JniNode)> {
+    let mut nodes = Vec::new();
+    for function in flat.functions.values() {
+        for param in &function.params {
+            if let Some(plan) = &param.ty.slot {
+                nodes.push((true, plan.input_node()));
+            }
+        }
+        if let Some(plan) = &function.ret.slot {
+            let outcomes = plan.output_outcomes();
+            nodes.extend(
+                std::iter::once(&outcomes.success)
+                    .chain(outcomes.source_error.iter())
+                    .chain(outcomes.binding_failure.iter())
+                    .map(|node| (false, node)),
+            );
+        }
+        if let Some(error) = function.metadata.as_ref().and_then(|m| m.error.as_deref()) {
+            nodes.push((false, &error.output.output_outcomes().success));
+        }
+    }
+    for input in &flat.metadata.callbacks {
+        nodes.push((true, input.input_node()));
+    }
+    nodes
+}
 
 /// Metadata schema for a Kotlin/JNI binding model.
 pub struct JniSchema;

@@ -54,6 +54,81 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_drop_1WideRowReturnHand
         ::prebindgen_jni_runtime::fail(&mut env, &e);
     }
 }
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_InputHandle_2099cab566bedd37<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let raw = unsafe {
+                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
+            }?;
+            if raw != 0 {
+                let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                    ::prebindgen_jni_runtime::drop_pointer::<
+                        bench_flat::InputHandle,
+                    >(raw)
+                });
+            }
+            Ok(())
+        },
+    );
+}
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let raw = unsafe {
+                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
+            }?;
+            if raw != 0 {
+                let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                    ::prebindgen_jni_runtime::drop_pointer::<
+                        bench_flat::InputHandle,
+                    >(raw)
+                });
+            }
+            Ok(())
+        },
+    );
+}
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_Rows_c27fddfa623fb18e<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let rows = env
+                .get_object_array_element(row, 0usize as i32)
+                .map_err(|e| e.to_string())?;
+            let rows = env
+                .auto_local(
+                    ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(rows),
+                );
+            if !rows.is_null() {
+                let length = env.get_array_length(&*rows).map_err(|e| e.to_string())?
+                    as usize;
+                unsafe {
+                    ::prebindgen_jni_runtime::reclaim_rows(
+                        env,
+                        rows.as_raw(),
+                        length,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                    );
+                }
+            }
+            Ok(())
+        },
+    );
+}
 #[allow(
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
@@ -921,8 +996,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             let source_value = bench_flat::owned_handles_echo(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            let mut ret_w0_owner = unsafe {
+                ::prebindgen_jni_runtime::OutputRows::new(
+                    &mut jni_environment,
+                    &ret_w0,
+                    __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                )
+            }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -959,11 +1040,18 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    let _ = Box::into_raw(ret_w4).expose_provenance();
+                })();
+                unsafe {
+                    ret_w0_owner.complete_row();
+                }
                 drop(ret_w0_frame);
-                ret_w0_commits
-                    .push(move || {
-                        let _ = Box::into_raw(ret_w4).expose_provenance();
-                    });
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -979,9 +1067,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                     .l
             };
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0_owner.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -1198,8 +1284,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
             );
             let ret_w0_source: ::std::vec::Vec<bench_flat::HandleRecord> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            let mut ret_w0_owner = unsafe {
+                ::prebindgen_jni_runtime::OutputRows::new(
+                    &mut jni_environment,
+                    &ret_w0,
+                    __pb_cleanup_objects_InputHandle_2099cab566bedd37,
+                )
+            }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -1255,11 +1347,18 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    let _ = Box::into_raw(ret_w4_f0).expose_provenance();
+                })();
+                unsafe {
+                    ret_w0_owner.complete_row();
+                }
                 drop(ret_w0_frame);
-                ret_w0_commits
-                    .push(move || {
-                        let _ = Box::into_raw(ret_w4_f0).expose_provenance();
-                    });
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -1275,9 +1374,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                     .l
             };
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0_owner.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -1525,8 +1622,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
             );
             let ret_w0_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            let mut ret_w0_owner = unsafe {
+                ::prebindgen_jni_runtime::OutputRows::new(
+                    &mut jni_environment,
+                    &ret_w0,
+                    __pb_cleanup_objects_Rows_c27fddfa623fb18e,
+                )
+            }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -1535,11 +1638,17 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                 }?;
                 let ret_w4_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let ret_w4 = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     ret_w6,
                 )?;
+                let mut ret_w4_owner = unsafe {
+                    ::prebindgen_jni_runtime::OutputRows::new(
+                        &mut jni_environment,
+                        &ret_w4,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                    )
+                }?;
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
@@ -1576,11 +1685,18 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     jni_environment
                         .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
                         .map_err(|e| e.to_string())?;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        let _ = Box::into_raw(ret_w8).expose_provenance();
+                    })();
+                    unsafe {
+                        ret_w4_owner.complete_row();
+                    }
                     drop(ret_w4_frame);
-                    ret_w4_commits
-                        .push(move || {
-                            let _ = Box::into_raw(ret_w8).expose_provenance();
-                        });
                 }
                 let ret_w4 = Some(ret_w4);
                 let ret_w0_row = ::prebindgen_jni_runtime::array(
@@ -1600,13 +1716,18 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4_owner.commit();
+                })();
+                unsafe {
+                    ret_w0_owner.complete_row();
+                }
                 drop(ret_w0_frame);
-                ret_w0_commits
-                    .push(move || {
-                        for commit in ret_w4_commits {
-                            commit();
-                        }
-                    });
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -1622,9 +1743,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     .l
             };
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0_owner.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -4824,7 +4943,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
             );
             let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
@@ -4984,8 +5102,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 drop(ret_w0_frame);
-                ret_w0_commits.push(move || {});
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -5001,9 +5124,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
                     .l
             };
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -5272,7 +5392,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
             let source_value = bench_flat::rows_echo(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
@@ -5432,8 +5551,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 drop(ret_w0_frame);
-                ret_w0_commits.push(move || {});
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -5449,9 +5573,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                     .l
             };
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -5774,9 +5895,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                         let callback_arg_0_w2 = ::std::vec::Vec::len(
                                             &callback_arg_0_w0_source,
                                         );
-                                        let mut callback_arg_0_w0_commits = Vec::with_capacity(
-                                            callback_arg_0_w2,
-                                        );
                                         let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
                                             &mut callback_environment,
                                             callback_arg_0_w2,
@@ -5996,8 +6114,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                                     &callback_arg_0_w0_row,
                                                 )
                                                 .map_err(|e| e.to_string())?;
+                                            #[allow(
+                                                clippy::redundant_closure_call,
+                                                clippy::let_unit_value,
+                                                clippy::unused_unit
+                                            )]
+                                            let _: () = (|| -> () {})();
                                             drop(callback_arg_0_w0_frame);
-                                            callback_arg_0_w0_commits.push(move || {});
                                         }
                                         let callback_arg_0_w0 = Some(callback_arg_0_w0);
                                         let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
@@ -6015,11 +6138,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                                 l: callback_java_0_0.as_raw(),
                                             },
                                         ];
-                                        {
-                                            for commit in callback_arg_0_w0_commits {
-                                                commit();
-                                            }
-                                        }
+                                        {}
                                         let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                         let __prebindgen_input_consumed = &__pb_input_consumed;
                                         let callback_result = unsafe {
@@ -6266,6 +6385,655 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_16fdab6ebdae
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1echo_1fold_1769ead1c15ceb95c<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {
+                if jni_environment
+                    .get_array_length(&ownership_accepted)
+                    .map_err(|e| e.to_string())? != 1
+                {
+                    return Err("invalid ownership acknowledgement".into());
+                }
+                __pb_receipt_valid.set(true);
+            };
+            let mut p0_w0: Vec<bench_flat::InputHandle> = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                let mut p0_w1_prepared = Vec::with_capacity(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w5 = ::prebindgen_jni_runtime::row_i64(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w5.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    #[allow(clippy::redundant_closure_call)]
+                    let prepared = (|| {
+                        let p0_w5_pointer = if true {
+                            (*p0_w5.as_ref().map_err(|e| e.clone())?)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    bench_flat::InputHandle,
+                                >
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w5_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<
+                            _,
+                            String,
+                        >(move || -> ::core::result::Result<
+                            bench_flat::InputHandle,
+                            String,
+                        > {
+                            if true {
+                                __prebindgen_input_consumed
+                                    .set(
+                                        __prebindgen_input_consumed.get()
+                                            + (::core::iter::once((p0_w5_pointer.addr()) as usize))
+                                                .count(),
+                                    );
+                            }
+                            let p0_w4 = if true {
+                                Some(unsafe { Box::from_raw(p0_w5_pointer) })
+                            } else {
+                                None
+                            };
+                            let p0_w4: bench_flat::InputHandle = p0_w4
+                                .expect("active allocation")
+                                .value;
+                            let p0_w0 = p0_w4;
+                            Ok(p0_w0)
+                        })
+                    })();
+                    drop(p0_w1_frame);
+                    p0_w1_prepared.push(prepared?);
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for build in p0_w1_prepared {
+                    let element = build()?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::owned_handles_echo(__prebindgen_argument_0);
+            let ret_w0_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(J)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                }?;
+                let mut ret_w4 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w1,
+                });
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ((&mut *ret_w4)
+                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                            bench_flat::InputHandle,
+                                        >) as i64,
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    let _ = Box::into_raw(ret_w4).expose_provenance();
+                })();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1handles_1echo_1fold_155ebe6c8ba226f50<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {
+                if jni_environment
+                    .get_array_length(&ownership_accepted)
+                    .map_err(|e| e.to_string())? != 1
+                {
+                    return Err("invalid ownership acknowledgement".into());
+                }
+                __pb_receipt_valid.set(true);
+            };
+            let mut p0_w0: Vec<Vec<bench_flat::InputHandle>> = Vec::new();
+            if true {
+                if p0_w1.is_null() {
+                    return Err("null collection".into());
+                }
+                let p0_w2 = jni_environment
+                    .get_array_length(&p0_w1)
+                    .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w1_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let p0_w1_row = ::prebindgen_jni_runtime::row(
+                        &mut jni_environment,
+                        &p0_w1,
+                        p0_w3,
+                        1usize,
+                    )?;
+                    let p0_w5 = ::prebindgen_jni_runtime::row_rows(
+                        &mut jni_environment,
+                        &(p0_w1_row),
+                        0usize,
+                    );
+                    if p0_w5.is_err()
+                        && jni_environment.exception_check().map_err(|e| e.to_string())?
+                    {
+                        return Err("JNI collection field decoding failed".into());
+                    }
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        Vec<bench_flat::InputHandle>,
+                        String,
+                    > {
+                        let mut p0_w4: Vec<bench_flat::InputHandle> = Vec::new();
+                        if true {
+                            if (*p0_w5.as_ref().map_err(|e| e.clone())?).is_null() {
+                                return Err("null collection".into());
+                            }
+                            let p0_w6 = jni_environment
+                                .get_array_length(
+                                    &(*p0_w5.as_ref().map_err(|e| e.clone())?),
+                                )
+                                .map_err(|e| e.to_string())? as usize;
+                            let mut p0_w5_accesses = __prebindgen_input_aliases
+                                .begin_group(p0_w6.saturating_mul(1usize));
+                            let mut p0_w5_prepared = Vec::with_capacity(p0_w6);
+                            for p0_w7 in 0..p0_w6 {
+                                let p0_w5_frame = unsafe {
+                                    ::prebindgen_jni_runtime::LocalFrame::new(
+                                        &jni_environment,
+                                        9i32,
+                                    )
+                                }?;
+                                let p0_w5_row = ::prebindgen_jni_runtime::row(
+                                    &mut jni_environment,
+                                    &(*p0_w5.as_ref().map_err(|e| e.clone())?),
+                                    p0_w7,
+                                    1usize,
+                                )?;
+                                let p0_w9 = ::prebindgen_jni_runtime::row_i64(
+                                    &mut jni_environment,
+                                    &(p0_w5_row),
+                                    0usize,
+                                );
+                                if p0_w9.is_err()
+                                    && jni_environment
+                                        .exception_check()
+                                        .map_err(|e| e.to_string())?
+                                {
+                                    return Err("JNI collection field decoding failed".into());
+                                }
+                                #[allow(clippy::redundant_closure_call)]
+                                let prepared = (|| {
+                                    let p0_w9_pointer = if true {
+                                        (*p0_w9.as_ref().map_err(|e| e.clone())?)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                bench_flat::InputHandle,
+                                            >
+                                    } else {
+                                        ::core::ptr::null_mut()
+                                    };
+                                    if true {
+                                        ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
+                                    }
+                                    if true {
+                                        for address in ::core::iter::once(
+                                            (p0_w9_pointer.addr()) as usize,
+                                        ) {
+                                            p0_w5_accesses.push((address, true));
+                                        }
+                                    }
+                                    Ok::<
+                                        _,
+                                        String,
+                                    >(move || -> ::core::result::Result<
+                                        bench_flat::InputHandle,
+                                        String,
+                                    > {
+                                        if true {
+                                            __prebindgen_input_consumed
+                                                .set(
+                                                    __prebindgen_input_consumed.get()
+                                                        + (::core::iter::once((p0_w9_pointer.addr()) as usize))
+                                                            .count(),
+                                                );
+                                        }
+                                        let p0_w8 = if true {
+                                            Some(unsafe { Box::from_raw(p0_w9_pointer) })
+                                        } else {
+                                            None
+                                        };
+                                        let p0_w8: bench_flat::InputHandle = p0_w8
+                                            .expect("active allocation")
+                                            .value;
+                                        let p0_w4 = p0_w8;
+                                        Ok(p0_w4)
+                                    })
+                                })();
+                                drop(p0_w5_frame);
+                                p0_w5_prepared.push(prepared?);
+                            }
+                            __prebindgen_input_aliases.accept_group(p0_w5_accesses)?;
+                            p0_w4.reserve_exact(p0_w6);
+                            for build in p0_w5_prepared {
+                                let element = build()?;
+                                #[allow(clippy::zst_offset)]
+                                unsafe {
+                                    let initialized = p0_w4.len();
+                                    p0_w4.as_mut_ptr().add(initialized).write(element);
+                                    p0_w4.set_len(initialized + 1);
+                                }
+                            }
+                        }
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_built = if true { Some(p0_w4) } else { None };
+                        let p0_w0 = p0_w4_built.expect("active input");
+                        Ok(p0_w0)
+                    })();
+                    drop(p0_w1_frame);
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = bench_flat::nested_owned_handles_echo(
+                __prebindgen_argument_0,
+            );
+            let ret_w0_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                }?;
+                let ret_w4_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w1;
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                let ret_w4 = ::prebindgen_jni_runtime::array(
+                    &mut jni_environment,
+                    ret_w6,
+                )?;
+                let mut ret_w4_owner = unsafe {
+                    ::prebindgen_jni_runtime::OutputRows::new(
+                        &mut jni_environment,
+                        &ret_w4,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                    )
+                }?;
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
+                    let ret_w4_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w5,
+                    });
+                    let ret_w4_row = ::prebindgen_jni_runtime::array(
+                        &mut jni_environment,
+                        1usize,
+                    )?;
+                    let object = jni_environment
+                        .call_static_method(
+                            "java/lang/Long",
+                            "valueOf",
+                            "(J)Ljava/lang/Long;",
+                            &[
+                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                    ((&mut *ret_w8)
+                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                            bench_flat::InputHandle,
+                                        >) as i64,
+                                ),
+                            ],
+                        )
+                        .and_then(|v| v.l())
+                        .map_err(|e| e.to_string())?;
+                    jni_environment
+                        .set_object_array_element(&ret_w4_row, 0i32, &object)
+                        .map_err(|e| e.to_string())?;
+                    jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                    jni_environment
+                        .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
+                        .map_err(|e| e.to_string())?;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        let _ = Box::into_raw(ret_w8).expose_provenance();
+                    })();
+                    unsafe {
+                        ret_w4_owner.complete_row();
+                    }
+                    drop(ret_w4_frame);
+                }
+                let ret_w4 = Some(ret_w4);
+                let ret_w0_callback_object_0 = match (ret_w4).as_ref() {
+                    Some(value) => {
+                        jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                    }
+                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                };
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: ret_w0_callback_object_0.as_raw(),
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4_owner.commit();
+                })();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce_1fold_1587a8aef1d9a0485<
     'local,
 >(
@@ -6326,7 +7094,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
             );
             let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
             let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
@@ -6388,8 +7158,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
                         )
                 }
                     .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
                 drop(ret_w0_callback_frame);
-                ret_w0_commits.push(move || {});
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -6404,13 +7179,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
                 })
                     .l
             };
-            jni_environment
-                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
-                .map_err(|e| e.to_string())?;
             let _: () = {
-                for commit in ret_w0_commits {
-                    commit();
-                }
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };

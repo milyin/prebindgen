@@ -246,6 +246,9 @@ fn generated_collection_inputs_allocate_once_without_growth() {
 
 #[test]
 fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for size in [0usize, 1, 8, 64, 512, 4096] {
         let rows: Vec<_> = (0..size)
             .map(|index| super::__PbRow_collection_try_construct_all_p0_w1 {
