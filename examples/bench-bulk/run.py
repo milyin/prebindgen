@@ -216,7 +216,7 @@ def main():
     print(f"Build ready; measuring without concurrent builds. Output: {output}", flush=True)
     for trial in range(args.jvms):
         for mode in (MODES if trial % 2 == 0 else MODES[::-1]):
-            command = ["java", *jvm_args, f"-Djava.library.path={library.parent}", "-jar", str(jar), mode, args.sizes,
+            command = ["java", *jvm_args, f"-Djava.library.path={library.parent}", "-cp", str(jar), "BenchKt", mode, args.sizes,
                        str(args.warmup), str(args.batches), str(args.target_ms), str(trial), args.payloads, ",".join(selected)]
             result = subprocess.run(command, text=True, capture_output=True)
             (output / f"run-{trial}-{mode}.log").write_text(result.stdout + result.stderr)

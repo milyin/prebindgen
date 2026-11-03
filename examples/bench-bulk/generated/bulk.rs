@@ -1257,7 +1257,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
                 ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>(),
             );
             let ret_w1_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
@@ -1294,7 +1294,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
                         ret_w1_release_row,
                     )
             };
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let mut ret_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w2,
                 });
@@ -1575,7 +1577,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
                 ::core::mem::size_of::<__PbBulk_Range_71300b84e922dbba>(),
             );
             let ret_w1_source: ::std::vec::Vec<bench_flat::HandleRecord> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
@@ -1614,7 +1616,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
                         ret_w1_release_row,
                     )
             };
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let ret_w5_record = ret_w2;
                 let mut ret_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w5_record.handle,
@@ -1931,7 +1935,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                 ::core::mem::size_of::<__PbBulk_Range_5e24e8a1a6fd1960>(),
             );
             let ret_w1_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
@@ -1990,9 +1994,11 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                         ret_w1_release_row,
                     )
             };
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let ret_w5_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w2;
-                let ret_w7 = ret_w5_source.len();
+                let ret_w7 = ::std::vec::Vec::len(&ret_w5_source);
                 let ret_w5 = ret_w0_writer
                     .rows(
                         ret_w7,
@@ -2029,7 +2035,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                             ret_w5_release_row,
                         )
                 };
-                for (ret_w8, ret_w6) in ret_w5_source.into_iter().enumerate() {
+                for (ret_w8, ret_w6) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w5_source),
+                ) {
                     let mut ret_w9 = Box::new(::prebindgen_jni_runtime::Allocation {
                         value: ret_w6,
                     });
@@ -6143,14 +6151,16 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1make_16f7eb2
                 ::core::mem::size_of::<__PbBulk_Range_f4d5524a08b9867b>(),
             );
             let ret_w1_source: ::std::vec::Vec<bench_flat::Row> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
                     ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                     ::core::mem::align_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                 )?;
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let ret_w5_record = ret_w2;
                 let ret_w5_f0 = ret_w5_record.a;
                 let ret_w5_f1 = ret_w5_record.b;
@@ -6386,14 +6396,16 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1for_1reduce_
                 ::core::mem::size_of::<__PbBulk_Range_f4d5524a08b9867b>(),
             );
             let ret_w1_source: ::std::vec::Vec<bench_flat::Row> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
                     ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                     ::core::mem::align_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                 )?;
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let ret_w5_record = ret_w2;
                 let ret_w5_f0 = ret_w5_record.a;
                 let ret_w5_f1 = ret_w5_record.b;
@@ -6802,14 +6814,16 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1echo_15c26c8
                 ::core::mem::size_of::<__PbBulk_Range_f4d5524a08b9867b>(),
             );
             let ret_w1_source: ::std::vec::Vec<bench_flat::Row> = source_value;
-            let ret_w3 = ret_w1_source.len();
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
                     ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                     ::core::mem::align_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                 )?;
-            for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
+            ) {
                 let ret_w5_record = ret_w2;
                 let ret_w5_f0 = ret_w5_record.a;
                 let ret_w5_f1 = ret_w5_record.b;
@@ -7350,17 +7364,20 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handler_1new_1916a
                                         let callback_arg_0_w1_source: ::std::vec::Vec<
                                             bench_flat::Row,
                                         > = callback_value_0;
-                                        let callback_arg_0_w3 = callback_arg_0_w1_source.len();
+                                        let callback_arg_0_w3 = ::std::vec::Vec::len(
+                                            &callback_arg_0_w1_source,
+                                        );
                                         let callback_arg_0_w1 = callback_arg_0_w0_writer
                                             .rows(
                                                 callback_arg_0_w3,
                                                 ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                                                 ::core::mem::align_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                                             )?;
-                                        for (callback_arg_0_w4, callback_arg_0_w2) in callback_arg_0_w1_source
-                                            .into_iter()
-                                            .enumerate()
-                                        {
+                                        for (callback_arg_0_w4, callback_arg_0_w2) in ::core::iter::Iterator::enumerate(
+                                            ::core::iter::IntoIterator::into_iter(
+                                                callback_arg_0_w1_source,
+                                            ),
+                                        ) {
                                             let callback_arg_0_w5_record = callback_arg_0_w2;
                                             let callback_arg_0_w5_f0 = callback_arg_0_w5_record.a;
                                             let callback_arg_0_w5_f1 = callback_arg_0_w5_record.b;
