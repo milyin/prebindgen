@@ -24,7 +24,7 @@ Disassembly of section .text:
    14f3a:	4d 85 ff             	test   %r15,%r15
    14f3d:	74 4b                	je     14f8a <bench_make_numbers+0x7a>
    14f3f:	4e 8d 2c fd 00 00 00 	lea    0x0(,%r15,8),%r13
-   14f46:	00 
+   14f46:	00
    14f47:	ff 15 93 c4 03 00    	call   *0x3c493(%rip)        # 513e0 <_DYNAMIC+0x260>
    14f4d:	be 08 00 00 00       	mov    $0x8,%esi
    14f52:	4c 89 ef             	mov    %r13,%rdi
@@ -53,7 +53,7 @@ Disassembly of section .text:
    14f9d:	49 8d 04 d6          	lea    (%r14,%rdx,8),%rax
    14fa1:	31 f6                	xor    %esi,%esi
    14fa3:	66 66 66 66 2e 0f 1f 	data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
-   14faa:	84 00 00 00 00 00 
+   14faa:	84 00 00 00 00 00
    14fb0:	41 0f 10 04 f6       	movups (%r14,%rsi,8),%xmm0
    14fb5:	41 0f 10 4c f6 10    	movups 0x10(%r14,%rsi,8),%xmm1
    14fbb:	41 0f 11 04 f4       	movups %xmm0,(%r12,%rsi,8)
@@ -120,7 +120,7 @@ Disassembly of section .text:
    15098:	0f 10 05 f6 2b ff ff 	movups -0xd40a(%rip),%xmm0        # 7c95 <GCC_except_table151+0x39>
    1509f:	0f 11 00             	movups %xmm0,(%rax)
    150a2:	48 b8 70 61 6e 69 63 	movabs $0x64656b63696e6170,%rax
-   150a9:	6b 65 64 
+   150a9:	6b 65 64
    150ac:	49 89 47 0f          	mov    %rax,0xf(%r15)
    150b0:	49 8b 06             	mov    (%r14),%rax
    150b3:	48 85 c0             	test   %rax,%rax
@@ -134,10 +134,10 @@ Disassembly of section .text:
    150ca:	48 89 df             	mov    %rbx,%rdi
    150cd:	ff 15 d5 c2 03 00    	call   *0x3c2d5(%rip)        # 513a8 <_DYNAMIC+0x228>
    150d3:	48 c7 04 24 17 00 00 	movq   $0x17,(%rsp)
-   150da:	00 
+   150da:	00
    150db:	4c 89 7c 24 08       	mov    %r15,0x8(%rsp)
    150e0:	48 c7 44 24 10 17 00 	movq   $0x17,0x10(%rsp)
-   150e7:	00 00 
+   150e7:	00 00
    150e9:	48 89 e0             	mov    %rsp,%rax
    150ec:	48 89 44 24 18       	mov    %rax,0x18(%rsp)
    150f1:	48 8d 05 d8 ed ff ff 	lea    -0x1228(%rip),%rax        # 13ed0 <_RNvXsq_NtCscHgRw1M2fX5_5alloc6stringNtB5_6StringNtNtCsc36rpYXAlPq_4core3fmt7Display3fmt>
