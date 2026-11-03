@@ -30,6 +30,10 @@ internal object JNINative {
     @JvmStatic external fun call_packet_sum_c07ede9eb5de050f(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f0_f2: Long, p0_w1_f0_f3: Long, p0_w1_f0_f4: Long, p0_w1_f0_f5: Long, p0_w1_f0_f6: Long, p0_w1_f0_f7: Long, p0_w1_f1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_handler_new_916a49ec8343b596(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_fire_6fdab6ebdaeffb11(p0_w1: Long, p1_w1: Long, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    internal fun interface SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626 { fun run(v0: Long) }
+    @JvmStatic external fun call_owned_handles_echo_fold_769ead1c15ceb95c(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a { fun run(v0: Array<Any?>?) }
+    @JvmStatic external fun call_nested_owned_handles_echo_fold_55ebe6c8ba226f50(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b { fun run(v0: Long, v1: Long, v2: Long, v3: Long, v4: Long, v5: Long, v6: Long, v7: Long) }
     @JvmStatic external fun call_rows_for_reduce_fold_587a8aef1d9a0485(p0_w1: Long, p1_w1: Long, callback: SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
 }

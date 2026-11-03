@@ -295,3 +295,10 @@ the next input; initial handle creation and final cleanup stay outside timing.
 One scalar JNI read verifies the first result, as in `owned_handles_roundtrip`.
 These cases include normal input locking and conversion, so comparisons report
 the end-to-end effect of changing output cleanup bookkeeping.
+
+## Ordinary JNI output ownership
+
+[The ownership report](jni-output-results/README.md) compares object-array returns
+and collection-return callbacks before and after native commit-queue removal.
+It records native allocation savings, mixed latency results, identical-build
+controls and a focused repeat of the nested-array case.

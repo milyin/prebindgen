@@ -18,6 +18,7 @@ p.add_argument('--output', type=Path, required=True)
 p.add_argument('--forks', type=int, default=4)
 p.add_argument('--counts', action='store_true')
 p.add_argument('--check-jni', action='store_true')
+p.add_argument('--cases', help='optional comma-separated case subset, also for A/A controls')
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=False)
 info = {key: json.loads((path / 'build.json').read_text()) for key, path in [('before', a.before), ('after', a.after)]}
@@ -32,6 +33,11 @@ if a.counts:
     cells = [(kind, size) for kind in ['flat','fold_flat','nested','fold_nested'] for size in [0,1,64,512]] + [('control',1),('primitive_array',64),('primitive_fold',64)]
 if a.check_jni:
     cells = [(kind,8) for kind in ['flat','fold_flat','nested','fold_nested','primitive_array','primitive_fold']]
+if a.cases:
+    selected=set(a.cases.split(','))
+    assert selected <= {kind for kind,size in cells}, 'unknown case'
+    cells=[cell for cell in cells if cell[0] in selected]
+assert a.forks > 0 and cells
 flags = ['-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2','-XX:-UsePerfData']
 samples, runs = [], []
 for fork in range(a.forks):
