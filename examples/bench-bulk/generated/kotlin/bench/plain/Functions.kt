@@ -615,12 +615,17 @@ kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w5 }) }, intA
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = bench.plain.JNINative.SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
         var foldElement0: bench.plain.InputHandle? = null
 
             try { val owner = foldElement0; if (owner != null) owner.close() else bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.plain.withHandleLocks(handles) {
@@ -632,7 +637,6 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
@@ -640,26 +644,25 @@ for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
         var foldElement0: bench.plain.InputHandle? = null
 
-__pb_pending = { failure ->             try { val owner = foldElement0; if (owner != null) owner.close() else bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
+try {
             foldElement0 = bench.plain.InputHandle(__pb_fold_row[0] as Long)
 
 current = fold(current, requireNotNull(foldElement0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+            try { val owner = foldElement0; if (owner != null) owner.close() else bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElement0: bench.plain.InputHandle? = null
-
-            try { val owner = foldElement0; if (owner != null) owner.close() else bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -673,7 +676,10 @@ kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w5_elements }
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = bench.plain.JNINative.SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 var foldElementowners: bench.plain.CollectionOwners? = null
 var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 
@@ -694,7 +700,9 @@ try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementind
 
 }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.plain.withHandleLocks(handles) {
@@ -706,68 +714,40 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
+var __pb_foldOwners: bench.plain.CollectionOwners? = null
         try {
 if (nativeResult != null) {
+if (__pb_rows.isNotEmpty()) __pb_foldOwners = bench.plain.CollectionOwners()
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
-var foldElementowners: bench.plain.CollectionOwners? = null
 var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 
-__pb_pending = { failure -> foldElementowners?.close(failure)
-if (foldElementowners?.complete != true) {
 try {
-for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
-var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
-        var foldElementitem_0: bench.plain.InputHandle? = null
-
-            try { if (foldElementowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
-
-} catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
-
-}
-} catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
-
-}
- }
-foldElementowners = bench.plain.CollectionOwners()
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row[0] as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
 val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_0: bench.plain.InputHandle? = null
 
-            foldElementitem_0 = requireNotNull(foldElementowners).own(bench.plain.InputHandle(foldElement_row[0] as Long))
+            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(bench.plain.InputHandle(foldElement_row[0] as Long))
 
 foldElementlist.add(requireNotNull(foldElementitem_0))
 }
 
-foldElementowners!!.complete = true
-
+__pb_foldOwners!!.complete = true
 current = fold(current, requireNotNull(foldElementlist))
-__pb_pending = null
+} catch (failure: Throwable) {
 __pb_processed++
-}
-__pb_accumulator = current
-}
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-var foldElementowners: bench.plain.CollectionOwners? = null
-var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
-
-foldElementowners?.close(failure)
-if (foldElementowners?.complete != true) {
+try {
+__pb_foldOwners?.close(failure)
+if (__pb_foldOwners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
 try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_0: bench.plain.InputHandle? = null
 
-            try { if (foldElementowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (__pb_foldOwners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
@@ -775,8 +755,17 @@ try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementind
 } catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
 
 }
-
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
 }
+__pb_processed++
+__pb_foldOwners!!.release()
+}
+__pb_accumulator = current
+}
+            __pb_accumulator as A
+        } catch (failure: Throwable) {
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -786,42 +775,24 @@ public fun <A> `rowsForReduceFold`(p0_w1: Long, p1_w1: Long, initial: A, onError
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = bench.plain.JNINative.SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b { v0, v1, v2, v3, v4, v5, v6, v7 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2, v3, v4, v5, v6, v7)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_rows_for_reduce_fold_587a8aef1d9a0485(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_rows_for_reduce_fold_587a8aef1d9a0485(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, bench.plain.Row(__pb_fold_row[0] as Long, __pb_fold_row[1] as Long, __pb_fold_row[2] as Long, __pb_fold_row[3] as Long, __pb_fold_row[4] as Long, __pb_fold_row[5] as Long, __pb_fold_row[6] as Long, __pb_fold_row[7] as Long))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }

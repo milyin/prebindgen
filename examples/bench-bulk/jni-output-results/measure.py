@@ -19,6 +19,7 @@ p.add_argument('--forks', type=int, default=4)
 p.add_argument('--counts', action='store_true')
 p.add_argument('--check-jni', action='store_true')
 p.add_argument('--cases', help='optional comma-separated case subset, also for A/A controls')
+p.add_argument('--cell', action='append', metavar='CASE:SIZE', help='repeat to replace the default case/size matrix')
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=False)
 info = {key: json.loads((path / 'build.json').read_text()) for key, path in [('before', a.before), ('after', a.after)]}
@@ -33,6 +34,11 @@ if a.counts:
     cells = [(kind, size) for kind in ['flat','fold_flat','nested','fold_nested'] for size in [0,1,64,512]] + [('control',1),('primitive_array',64),('primitive_fold',64)]
 if a.check_jni:
     cells = [(kind,8) for kind in ['flat','fold_flat','nested','fold_nested','primitive_array','primitive_fold']]
+if a.cell:
+    allowed = {kind for kind, size in cells} | {'fold_wide_nested'}
+    cells = [(cell.rsplit(':', 1)[0], int(cell.rsplit(':', 1)[1])) for cell in a.cell]
+    assert cells and len(cells) == len(set(cells))
+    assert all(kind in allowed and size >= 0 for kind, size in cells), 'unknown case or negative size'
 if a.cases:
     selected=set(a.cases.split(','))
     assert selected <= {kind for kind,size in cells}, 'unknown case'

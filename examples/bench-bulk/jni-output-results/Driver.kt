@@ -18,8 +18,10 @@ private fun operation(kind: String, size: Int): Operation = when (kind) {
             rows.size.toLong()
         }, { rows.forEach { it.close() } })
     }
-    "nested", "fold_nested" -> {
-        var rows: List<List<InputHandle>> = List(size) { listOf(inputHandleNew(1000000L + it)) }
+    "nested", "fold_nested", "fold_wide_nested" -> {
+        var rows: List<List<InputHandle>> = if (kind == "fold_wide_nested")
+            listOf(List(size) { inputHandleNew(1000000L + it) })
+            else List(size) { listOf(inputHandleNew(1000000L + it)) }
         val fold: (MutableList<List<InputHandle>>, List<InputHandle>) -> MutableList<List<InputHandle>> = { list, value -> list.add(value); list }
         Operation({
             rows = if (kind == "nested") nestedOwnedHandlesEcho(rows)
