@@ -5,7 +5,7 @@ import io.prebindgen.covertest.callbacks.*
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicReference
 
-private object CallbackFailureProbe {
+internal object CallbackFailureProbe {
     init { NativeLibrary.ensureLoaded() }
     @JvmStatic external fun exercise(mode: Int): Int
 }

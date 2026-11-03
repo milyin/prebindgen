@@ -417,6 +417,10 @@ fn main() {
             .fun(fun!(callback_enums)))
         .package(package!("cleanup")
             .class(data_class!(OutputCleanupRow))
+            .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
+            .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
+            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::Output::OwnedFields(vec![prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto); 2])))
+            .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
             .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::OwnedFields(vec![
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
                 prebindgen_declarations::Output::Sequence {delivery: prebindgen_declarations::SequenceDelivery::Value,mode:None,element:Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto))},

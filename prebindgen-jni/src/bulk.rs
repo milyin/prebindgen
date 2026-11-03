@@ -195,6 +195,8 @@ pub(crate) fn output(
     }
     let store = resolve(&store, "bulk_writer", &quote!(#writer))?;
     let env = parameter("environment");
+    let commit = &child.commit;
+    child.commit = quote!(#commit #writer.commit(););
     child.statements = quote! {
         let mut #writer=::prebindgen_jni_runtime::bulk::Writer::new(::core::mem::size_of::<#ty>());
         #prepare #store
@@ -250,6 +252,60 @@ pub(crate) fn sequence_input(
         release: quote!(),
     })
 }
+
+// Destruction reads only completed rows, whose nested descriptors and handle
+// fields have all been written. Each field catches user destructor panics.
+fn release_row(node: &JniNode) -> Result<TokenStream> {
+    let layout = record(node)?;
+    let row = &layout.name;
+    let mut cleanup = TokenStream::new();
+    for (i, field) in crate::group::row_fields(node).enumerate() {
+        let member = format_ident!("v{i}");
+        let at = quote!(base + ::core::mem::offset_of!(#row, #member));
+        let release = match &field.kind {
+            JniWire::Handle { handle, .. } => {
+                if handle.access != prebindgen_conversions::Access::Move {
+                    return Err("bulk output handles must transfer owned boxed allocations".into());
+                }
+                let ty = &handle.ty;
+                quote! {
+                    let raw = reader.read::<i64>(#at)?;
+                    if raw != 0 { unsafe { ::prebindgen_jni_runtime::drop_pointer::<#ty>(raw)?; } }
+                }
+            }
+            JniWire::NativeRows { .. } => {
+                let child =
+                    sequence_child(node, &field.name).ok_or("missing bulk collection element")?;
+                let child_cleanup = release_row(child)?;
+                if child_cleanup.is_empty() {
+                    continue;
+                }
+                let child_layout = record(child)?;
+                let child_row = &child_layout.name;
+                quote! {
+                    if let Some(range) = reader.range(#at)? {
+                        let (start, length) = reader.rows(Some(range), ::core::mem::size_of::<#child_row>())?;
+                        for index in 0..length {
+                            let base = start + index * ::core::mem::size_of::<#child_row>();
+                            #child_cleanup
+                        }
+                    }
+                }
+            }
+            JniWire::NativeBuffer { .. }
+            | JniWire::Native128 { .. }
+            | JniWire::Scalar { .. }
+            | JniWire::Enum { .. }
+            | JniWire::Selector { .. } => continue,
+            _ => return Err("bulk output ownership requires native field encodings".into()),
+        };
+        cleanup.extend(quote! {
+            let _ = ::prebindgen_runtime::boundary(|| { #release Ok(()) });
+        });
+    }
+    Ok(cleanup)
+}
+
 pub(crate) fn sequence_output(
     wire: syn::Ident,
     length: syn::Ident,
@@ -260,6 +316,19 @@ pub(crate) fn sequence_output(
     let layout = record(element)?;
     let row = &layout.name;
     let writer = parameter("bulk_writer");
+    let owner = format_ident!("{wire}_owners");
+    let release = format_ident!("{wire}_release_row");
+    let cleanup = release_row(element)?;
+    let owners = if cleanup.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            unsafe fn #release(reader: &::prebindgen_jni_runtime::bulk::Reader<'_>, base: usize) {
+                #cleanup
+            }
+            let #owner = unsafe { #writer.own_rows(#wire, ::core::mem::size_of::<#row>(), #release) };
+        }
+    };
     let mut store = TokenStream::new();
     for (i, (w, value)) in crate::group::row_values(element, values)?
         .into_iter()
@@ -273,6 +342,11 @@ pub(crate) fn sequence_output(
             value.clone(),
         )?);
     }
+    let commit_element = parameter("commit_element");
+    store.extend(quote!(#commit_element));
+    if !cleanup.is_empty() {
+        store.extend(quote!(unsafe { #writer.commit_rows(#owner, #index + 1); }));
+    }
     Ok(SequenceOutput {
         controls: vec![Wire {
             name: wire.clone(),
@@ -281,9 +355,9 @@ pub(crate) fn sequence_output(
             },
         }],
         metadata: JniChain::Sequence(JniSequence::Bulk),
-        commit_each: false,
+        commit_each: true,
         fallible: true,
-        begin: quote!(let #wire=#writer.rows(#length,::core::mem::size_of::<#row>(),::core::mem::align_of::<#row>())?;),
+        begin: quote!(let #wire=#writer.rows(#length,::core::mem::size_of::<#row>(),::core::mem::align_of::<#row>())?; #owners),
         enter: quote!(),
         store,
         finish: quote!(let #wire=Some(#wire);),

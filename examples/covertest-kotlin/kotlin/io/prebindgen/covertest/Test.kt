@@ -28,6 +28,7 @@ fun main() {
     checkCallbackBoundaryFailures()
     checkCollections()
     checkOutputCleanup()
+    checkNativeOutputOwnership()
     checkSequenceDelivery()
     checkResults()
     checkOptions()

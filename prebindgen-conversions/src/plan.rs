@@ -49,6 +49,7 @@ pub struct OutputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
+    /// Commit code must be infallible and must not unwind after foreign delivery.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
     pub statements: TokenStream,

@@ -55,7 +55,7 @@ def cargo_configs(project):
     return {str(path): digest(path) for path in paths if path.is_file()}
 
 
-def build(checkout, output, kotlinc, record, check, fetch):
+def build(checkout, output, kotlinc, record, check, fetch, native_allocations=False):
     project = output / "fixture"
     (project / "flat/src").mkdir(parents=True)
     (project / "src").mkdir()
@@ -70,6 +70,8 @@ edition="2021"
 [lib]
 name="bulk_bench"
 crate-type=["cdylib"]
+[features]
+native-allocations=[]
 [dependencies]
 bench-flat={path="flat"}
 konst="0.3.0"
@@ -87,9 +89,11 @@ edition="2021"
     shutil.copyfile(FIXTURE / "bindings.rs", project / "build.rs")
     (project / "flat/build.rs").write_text('fn main(){prebindgen::init_prebindgen_out_dir();}\n')
     (project / "src/lib.rs").write_text('''#![allow(non_camel_case_types, unused_variables)]
+#[path="native_allocations.rs"] mod native_allocations;
 mod plain { include!(concat!(env!("OUT_DIR"),"/plain.rs")); }
 mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
 ''')
+    shutil.copyfile(FIXTURE / "native_allocations.rs", project / "src/native_allocations.rs")
     seed = FIXTURE / "Cargo.lock.snapshot"
     shutil.copyfile(seed, project / "Cargo.lock")
     env = dict(os.environ, CARGO_TARGET_DIR=str(output / "target"))
@@ -101,14 +105,14 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     revisions = source_revisions(metadata, project)
     package = next(p["id"] for p in metadata["packages"] if p["name"] == "bulk-bench")
     with (output / "cargo.jsonl").open("w") as log:
-        subprocess.run(["cargo", "build", "--offline", "--locked", "--release", "--message-format=json"], cwd=project, env=env, stdout=log, check=True)
+        subprocess.run(["cargo", "build", "--offline", "--locked", "--release", "--message-format=json", *(["--features", "native-allocations"] if native_allocations else [])], cwd=project, env=env, stdout=log, check=True)
     messages = [json.loads(line) for line in (output / "cargo.jsonl").read_text().splitlines()]
     out = next(Path(m["out_dir"]) for m in messages if m.get("reason") == "build-script-executed" and m["package_id"] == package)
     cdylib = next(m for m in messages if m.get("reason") == "compiler-artifact" and m["package_id"] == package and "cdylib" in m["target"]["kind"])
     if cdylib["profile"]["opt_level"] != "3" or cdylib["profile"]["debug_assertions"]:
         raise RuntimeError(f"unexpected native benchmark profile: {cdylib['profile']}")
     jar = output / "bench.jar"
-    subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
+    subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), str(FIXTURE / "AllocationBench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
     libraries = [output / "target/release" / name for name in ("libbulk_bench.so", "libbulk_bench.dylib", "bulk_bench.dll")]
     library, = [p for p in libraries if p.is_file()]
     if record or check:
@@ -134,8 +138,9 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "cargo": command_version(["cargo", "-V"], cwd=project),
         "dependency_lock_sha256": digest(project / "Cargo.lock"),
         "cargo_profile": cdylib["profile"],
+        "native_allocations": native_allocations,
         "kotlin": command_version([kotlinc, "-version"]),
-        "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "run.py", "Cargo.lock.snapshot")},
+        "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "AllocationBench.kt", "native_allocations.rs", "run.py", "Cargo.lock.snapshot")},
         "jar": str(jar), "library": str(library),
         "jar_sha256": digest(jar), "native_sha256": digest(library),
     }
@@ -168,6 +173,7 @@ def main():
     parser.add_argument("--record-generated", action="store_true")
     parser.add_argument("--check-generated", action="store_true")
     parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--native-allocations", action="store_true", help="instrument native allocations; use AllocationBenchKt, not latency measurements")
     parser.add_argument("--fetch", action="store_true", help="fetch the pinned fixture dependencies before building")
     parser.add_argument("--check-jni", action="store_true", help="correctness smoke run; not suitable for timing")
     args = parser.parse_args()
@@ -195,7 +201,7 @@ def main():
         parser.error("use a new empty output directory to preserve earlier results")
     output.mkdir(parents=True, exist_ok=True)
     kotlinc = os.environ.get("KOTLINC", "kotlinc")
-    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch)
+    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch, args.native_allocations)
     jar, library = Path(info["jar"]), Path(info["library"])
     if digest(jar) != info["jar_sha256"] or digest(library) != info["native_sha256"]:
         raise RuntimeError("prepared benchmark artifact changed")
@@ -210,7 +216,7 @@ def main():
     print(f"Build ready; measuring without concurrent builds. Output: {output}", flush=True)
     for trial in range(args.jvms):
         for mode in (MODES if trial % 2 == 0 else MODES[::-1]):
-            command = ["java", *jvm_args, f"-Djava.library.path={library.parent}", "-jar", str(jar), mode, args.sizes,
+            command = ["java", *jvm_args, f"-Djava.library.path={library.parent}", "-cp", str(jar), "BenchKt", mode, args.sizes,
                        str(args.warmup), str(args.batches), str(args.target_ms), str(trial), args.payloads, ",".join(selected)]
             result = subprocess.run(command, text=True, capture_output=True)
             (output / f"run-{trial}-{mode}.log").write_text(result.stdout + result.stderr)

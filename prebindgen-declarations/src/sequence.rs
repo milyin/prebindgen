@@ -29,8 +29,12 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
 pub struct SequenceOutput<W: prebindgen_flat::WireKind, G> {
-    /// Commit each element inside `store`, after capturing its prepared wire values
-    /// and before invoking a foreign visitor. `store` must contain exactly one
+    /// Transfer each element inside `store`, after capturing its prepared wire
+    /// values, into a rollback-capable carrier or to a foreign visitor. A carrier
+    /// must reclaim transferred owners if outer output delivery fails.
+    /// Every fallible row store must precede the marker. Element commit code is
+    /// evaluated in an infallible, unit-returning closure.
+    /// `store` must contain exactly one
     /// `template_parameter("commit_element")` marker when true. When false, all
     /// element owners remain in Rust until the outer slot commits.
     pub commit_each: bool,
@@ -434,10 +438,40 @@ pub(crate) fn output<C: Codec>(
     }?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");
-    let (binding, iterator) = if mode == ProjectionMode::Owned {
-        (value, quote!(#owner.into_iter()))
+    let vector = matches!(view, SequenceView::Owned | SequenceView::Vector);
+    // Use standard operations explicitly: extension traits in the including
+    // module must not replace length/iteration and violate native row extents.
+    let (binding, iterator, extent) = if mode == ProjectionMode::Owned {
+        let extent = if vector {
+            quote!(::std::vec::Vec::len(&#owner))
+        } else {
+            quote!(<[#element_type]>::len(&#owner))
+        };
+        (
+            value,
+            quote!(::core::iter::IntoIterator::into_iter(#owner)),
+            extent,
+        )
     } else {
-        (quote!(&(#value)), quote!(#owner.iter()))
+        let slice = quote!(::core::convert::AsRef::<[#element_type]>::as_ref(#owner));
+        (
+            quote!(&(#value)),
+            quote!(<[#element_type]>::iter(#slice)),
+            quote!(<[#element_type]>::len(#slice)),
+        )
+    };
+    // Fix the binding's type, rather than relying on a custom Vec name or
+    // Deref target to give len and iteration the standard collection semantics.
+    let binding = if matches!(view, SequenceView::Owned | SequenceView::Vector) {
+        let vector = quote!(::std::vec::Vec<#element_type>);
+        let vector = if mode == ProjectionMode::Owned {
+            vector
+        } else {
+            quote!(&#vector)
+        };
+        quote!(let #owner: #vector = #binding;)
+    } else {
+        quote!(let #owner = #binding;)
     };
     let prepare = child.statements;
     let child_commit = child.commit;
@@ -458,7 +492,10 @@ pub(crate) fn output<C: Codec>(
         let store = prebindgen_conversions::render_template(&store, &|name| {
             if name == "commit_element" {
                 count.set(count.get() + 1);
-                Ok(child_commit.clone())
+                Ok(quote!(
+                    #[allow(clippy::redundant_closure_call, clippy::let_unit_value, clippy::unused_unit)]
+                    let _: () = (|| -> () { #child_commit })();
+                ))
             } else {
                 Ok(prebindgen_conversions::template_parameter(name))
             }
@@ -494,9 +531,9 @@ pub(crate) fn output<C: Codec>(
             binding_failure: None,
         },
         statements: quote! {
-            let #owner=#binding; let #length=#owner.len(); #declarations
+            #binding let #length=#extent; #declarations
             #begin
-            for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
+            for (#index,#element) in ::core::iter::Iterator::enumerate(#iterator){ #enter #prepare #store }
             #finish
         },
         values,

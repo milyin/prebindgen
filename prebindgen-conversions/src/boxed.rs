@@ -207,6 +207,8 @@ pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
         },
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![(wire.clone(), quote!((&mut *#wire) as *mut #allocation))],
-        commit: quote!(let _ = Box::into_raw(#wire);),
+        // Moving the Box can retag its allocation. Integer wire addresses must
+        // recover the final raw pointer's provenance, including native rollback.
+        commit: quote!(let _ = Box::into_raw(#wire).expose_provenance();),
     })
 }

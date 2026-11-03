@@ -107,7 +107,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1input_1handle_1ne
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -919,11 +919,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::owned_handles_echo(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
@@ -960,7 +962,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                 drop(ret_w0_frame);
                 ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w4);
+                        let _ = Box::into_raw(ret_w4).expose_provenance();
                     });
             }
             let ret_w0 = Some(ret_w0);
@@ -1194,11 +1196,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
             let source_value = bench_flat::owned_handle_records_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<bench_flat::HandleRecord> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 10i32)
                 }?;
@@ -1254,7 +1258,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                 drop(ret_w0_frame);
                 ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w4_f0);
+                        let _ = Box::into_raw(ret_w4_f0).expose_provenance();
                     });
             }
             let ret_w0 = Some(ret_w0);
@@ -1519,22 +1523,26 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
             let source_value = bench_flat::nested_owned_handles_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w4_source = ret_w1;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w4_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w1;
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let ret_w4 = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     ret_w6,
                 )?;
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w4_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                     }?;
@@ -1571,7 +1579,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     drop(ret_w4_frame);
                     ret_w4_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w8);
+                            let _ = Box::into_raw(ret_w8).expose_provenance();
                         });
                 }
                 let ret_w4 = Some(ret_w4);
@@ -2830,7 +2838,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -3681,7 +3689,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -4814,11 +4822,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
                 }?;
@@ -5260,11 +5270,13 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
             let p0_w0_built = if true { Some(p0_w0) } else { None };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = bench_flat::rows_echo(__prebindgen_argument_0);
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
                 }?;
@@ -5756,8 +5768,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                     let mut callback_environment = callback_environment;
                                     let callback_value_0 = callback_source_0;
                                     {
-                                        let callback_arg_0_w0_source = callback_value_0;
-                                        let callback_arg_0_w2 = callback_arg_0_w0_source.len();
+                                        let callback_arg_0_w0_source: ::std::vec::Vec<
+                                            bench_flat::Row,
+                                        > = callback_value_0;
+                                        let callback_arg_0_w2 = ::std::vec::Vec::len(
+                                            &callback_arg_0_w0_source,
+                                        );
                                         let mut callback_arg_0_w0_commits = Vec::with_capacity(
                                             callback_arg_0_w2,
                                         );
@@ -5765,10 +5781,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                             &mut callback_environment,
                                             callback_arg_0_w2,
                                         )?;
-                                        for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
-                                            .into_iter()
-                                            .enumerate()
-                                        {
+                                        for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
+                                            ::core::iter::IntoIterator::into_iter(
+                                                callback_arg_0_w0_source,
+                                            ),
+                                        ) {
                                             let callback_arg_0_w0_frame = unsafe {
                                                 ::prebindgen_jni_runtime::LocalFrame::new(
                                                     &callback_environment,
@@ -6062,7 +6079,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -6307,8 +6324,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_source = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
@@ -6319,7 +6336,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
             jni_environment
                 .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
                 }?;

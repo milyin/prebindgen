@@ -112,14 +112,18 @@ impl Hook {
                 table.NewByteArray = Some(fail_bytes);
             }
             2 | 4 | 6 | 8 => table.NewStringUTF = Some(fail_string),
-            3 | 5 | 7 | 9 => table.NewByteArray = Some(fail_bytes),
+            3 | 5 | 7 | 9 | 10 | 11 | 12 => table.NewByteArray = Some(fail_bytes),
             _ => unreachable!(),
         }
         FAULT.with(|slot| {
             *slot.borrow_mut() = Some(Fault {
                 original,
                 oom: oom.as_obj().as_raw(),
-                remaining: if mode >= 8 { 2 } else { 1 },
+                remaining: if (8..=9).contains(&mode) || mode == 11 {
+                    2
+                } else {
+                    1
+                },
                 failures: 0,
             })
         });
@@ -148,7 +152,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercis
     mode: jint,
 ) -> jint {
     prebindgen_runtime::boundary(|| {
-        if !(0..=9).contains(&mode) {
+        if !(0..=12).contains(&mode) {
             return Err("unknown allocation probe".into());
         }
         // Resolve Java entry points before arming the selected JNI allocation
@@ -158,8 +162,10 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercis
                 "io/prebindgen/covertest/CallbackFailureEntryPoint"
             } else if mode < 4 {
                 "io/prebindgen/covertest/BufferFailureEntryPoint"
-            } else {
+            } else if mode < 10 {
                 "io/prebindgen/covertest/BufferReturnFailureEntryPoint"
+            } else {
+                "io/prebindgen/covertest/NativeOutputFailureEntryPoint"
             })
             .map_err(|e| e.to_string())?;
         let hook = unsafe { Hook::install(&mut env, mode) }?;

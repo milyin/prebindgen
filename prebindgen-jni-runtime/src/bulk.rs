@@ -95,13 +95,107 @@ impl<'a> Reader<'a> {
 /// Native frame builder; all storage, including padding, is initialized.
 pub struct Writer {
     bytes: Vec<u8>,
+    first_owner: Option<RowOwners>,
+    second_owner: Option<RowOwners>,
+    other_owners: Vec<RowOwners>,
+    transferred: bool,
+}
+// Pending collection stack. Completing a parent row subsumes its nested ranges,
+// so metadata is bounded by schema nesting/siblings rather than element count.
+struct RowOwners {
+    range: Range,
+    stride: usize,
+    initialized: usize,
+    release: unsafe fn(&Reader<'_>, usize),
 }
 impl Writer {
     /// Reserve the root record without copying a Rust structure's padding.
+    #[inline]
     pub fn new(size: usize) -> Self {
         Self {
             bytes: vec![0; size],
+            first_owner: None,
+            second_owner: None,
+            other_owners: Vec::new(),
+            transferred: false,
         }
+    }
+    /// Register rollback for a collection's rows, including nested owners. Two
+    /// pending ranges fit inline, covering flat and singly nested collections.
+    ///
+    /// # Safety
+    /// `range` must be a row allocation made by this writer with this `stride`.
+    /// `release` must reclaim every owned field of an initialized row, including
+    /// nested rows, skipping nulls and catching destructor panics to visit every
+    /// field. Nested collections register after their parent; completed parent
+    /// rows must contain their complete descriptors. Registered fields must not
+    /// be overwritten after ownership transfer, and no rows may be registered
+    /// after [`Self::commit`]. Owners must support destruction on another thread.
+    #[inline]
+    pub unsafe fn own_rows(
+        &mut self,
+        range: Range,
+        stride: usize,
+        release: unsafe fn(&Reader<'_>, usize),
+    ) -> usize {
+        debug_assert!(!self.transferred);
+        debug_assert!(Reader::new(&self.bytes).rows(Some(range), stride).is_ok());
+        if range.length == 0 {
+            return usize::MAX;
+        }
+        let owner = RowOwners {
+            range,
+            stride,
+            initialized: 0,
+            release,
+        };
+        if self.first_owner.is_none() {
+            self.first_owner = Some(owner);
+            0
+        } else if self.second_owner.is_none() {
+            self.second_owner = Some(owner);
+            1
+        } else {
+            self.other_owners.push(owner);
+            self.other_owners.len() + 1
+        }
+    }
+    /// Transfer a completed row prefix to this frame's rollback protection.
+    ///
+    /// # Safety
+    /// `owner` must identify a nonempty registration from this writer, which
+    /// must not have committed. Every direct owned field in the newly completed
+    /// rows, including complete nested descriptors, must have been initialized
+    /// and transferred exactly once. Every later
+    /// registration must belong to those newly completed rows: this call removes
+    /// the nested registrations, whose owners become reachable through the parent.
+    /// Previous rows remain owned by this writer; the prefix must not shrink.
+    #[inline]
+    pub unsafe fn commit_rows(&mut self, owner: usize, initialized: usize) {
+        debug_assert!(!self.transferred);
+        let rows = if owner == 0 {
+            self.first_owner.as_mut().unwrap_unchecked()
+        } else if owner == 1 {
+            self.second_owner.as_mut().unwrap_unchecked()
+        } else {
+            self.other_owners.get_unchecked_mut(owner - 2)
+        };
+        debug_assert!(initialized >= rows.initialized && initialized <= rows.range.length as usize);
+        rows.initialized = initialized;
+        // RowOwners contains no user values or destructors. Truncating retained
+        // capacity is infallible and does not visit transferred handle fields.
+        if owner == 0 {
+            self.second_owner = None;
+            self.other_owners.clear();
+        } else {
+            self.other_owners.truncate(owner - 1);
+        }
+    }
+    /// Transfer every registered handle to the output recipient. Until this
+    /// point, dropping the writer reclaims completed rows on conversion failure.
+    #[inline]
+    pub fn commit(mut self) {
+        self.transferred = true;
     }
     /// Reserve a contiguous array at an aligned offset in the frame.
     pub fn rows(&mut self, len: usize, size: usize, align: usize) -> Result<Range> {
@@ -132,6 +226,20 @@ impl Writer {
         let end = offset
             .checked_add(std::mem::size_of::<T>())
             .ok_or("bulk offset overflow")?;
+        debug_assert!(
+            self.transferred
+                || self
+                    .first_owner
+                    .iter()
+                    .chain(&self.second_owner)
+                    .chain(&self.other_owners)
+                    .all(|rows| {
+                        rows.initialized == 0
+                            || end <= rows.range.offset as usize
+                            || offset >= rows.range.offset as usize + rows.initialized * rows.stride
+                    }),
+            "bulk write overlaps completed owned rows"
+        );
         let bytes = self
             .bytes
             .get_mut(offset..end)
@@ -171,6 +279,29 @@ impl Writer {
         &self.bytes
     }
 }
+impl Drop for Writer {
+    #[inline]
+    fn drop(&mut self) {
+        if self.transferred {
+            return;
+        }
+        let reader = Reader::new(&self.bytes);
+        for rows in self
+            .first_owner
+            .iter()
+            .chain(&self.second_owner)
+            .chain(&self.other_owners)
+        {
+            for index in 0..rows.initialized {
+                let base = rows.range.offset as usize + index * rows.stride;
+                // Rollback must continue even if a user destructor panics.
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+                    (rows.release)(&reader, base);
+                }));
+            }
+        }
+    }
+}
 /// Copy only the initialized portion of a JVM frame, preserving spare writer capacity.
 pub fn input(
     env: &mut jni::JNIEnv<'_>,
@@ -201,6 +332,280 @@ pub fn input(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    struct Tracked {
+        drops: Arc<AtomicUsize>,
+        panic: bool,
+    }
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+            assert!(!self.panic, "injected owner destructor panic");
+        }
+    }
+    fn allocation(drops: &Arc<AtomicUsize>, panic: bool) -> Box<crate::Allocation<Tracked>> {
+        Box::new(crate::Allocation {
+            value: Tracked {
+                drops: drops.clone(),
+                panic,
+            },
+        })
+    }
+    unsafe fn release_one(reader: &Reader<'_>, base: usize) {
+        let _ = prebindgen_runtime::boundary(|| {
+            let raw = reader.read::<i64>(base)?;
+            if raw != 0 {
+                crate::drop_pointer::<Tracked>(raw)?;
+            }
+            Ok(())
+        });
+    }
+    unsafe fn release_nested(reader: &Reader<'_>, base: usize) {
+        if let Some(range) = reader.range(base).unwrap() {
+            let (start, len) = reader.rows(Some(range), 8).unwrap();
+            for i in 0..len {
+                release_one(reader, start + i * 8);
+            }
+        }
+    }
+    #[test]
+    fn rollback_owns_only_completed_rows_and_survives_writer_moves() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut writer = Writer::new(0);
+        let range = writer.rows(3, 8, 8).unwrap();
+        let owners = unsafe { writer.own_rows(range, 8, release_one) };
+        let mut first = allocation(&drops, false);
+        writer
+            .write(range.offset as usize, (&mut *first as *mut _) as i64)
+            .unwrap();
+        let _ = Box::into_raw(first).expose_provenance();
+        unsafe {
+            writer.commit_rows(owners, 1);
+        }
+        let pending = allocation(&drops, false);
+        writer
+            .write(range.offset as usize + 8, (&*pending as *const _) as i64)
+            .unwrap();
+        let moved = writer;
+        drop(moved);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        drop(pending);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+    #[test]
+    fn successful_transfer_leaves_the_recipient_as_owner() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut writer = Writer::new(0);
+        let range = writer.rows(1, 8, 8).unwrap();
+        let owners = unsafe { writer.own_rows(range, 8, release_one) };
+        let raw = Box::into_raw(allocation(&drops, false)) as i64;
+        writer.write(range.offset as usize, raw).unwrap();
+        unsafe {
+            writer.commit_rows(owners, 1);
+        }
+        writer.commit();
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        unsafe {
+            crate::drop_pointer::<Tracked>(raw).unwrap();
+        }
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn nested_metadata_is_bounded_by_depth_not_row_count() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut writer = Writer::new(0);
+        let parent = writer.rows(512, 16, 8).unwrap();
+        let parent_owners = unsafe { writer.own_rows(parent, 16, release_nested) };
+        for i in 0..512 {
+            let child = writer.rows(1, 8, 8).unwrap();
+            let owners = unsafe { writer.own_rows(child, 8, release_one) };
+            writer
+                .write(
+                    child.offset as usize,
+                    Box::into_raw(allocation(&drops, false)) as i64,
+                )
+                .unwrap();
+            unsafe {
+                writer.commit_rows(owners, 1);
+            }
+            writer
+                .range(parent.offset as usize + i * 16, Some(child))
+                .unwrap();
+            unsafe {
+                writer.commit_rows(parent_owners, i + 1);
+            }
+            assert!(writer.other_owners.is_empty());
+            assert_eq!(writer.other_owners.capacity(), 0);
+        }
+        drop(writer);
+        assert_eq!(drops.load(Ordering::SeqCst), 512);
+    }
+    #[test]
+    fn partial_parent_reclaims_siblings_not_yet_linked_into_its_row() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut writer = Writer::new(0);
+        let parent = writer.rows(1, 16, 8).unwrap();
+        let _parent_owners = unsafe { writer.own_rows(parent, 16, release_nested) };
+        let a = writer.rows(1, 8, 8).unwrap();
+        let a_owners = unsafe { writer.own_rows(a, 8, release_one) };
+        writer
+            .write(
+                a.offset as usize,
+                Box::into_raw(allocation(&drops, false)) as i64,
+            )
+            .unwrap();
+        unsafe {
+            writer.commit_rows(a_owners, 1);
+        }
+        let b = writer.rows(2, 8, 8).unwrap();
+        let b_owners = unsafe { writer.own_rows(b, 8, release_one) };
+        writer
+            .write(
+                b.offset as usize,
+                Box::into_raw(allocation(&drops, false)) as i64,
+            )
+            .unwrap();
+        unsafe {
+            writer.commit_rows(b_owners, 1);
+        }
+        let pending = allocation(&drops, false);
+        writer
+            .write(b.offset as usize + 8, (&*pending as *const _) as i64)
+            .unwrap();
+        // Parent descriptor has not been written; pending ranges remain reachable.
+        drop(writer);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+        drop(pending);
+        assert_eq!(drops.load(Ordering::SeqCst), 3);
+    }
+    #[test]
+    fn empty_ranges_use_no_owner_slot_and_panicking_fields_do_not_stop_cleanup() {
+        unsafe fn pair(reader: &Reader<'_>, base: usize) {
+            release_one(reader, base);
+            release_one(reader, base + 8);
+        }
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut writer = Writer::new(0);
+        let empty = writer.rows(0, 16, 8).unwrap();
+        unsafe {
+            writer.own_rows(empty, 16, pair);
+        }
+        assert!(writer.first_owner.is_none());
+        let range = writer.rows(1, 16, 8).unwrap();
+        let owners = unsafe { writer.own_rows(range, 16, pair) };
+        writer
+            .write(
+                range.offset as usize,
+                Box::into_raw(allocation(&drops, true)) as i64,
+            )
+            .unwrap();
+        writer
+            .write(
+                range.offset as usize + 8,
+                Box::into_raw(allocation(&drops, false)) as i64,
+            )
+            .unwrap();
+        unsafe {
+            writer.commit_rows(owners, 1);
+        }
+        drop(writer);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+    #[test]
+    fn rollback_catches_destructor_panics_while_conversion_is_already_unwinding() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let failed = std::panic::catch_unwind({
+            let drops = drops.clone();
+            move || {
+                let mut writer = Writer::new(0);
+                let range = writer.rows(2, 8, 8).unwrap();
+                let owners = unsafe { writer.own_rows(range, 8, release_one) };
+                for i in 0..2 {
+                    writer
+                        .write(
+                            range.offset as usize + i * 8,
+                            Box::into_raw(allocation(&drops, i == 0)) as i64,
+                        )
+                        .unwrap();
+                    unsafe {
+                        writer.commit_rows(owners, i + 1);
+                    }
+                }
+                panic!("injected native conversion failure");
+            }
+        });
+        assert!(failed.is_err());
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+    #[test]
+    fn completed_parent_and_later_partial_child_drop_each_allocation_once() {
+        struct Specific {
+            id: usize,
+            drops: Arc<[AtomicUsize; 4]>,
+        }
+        impl Drop for Specific {
+            fn drop(&mut self) {
+                self.drops[self.id].fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        unsafe fn leaf(reader: &Reader<'_>, base: usize) {
+            let raw = reader.read::<i64>(base).unwrap();
+            if raw != 0 {
+                crate::drop_pointer::<Specific>(raw).unwrap();
+            }
+        }
+        unsafe fn parent(reader: &Reader<'_>, base: usize) {
+            let (start, len) = reader.rows(reader.range(base).unwrap(), 8).unwrap();
+            for index in 0..len {
+                leaf(reader, start + index * 8);
+            }
+        }
+        let drops = Arc::new(std::array::from_fn(|_| AtomicUsize::new(0)));
+        let make = |id| {
+            Box::new(crate::Allocation {
+                value: Specific {
+                    id,
+                    drops: drops.clone(),
+                },
+            })
+        };
+        let mut writer = Writer::new(0);
+        let outer = writer.rows(2, 16, 8).unwrap();
+        let root = unsafe { writer.own_rows(outer, 16, parent) };
+        let a = writer.rows(2, 8, 8).unwrap();
+        let a_owner = unsafe { writer.own_rows(a, 8, leaf) };
+        for i in 0..2 {
+            writer
+                .write(a.offset as usize + i * 8, Box::into_raw(make(i)) as i64)
+                .unwrap();
+            unsafe {
+                writer.commit_rows(a_owner, i + 1);
+            }
+        }
+        writer.range(outer.offset as usize, Some(a)).unwrap();
+        unsafe {
+            writer.commit_rows(root, 1);
+        }
+        let b = writer.rows(2, 8, 8).unwrap();
+        let b_owner = unsafe { writer.own_rows(b, 8, leaf) };
+        writer
+            .write(b.offset as usize, Box::into_raw(make(2)) as i64)
+            .unwrap();
+        unsafe {
+            writer.commit_rows(b_owner, 1);
+        }
+        let mut pending = make(3);
+        writer
+            .write(b.offset as usize + 8, (&mut *pending as *mut _) as i64)
+            .unwrap();
+        drop(writer);
+        drop(pending);
+        assert!(drops.iter().all(|count| count.load(Ordering::SeqCst) == 1));
+    }
     #[test]
     fn unaligned_fields_and_padding_are_handled_fieldwise() {
         let mut writer = Writer::new(24);

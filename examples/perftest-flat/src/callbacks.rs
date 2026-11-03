@@ -464,6 +464,45 @@ fn callback_row(index: i64) -> CallbackRow {
         second: callback_row_resource_new(index * 10 + 2),
     }
 }
+fn native_bulk_values(fail_at: i64) -> Vec<CallbackRow> {
+    (0..3)
+        .map(|i| {
+            let mut row = callback_row(i);
+            if i == fail_at {
+                row.second = callback_row_resource_new(-1);
+            }
+            row
+        })
+        .collect()
+}
+/// Explicit clone projections inject a native conversion panic after prior rows.
+#[prebindgen]
+pub fn native_bulk_rows(fail_at: i64) -> Vec<CallbackRow> {
+    native_bulk_values(fail_at)
+}
+#[prebindgen]
+pub struct NativeBulkNested {
+    pub first: Vec<CallbackRow>,
+    pub second: Vec<CallbackRow>,
+}
+#[prebindgen]
+pub fn native_bulk_nested(fail_at: i64) -> Vec<Vec<CallbackRow>> {
+    (0..3)
+        .map(|i| native_bulk_values(if i == 1 { fail_at } else { -1 }))
+        .collect()
+}
+/// Two independent bulk frames; the second may fail after the first was encoded.
+#[prebindgen]
+pub fn native_bulk_pair(fail_at: i64) -> NativeBulkNested {
+    NativeBulkNested {
+        first: native_bulk_values(-1),
+        second: native_bulk_values(fail_at),
+    }
+}
+#[prebindgen]
+pub fn native_bulk_callback(fail_at: i64, callback: impl Fn(Vec<Vec<CallbackRow>>)) {
+    callback(native_bulk_nested(fail_at));
+}
 #[prebindgen]
 pub fn callback_rows_owned(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {
     callback((0..3).map(callback_row).collect());

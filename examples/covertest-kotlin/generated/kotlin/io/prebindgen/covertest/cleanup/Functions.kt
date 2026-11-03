@@ -1,6 +1,444 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.cleanup
 
+public fun `nativeBulkRows`(p0_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow> = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_native_bulk_rows_f3ef23b4e405ea00(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+        try {
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputowners = io.prebindgen.covertest.CollectionOwners()
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+        var outputbulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            outputbulkItem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long))
+            outputbulkItem_g2_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long))
+
+outputbulkList!!.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(outputbulkItem_g0_0), (requireNotNull(outputbulkReader).text((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[1])) as String, requireNotNull(outputbulkItem_g2_0)))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputbulkList)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `nativeBulkNested`(p0_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>> = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_native_bulk_nested_a866f03d6554ae4e(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>>? = null
+        try {
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputowners = io.prebindgen.covertest.CollectionOwners()
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+outputbulkItem_bulkList = kotlin.collections.ArrayList(outputbulkItem_bulkRange!!.length)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+        var outputbulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            outputbulkItem_bulkItem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long))
+            outputbulkItem_bulkItem_g2_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long))
+
+outputbulkItem_bulkList!!.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(outputbulkItem_bulkItem_g0_0), (requireNotNull(outputbulkReader).text((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[1])) as String, requireNotNull(outputbulkItem_bulkItem_g2_0)))
+}
+
+outputbulkList!!.add(requireNotNull(outputbulkItem_bulkList))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputbulkList)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var outputbulkFailure: Throwable? = failure
+try { var outputbulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+try { if (outputbulkItem_bulkRange == null) outputbulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputbulkItem_bulkIndex in 0 until outputbulkItem_bulkRange!!.length) {
+val outputbulkItem_bulkBase = outputbulkItem_bulkRange!!.offset + outputbulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputbulkItem_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputbulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputbulkReader).long((outputbulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = cleanup else if (outputbulkItem_bulkFailure !== cleanup) outputbulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_bulkFailure == null) outputbulkItem_bulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkItem_bulkFailure !== outputbulkItem_bulkCleanupError) outputbulkItem_bulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_bulkFailure
+} } catch (outputbulkItem_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_bulkCleanupError) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun <R> `nativeBulkPair`(p0_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>, kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>) -> R): R = run {
+    val returnCapture = io.prebindgen.covertest.Return_ByteArray_ByteArray2_ErrorEmpty_cdd3629414305251.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_native_bulk_pair_a4a8c00804a0cda0(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputg0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_owners: io.prebindgen.covertest.CollectionOwners? = null
+var outputg0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var outputg1_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg1_g0_owners: io.prebindgen.covertest.CollectionOwners? = null
+var outputg1_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg1_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+ if (outputg0_g0_bulkReader == null) { outputg0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+ }
+outputg0_g0_owners?.close(failure)
+if (outputg0_g0_owners?.complete != true) {
+try { if (outputg0_g0_bulkRange == null) outputg0_g0_bulkRange = requireNotNull(outputg0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputg0_g0_bulkIndex in 0 until outputg0_g0_bulkRange!!.length) {
+val outputg0_g0_bulkBase = outputg0_g0_bulkRange!!.offset + outputg0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputg0_g0_bulkFailure: Throwable? = failure
+try {         var outputg0_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg0_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputg0_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = cleanup else if (outputg0_g0_bulkFailure !== cleanup) outputg0_g0_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputg0_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = cleanup else if (outputg0_g0_bulkFailure !== cleanup) outputg0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = outputg0_g0_bulkCleanupError else if (outputg0_g0_bulkFailure !== outputg0_g0_bulkCleanupError) outputg0_g0_bulkFailure!!.addSuppressed(outputg0_g0_bulkCleanupError) }
+
+} } catch (outputg0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_bulkCleanupError) }
+
+}
+if (outputg1_g0_bulkReader == null) { outputg1_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s1 as ByteArray)
+ }
+outputg1_g0_owners?.close(failure)
+if (outputg1_g0_owners?.complete != true) {
+try { if (outputg1_g0_bulkRange == null) outputg1_g0_bulkRange = requireNotNull(outputg1_g0_bulkReader).rows(((requireNotNull(outputg1_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputg1_g0_bulkIndex in 0 until outputg1_g0_bulkRange!!.length) {
+val outputg1_g0_bulkBase = outputg1_g0_bulkRange!!.offset + outputg1_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputg1_g0_bulkFailure: Throwable? = failure
+try {         var outputg1_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg1_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = cleanup else if (outputg1_g0_bulkFailure !== cleanup) outputg1_g0_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = cleanup else if (outputg1_g0_bulkFailure !== cleanup) outputg1_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg1_g0_bulkCleanupError: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = outputg1_g0_bulkCleanupError else if (outputg1_g0_bulkFailure !== outputg1_g0_bulkCleanupError) outputg1_g0_bulkFailure!!.addSuppressed(outputg1_g0_bulkCleanupError) }
+
+} } catch (outputg1_g0_bulkCleanupError: Throwable) { if (failure !== outputg1_g0_bulkCleanupError) failure.addSuppressed(outputg1_g0_bulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputg0_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg0_g0_owners: io.prebindgen.covertest.CollectionOwners? = null
+var outputg0_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg0_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var outputg1_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputg1_g0_owners: io.prebindgen.covertest.CollectionOwners? = null
+var outputg1_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputg1_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+        try {
+outputg0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+outputg0_g0_owners = io.prebindgen.covertest.CollectionOwners()
+outputg0_g0_bulkRange = requireNotNull(outputg0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+outputg0_g0_bulkList = kotlin.collections.ArrayList(outputg0_g0_bulkRange!!.length)
+for (outputg0_g0_bulkIndex in 0 until outputg0_g0_bulkRange!!.length) {
+val outputg0_g0_bulkBase = outputg0_g0_bulkRange!!.offset + outputg0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+        var outputg0_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg0_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            outputg0_g0_bulkItem_g0_0 = requireNotNull(outputg0_g0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long))
+            outputg0_g0_bulkItem_g2_0 = requireNotNull(outputg0_g0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long))
+
+outputg0_g0_bulkList!!.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(outputg0_g0_bulkItem_g0_0), (requireNotNull(outputg0_g0_bulkReader).text((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[1])) as String, requireNotNull(outputg0_g0_bulkItem_g2_0)))
+}
+
+outputg0_g0_owners!!.complete = true
+outputg1_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s1 as ByteArray)
+outputg1_g0_owners = io.prebindgen.covertest.CollectionOwners()
+outputg1_g0_bulkRange = requireNotNull(outputg1_g0_bulkReader).rows(((requireNotNull(outputg1_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+outputg1_g0_bulkList = kotlin.collections.ArrayList(outputg1_g0_bulkRange!!.length)
+for (outputg1_g0_bulkIndex in 0 until outputg1_g0_bulkRange!!.length) {
+val outputg1_g0_bulkBase = outputg1_g0_bulkRange!!.offset + outputg1_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+        var outputg1_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg1_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            outputg1_g0_bulkItem_g0_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long))
+            outputg1_g0_bulkItem_g2_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long))
+
+outputg1_g0_bulkList!!.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(outputg1_g0_bulkItem_g0_0), (requireNotNull(outputg1_g0_bulkReader).text((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[1])) as String, requireNotNull(outputg1_g0_bulkItem_g2_0)))
+}
+
+outputg1_g0_owners!!.complete = true
+            build(requireNotNull(outputg0_g0_bulkList), requireNotNull(outputg1_g0_bulkList))
+        } catch (failure: Throwable) {
+if (outputg0_g0_bulkReader == null) { outputg0_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s0 as ByteArray)
+ }
+outputg0_g0_owners?.close(failure)
+if (outputg0_g0_owners?.complete != true) {
+try { if (outputg0_g0_bulkRange == null) outputg0_g0_bulkRange = requireNotNull(outputg0_g0_bulkReader).rows(((requireNotNull(outputg0_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputg0_g0_bulkIndex in 0 until outputg0_g0_bulkRange!!.length) {
+val outputg0_g0_bulkBase = outputg0_g0_bulkRange!!.offset + outputg0_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputg0_g0_bulkFailure: Throwable? = failure
+try {         var outputg0_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg0_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputg0_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = cleanup else if (outputg0_g0_bulkFailure !== cleanup) outputg0_g0_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputg0_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg0_g0_bulkReader).long((outputg0_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = cleanup else if (outputg0_g0_bulkFailure !== cleanup) outputg0_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg0_g0_bulkCleanupError: Throwable) { if (outputg0_g0_bulkFailure == null) outputg0_g0_bulkFailure = outputg0_g0_bulkCleanupError else if (outputg0_g0_bulkFailure !== outputg0_g0_bulkCleanupError) outputg0_g0_bulkFailure!!.addSuppressed(outputg0_g0_bulkCleanupError) }
+
+} } catch (outputg0_g0_bulkCleanupError: Throwable) { if (failure !== outputg0_g0_bulkCleanupError) failure.addSuppressed(outputg0_g0_bulkCleanupError) }
+
+}
+if (outputg1_g0_bulkReader == null) { outputg1_g0_bulkReader = io.prebindgen.covertest.BulkReader(returnCapture.s1 as ByteArray)
+ }
+outputg1_g0_owners?.close(failure)
+if (outputg1_g0_owners?.complete != true) {
+try { if (outputg1_g0_bulkRange == null) outputg1_g0_bulkRange = requireNotNull(outputg1_g0_bulkReader).rows(((requireNotNull(outputg1_g0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (outputg1_g0_bulkIndex in 0 until outputg1_g0_bulkRange!!.length) {
+val outputg1_g0_bulkBase = outputg1_g0_bulkRange!!.offset + outputg1_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var outputg1_g0_bulkFailure: Throwable? = failure
+try {         var outputg1_g0_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var outputg1_g0_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = cleanup else if (outputg1_g0_bulkFailure !== cleanup) outputg1_g0_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(outputg1_g0_bulkReader).long((outputg1_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = cleanup else if (outputg1_g0_bulkFailure !== cleanup) outputg1_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputg1_g0_bulkCleanupError: Throwable) { if (outputg1_g0_bulkFailure == null) outputg1_g0_bulkFailure = outputg1_g0_bulkCleanupError else if (outputg1_g0_bulkFailure !== outputg1_g0_bulkCleanupError) outputg1_g0_bulkFailure!!.addSuppressed(outputg1_g0_bulkCleanupError) }
+
+} } catch (outputg1_g0_bulkCleanupError: Throwable) { if (failure !== outputg1_g0_bulkCleanupError) failure.addSuppressed(outputg1_g0_bulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `nativeBulkCallback`(p0_w1: Long, p1_callback: io.prebindgen.covertest.NativeBulkCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: ByteArray?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var callbackOutput0_owners: io.prebindgen.covertest.CollectionOwners? = null
+var callbackOutput0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var callbackOutput0_bulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_bulkReader = io.prebindgen.covertest.BulkReader(raw0 as ByteArray)
+callbackOutput0_owners = io.prebindgen.covertest.CollectionOwners()
+callbackOutput0_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+callbackOutput0_bulkList = kotlin.collections.ArrayList(callbackOutput0_bulkRange!!.length)
+for (callbackOutput0_bulkIndex in 0 until callbackOutput0_bulkRange!!.length) {
+val callbackOutput0_bulkBase = callbackOutput0_bulkRange!!.offset + callbackOutput0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var callbackOutput0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var callbackOutput0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+callbackOutput0_bulkItem_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((callbackOutput0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+callbackOutput0_bulkItem_bulkList = kotlin.collections.ArrayList(callbackOutput0_bulkItem_bulkRange!!.length)
+for (callbackOutput0_bulkItem_bulkIndex in 0 until callbackOutput0_bulkItem_bulkRange!!.length) {
+val callbackOutput0_bulkItem_bulkBase = callbackOutput0_bulkItem_bulkRange!!.offset + callbackOutput0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+        var callbackOutput0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_bulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            callbackOutput0_bulkItem_bulkItem_g0_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long))
+            callbackOutput0_bulkItem_bulkItem_g2_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.callbacks.CallbackRowResource((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long))
+
+callbackOutput0_bulkItem_bulkList!!.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_bulkItem_bulkItem_g0_0), (requireNotNull(callbackOutput0_bulkReader).text((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[1])) as String, requireNotNull(callbackOutput0_bulkItem_bulkItem_g2_0)))
+}
+
+callbackOutput0_bulkList!!.add(requireNotNull(callbackOutput0_bulkItem_bulkList))
+}
+
+callbackOutput0_owners!!.complete = true
+            callbackArgument0_0 = requireNotNull(callbackOutput0_bulkList)
+        } catch (failure: Throwable) {
+if (callbackOutput0_bulkReader == null) { callbackOutput0_bulkReader = io.prebindgen.covertest.BulkReader(raw0 as ByteArray)
+ }
+callbackCleanupFailure = callbackOutput0_owners?.close(callbackCleanupFailure) ?: callbackCleanupFailure
+if (callbackOutput0_owners?.complete != true) {
+try { if (callbackOutput0_bulkRange == null) callbackOutput0_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+for (callbackOutput0_bulkIndex in 0 until callbackOutput0_bulkRange!!.length) {
+val callbackOutput0_bulkBase = callbackOutput0_bulkRange!!.offset + callbackOutput0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var callbackOutput0_bulkFailure: Throwable? = callbackCleanupFailure
+try { var callbackOutput0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var callbackOutput0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+try { if (callbackOutput0_bulkItem_bulkRange == null) callbackOutput0_bulkItem_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((callbackOutput0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (callbackOutput0_bulkItem_bulkIndex in 0 until callbackOutput0_bulkItem_bulkRange!!.length) {
+val callbackOutput0_bulkItem_bulkBase = callbackOutput0_bulkItem_bulkRange!!.offset + callbackOutput0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var callbackOutput0_bulkItem_bulkFailure: Throwable? = callbackOutput0_bulkFailure
+try {         var callbackOutput0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_bulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = cleanup else if (callbackOutput0_bulkItem_bulkFailure !== cleanup) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = cleanup else if (callbackOutput0_bulkItem_bulkFailure !== cleanup) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_bulkItem_bulkCleanupError: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = callbackOutput0_bulkItem_bulkCleanupError else if (callbackOutput0_bulkItem_bulkFailure !== callbackOutput0_bulkItem_bulkCleanupError) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(callbackOutput0_bulkItem_bulkCleanupError) }
+callbackOutput0_bulkFailure = callbackOutput0_bulkItem_bulkFailure
+} } catch (callbackOutput0_bulkItem_bulkCleanupError: Throwable) { if (callbackOutput0_bulkFailure == null) callbackOutput0_bulkFailure = callbackOutput0_bulkItem_bulkCleanupError else if (callbackOutput0_bulkFailure !== callbackOutput0_bulkItem_bulkCleanupError) callbackOutput0_bulkFailure!!.addSuppressed(callbackOutput0_bulkItem_bulkCleanupError) }
+ } catch (callbackOutput0_bulkCleanupError: Throwable) { if (callbackOutput0_bulkFailure == null) callbackOutput0_bulkFailure = callbackOutput0_bulkCleanupError else if (callbackOutput0_bulkFailure !== callbackOutput0_bulkCleanupError) callbackOutput0_bulkFailure!!.addSuppressed(callbackOutput0_bulkCleanupError) }
+callbackCleanupFailure = callbackOutput0_bulkFailure
+} } catch (callbackOutput0_bulkCleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_bulkCleanupError else if (callbackCleanupFailure !== callbackOutput0_bulkCleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_bulkCleanupError) }
+
+}
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p1_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+if (callbackOutput0_bulkReader == null) { callbackOutput0_bulkReader = io.prebindgen.covertest.BulkReader(raw0 as ByteArray)
+ }
+callbackCleanupFailure = callbackOutput0_owners?.close(callbackCleanupFailure) ?: callbackCleanupFailure
+if (callbackOutput0_owners?.complete != true) {
+try { if (callbackOutput0_bulkRange == null) callbackOutput0_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4870fc95cea3097a.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size)
+for (callbackOutput0_bulkIndex in 0 until callbackOutput0_bulkRange!!.length) {
+val callbackOutput0_bulkBase = callbackOutput0_bulkRange!!.offset + callbackOutput0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.size
+var callbackOutput0_bulkFailure: Throwable? = callbackCleanupFailure
+try { var callbackOutput0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var callbackOutput0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+
+try { if (callbackOutput0_bulkItem_bulkRange == null) callbackOutput0_bulkItem_bulkRange = requireNotNull(callbackOutput0_bulkReader).rows(((requireNotNull(callbackOutput0_bulkReader).range((callbackOutput0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r070bbcf38f849ff2.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size)
+for (callbackOutput0_bulkItem_bulkIndex in 0 until callbackOutput0_bulkItem_bulkRange!!.length) {
+val callbackOutput0_bulkItem_bulkBase = callbackOutput0_bulkItem_bulkRange!!.offset + callbackOutput0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.size
+var callbackOutput0_bulkItem_bulkFailure: Throwable? = callbackOutput0_bulkFailure
+try {         var callbackOutput0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_bulkItem_bulkItem_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = cleanup else if (callbackOutput0_bulkItem_bulkFailure !== cleanup) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackRowResource_abd70bbf025eb35c((requireNotNull(callbackOutput0_bulkReader).long((callbackOutput0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.rf508a557893415ce.offsets[2])) as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = cleanup else if (callbackOutput0_bulkItem_bulkFailure !== cleanup) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_bulkItem_bulkCleanupError: Throwable) { if (callbackOutput0_bulkItem_bulkFailure == null) callbackOutput0_bulkItem_bulkFailure = callbackOutput0_bulkItem_bulkCleanupError else if (callbackOutput0_bulkItem_bulkFailure !== callbackOutput0_bulkItem_bulkCleanupError) callbackOutput0_bulkItem_bulkFailure!!.addSuppressed(callbackOutput0_bulkItem_bulkCleanupError) }
+callbackOutput0_bulkFailure = callbackOutput0_bulkItem_bulkFailure
+} } catch (callbackOutput0_bulkItem_bulkCleanupError: Throwable) { if (callbackOutput0_bulkFailure == null) callbackOutput0_bulkFailure = callbackOutput0_bulkItem_bulkCleanupError else if (callbackOutput0_bulkFailure !== callbackOutput0_bulkItem_bulkCleanupError) callbackOutput0_bulkFailure!!.addSuppressed(callbackOutput0_bulkItem_bulkCleanupError) }
+ } catch (callbackOutput0_bulkCleanupError: Throwable) { if (callbackOutput0_bulkFailure == null) callbackOutput0_bulkFailure = callbackOutput0_bulkCleanupError else if (callbackOutput0_bulkFailure !== callbackOutput0_bulkCleanupError) callbackOutput0_bulkFailure!!.addSuppressed(callbackOutput0_bulkCleanupError) }
+callbackCleanupFailure = callbackOutput0_bulkFailure
+} } catch (callbackOutput0_bulkCleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_bulkCleanupError else if (callbackCleanupFailure !== callbackOutput0_bulkCleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_bulkCleanupError) }
+
+}
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_native_bulk_callback_b0aa3d8beb220a07(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    Unit
+    } finally { returnCapture.release() }
+}
+
 public fun <R> `outputCleanupSurround`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.resources.OwnedResource, kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.cleanup.OutputCleanupRow>?>, io.prebindgen.covertest.resources.OwnedResource) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_Array_Any___Long3_ErrorEmpty_2b0b20baf8d8d1fd.acquire()
     try {
