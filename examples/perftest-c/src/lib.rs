@@ -5,6 +5,8 @@ mod owner_views;
 
 #[cfg(test)]
 mod alias_allocations;
+#[cfg(test)]
+mod output_owners;
 
 #[cfg(test)]
 static GETTER_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());

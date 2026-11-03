@@ -6,6 +6,35 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("c_output_resource", pq!(CallbackRowResource))
+        .expand(
+            expand_return!(CallbackRow)
+                .field(fun!(c_output_first))
+                .field(fun!(c_output_label))
+                .field(fun!(c_output_second)),
+        )
+        .function(fun!(c_output_rows).output(c_output_rows()))
+        .function(fun!(c_output_nested).output(c_output_nested_rows()))
+        .function(
+            fun!(c_output_pair).output(prebindgen_declarations::Output::OwnedFields(vec![
+                c_output_rows(),
+                c_output_rows(),
+            ])),
+        )
+        .output(prebindgen_declarations::Output::for_type(
+            pq!(Vec<CallbackRow>),
+            c_output_rows(),
+        ))
+        .output(prebindgen_declarations::Output::for_type(
+            pq!(Vec<Vec<CallbackRow>>),
+            c_output_nested_rows(),
+        ))
+        .function(fun!(c_output_callback))
+        .panic()
+        .function(fun!(callback_row_resource_live))
+        .panic()
+        .function(fun!(callback_row_resource_id))
+        .panic()
         .function(fun!(collection_input_plain))
         .panic()
         .function(fun!(collection_input_custom).expand_param(
@@ -950,4 +979,20 @@ fn main() {
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
+}
+
+fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {
+    prebindgen_declarations::Output::Sequence {
+        element: Box::new(prebindgen_declarations::Output::auto()),
+        mode: None,
+        delivery: prebindgen_declarations::SequenceDelivery::Value,
+    }
+}
+fn c_output_nested_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest>
+{
+    prebindgen_declarations::Output::Sequence {
+        element: Box::new(c_output_rows()),
+        mode: None,
+        delivery: prebindgen_declarations::SequenceDelivery::Value,
+    }
 }

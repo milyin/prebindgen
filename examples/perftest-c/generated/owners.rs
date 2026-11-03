@@ -2469,24 +2469,39 @@ pub unsafe extern "C" fn owner_inline_packets_rows(
             let ret_w2 = perftest_flat::inline_packets_getter(&ret_w0);
             let ret_w3_source: ::std::vec::Vec<perftest_flat::InlinePacket> = ret_w2;
             let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let mut ret_w3_commits = Vec::with_capacity(ret_w5);
-            let mut ret_w3: Vec<__PbRow_inline_packets_rows_ret_w3> = Vec::with_capacity(
-                ret_w5,
-            );
+            unsafe fn ret_w3_release_row(row: &__PbRow_inline_packets_rows_ret_w3) {
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v0).into_rust());
+                    Ok(())
+                });
+            }
+            let mut ret_w3 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_inline_packets_rows_ret_w3,
+                >::new(ret_w5, ret_w3_release_row)
+            };
             for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w3_source),
             ) {
                 let ret_w7 = __PbOwned_packet::guard(ret_w4);
-                ret_w3
-                    .push(__PbRow_inline_packets_rows_ret_w3 {
-                        v0: ret_w7.0,
-                    });
-                ret_w3_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w7);
-                    });
+                unsafe {
+                    ret_w3
+                        .write_next(__PbRow_inline_packets_rows_ret_w3 {
+                            v0: ret_w7.0,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w7);
+                })();
+                unsafe {
+                    ret_w3.commit_row();
+                }
             }
-            let ret_w3 = ret_w3.into_boxed_slice();
             let ret_w8 = perftest_flat::inline_packets_late(&ret_w0);
             let ret_w9 = ret_w8;
             let result = owner_inline_packets_rows_result {
@@ -2502,10 +2517,7 @@ pub unsafe extern "C" fn owner_inline_packets_rows(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w3);
-                for commit in ret_w3_commits {
-                    commit();
-                }
+                ret_w3.commit();
                 success_committed = true;
             };
             Ok(())

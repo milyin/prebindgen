@@ -21,6 +21,12 @@ fn __pb_owned_owned_vec_vec_i64_44fcce9e083e0432_len(value: &Vec<Vec<i64>>) -> u
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_callbackrow_addaf24d06e04a05_len(
+    value: &Vec<Vec<perftest_flat::CallbackRow>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_len(
     value: &Vec<Vec<perftest_flat::OwnedResource>>,
 ) -> usize {
@@ -53,6 +59,12 @@ fn __pb_owned_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb_len
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301_len(
     value: &Vec<perftest_flat::CallbackReturnResource>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_callbackrow_f03a4febf07e44f9_len(
+    value: &Vec<perftest_flat::CallbackRow>,
 ) -> usize {
     value.len()
 }
@@ -173,6 +185,21 @@ const _: () = {
         "C binding target differs from the Rust compilation target"
     );
 };
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_c_output_resource(
+    ptr: *mut perftest_flat::CallbackRowResource,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -711,6 +738,61 @@ pub struct perftest_callback_321f7c4288706a27 {
 #[derive(Clone, Copy)]
 pub struct perftest_callback_490413898821d50d {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u8) -> u8>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data
+                        as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0 {
+    pub v0: __PbRows,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data
+                        as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_4cf53ee6dc85aa46 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbRows) -> ()>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
@@ -1317,10 +1399,19 @@ unsafe fn __pb_report_collection_error(
         let ret_w1_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0
             .resources;
         let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
-        let mut ret_w1_commits = Vec::with_capacity(ret_w3);
-        let mut ret_w1: Vec<__PbRow_error_collection_error_ret_w1> = Vec::with_capacity(
-            ret_w3,
-        );
+        unsafe fn ret_w1_release_row(row: &__PbRow_error_collection_error_ret_w1) {
+            if !(row.v0).is_null() {
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop(Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource));
+                    Ok(())
+                });
+            }
+        }
+        let mut ret_w1 = unsafe {
+            ::prebindgen_runtime::OutputRows::<
+                __PbRow_error_collection_error_ret_w1,
+            >::new(ret_w3, ret_w1_release_row)
+        };
         for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
             ::core::iter::IntoIterator::into_iter(ret_w1_source),
         ) {
@@ -1328,62 +1419,98 @@ unsafe fn __pb_report_collection_error(
                 Box::new(ret_w2),
             );
             let ret_w5_owner = __PbOutputOwner(ret_w5);
-            ret_w1
-                .push(__PbRow_error_collection_error_ret_w1 {
-                    v0: ret_w5,
-                });
-            ret_w1_commits
-                .push(move || {
-                    ::core::mem::forget(ret_w5_owner);
-                });
+            unsafe {
+                ret_w1
+                    .write_next(__PbRow_error_collection_error_ret_w1 {
+                        v0: ret_w5,
+                    });
+            }
+            #[allow(
+                clippy::redundant_closure_call,
+                clippy::let_unit_value,
+                clippy::unused_unit
+            )]
+            let _: () = (|| -> () {
+                ::core::mem::forget(ret_w5_owner);
+            })();
+            unsafe {
+                ret_w1.commit_row();
+            }
         }
-        let ret_w1 = ret_w1.into_boxed_slice();
         let ret_w6_source: ::std::vec::Vec<Vec<i64>> = ret_w0.codes;
         let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
-        let mut ret_w6_commits = Vec::with_capacity(ret_w8);
-        let mut ret_w6: Vec<__PbRow_error_collection_error_ret_w6> = Vec::with_capacity(
-            ret_w8,
-        );
+        unsafe fn ret_w6_release_row(row: &__PbRow_error_collection_error_ret_w6) {
+            if (row.v0).len != 0 {
+                let rows = Box::from_raw(
+                    std::ptr::slice_from_raw_parts_mut(
+                        (row.v0).data as *mut __PbRow_error_collection_error_ret_w10,
+                        (row.v0).len,
+                    ),
+                );
+                for row in rows.iter() {}
+            }
+        }
+        let mut ret_w6 = unsafe {
+            ::prebindgen_runtime::OutputRows::<
+                __PbRow_error_collection_error_ret_w6,
+            >::new(ret_w8, ret_w6_release_row)
+        };
         for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
             ::core::iter::IntoIterator::into_iter(ret_w6_source),
         ) {
             let ret_w10_source: ::std::vec::Vec<i64> = ret_w7;
             let ret_w12 = ::std::vec::Vec::len(&ret_w10_source);
-            let mut ret_w10_commits = Vec::with_capacity(ret_w12);
-            let mut ret_w10: Vec<__PbRow_error_collection_error_ret_w10> = Vec::with_capacity(
-                ret_w12,
-            );
+            unsafe fn ret_w10_release_row(row: &__PbRow_error_collection_error_ret_w10) {}
+            let mut ret_w10 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_error_collection_error_ret_w10,
+                >::new(ret_w12, ret_w10_release_row)
+            };
             for (ret_w13, ret_w11) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w10_source),
             ) {
                 let ret_w14 = ret_w11;
-                ret_w10
-                    .push(__PbRow_error_collection_error_ret_w10 {
-                        v0: ret_w14,
-                    });
-                ret_w10_commits.push(move || {});
+                unsafe {
+                    ret_w10
+                        .write_next(__PbRow_error_collection_error_ret_w10 {
+                            v0: ret_w14,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w10.commit_row();
+                }
             }
-            let ret_w10 = ret_w10.into_boxed_slice();
-            ret_w6
-                .push(__PbRow_error_collection_error_ret_w6 {
-                    v0: __PbRows {
-                        data: if ret_w10.is_empty() {
-                            ::core::ptr::null()
-                        } else {
-                            ret_w10.as_ptr().cast()
+            unsafe {
+                ret_w6
+                    .write_next(__PbRow_error_collection_error_ret_w6 {
+                        v0: __PbRows {
+                            data: if ret_w10.is_empty() {
+                                ::core::ptr::null()
+                            } else {
+                                ret_w10.as_ptr().cast()
+                            },
+                            len: ret_w10.len(),
                         },
-                        len: ret_w10.len(),
-                    },
-                });
-            ret_w6_commits
-                .push(move || {
-                    let _ = Box::into_raw(ret_w10);
-                    for commit in ret_w10_commits {
-                        commit();
-                    }
-                });
+                    });
+            }
+            #[allow(
+                clippy::redundant_closure_call,
+                clippy::let_unit_value,
+                clippy::unused_unit
+            )]
+            let _: () = (|| -> () {
+                ret_w10.commit();
+            })();
+            unsafe {
+                ret_w6.commit_row();
+            }
         }
-        let ret_w6 = ret_w6.into_boxed_slice();
         let result = __PbError_collection_error {
             v0: __PbRows {
                 data: if ret_w1.is_empty() {
@@ -1403,14 +1530,8 @@ unsafe fn __pb_report_collection_error(
             },
         };
         std::ptr::write(error_output, result);
-        let _ = Box::into_raw(ret_w1);
-        for commit in ret_w1_commits {
-            commit();
-        }
-        let _ = Box::into_raw(ret_w6);
-        for commit in ret_w6_commits {
-            commit();
-        }
+        ret_w1.commit();
+        ret_w6.commit();
         *reported = true;
         Ok(())
     }
@@ -2246,6 +2367,1202 @@ pub unsafe extern "C" fn perftest_buffer_views_text(
     let value = storage.assume_init();
     std::ptr::write(out1, value.v1);
     value.v0
+}
+#[repr(C)]
+pub struct perftest_c_output_callback_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_callback(
+    p0_w1: i64,
+    p1_callback: perftest_callback_4cf53ee6dc85aa46,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_c_output_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: Vec<Vec<perftest_flat::CallbackRow>>|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0_source: ::std::vec::Vec<
+                                Vec<perftest_flat::CallbackRow>,
+                            > = callback_source_0;
+                            let callback_arg_0_w2 = ::std::vec::Vec::len(
+                                &callback_arg_0_w0_source,
+                            );
+                            unsafe fn callback_arg_0_w0_release_row(
+                                row: &__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
+                            ) {
+                                if (row.v0).len != 0 {
+                                    let rows = Box::from_raw(
+                                        std::ptr::slice_from_raw_parts_mut(
+                                            (row.v0).data
+                                                as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                            (row.v0).len,
+                                        ),
+                                    );
+                                    for row in rows.iter() {
+                                        if !(row.v0).is_null() {
+                                            let _ = ::prebindgen_runtime::boundary(|| {
+                                                drop(
+                                                    Box::from_raw(
+                                                        (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                                    ),
+                                                );
+                                                Ok(())
+                                            });
+                                        }
+                                        let _ = ::prebindgen_runtime::boundary(|| {
+                                            drop((row.v1).into_rust());
+                                            Ok(())
+                                        });
+                                        if !(row.v2).is_null() {
+                                            let _ = ::prebindgen_runtime::boundary(|| {
+                                                drop(
+                                                    Box::from_raw(
+                                                        (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                                    ),
+                                                );
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            let mut callback_arg_0_w0 = unsafe {
+                                ::prebindgen_runtime::OutputRows::<
+                                    __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
+                                >::new(callback_arg_0_w2, callback_arg_0_w0_release_row)
+                            };
+                            for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
+                                ::core::iter::IntoIterator::into_iter(
+                                    callback_arg_0_w0_source,
+                                ),
+                            ) {
+                                let callback_arg_0_w4_source: ::std::vec::Vec<
+                                    perftest_flat::CallbackRow,
+                                > = callback_arg_0_w1;
+                                let callback_arg_0_w6 = ::std::vec::Vec::len(
+                                    &callback_arg_0_w4_source,
+                                );
+                                unsafe fn callback_arg_0_w4_release_row(
+                                    row: &__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                ) {
+                                    if !(row.v0).is_null() {
+                                        let _ = ::prebindgen_runtime::boundary(|| {
+                                            drop(
+                                                Box::from_raw(
+                                                    (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                                ),
+                                            );
+                                            Ok(())
+                                        });
+                                    }
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop((row.v1).into_rust());
+                                        Ok(())
+                                    });
+                                    if !(row.v2).is_null() {
+                                        let _ = ::prebindgen_runtime::boundary(|| {
+                                            drop(
+                                                Box::from_raw(
+                                                    (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                                ),
+                                            );
+                                            Ok(())
+                                        });
+                                    }
+                                }
+                                let mut callback_arg_0_w4 = unsafe {
+                                    ::prebindgen_runtime::OutputRows::<
+                                        __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                    >::new(callback_arg_0_w6, callback_arg_0_w4_release_row)
+                                };
+                                for (callback_arg_0_w7, callback_arg_0_w5) in ::core::iter::Iterator::enumerate(
+                                    ::core::iter::IntoIterator::into_iter(
+                                        callback_arg_0_w4_source,
+                                    ),
+                                ) {
+                                    let callback_arg_0_w8 = perftest_flat::c_output_first(
+                                        &callback_arg_0_w5,
+                                    );
+                                    let callback_arg_0_w9: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                                        Box::new(callback_arg_0_w8),
+                                    );
+                                    let callback_arg_0_w9_owner = __PbOutputOwner(
+                                        callback_arg_0_w9,
+                                    );
+                                    let callback_arg_0_w10 = perftest_flat::c_output_label(
+                                        &callback_arg_0_w5,
+                                    );
+                                    let callback_arg_0_w11 = __PbOwned_owned_string::guard(
+                                        callback_arg_0_w10,
+                                    );
+                                    let callback_arg_0_w12 = perftest_flat::c_output_second(
+                                        &callback_arg_0_w5,
+                                    );
+                                    let callback_arg_0_w13: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                                        Box::new(callback_arg_0_w12),
+                                    );
+                                    let callback_arg_0_w13_owner = __PbOutputOwner(
+                                        callback_arg_0_w13,
+                                    );
+                                    unsafe {
+                                        callback_arg_0_w4
+                                            .write_next(__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4 {
+                                                v0: callback_arg_0_w9,
+                                                v1: callback_arg_0_w11.0,
+                                                v2: callback_arg_0_w13,
+                                            });
+                                    }
+                                    #[allow(
+                                        clippy::redundant_closure_call,
+                                        clippy::let_unit_value,
+                                        clippy::unused_unit
+                                    )]
+                                    let _: () = (|| -> () {
+                                        ::core::mem::forget(callback_arg_0_w9_owner);
+                                        ::core::mem::forget(callback_arg_0_w11);
+                                        ::core::mem::forget(callback_arg_0_w13_owner);
+                                    })();
+                                    unsafe {
+                                        callback_arg_0_w4.commit_row();
+                                    }
+                                }
+                                unsafe {
+                                    callback_arg_0_w0
+                                        .write_next(__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0 {
+                                            v0: __PbRows {
+                                                data: if callback_arg_0_w4.is_empty() {
+                                                    ::core::ptr::null()
+                                                } else {
+                                                    callback_arg_0_w4.as_ptr().cast()
+                                                },
+                                                len: callback_arg_0_w4.len(),
+                                            },
+                                        });
+                                }
+                                #[allow(
+                                    clippy::redundant_closure_call,
+                                    clippy::let_unit_value,
+                                    clippy::unused_unit
+                                )]
+                                let _: () = (|| -> () {
+                                    callback_arg_0_w4.commit();
+                                })();
+                                unsafe {
+                                    callback_arg_0_w0.commit_row();
+                                }
+                            }
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = __PbRows {
+                                data: if callback_arg_0_w0.is_empty() {
+                                    ::core::ptr::null()
+                                } else {
+                                    callback_arg_0_w0.as_ptr().cast()
+                                },
+                                len: callback_arg_0_w0.len(),
+                            };
+                            {
+                                callback_arg_0_w0.commit();
+                            }
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_4cf53ee6dc85aa46",
+                                "(Vec < Vec < perftest_flat :: CallbackRow > >)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let source_value = perftest_flat::c_output_callback(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let result = perftest_c_output_callback_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_c_output_nested_ret_w6 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_nested_ret_w6_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_c_output_nested_ret_w6,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_c_output_nested_ret_w2 {
+    pub v0: __PbRows,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_nested_ret_w2_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_c_output_nested_ret_w2,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_c_output_nested_result {
+    pub v0: __PbRows,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_nested(
+    p0_w1: i64,
+    out0: *mut __PbRows,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<perftest_c_output_nested_result>::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::c_output_nested(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2_source: ::std::vec::Vec<Vec<perftest_flat::CallbackRow>> = ret_w0;
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            unsafe fn ret_w2_release_row(row: &__PbRow_c_output_nested_ret_w2) {
+                if (row.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (row.v0).data as *mut __PbRow_c_output_nested_ret_w6,
+                            (row.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop((row.v1).into_rust());
+                            Ok(())
+                        });
+                        if !(row.v2).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+            }
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_c_output_nested_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
+                let ret_w6_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w3;
+                let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
+                unsafe fn ret_w6_release_row(row: &__PbRow_c_output_nested_ret_w6) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw(
+                                    (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                ),
+                            );
+                            Ok(())
+                        });
+                    }
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop((row.v1).into_rust());
+                        Ok(())
+                    });
+                    if !(row.v2).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw(
+                                    (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                ),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w6 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_c_output_nested_ret_w6,
+                    >::new(ret_w8, ret_w6_release_row)
+                };
+                for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w6_source),
+                ) {
+                    let ret_w10 = perftest_flat::c_output_first(&ret_w7);
+                    let ret_w11: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                        Box::new(ret_w10),
+                    );
+                    let ret_w11_owner = __PbOutputOwner(ret_w11);
+                    let ret_w12 = perftest_flat::c_output_label(&ret_w7);
+                    let ret_w13 = __PbOwned_owned_string::guard(ret_w12);
+                    let ret_w14 = perftest_flat::c_output_second(&ret_w7);
+                    let ret_w15: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                        Box::new(ret_w14),
+                    );
+                    let ret_w15_owner = __PbOutputOwner(ret_w15);
+                    unsafe {
+                        ret_w6
+                            .write_next(__PbRow_c_output_nested_ret_w6 {
+                                v0: ret_w11,
+                                v1: ret_w13.0,
+                                v2: ret_w15,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w11_owner);
+                        ::core::mem::forget(ret_w13);
+                        ::core::mem::forget(ret_w15_owner);
+                    })();
+                    unsafe {
+                        ret_w6.commit_row();
+                    }
+                }
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_c_output_nested_ret_w2 {
+                            v0: __PbRows {
+                                data: if ret_w6.is_empty() {
+                                    ::core::ptr::null()
+                                } else {
+                                    ret_w6.as_ptr().cast()
+                                },
+                                len: ret_w6.len(),
+                            },
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w6.commit();
+                })();
+                unsafe {
+                    ret_w2.commit_row();
+                }
+            }
+            let result = perftest_c_output_nested_result {
+                v0: __PbRows {
+                    data: if ret_w2.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w2.as_ptr().cast()
+                    },
+                    len: ret_w2.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w2.commit();
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                if (value.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (value.v0).data as *mut __PbRow_c_output_nested_ret_w2,
+                            (value.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if (row.v0).len != 0 {
+                            let rows = Box::from_raw(
+                                std::ptr::slice_from_raw_parts_mut(
+                                    (row.v0).data as *mut __PbRow_c_output_nested_ret_w6,
+                                    (row.v0).len,
+                                ),
+                            );
+                            for row in rows.iter() {
+                                if !(row.v0).is_null() {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop(
+                                            Box::from_raw(
+                                                (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                            ),
+                                        );
+                                        Ok(())
+                                    });
+                                }
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop((row.v1).into_rust());
+                                    Ok(())
+                                });
+                                if !(row.v2).is_null() {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop(
+                                            Box::from_raw(
+                                                (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                            ),
+                                        );
+                                        Ok(())
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_c_output_pair_ret_w3 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_pair_ret_w3_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_c_output_pair_ret_w3,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_c_output_pair_ret_w13 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_pair_ret_w13_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_c_output_pair_ret_w13,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_c_output_pair_result {
+    pub v0: __PbRows,
+    pub v1: __PbRows,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_pair(
+    p0_w1: i64,
+    out0: *mut __PbRows,
+    out1: *mut __PbRows,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<perftest_c_output_pair_result>::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        if out1.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::c_output_pair(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let ret_w3_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w2
+                .first;
+            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
+            unsafe fn ret_w3_release_row(row: &__PbRow_c_output_pair_ret_w3) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v0) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v1).into_rust());
+                    Ok(())
+                });
+                if !(row.v2).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v2) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w3 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_c_output_pair_ret_w3,
+                >::new(ret_w5, ret_w3_release_row)
+            };
+            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            ) {
+                let ret_w7 = perftest_flat::c_output_first(&ret_w4);
+                let ret_w8: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w7),
+                );
+                let ret_w8_owner = __PbOutputOwner(ret_w8);
+                let ret_w9 = perftest_flat::c_output_label(&ret_w4);
+                let ret_w10 = __PbOwned_owned_string::guard(ret_w9);
+                let ret_w11 = perftest_flat::c_output_second(&ret_w4);
+                let ret_w12: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w11),
+                );
+                let ret_w12_owner = __PbOutputOwner(ret_w12);
+                unsafe {
+                    ret_w3
+                        .write_next(__PbRow_c_output_pair_ret_w3 {
+                            v0: ret_w8,
+                            v1: ret_w10.0,
+                            v2: ret_w12,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w8_owner);
+                    ::core::mem::forget(ret_w10);
+                    ::core::mem::forget(ret_w12_owner);
+                })();
+                unsafe {
+                    ret_w3.commit_row();
+                }
+            }
+            let ret_w13_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w2
+                .second;
+            let ret_w15 = ::std::vec::Vec::len(&ret_w13_source);
+            unsafe fn ret_w13_release_row(row: &__PbRow_c_output_pair_ret_w13) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v0) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v1).into_rust());
+                    Ok(())
+                });
+                if !(row.v2).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v2) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w13 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_c_output_pair_ret_w13,
+                >::new(ret_w15, ret_w13_release_row)
+            };
+            for (ret_w16, ret_w14) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w13_source),
+            ) {
+                let ret_w17 = perftest_flat::c_output_first(&ret_w14);
+                let ret_w18: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w17),
+                );
+                let ret_w18_owner = __PbOutputOwner(ret_w18);
+                let ret_w19 = perftest_flat::c_output_label(&ret_w14);
+                let ret_w20 = __PbOwned_owned_string::guard(ret_w19);
+                let ret_w21 = perftest_flat::c_output_second(&ret_w14);
+                let ret_w22: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w21),
+                );
+                let ret_w22_owner = __PbOutputOwner(ret_w22);
+                unsafe {
+                    ret_w13
+                        .write_next(__PbRow_c_output_pair_ret_w13 {
+                            v0: ret_w18,
+                            v1: ret_w20.0,
+                            v2: ret_w22,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w18_owner);
+                    ::core::mem::forget(ret_w20);
+                    ::core::mem::forget(ret_w22_owner);
+                })();
+                unsafe {
+                    ret_w13.commit_row();
+                }
+            }
+            let result = perftest_c_output_pair_result {
+                v0: __PbRows {
+                    data: if ret_w3.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w3.as_ptr().cast()
+                    },
+                    len: ret_w3.len(),
+                },
+                v1: __PbRows {
+                    data: if ret_w13.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w13.as_ptr().cast()
+                    },
+                    len: ret_w13.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w3.commit();
+                ret_w13.commit();
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            std::ptr::write(out1, value.v1);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                if (value.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (value.v0).data as *mut __PbRow_c_output_pair_ret_w3,
+                            (value.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop((row.v1).into_rust());
+                            Ok(())
+                        });
+                        if !(row.v2).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+                if (value.v1).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (value.v1).data as *mut __PbRow_c_output_pair_ret_w13,
+                            (value.v1).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop((row.v1).into_rust());
+                            Ok(())
+                        });
+                        if !(row.v2).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_c_output_rows_ret_w2 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_rows_ret_w2_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_c_output_rows_ret_w2,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_c_output_rows_result {
+    pub v0: __PbRows,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_c_output_rows(
+    p0_w1: i64,
+    out0: *mut __PbRows,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<perftest_c_output_rows_result>::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::c_output_rows(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w0;
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            unsafe fn ret_w2_release_row(row: &__PbRow_c_output_rows_ret_w2) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v0) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v1).into_rust());
+                    Ok(())
+                });
+                if !(row.v2).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (row.v2) as *mut perftest_flat::CallbackRowResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_c_output_rows_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
+                let ret_w6 = perftest_flat::c_output_first(&ret_w3);
+                let ret_w7: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w6),
+                );
+                let ret_w7_owner = __PbOutputOwner(ret_w7);
+                let ret_w8 = perftest_flat::c_output_label(&ret_w3);
+                let ret_w9 = __PbOwned_owned_string::guard(ret_w8);
+                let ret_w10 = perftest_flat::c_output_second(&ret_w3);
+                let ret_w11: *mut perftest_flat::CallbackRowResource = Box::into_raw(
+                    Box::new(ret_w10),
+                );
+                let ret_w11_owner = __PbOutputOwner(ret_w11);
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_c_output_rows_ret_w2 {
+                            v0: ret_w7,
+                            v1: ret_w9.0,
+                            v2: ret_w11,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w7_owner);
+                    ::core::mem::forget(ret_w9);
+                    ::core::mem::forget(ret_w11_owner);
+                })();
+                unsafe {
+                    ret_w2.commit_row();
+                }
+            }
+            let result = perftest_c_output_rows_result {
+                v0: __PbRows {
+                    data: if ret_w2.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w2.as_ptr().cast()
+                    },
+                    len: ret_w2.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w2.commit();
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                if (value.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (value.v0).data as *mut __PbRow_c_output_rows_ret_w2,
+                            (value.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v0) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop((row.v1).into_rust());
+                            Ok(())
+                        });
+                        if !(row.v2).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw(
+                                        (row.v2) as *mut perftest_flat::CallbackRowResource,
+                                    ),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
 }
 #[repr(C)]
 pub struct perftest_c_panic_output_new_result {
@@ -7582,25 +8899,36 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                             let callback_arg_0_w2 = ::std::vec::Vec::len(
                                 &callback_arg_0_w0_source,
                             );
-                            let mut callback_arg_0_w0_commits = Vec::with_capacity(
-                                callback_arg_0_w2,
-                            );
-                            let mut callback_arg_0_w0: Vec<
-                                __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
-                            > = Vec::with_capacity(callback_arg_0_w2);
+                            unsafe fn callback_arg_0_w0_release_row(
+                                row: &__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
+                            ) {}
+                            let mut callback_arg_0_w0 = unsafe {
+                                ::prebindgen_runtime::OutputRows::<
+                                    __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
+                                >::new(callback_arg_0_w2, callback_arg_0_w0_release_row)
+                            };
                             for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
                                 ::core::iter::IntoIterator::into_iter(
                                     callback_arg_0_w0_source,
                                 ),
                             ) {
                                 let callback_arg_0_w4 = callback_arg_0_w1;
-                                callback_arg_0_w0
-                                    .push(__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0 {
-                                        v0: callback_arg_0_w4,
-                                    });
-                                callback_arg_0_w0_commits.push(move || {});
+                                unsafe {
+                                    callback_arg_0_w0
+                                        .write_next(__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0 {
+                                            v0: callback_arg_0_w4,
+                                        });
+                                }
+                                #[allow(
+                                    clippy::redundant_closure_call,
+                                    clippy::let_unit_value,
+                                    clippy::unused_unit
+                                )]
+                                let _: () = (|| -> () {})();
+                                unsafe {
+                                    callback_arg_0_w0.commit_row();
+                                }
                             }
-                            let callback_arg_0_w0 = callback_arg_0_w0.into_boxed_slice();
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
                             let callback_argument_0 = __PbRows {
@@ -7612,10 +8940,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 len: callback_arg_0_w0.len(),
                             };
                             {
-                                let _ = Box::into_raw(callback_arg_0_w0);
-                                for commit in callback_arg_0_w0_commits {
-                                    commit();
-                                }
+                                callback_arg_0_w0.commit();
                             }
                             let raw_result = unsafe {
                                 p0_callback_run(
@@ -7706,21 +9031,32 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
             );
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_callback_return_vector_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_callback_return_vector_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_callback_return_vector_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = ret_w1;
-                ret_w0
-                    .push(__PbRow_callback_return_vector_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_callback_return_vector_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_callback_return_vector_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -7733,10 +9069,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -7973,6 +9306,111 @@ pub unsafe extern "C" fn perftest_callback_return_zero(
             );
             let ret_w0 = source_value;
             let result = perftest_callback_return_zero_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_callback_row_resource_id_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_row_resource_id(
+    p0_w1: *const perftest_flat::CallbackRowResource,
+) -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_callback_row_resource_id_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::CallbackRowResource
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::CallbackRowResource = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::callback_row_resource_id(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_callback_row_resource_id_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_callback_row_resource_live_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_row_resource_live() -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_callback_row_resource_live_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::callback_row_resource_live();
+            let ret_w0 = source_value;
+            let result = perftest_callback_row_resource_live_result {
                 v0: ret_w0,
             };
             std::ptr::write(output, result);
@@ -8224,22 +9662,33 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
             let ret_w2 = <[i64]>::len(
                 ::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source),
             );
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_borrow_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_borrow_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_borrow_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 <[i64]>::iter(::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source)),
             ) {
                 let ret_w4: &i64 = ret_w1;
                 let ret_w4 = *ret_w4;
-                ret_w0
-                    .push(__PbRow_collection_borrow_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_borrow_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_borrow_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -8252,10 +9701,7 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -8423,10 +9869,21 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
             let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1
                 .values;
             let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-            let mut ret_w2: Vec<__PbRow_collection_bundle_ret_w2> = Vec::with_capacity(
-                ret_w4,
-            );
+            unsafe fn ret_w2_release_row(row: &__PbRow_collection_bundle_ret_w2) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_bundle_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
@@ -8434,16 +9891,24 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
                     Box::new(ret_w3),
                 );
                 let ret_w6_owner = __PbOutputOwner(ret_w6);
-                ret_w2
-                    .push(__PbRow_collection_bundle_ret_w2 {
-                        v0: ret_w6,
-                    });
-                ret_w2_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w6_owner);
-                    });
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_collection_bundle_ret_w2 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w6_owner);
+                })();
+                unsafe {
+                    ret_w2.commit_row();
+                }
             }
-            let ret_w2 = ret_w2.into_boxed_slice();
             let ret_w7 = ret_w1.tag;
             let result = perftest_collection_bundle_result {
                 v0: __PbRows {
@@ -8458,10 +9923,7 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
-                for commit in ret_w2_commits {
-                    commit();
-                }
+                ret_w2.commit();
             };
             Ok(())
         }
@@ -8564,24 +10026,39 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             let source_value = perftest_flat::collection_bytes(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<u8>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_bytes_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_bytes_ret_w0) {
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v0).into_rust());
+                    Ok(())
+                });
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_bytes_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
-                ret_w0
-                    .push(__PbRow_collection_bytes_ret_w0 {
-                        v0: ret_w4.0,
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w4);
-                    });
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_bytes_ret_w0 {
+                            v0: ret_w4.0,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w4);
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_bytes_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -8594,10 +10071,7 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -8949,10 +10423,12 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
             let source_value = perftest_flat::collection_enum(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<perftest_flat::SparseCode> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_enum_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_enum_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_enum_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -8965,13 +10441,22 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
                     perftest_flat::SparseCode::Eight => 8i32,
                     perftest_flat::SparseCode::Top => 2147483647i32,
                 };
-                ret_w0
-                    .push(__PbRow_collection_enum_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_enum_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_enum_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -8984,10 +10469,7 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -9413,10 +10895,21 @@ pub unsafe extern "C" fn perftest_collection_handles(
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
             let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-            let mut ret_w2: Vec<__PbRow_collection_handles_ret_w2> = Vec::with_capacity(
-                ret_w4,
-            );
+            unsafe fn ret_w2_release_row(row: &__PbRow_collection_handles_ret_w2) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_handles_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
@@ -9424,16 +10917,24 @@ pub unsafe extern "C" fn perftest_collection_handles(
                     Box::new(ret_w3),
                 );
                 let ret_w6_owner = __PbOutputOwner(ret_w6);
-                ret_w2
-                    .push(__PbRow_collection_handles_ret_w2 {
-                        v0: ret_w6,
-                    });
-                ret_w2_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w6_owner);
-                    });
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_collection_handles_ret_w2 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w6_owner);
+                })();
+                unsafe {
+                    ret_w2.commit_row();
+                }
             }
-            let ret_w2 = ret_w2.into_boxed_slice();
             let result = perftest_collection_handles_result {
                 v0: __PbRows {
                     data: if ret_w2.is_empty() {
@@ -9446,10 +10947,7 @@ pub unsafe extern "C" fn perftest_collection_handles(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
-                for commit in ret_w2_commits {
-                    commit();
-                }
+                ret_w2.commit();
                 success_committed = true;
             };
             Ok(())
@@ -9812,21 +11310,32 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_i64_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_i64_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_i64_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = ret_w1;
-                ret_w0
-                    .push(__PbRow_collection_i64_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_i64_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_i64_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -9839,10 +11348,7 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -10614,19 +12120,51 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
             let ret_w2 = perftest_flat::collection_late_values(&ret_w0);
             let ret_w3_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = ret_w2;
             let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let mut ret_w3_commits = Vec::with_capacity(ret_w5);
-            let mut ret_w3: Vec<__PbRow_collection_late_drop_ret_w3> = Vec::with_capacity(
-                ret_w5,
-            );
+            unsafe fn ret_w3_release_row(row: &__PbRow_collection_late_drop_ret_w3) {
+                if (row.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (row.v0).data as *mut __PbRow_collection_late_drop_ret_w7,
+                            (row.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+            }
+            let mut ret_w3 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_late_drop_ret_w3,
+                >::new(ret_w5, ret_w3_release_row)
+            };
             for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w3_source),
             ) {
                 let ret_w7_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w4;
                 let ret_w9 = ::std::vec::Vec::len(&ret_w7_source);
-                let mut ret_w7_commits = Vec::with_capacity(ret_w9);
-                let mut ret_w7: Vec<__PbRow_collection_late_drop_ret_w7> = Vec::with_capacity(
-                    ret_w9,
-                );
+                unsafe fn ret_w7_release_row(row: &__PbRow_collection_late_drop_ret_w7) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w7 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_late_drop_ret_w7,
+                    >::new(ret_w9, ret_w7_release_row)
+                };
                 for (ret_w10, ret_w8) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w7_source),
                 ) {
@@ -10634,36 +12172,49 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
                         Box::new(ret_w8),
                     );
                     let ret_w11_owner = __PbOutputOwner(ret_w11);
-                    ret_w7
-                        .push(__PbRow_collection_late_drop_ret_w7 {
-                            v0: ret_w11,
-                        });
-                    ret_w7_commits
-                        .push(move || {
-                            ::core::mem::forget(ret_w11_owner);
+                    unsafe {
+                        ret_w7
+                            .write_next(__PbRow_collection_late_drop_ret_w7 {
+                                v0: ret_w11,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w11_owner);
+                    })();
+                    unsafe {
+                        ret_w7.commit_row();
+                    }
+                }
+                unsafe {
+                    ret_w3
+                        .write_next(__PbRow_collection_late_drop_ret_w3 {
+                            v0: __PbRows {
+                                data: if ret_w7.is_empty() {
+                                    ::core::ptr::null()
+                                } else {
+                                    ret_w7.as_ptr().cast()
+                                },
+                                len: ret_w7.len(),
+                            },
                         });
                 }
-                let ret_w7 = ret_w7.into_boxed_slice();
-                ret_w3
-                    .push(__PbRow_collection_late_drop_ret_w3 {
-                        v0: __PbRows {
-                            data: if ret_w7.is_empty() {
-                                ::core::ptr::null()
-                            } else {
-                                ret_w7.as_ptr().cast()
-                            },
-                            len: ret_w7.len(),
-                        },
-                    });
-                ret_w3_commits
-                    .push(move || {
-                        let _ = Box::into_raw(ret_w7);
-                        for commit in ret_w7_commits {
-                            commit();
-                        }
-                    });
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w7.commit();
+                })();
+                unsafe {
+                    ret_w3.commit_row();
+                }
             }
-            let ret_w3 = ret_w3.into_boxed_slice();
             let result = perftest_collection_late_drop_result {
                 v0: __PbRows {
                     data: if ret_w3.is_empty() {
@@ -10676,10 +12227,7 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w3);
-                for commit in ret_w3_commits {
-                    commit();
-                }
+                ret_w3.commit();
                 success_committed = true;
             };
             Ok(())
@@ -10794,10 +12342,21 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
             let source_value = perftest_flat::collection_make_items();
             let ret_w0_source: ::std::vec::Vec<perftest_flat::CollectionItem> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_make_items_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_make_items_ret_w0) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_make_items_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -10807,16 +12366,24 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
                     Box::new(ret_w5.resource),
                 );
                 let ret_w6_owner = __PbOutputOwner(ret_w6);
-                ret_w0
-                    .push(__PbRow_collection_make_items_ret_w0 {
-                        v0: ret_w6,
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w6_owner);
-                    });
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_make_items_ret_w0 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w6_owner);
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_make_items_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -10829,10 +12396,7 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -10988,50 +12552,78 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
             let source_value = perftest_flat::collection_nested(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<i64>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_nested_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_nested_ret_w0) {
+                if (row.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (row.v0).data as *mut __PbRow_collection_nested_ret_w4,
+                            (row.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {}
+                }
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_nested_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
-                let mut ret_w4: Vec<__PbRow_collection_nested_ret_w4> = Vec::with_capacity(
-                    ret_w6,
-                );
+                unsafe fn ret_w4_release_row(row: &__PbRow_collection_nested_ret_w4) {}
+                let mut ret_w4 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_nested_ret_w4,
+                    >::new(ret_w6, ret_w4_release_row)
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
                     let ret_w8 = ret_w5;
-                    ret_w4
-                        .push(__PbRow_collection_nested_ret_w4 {
-                            v0: ret_w8,
-                        });
-                    ret_w4_commits.push(move || {});
+                    unsafe {
+                        ret_w4
+                            .write_next(__PbRow_collection_nested_ret_w4 {
+                                v0: ret_w8,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
+                    unsafe {
+                        ret_w4.commit_row();
+                    }
                 }
-                let ret_w4 = ret_w4.into_boxed_slice();
-                ret_w0
-                    .push(__PbRow_collection_nested_ret_w0 {
-                        v0: __PbRows {
-                            data: if ret_w4.is_empty() {
-                                ::core::ptr::null()
-                            } else {
-                                ret_w4.as_ptr().cast()
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_nested_ret_w0 {
+                            v0: __PbRows {
+                                data: if ret_w4.is_empty() {
+                                    ::core::ptr::null()
+                                } else {
+                                    ret_w4.as_ptr().cast()
+                                },
+                                len: ret_w4.len(),
                             },
-                            len: ret_w4.len(),
-                        },
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        let _ = Box::into_raw(ret_w4);
-                        for commit in ret_w4_commits {
-                            commit();
-                        }
-                    });
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4.commit();
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_nested_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -11044,10 +12636,7 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -11198,21 +12787,34 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
             ) {
                 let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
-                let mut ret_w4: Vec<__PbRow_collection_nested_each_ret_w4> = Vec::with_capacity(
-                    ret_w6,
-                );
+                unsafe fn ret_w4_release_row(
+                    row: &__PbRow_collection_nested_each_ret_w4,
+                ) {}
+                let mut ret_w4 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_nested_each_ret_w4,
+                    >::new(ret_w6, ret_w4_release_row)
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
                     let ret_w8 = ret_w5;
-                    ret_w4
-                        .push(__PbRow_collection_nested_each_ret_w4 {
-                            v0: ret_w8,
-                        });
-                    ret_w4_commits.push(move || {});
+                    unsafe {
+                        ret_w4
+                            .write_next(__PbRow_collection_nested_each_ret_w4 {
+                                v0: ret_w8,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
+                    unsafe {
+                        ret_w4.commit_row();
+                    }
                 }
-                let ret_w4 = ret_w4.into_boxed_slice();
                 let __pb_callback_value_0 = __PbRows {
                     data: if ret_w4.is_empty() {
                         ::core::ptr::null()
@@ -11227,10 +12829,7 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w4);
-                    for commit in ret_w4_commits {
-                        commit();
-                    }
+                    ret_w4.commit();
                 })();
                 unsafe {
                     __pb_callback
@@ -11449,19 +13048,56 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
             );
             let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_nested_handles_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(
+                row: &__PbRow_collection_nested_handles_ret_w0,
+            ) {
+                if (row.v0).len != 0 {
+                    let rows = Box::from_raw(
+                        std::ptr::slice_from_raw_parts_mut(
+                            (row.v0).data
+                                as *mut __PbRow_collection_nested_handles_ret_w4,
+                            (row.v0).len,
+                        ),
+                    );
+                    for row in rows.iter() {
+                        if !(row.v0).is_null() {
+                            let _ = ::prebindgen_runtime::boundary(|| {
+                                drop(
+                                    Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                                );
+                                Ok(())
+                            });
+                        }
+                    }
+                }
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_nested_handles_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
-                let mut ret_w4: Vec<__PbRow_collection_nested_handles_ret_w4> = Vec::with_capacity(
-                    ret_w6,
-                );
+                unsafe fn ret_w4_release_row(
+                    row: &__PbRow_collection_nested_handles_ret_w4,
+                ) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w4 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_nested_handles_ret_w4,
+                    >::new(ret_w6, ret_w4_release_row)
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
@@ -11469,36 +13105,49 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                         Box::new(ret_w5),
                     );
                     let ret_w8_owner = __PbOutputOwner(ret_w8);
-                    ret_w4
-                        .push(__PbRow_collection_nested_handles_ret_w4 {
-                            v0: ret_w8,
-                        });
-                    ret_w4_commits
-                        .push(move || {
-                            ::core::mem::forget(ret_w8_owner);
+                    unsafe {
+                        ret_w4
+                            .write_next(__PbRow_collection_nested_handles_ret_w4 {
+                                v0: ret_w8,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w8_owner);
+                    })();
+                    unsafe {
+                        ret_w4.commit_row();
+                    }
+                }
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_nested_handles_ret_w0 {
+                            v0: __PbRows {
+                                data: if ret_w4.is_empty() {
+                                    ::core::ptr::null()
+                                } else {
+                                    ret_w4.as_ptr().cast()
+                                },
+                                len: ret_w4.len(),
+                            },
                         });
                 }
-                let ret_w4 = ret_w4.into_boxed_slice();
-                ret_w0
-                    .push(__PbRow_collection_nested_handles_ret_w0 {
-                        v0: __PbRows {
-                            data: if ret_w4.is_empty() {
-                                ::core::ptr::null()
-                            } else {
-                                ret_w4.as_ptr().cast()
-                            },
-                            len: ret_w4.len(),
-                        },
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        let _ = Box::into_raw(ret_w4);
-                        for commit in ret_w4_commits {
-                            commit();
-                        }
-                    });
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4.commit();
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_nested_handles_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -11511,10 +13160,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -11710,10 +13356,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
             ) {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
-                let mut ret_w4: Vec<__PbRow_collection_nested_handles_each_ret_w4> = Vec::with_capacity(
-                    ret_w6,
-                );
+                unsafe fn ret_w4_release_row(
+                    row: &__PbRow_collection_nested_handles_each_ret_w4,
+                ) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w4 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_nested_handles_each_ret_w4,
+                    >::new(ret_w6, ret_w4_release_row)
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
@@ -11721,16 +13380,24 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                         Box::new(ret_w5),
                     );
                     let ret_w8_owner = __PbOutputOwner(ret_w8);
-                    ret_w4
-                        .push(__PbRow_collection_nested_handles_each_ret_w4 {
-                            v0: ret_w8,
-                        });
-                    ret_w4_commits
-                        .push(move || {
-                            ::core::mem::forget(ret_w8_owner);
-                        });
+                    unsafe {
+                        ret_w4
+                            .write_next(__PbRow_collection_nested_handles_each_ret_w4 {
+                                v0: ret_w8,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w8_owner);
+                    })();
+                    unsafe {
+                        ret_w4.commit_row();
+                    }
                 }
-                let ret_w4 = ret_w4.into_boxed_slice();
                 let __pb_callback_value_0 = __PbRows {
                     data: if ret_w4.is_empty() {
                         ::core::ptr::null()
@@ -11745,10 +13412,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w4);
-                    for commit in ret_w4_commits {
-                        commit();
-                    }
+                    ret_w4.commit();
                 })();
                 unsafe {
                     __pb_callback
@@ -11823,22 +13487,33 @@ pub unsafe extern "C" fn perftest_collection_numbers(out1: *mut i64) -> __PbRows
             let ret_w4 = <[i64]>::len(
                 ::core::convert::AsRef::<[i64]>::as_ref(ret_w2_source),
             );
-            let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-            let mut ret_w2: Vec<__PbRow_collection_numbers_ret_w2> = Vec::with_capacity(
-                ret_w4,
-            );
+            unsafe fn ret_w2_release_row(row: &__PbRow_collection_numbers_ret_w2) {}
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_numbers_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 <[i64]>::iter(::core::convert::AsRef::<[i64]>::as_ref(ret_w2_source)),
             ) {
                 let ret_w6: &i64 = ret_w3;
                 let ret_w6 = *ret_w6;
-                ret_w2
-                    .push(__PbRow_collection_numbers_ret_w2 {
-                        v0: ret_w6,
-                    });
-                ret_w2_commits.push(move || {});
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_collection_numbers_ret_w2 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w2.commit_row();
+                }
             }
-            let ret_w2 = ret_w2.into_boxed_slice();
             let ret_w7: &i64 = &ret_w1.tag;
             let ret_w7 = *ret_w7;
             let result = perftest_collection_numbers_result {
@@ -11854,10 +13529,7 @@ pub unsafe extern "C" fn perftest_collection_numbers(out1: *mut i64) -> __PbRows
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
-                for commit in ret_w2_commits {
-                    commit();
-                }
+                ret_w2.commit();
             };
             Ok(())
         }
@@ -11980,21 +13652,32 @@ pub unsafe extern "C" fn perftest_collection_optional(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<i64> = ret_w1;
                 let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-                let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-                let mut ret_w2: Vec<__PbRow_collection_optional_ret_w2> = Vec::with_capacity(
-                    ret_w4,
-                );
+                unsafe fn ret_w2_release_row(row: &__PbRow_collection_optional_ret_w2) {}
+                let mut ret_w2 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_optional_ret_w2,
+                    >::new(ret_w4, ret_w2_release_row)
+                };
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
                     let ret_w6 = ret_w3;
-                    ret_w2
-                        .push(__PbRow_collection_optional_ret_w2 {
-                            v0: ret_w6,
-                        });
-                    ret_w2_commits.push(move || {});
+                    unsafe {
+                        ret_w2
+                            .write_next(__PbRow_collection_optional_ret_w2 {
+                                v0: ret_w6,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
+                    unsafe {
+                        ret_w2.commit_row();
+                    }
                 }
-                let ret_w2 = ret_w2.into_boxed_slice();
                 let ret_w0_values = (
                     __PbRows {
                         data: if ret_w2.is_empty() {
@@ -12009,10 +13692,7 @@ pub unsafe extern "C" fn perftest_collection_optional(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
-                        for commit in ret_w2_commits {
-                            commit();
-                        }
+                        ret_w2.commit();
                     }),
                 )
             } else {
@@ -12344,10 +14024,23 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
                 let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-                let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-                let mut ret_w2: Vec<__PbRow_collection_optional_handles_ret_w2> = Vec::with_capacity(
-                    ret_w4,
-                );
+                unsafe fn ret_w2_release_row(
+                    row: &__PbRow_collection_optional_handles_ret_w2,
+                ) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w2 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_optional_handles_ret_w2,
+                    >::new(ret_w4, ret_w2_release_row)
+                };
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
@@ -12355,16 +14048,24 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                         Box::new(ret_w3),
                     );
                     let ret_w6_owner = __PbOutputOwner(ret_w6);
-                    ret_w2
-                        .push(__PbRow_collection_optional_handles_ret_w2 {
-                            v0: ret_w6,
-                        });
-                    ret_w2_commits
-                        .push(move || {
-                            ::core::mem::forget(ret_w6_owner);
-                        });
+                    unsafe {
+                        ret_w2
+                            .write_next(__PbRow_collection_optional_handles_ret_w2 {
+                                v0: ret_w6,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w6_owner);
+                    })();
+                    unsafe {
+                        ret_w2.commit_row();
+                    }
                 }
-                let ret_w2 = ret_w2.into_boxed_slice();
                 let ret_w0_values = (
                     __PbRows {
                         data: if ret_w2.is_empty() {
@@ -12379,10 +14080,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
-                        for commit in ret_w2_commits {
-                            commit();
-                        }
+                        ret_w2.commit();
                     }),
                 )
             } else {
@@ -12739,10 +14437,14 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<Option<i64>> = ret_w1;
                 let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-                let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-                let mut ret_w2: Vec<__PbRow_collection_optional_items_ret_w2> = Vec::with_capacity(
-                    ret_w4,
-                );
+                unsafe fn ret_w2_release_row(
+                    row: &__PbRow_collection_optional_items_ret_w2,
+                ) {}
+                let mut ret_w2 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_optional_items_ret_w2,
+                    >::new(ret_w4, ret_w2_release_row)
+                };
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
@@ -12755,19 +14457,27 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                     } else {
                         (0i32, (0,), None)
                     };
-                    ret_w2
-                        .push(__PbRow_collection_optional_items_ret_w2 {
-                            v0: ret_w6,
-                            v1: ret_w6_value0,
-                        });
-                    ret_w2_commits
-                        .push(move || {
-                            if let Some(ret_w6_action) = ret_w6_commit {
-                                ret_w6_action();
-                            }
-                        });
+                    unsafe {
+                        ret_w2
+                            .write_next(__PbRow_collection_optional_items_ret_w2 {
+                                v0: ret_w6,
+                                v1: ret_w6_value0,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        if let Some(ret_w6_action) = ret_w6_commit {
+                            ret_w6_action();
+                        }
+                    })();
+                    unsafe {
+                        ret_w2.commit_row();
+                    }
                 }
-                let ret_w2 = ret_w2.into_boxed_slice();
                 let ret_w0_values = (
                     __PbRows {
                         data: if ret_w2.is_empty() {
@@ -12782,10 +14492,7 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
-                        for commit in ret_w2_commits {
-                            commit();
-                        }
+                        ret_w2.commit();
                     }),
                 )
             } else {
@@ -13116,10 +14823,12 @@ pub unsafe extern "C" fn perftest_collection_options(
             );
             let ret_w0_source: ::std::vec::Vec<Option<i64>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_options_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_options_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_options_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -13130,19 +14839,27 @@ pub unsafe extern "C" fn perftest_collection_options(
                 } else {
                     (0i32, (0,), None)
                 };
-                ret_w0
-                    .push(__PbRow_collection_options_ret_w0 {
-                        v0: ret_w4,
-                        v1: ret_w4_value0,
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        if let Some(ret_w4_action) = ret_w4_commit {
-                            ret_w4_action();
-                        }
-                    });
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_options_ret_w0 {
+                            v0: ret_w4,
+                            v1: ret_w4_value0,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    if let Some(ret_w4_action) = ret_w4_commit {
+                        ret_w4_action();
+                    }
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_options_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -13155,10 +14872,7 @@ pub unsafe extern "C" fn perftest_collection_options(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -13437,21 +15151,32 @@ pub unsafe extern "C" fn perftest_collection_probe(
             );
             let ret_w0_source: ::std::vec::Vec<char> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_probe_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_probe_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_probe_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = (ret_w1) as u32;
-                ret_w0
-                    .push(__PbRow_collection_probe_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_probe_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_probe_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -13464,10 +15189,7 @@ pub unsafe extern "C" fn perftest_collection_probe(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -13652,21 +15374,32 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
             );
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_resource_ids_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_resource_ids_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_resource_ids_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = ret_w1;
-                ret_w0
-                    .push(__PbRow_collection_resource_ids_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_resource_ids_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_resource_ids_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -13679,10 +15412,7 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -13880,21 +15610,32 @@ pub unsafe extern "C" fn perftest_collection_result(
             };
             let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
             let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-            let mut ret_w2: Vec<__PbRow_collection_result_ret_w2> = Vec::with_capacity(
-                ret_w4,
-            );
+            unsafe fn ret_w2_release_row(row: &__PbRow_collection_result_ret_w2) {}
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_result_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
                 let ret_w6 = ret_w3;
-                ret_w2
-                    .push(__PbRow_collection_result_ret_w2 {
-                        v0: ret_w6,
-                    });
-                ret_w2_commits.push(move || {});
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_collection_result_ret_w2 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w2.commit_row();
+                }
             }
-            let ret_w2 = ret_w2.into_boxed_slice();
             let result = perftest_collection_result_result {
                 v0: __PbRows {
                     data: if ret_w2.is_empty() {
@@ -13907,10 +15648,7 @@ pub unsafe extern "C" fn perftest_collection_result(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
-                for commit in ret_w2_commits {
-                    commit();
-                }
+                ret_w2.commit();
                 success_committed = true;
             };
             Ok(())
@@ -14287,10 +16025,23 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
             let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
-                let mut ret_w4_commits = Vec::with_capacity(ret_w6);
-                let mut ret_w4: Vec<__PbRow_collection_result_optional_ret_w4> = Vec::with_capacity(
-                    ret_w6,
-                );
+                unsafe fn ret_w4_release_row(
+                    row: &__PbRow_collection_result_optional_ret_w4,
+                ) {
+                    if !(row.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                            );
+                            Ok(())
+                        });
+                    }
+                }
+                let mut ret_w4 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_collection_result_optional_ret_w4,
+                    >::new(ret_w6, ret_w4_release_row)
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
@@ -14298,16 +16049,24 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                         Box::new(ret_w5),
                     );
                     let ret_w8_owner = __PbOutputOwner(ret_w8);
-                    ret_w4
-                        .push(__PbRow_collection_result_optional_ret_w4 {
-                            v0: ret_w8,
-                        });
-                    ret_w4_commits
-                        .push(move || {
-                            ::core::mem::forget(ret_w8_owner);
-                        });
+                    unsafe {
+                        ret_w4
+                            .write_next(__PbRow_collection_result_optional_ret_w4 {
+                                v0: ret_w8,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        ::core::mem::forget(ret_w8_owner);
+                    })();
+                    unsafe {
+                        ret_w4.commit_row();
+                    }
                 }
-                let ret_w4 = ret_w4.into_boxed_slice();
                 let ret_w2_values = (
                     __PbRows {
                         data: if ret_w4.is_empty() {
@@ -14322,10 +16081,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                     1i32,
                     ret_w2_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w4);
-                        for commit in ret_w4_commits {
-                            commit();
-                        }
+                        ret_w4.commit();
                     }),
                 )
             } else {
@@ -14713,21 +16469,32 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_slice_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_slice_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_slice_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = ret_w1;
-                ret_w0
-                    .push(__PbRow_collection_slice_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_slice_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_slice_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -14740,10 +16507,7 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -14949,24 +16713,39 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             let source_value = perftest_flat::collection_text(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<String> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_collection_text_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_collection_text_ret_w0) {
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((row.v0).into_rust());
+                    Ok(())
+                });
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_text_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
-                ret_w0
-                    .push(__PbRow_collection_text_ret_w0 {
-                        v0: ret_w4.0,
-                    });
-                ret_w0_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w4);
-                    });
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_collection_text_ret_w0 {
+                            v0: ret_w4.0,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w4);
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_collection_text_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -14979,10 +16758,7 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -15357,10 +17133,23 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::CollectionItem> = ret_w0;
             let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-            let mut ret_w2: Vec<__PbRow_collection_try_make_items_ret_w2> = Vec::with_capacity(
-                ret_w4,
-            );
+            unsafe fn ret_w2_release_row(
+                row: &__PbRow_collection_try_make_items_ret_w2,
+            ) {
+                if !(row.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            let mut ret_w2 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_collection_try_make_items_ret_w2,
+                >::new(ret_w4, ret_w2_release_row)
+            };
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
@@ -15370,16 +17159,24 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
                     Box::new(ret_w7.resource),
                 );
                 let ret_w8_owner = __PbOutputOwner(ret_w8);
-                ret_w2
-                    .push(__PbRow_collection_try_make_items_ret_w2 {
-                        v0: ret_w8,
-                    });
-                ret_w2_commits
-                    .push(move || {
-                        ::core::mem::forget(ret_w8_owner);
-                    });
+                unsafe {
+                    ret_w2
+                        .write_next(__PbRow_collection_try_make_items_ret_w2 {
+                            v0: ret_w8,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ::core::mem::forget(ret_w8_owner);
+                })();
+                unsafe {
+                    ret_w2.commit_row();
+                }
             }
-            let ret_w2 = ret_w2.into_boxed_slice();
             let result = perftest_collection_try_make_items_result {
                 v0: __PbRows {
                     data: if ret_w2.is_empty() {
@@ -15392,10 +17189,7 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
-                for commit in ret_w2_commits {
-                    commit();
-                }
+                ret_w2.commit();
                 success_committed = true;
             };
             Ok(())
@@ -15977,21 +17771,32 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
             let source_value = perftest_flat::getter_counts();
             let ret_w0_source: ::std::vec::Vec<usize> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
-            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
-            let mut ret_w0: Vec<__PbRow_getter_counts_ret_w0> = Vec::with_capacity(
-                ret_w2,
-            );
+            unsafe fn ret_w0_release_row(row: &__PbRow_getter_counts_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_getter_counts_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
                 let ret_w4 = ret_w1;
-                ret_w0
-                    .push(__PbRow_getter_counts_ret_w0 {
-                        v0: ret_w4,
-                    });
-                ret_w0_commits.push(move || {});
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_getter_counts_ret_w0 {
+                            v0: ret_w4,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
             }
-            let ret_w0 = ret_w0.into_boxed_slice();
             let result = perftest_getter_counts_result {
                 v0: __PbRows {
                     data: if ret_w0.is_empty() {
@@ -16004,10 +17809,7 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                for commit in ret_w0_commits {
-                    commit();
-                }
+                ret_w0.commit();
             };
             Ok(())
         }
@@ -25271,10 +27073,12 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::Payload> = ret_w1;
                 let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-                let mut ret_w2_commits = Vec::with_capacity(ret_w4);
-                let mut ret_w2: Vec<__PbRow_storage_get_vec_ret_w2> = Vec::with_capacity(
-                    ret_w4,
-                );
+                unsafe fn ret_w2_release_row(row: &__PbRow_storage_get_vec_ret_w2) {}
+                let mut ret_w2 = unsafe {
+                    ::prebindgen_runtime::OutputRows::<
+                        __PbRow_storage_get_vec_ret_w2,
+                    >::new(ret_w4, ret_w2_release_row)
+                };
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
@@ -25288,16 +27092,25 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
                     let ret_w10 = *ret_w10;
                     let ret_w11: &bool = &ret_w7.flag;
                     let ret_w11 = u8::from(*ret_w11);
-                    ret_w2
-                        .push(__PbRow_storage_get_vec_ret_w2 {
-                            v0: ret_w8,
-                            v1: ret_w9,
-                            v2: ret_w10,
-                            v3: ret_w11,
-                        });
-                    ret_w2_commits.push(move || {});
+                    unsafe {
+                        ret_w2
+                            .write_next(__PbRow_storage_get_vec_ret_w2 {
+                                v0: ret_w8,
+                                v1: ret_w9,
+                                v2: ret_w10,
+                                v3: ret_w11,
+                            });
+                    }
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {})();
+                    unsafe {
+                        ret_w2.commit_row();
+                    }
                 }
-                let ret_w2 = ret_w2.into_boxed_slice();
                 let ret_w0_values = (
                     __PbRows {
                         data: if ret_w2.is_empty() {
@@ -25312,10 +27125,7 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
-                        for commit in ret_w2_commits {
-                            commit();
-                        }
+                        ret_w2.commit();
                     }),
                 )
             } else {
@@ -27403,6 +29213,14 @@ const _: () = assert!(
     "flat object `CallbackReturnResource` must have nonzero size"
 );
 const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CallbackRow > () != 0,
+    "flat object `CallbackRow` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CallbackRowResource > () != 0,
+    "flat object `CallbackRowResource` must have nonzero size"
+);
+const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CollectionBundle > () != 0,
     "flat object `CollectionBundle` must have nonzero size"
 );
@@ -27441,6 +29259,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::GetterOwner > () != 0,
     "flat object `GetterOwner` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::NativeBulkNested > () != 0,
+    "flat object `NativeBulkNested` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::NicheChoiceHandle > () != 0,

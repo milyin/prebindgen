@@ -1,6 +1,7 @@
 //! Retained source callbacks exercised by the Kotlin/JNI covertest.
 use crate::CallbackReturnResource;
 use crate::Priority;
+use crate::ResultFailure;
 use prebindgen_proc_macro::prebindgen;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -502,6 +503,37 @@ pub fn native_bulk_pair(fail_at: i64) -> NativeBulkNested {
 #[prebindgen]
 pub fn native_bulk_callback(fail_at: i64, callback: impl Fn(Vec<Vec<CallbackRow>>)) {
     callback(native_bulk_nested(fail_at));
+}
+
+// C buffered-output failure injection. Copies are explicit test projections,
+// allowing a later field to fail after prior rows have transferred ownership.
+#[prebindgen]
+pub fn c_output_rows(fail_at: i64) -> Result<Vec<CallbackRow>, ResultFailure> {
+    Ok(native_bulk_rows(fail_at))
+}
+#[prebindgen]
+pub fn c_output_nested(fail_at: i64) -> Result<Vec<Vec<CallbackRow>>, ResultFailure> {
+    Ok(native_bulk_nested(fail_at))
+}
+#[prebindgen]
+pub fn c_output_pair(fail_at: i64) -> Result<NativeBulkNested, ResultFailure> {
+    Ok(native_bulk_pair(fail_at))
+}
+#[prebindgen]
+pub fn c_output_callback(fail_at: i64, callback: impl Fn(Vec<Vec<CallbackRow>>)) {
+    callback(native_bulk_nested(fail_at));
+}
+#[prebindgen]
+pub fn c_output_first(row: &CallbackRow) -> CallbackRowResource {
+    row.first.clone()
+}
+#[prebindgen]
+pub fn c_output_label(row: &CallbackRow) -> String {
+    row.label.clone()
+}
+#[prebindgen]
+pub fn c_output_second(row: &CallbackRow) -> CallbackRowResource {
+    row.second.clone()
 }
 #[prebindgen]
 pub fn callback_rows_owned(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {

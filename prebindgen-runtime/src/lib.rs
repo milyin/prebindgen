@@ -2,6 +2,8 @@
 #![warn(missing_docs)]
 mod input;
 pub use input::{DynamicInputs, FixedInputs, SharedInputs};
+mod output;
+pub use output::OutputRows;
 mod callback;
 #[cfg(test)]
 mod diagnostics_tests;
