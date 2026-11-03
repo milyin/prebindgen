@@ -1316,12 +1316,14 @@ unsafe fn __pb_report_collection_error(
         let ret_w0 = source_error;
         let ret_w1_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0
             .resources;
-        let ret_w3 = ret_w1_source.len();
+        let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
         let mut ret_w1_commits = Vec::with_capacity(ret_w3);
         let mut ret_w1: Vec<__PbRow_error_collection_error_ret_w1> = Vec::with_capacity(
             ret_w3,
         );
-        for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
+        for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+            ::core::iter::IntoIterator::into_iter(ret_w1_source),
+        ) {
             let ret_w5: *mut perftest_flat::OwnedResource = Box::into_raw(
                 Box::new(ret_w2),
             );
@@ -1337,19 +1339,23 @@ unsafe fn __pb_report_collection_error(
         }
         let ret_w1 = ret_w1.into_boxed_slice();
         let ret_w6_source: ::std::vec::Vec<Vec<i64>> = ret_w0.codes;
-        let ret_w8 = ret_w6_source.len();
+        let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
         let mut ret_w6_commits = Vec::with_capacity(ret_w8);
         let mut ret_w6: Vec<__PbRow_error_collection_error_ret_w6> = Vec::with_capacity(
             ret_w8,
         );
-        for (ret_w9, ret_w7) in ret_w6_source.into_iter().enumerate() {
+        for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
+            ::core::iter::IntoIterator::into_iter(ret_w6_source),
+        ) {
             let ret_w10_source: ::std::vec::Vec<i64> = ret_w7;
-            let ret_w12 = ret_w10_source.len();
+            let ret_w12 = ::std::vec::Vec::len(&ret_w10_source);
             let mut ret_w10_commits = Vec::with_capacity(ret_w12);
             let mut ret_w10: Vec<__PbRow_error_collection_error_ret_w10> = Vec::with_capacity(
                 ret_w12,
             );
-            for (ret_w13, ret_w11) in ret_w10_source.into_iter().enumerate() {
+            for (ret_w13, ret_w11) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w10_source),
+            ) {
                 let ret_w14 = ret_w11;
                 ret_w10
                     .push(__PbRow_error_collection_error_ret_w10 {
@@ -7573,17 +7579,20 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                     let p0_callback_value = move |callback_source_0: Vec<i64>| {
                         let result = ::prebindgen_runtime::boundary(|| {
                             let callback_arg_0_w0_source: ::std::vec::Vec<i64> = callback_source_0;
-                            let callback_arg_0_w2 = callback_arg_0_w0_source.len();
+                            let callback_arg_0_w2 = ::std::vec::Vec::len(
+                                &callback_arg_0_w0_source,
+                            );
                             let mut callback_arg_0_w0_commits = Vec::with_capacity(
                                 callback_arg_0_w2,
                             );
                             let mut callback_arg_0_w0: Vec<
                                 __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
                             > = Vec::with_capacity(callback_arg_0_w2);
-                            for (callback_arg_0_w3, callback_arg_0_w1) in callback_arg_0_w0_source
-                                .into_iter()
-                                .enumerate()
-                            {
+                            for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
+                                ::core::iter::IntoIterator::into_iter(
+                                    callback_arg_0_w0_source,
+                                ),
+                            ) {
                                 let callback_arg_0_w4 = callback_arg_0_w1;
                                 callback_arg_0_w0
                                     .push(__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0 {
@@ -7696,12 +7705,14 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                 __prebindgen_argument_0,
             );
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_callback_return_vector_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 ret_w0
                     .push(__PbRow_callback_return_vector_ret_w0 {
@@ -8210,12 +8221,16 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = <[i64]>::len(
+                ::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source),
+            );
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_borrow_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                <[i64]>::iter(::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source)),
+            ) {
                 let ret_w4: &i64 = ret_w1;
                 let ret_w4 = *ret_w4;
                 ret_w0
@@ -8321,8 +8336,12 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.iter().enumerate() {
+            let ret_w2 = <[i64]>::len(
+                ::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source),
+            );
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                <[i64]>::iter(::core::convert::AsRef::<[i64]>::as_ref(ret_w0_source)),
+            ) {
                 let ret_w4: &i64 = ret_w1;
                 let ret_w4 = *ret_w4;
                 let __pb_callback_value_0 = ret_w4;
@@ -8403,12 +8422,14 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
             let ret_w1 = ret_w0;
             let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1
                 .values;
-            let ret_w4 = ret_w2_source.len();
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_bundle_ret_w2> = Vec::with_capacity(
                 ret_w4,
             );
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
                     Box::new(ret_w3),
                 );
@@ -8542,12 +8563,14 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_bytes(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<u8>> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_bytes_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
                 ret_w0
                     .push(__PbRow_collection_bytes_ret_w0 {
@@ -8667,8 +8690,10 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_bytes(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<u8>> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
                 let __pb_callback_value_0 = ret_w4.0;
                 #[allow(
@@ -8923,12 +8948,14 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_enum(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<perftest_flat::SparseCode> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_enum_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4: i32 = match &(ret_w1) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
                     perftest_flat::SparseCode::MinusTwo => -2i32,
@@ -9057,8 +9084,10 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_enum(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<perftest_flat::SparseCode> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4: i32 = match &(ret_w1) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
                     perftest_flat::SparseCode::MinusTwo => -2i32,
@@ -9383,12 +9412,14 @@ pub unsafe extern "C" fn perftest_collection_handles(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_handles_ret_w2> = Vec::with_capacity(
                 ret_w4,
             );
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
                     Box::new(ret_w3),
                 );
@@ -9644,8 +9675,10 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
                     Box::new(ret_w3),
                 );
@@ -9778,12 +9811,14 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_i64_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 ret_w0
                     .push(__PbRow_collection_i64_ret_w0 {
@@ -9888,8 +9923,10 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_i64(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 let __pb_callback_value_0 = ret_w4;
                 #[allow(
@@ -10576,19 +10613,23 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
             };
             let ret_w2 = perftest_flat::collection_late_values(&ret_w0);
             let ret_w3_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = ret_w2;
-            let ret_w5 = ret_w3_source.len();
+            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
             let mut ret_w3_commits = Vec::with_capacity(ret_w5);
             let mut ret_w3: Vec<__PbRow_collection_late_drop_ret_w3> = Vec::with_capacity(
                 ret_w5,
             );
-            for (ret_w6, ret_w4) in ret_w3_source.into_iter().enumerate() {
+            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            ) {
                 let ret_w7_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w4;
-                let ret_w9 = ret_w7_source.len();
+                let ret_w9 = ::std::vec::Vec::len(&ret_w7_source);
                 let mut ret_w7_commits = Vec::with_capacity(ret_w9);
                 let mut ret_w7: Vec<__PbRow_collection_late_drop_ret_w7> = Vec::with_capacity(
                     ret_w9,
                 );
-                for (ret_w10, ret_w8) in ret_w7_source.into_iter().enumerate() {
+                for (ret_w10, ret_w8) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w7_source),
+                ) {
                     let ret_w11: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w8),
                     );
@@ -10752,12 +10793,14 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
         {
             let source_value = perftest_flat::collection_make_items();
             let ret_w0_source: ::std::vec::Vec<perftest_flat::CollectionItem> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_make_items_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = perftest_flat::collection_item_into(ret_w1);
                 let ret_w5 = ret_w4;
                 let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -10944,19 +10987,23 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<i64>> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_nested_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_ret_w4> = Vec::with_capacity(
                     ret_w6,
                 );
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8 = ret_w5;
                     ret_w4
                         .push(__PbRow_collection_nested_ret_w4 {
@@ -11145,15 +11192,19 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<i64>> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4_source: ::std::vec::Vec<i64> = ret_w1;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_each_ret_w4> = Vec::with_capacity(
                     ret_w6,
                 );
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8 = ret_w5;
                     ret_w4
                         .push(__PbRow_collection_nested_each_ret_w4 {
@@ -11397,19 +11448,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                 __prebindgen_argument_0,
             );
             let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_nested_handles_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_handles_ret_w4> = Vec::with_capacity(
                     ret_w6,
                 );
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w5),
                     );
@@ -11649,15 +11704,19 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                 __prebindgen_argument_0,
             );
             let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::OwnedResource>> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_nested_handles_each_ret_w4> = Vec::with_capacity(
                     ret_w6,
                 );
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w5),
                     );
@@ -11761,12 +11820,16 @@ pub unsafe extern "C" fn perftest_collection_numbers(out1: *mut i64) -> __PbRows
             let ret_w0 = perftest_flat::collection_numbers_view(&source_value);
             let ret_w1 = &(ret_w0);
             let ret_w2_source: &::std::vec::Vec<i64> = &(&ret_w1.values);
-            let ret_w4 = ret_w2_source.len();
+            let ret_w4 = <[i64]>::len(
+                ::core::convert::AsRef::<[i64]>::as_ref(ret_w2_source),
+            );
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_numbers_ret_w2> = Vec::with_capacity(
                 ret_w4,
             );
-            for (ret_w5, ret_w3) in ret_w2_source.iter().enumerate() {
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                <[i64]>::iter(::core::convert::AsRef::<[i64]>::as_ref(ret_w2_source)),
+            ) {
                 let ret_w6: &i64 = ret_w3;
                 let ret_w6 = *ret_w6;
                 ret_w2
@@ -11916,12 +11979,14 @@ pub unsafe extern "C" fn perftest_collection_optional(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<i64> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_ret_w2> = Vec::with_capacity(
                     ret_w4,
                 );
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6 = ret_w3;
                     ret_w2
                         .push(__PbRow_collection_optional_ret_w2 {
@@ -12077,8 +12142,10 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<i64> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6 = ret_w3;
                     let __pb_callback_value_0 = ret_w6;
                     #[allow(
@@ -12276,12 +12343,14 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_handles_ret_w2> = Vec::with_capacity(
                     ret_w4,
                 );
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w3),
                     );
@@ -12490,8 +12559,10 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w3),
                     );
@@ -12667,12 +12738,14 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<Option<i64>> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_collection_optional_items_ret_w2> = Vec::with_capacity(
                     ret_w4,
                 );
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let (ret_w6, (ret_w6_value0,), ret_w6_commit) = if let Some(
                         ret_w7,
                     ) = ret_w3 {
@@ -12861,8 +12934,10 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<Option<i64>> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let (ret_w6, (ret_w6_value0,), ret_w6_commit) = if let Some(
                         ret_w7,
                     ) = ret_w3 {
@@ -13040,12 +13115,14 @@ pub unsafe extern "C" fn perftest_collection_options(
                 __prebindgen_argument_1,
             );
             let ret_w0_source: ::std::vec::Vec<Option<i64>> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_options_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let (ret_w4, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w1 {
                     let ret_w6 = ret_w5;
                     let ret_w4_values = (ret_w6,);
@@ -13196,8 +13273,10 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                 __prebindgen_argument_1,
             );
             let ret_w0_source: ::std::vec::Vec<Option<i64>> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let (ret_w4, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w1 {
                     let ret_w6 = ret_w5;
                     let ret_w4_values = (ret_w6,);
@@ -13357,12 +13436,14 @@ pub unsafe extern "C" fn perftest_collection_probe(
                 __prebindgen_argument_1,
             );
             let ret_w0_source: ::std::vec::Vec<char> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_probe_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = (ret_w1) as u32;
                 ret_w0
                     .push(__PbRow_collection_probe_ret_w0 {
@@ -13570,12 +13651,14 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                 __prebindgen_argument_0,
             );
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_resource_ids_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 ret_w0
                     .push(__PbRow_collection_resource_ids_ret_w0 {
@@ -13796,12 +13879,14 @@ pub unsafe extern "C" fn perftest_collection_result(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_result_ret_w2> = Vec::with_capacity(
                 ret_w4,
             );
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6 = ret_w3;
                 ret_w2
                     .push(__PbRow_collection_result_ret_w2 {
@@ -13970,8 +14055,10 @@ pub unsafe extern "C" fn perftest_collection_result_each(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6 = ret_w3;
                 let __pb_callback_value_0 = ret_w6;
                 #[allow(
@@ -14199,12 +14286,14 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
             };
             let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
-                let ret_w6 = ret_w4_source.len();
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
                 let mut ret_w4_commits = Vec::with_capacity(ret_w6);
                 let mut ret_w4: Vec<__PbRow_collection_result_optional_ret_w4> = Vec::with_capacity(
                     ret_w6,
                 );
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w5),
                     );
@@ -14475,8 +14564,10 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
             };
             let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
                 let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
-                let ret_w6 = ret_w4_source.len();
-                for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
                     let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
                         Box::new(ret_w5),
                     );
@@ -14621,12 +14712,14 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_slice_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 ret_w0
                     .push(__PbRow_collection_slice_ret_w0 {
@@ -14731,8 +14824,10 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 let __pb_callback_value_0 = ret_w4;
                 #[allow(
@@ -14853,12 +14948,14 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_text(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<String> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_collection_text_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
                 ret_w0
                     .push(__PbRow_collection_text_ret_w0 {
@@ -14978,8 +15075,10 @@ pub unsafe extern "C" fn perftest_collection_text_each(
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_text(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<String> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
                 let __pb_callback_value_0 = ret_w4.0;
                 #[allow(
@@ -15257,12 +15356,14 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::CollectionItem> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
             let mut ret_w2_commits = Vec::with_capacity(ret_w4);
             let mut ret_w2: Vec<__PbRow_collection_try_make_items_ret_w2> = Vec::with_capacity(
                 ret_w4,
             );
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6 = perftest_flat::collection_item_into(ret_w3);
                 let ret_w7 = ret_w6;
                 let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
@@ -15875,12 +15976,14 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
         {
             let source_value = perftest_flat::getter_counts();
             let ret_w0_source: ::std::vec::Vec<usize> = source_value;
-            let ret_w2 = ret_w0_source.len();
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let mut ret_w0_commits = Vec::with_capacity(ret_w2);
             let mut ret_w0: Vec<__PbRow_getter_counts_ret_w0> = Vec::with_capacity(
                 ret_w2,
             );
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = ret_w1;
                 ret_w0
                     .push(__PbRow_getter_counts_ret_w0 {
@@ -23805,8 +23908,10 @@ pub unsafe extern "C" fn perftest_sequence_late_drop_each(
             };
             let ret_w2 = perftest_flat::sequence_late_view(&ret_w0);
             let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w2;
-            let ret_w5 = ret_w3_source.len();
-            for (ret_w6, ret_w4) in ret_w3_source.into_iter().enumerate() {
+            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
+            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            ) {
                 let ret_w7: *mut perftest_flat::OwnedResource = Box::into_raw(
                     Box::new(ret_w4),
                 );
@@ -23930,8 +24035,10 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
                 }
             };
             let ret_w2_source: ::std::vec::Vec<perftest_flat::SequencePart> = ret_w0;
-            let ret_w4 = ret_w2_source.len();
-            for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            ) {
                 let ret_w6 = perftest_flat::sequence_part_into(ret_w3);
                 let ret_w7 = ret_w6;
                 let ret_w8 = ret_w7.number;
@@ -24035,8 +24142,10 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
         {
             let source_value = perftest_flat::sequence_scalars();
             let ret_w0_source: ::std::vec::Vec<perftest_flat::SequenceScalars> = source_value;
-            let ret_w2 = ret_w0_source.len();
-            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
                 let ret_w4 = perftest_flat::sequence_scalars_into(ret_w1);
                 let ret_w5 = ret_w4;
                 let ret_w6 = u8::from(ret_w5.flag);
@@ -25161,12 +25270,14 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::Payload> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
                 let mut ret_w2_commits = Vec::with_capacity(ret_w4);
                 let mut ret_w2: Vec<__PbRow_storage_get_vec_ret_w2> = Vec::with_capacity(
                     ret_w4,
                 );
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6 = perftest_flat::payload_to_struct(&ret_w3);
                     let ret_w7 = &(ret_w6);
                     let ret_w8: &i64 = &ret_w7.id;
@@ -25302,8 +25413,10 @@ pub unsafe extern "C" fn perftest_storage_get_vec_each(
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2_source: ::std::vec::Vec<perftest_flat::Payload> = ret_w1;
-                let ret_w4 = ret_w2_source.len();
-                for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
+                ) {
                     let ret_w6 = perftest_flat::payload_to_struct(&ret_w3);
                     let ret_w7 = &(ret_w6);
                     let ret_w8: &i64 = &ret_w7.id;

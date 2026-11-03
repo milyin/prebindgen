@@ -438,10 +438,27 @@ pub(crate) fn output<C: Codec>(
     }?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");
-    let (binding, iterator) = if mode == ProjectionMode::Owned {
-        (value, quote!(#owner.into_iter()))
+    let vector = matches!(view, SequenceView::Owned | SequenceView::Vector);
+    // Use standard operations explicitly: extension traits in the including
+    // module must not replace length/iteration and violate native row extents.
+    let (binding, iterator, extent) = if mode == ProjectionMode::Owned {
+        let extent = if vector {
+            quote!(::std::vec::Vec::len(&#owner))
+        } else {
+            quote!(<[#element_type]>::len(&#owner))
+        };
+        (
+            value,
+            quote!(::core::iter::IntoIterator::into_iter(#owner)),
+            extent,
+        )
     } else {
-        (quote!(&(#value)), quote!(#owner.iter()))
+        let slice = quote!(::core::convert::AsRef::<[#element_type]>::as_ref(#owner));
+        (
+            quote!(&(#value)),
+            quote!(<[#element_type]>::iter(#slice)),
+            quote!(<[#element_type]>::len(#slice)),
+        )
     };
     // Fix the binding's type, rather than relying on a custom Vec name or
     // Deref target to give len and iteration the standard collection semantics.
@@ -514,9 +531,9 @@ pub(crate) fn output<C: Codec>(
             binding_failure: None,
         },
         statements: quote! {
-            #binding let #length=#owner.len(); #declarations
+            #binding let #length=#extent; #declarations
             #begin
-            for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
+            for (#index,#element) in ::core::iter::Iterator::enumerate(#iterator){ #enter #prepare #store }
             #finish
         },
         values,
