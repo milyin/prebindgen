@@ -2748,6 +2748,92 @@ fn explicit_nested_outputs_have_no_hidden_bulk_frames_in_rows_or_callbacks() {
 }
 
 #[test]
+fn resource_free_callback_folds_omit_cleanup_bookkeeping() {
+    for ty in ["i64", "String", "Row", "Option<Vec<Option<Row>>>"] {
+        let generated = JniGen::builder()
+            .flat(flat(&format!("pub struct Row {{pub id:i64,pub text:String}}pub fn values()->Option<Vec<{ty}>>{{}}")))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Row)).fun(fun!(values).callback_return_only()))
+            .build().unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        for bookkeeping in [
+            "__pb_pending",
+            "__pb_processed",
+            "__pb_discard",
+            "CollectionOwners",
+            "cleanup: Throwable",
+        ] {
+            assert!(!text.contains(bookkeeping), "{ty}: {text}");
+        }
+        assert!(text.contains("current = fold("));
+    }
+}
+
+#[test]
+fn fixed_handle_callback_rows_use_lexical_cleanup_without_a_journal() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Owner=String;pub struct Row {pub first:Option<Owner>,pub second:Owner}pub fn values()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(values).callback_return_only()))
+        .build().unwrap();
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("__pb_pending"));
+    assert!(!text.contains("CollectionOwners"));
+    assert!(text.contains("owner.close()"));
+    assert!(text.contains("__pb_discard(failure, __pb_processed)"));
+    assert!(text.contains("current = fold("));
+}
+
+#[test]
+fn nested_callback_rows_reuse_one_owner_journal() {
+    for bulk in [false, true] {
+        let declaration = fun!(values).callback_return_only();
+        let mut generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Option<Vec<Option<Vec<Option<Owner>>>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(declaration))
+            .prepare()
+            .unwrap();
+        if bulk {
+            use prebindgen_declarations::{Output, SequenceDelivery};
+            let inner = Output::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+                element: Box::new(Output::Optional(Box::new(Output::Leaf))),
+            };
+            let recipe = Output::Optional(Box::new(Output::Sequence {
+                delivery: SequenceDelivery::Callback,
+                mode: None,
+                element: Box::new(Output::Optional(Box::new(Output::Bulk(Box::new(inner))))),
+            }));
+            let conversion = prebindgen_declarations::compile_output(
+                &generated,
+                &JniCodec,
+                "values_fold",
+                &recipe,
+                &(),
+            )
+            .unwrap();
+            generated.function_mut("values_fold").unwrap().ret.slot = Some(conversion);
+        }
+        let generated = generate(&generated).unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        assert_eq!(
+            text.matches("= test.CollectionOwners()").count(),
+            1,
+            "{text}"
+        );
+        assert!(text.contains("__pb_foldOwners).own("), "{text}");
+        assert!(text.contains("__pb_foldOwners!!.release()"));
+        assert!(text.contains("__pb_foldOwners?.close(failure)"));
+        assert!(!text.contains("__pb_pending"));
+    }
+}
+
+#[test]
 fn collection_output_owners_are_shared_without_row_cleanup_closures() {
     for bulk in [false, true] {
         let mut declaration = fun!(values);

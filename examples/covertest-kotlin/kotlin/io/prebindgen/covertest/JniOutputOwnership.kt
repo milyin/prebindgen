@@ -17,6 +17,7 @@ fun checkJniOutputOwnership() {
             { jniOutputFold(fail, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> close(listOf(row)) } },
             { jniOutputOptional(fail).filterNotNull().forEach(::close) },
             { jniOutputMixed(fail).flatten().forEach { it.close() } },
+            { jniOutputMixedFramesFold(fail, Unit) { _, row -> row.forEach { it.close() } } },
         )
         for (operation in operations) {
             var failed = false
@@ -28,6 +29,41 @@ fun checkJniOutputOwnership() {
             check(callbackRowResourceLive() == 0L) { "JNI output leaked after fail=$fail" }
         }
     }
+    // A later fold failure closes its own bulk-frame wrappers and unread frames,
+    // while the previously delivered frame remains owned by the user.
+    var accepted: List<CallbackRowResource> = emptyList()
+    var failedRow: List<CallbackRowResource> = emptyList()
+    val foldFailure = IllegalStateException("mixed bulk fold failure")
+    try {
+        jniOutputMixedFramesFold(-1, 0) { index, row ->
+            if (index == 1) { failedRow = row; throw foldFailure }
+            accepted = row
+            index + 1
+        }
+        error("mixed fold should throw")
+    } catch (caught: IllegalStateException) { check(caught === foldFailure) }
+    check(accepted.isNotEmpty() && accepted.none { it.isClosed })
+    check(failedRow.isNotEmpty() && failedRow.all { it.isClosed })
+    check(callbackRowResourceLive() == accepted.size.toLong())
+    accepted.forEach { it.close() }
+    check(callbackRowResourceLive() == 0L)
+    val cleanupDrops = callbackRowResourceDrops()
+    val original = IllegalStateException("fold failure before destructor panic")
+    try {
+        jniOutputFoldDropFold(0) { index, row ->
+            if (index == 1) { failedRow = row; throw original }
+            accepted = row
+            index + 1
+        }
+        error("destructor fold should throw")
+    } catch (caught: IllegalStateException) {
+        check(caught === original)
+        check(caught.suppressed.size == 1 && caught.suppressed[0].message == "Rust operation panicked")
+    }
+    check(accepted.none { it.isClosed } && failedRow.all { it.isClosed })
+    check(callbackRowResourceLive() == 2L && callbackRowResourceDrops() == cleanupDrops + 4L)
+    accepted.forEach { it.close() }
+    check(callbackRowResourceLive() == 0L && callbackRowResourceDrops() == cleanupDrops + 6L)
     for (mode in 13..18) check(CallbackFailureProbe.exercise(mode) == 1)
     val drops = callbackRowResourceDrops()
     try { JniOutputRuntimeProbe.rollback(); error("rollback did not preserve exception") }

@@ -88,7 +88,80 @@ fun checkOutputCleanup() {
         check(ownedResourceDrops() == before + 6uL)
     }
     OutputCleanupProbe.reset(-1)
+    checkCallbackFoldCleanup()
     checkCollectionOwnerFailures()
+}
+
+private fun checkCallbackFoldCleanup() {
+    val folds: List<((List<OutputCleanupRow>) -> Unit) -> Unit> = listOf(
+        { visit -> outputCleanupRowsFold(Unit) { _, row -> visit(listOf(row)) } },
+        { visit -> outputCleanupNestedFold(Unit) { _, rows -> visit(rows.orEmpty()) } },
+    )
+    fun handles(rows: List<OutputCleanupRow>) = rows.flatMap { listOfNotNull(it.first, it.second) }
+    for ((mode, decode) in folds.withIndex()) {
+        // Constructor failures clean only the failing and unread rows. Earlier
+        // rows have already been delivered to the fold and remain user-owned.
+        for (fail in listOf(-1L, 0L, 1L, 2L)) {
+            OutputCleanupProbe.reset(fail)
+            val accepted = mutableListOf<OutputCleanupRow>()
+            val before = ownedResourceDrops()
+            try {
+                decode { rows ->
+                    accepted.addAll(rows)
+                    // Reentry uses a separate ownership journal and no JNI lock.
+                    check(io.prebindgen.covertest.collections.collectionI64Fold(listOf(3L, 4L), 0L) { a, n -> a + n } == 7L)
+                }
+                check(fail == -1L)
+            } catch (caught: IllegalStateException) {
+                check(fail >= 0L && caught === OutputCleanupProbe.failure)
+            }
+            check(handles(accepted).none { it.isClosed }) { "earlier fold row closed: mode=$mode fail=$fail" }
+            val delivered = handles(accepted).toSet()
+            check(OutputCleanupProbe.seen.filter { it !in delivered }.all { it.isClosed })
+            handles(accepted).forEach { it.close() }
+            check(ownedResourceDrops() == before + 4uL) { "fold constructor leak: mode=$mode fail=$fail" }
+        }
+        // The fold itself fails after reconstruction; close() and take() inside
+        // user code must retain their normal ownership effects during rollback.
+        for (take in listOf(false, true)) {
+            OutputCleanupProbe.reset(-1)
+            val accepted = mutableListOf<OutputCleanupRow>()
+            val before = ownedResourceDrops()
+            val failure = IllegalStateException("fold user failure")
+            var retained: OwnedResource? = null
+            var failedRow: List<OutputCleanupRow> = emptyList()
+            try {
+                decode { rows ->
+                    if (rows.any { it.id == 1L }) {
+                        failedRow = rows
+                        rows.flatMap { listOfNotNull(it.second) }.forEach { it.close() }
+                        if (take) retained = rows.first { it.id == 1L }.first!!.take()
+                        throw failure
+                    }
+                    accepted.addAll(rows)
+                }
+                error("fold should fail")
+            } catch (caught: IllegalStateException) { check(caught === failure) }
+            check(handles(failedRow).all { it.isClosed })
+            check(handles(accepted).none { it.isClosed })
+            handles(accepted).forEach { it.close() }
+            check(ownedResourceDrops() == before + if (take) 3uL else 4uL)
+            if (take) {
+                check(ownedResourceId(checkNotNull(retained)) == 11L)
+                retained!!.close()
+                check(ownedResourceDrops() == before + 4uL)
+            }
+        }
+    }
+    OutputCleanupProbe.reset(-1)
+    val primitiveFailure = IllegalStateException("resource-free fold failure")
+    try {
+        io.prebindgen.covertest.collections.collectionI64Fold(listOf(1L, 2L, 3L), 0L) { a, n ->
+            if (n == 2L) throw primitiveFailure
+            a + n
+        }
+        error("primitive fold should throw")
+    } catch (caught: IllegalStateException) { check(caught === primitiveFailure) }
 }
 
 private fun checkCollectionOwnerFailures() {
@@ -108,6 +181,24 @@ private fun checkCollectionOwnerFailures() {
     check(journal.close(null) == null)
     check(ownedResourceId(rawOwner) == 99L)
     rawOwner.close()
+
+    // Successful fold delivery clears references without closing the delivered
+    // owners; the next row starts a fresh unread prefix in the same journal.
+    val reused = CollectionOwners()
+    var released = 0
+    fun owner() = object : NativeHandle(2L) {
+        override fun freeNative(raw: Long) { released++ }
+    }
+    val delivered = reused.own(owner())
+    reused.complete = true
+    reused.release()
+    check(!reused.complete && !delivered.isClosed)
+    val current = reused.own(owner())
+    check(!reused.unread() && reused.unread())
+    check(reused.close(null) == null)
+    check(released == 1 && current.isClosed && !delivered.isClosed)
+    delivered.close()
+    check(released == 2)
 
     // One failing destructor cannot prevent later owners from being released or
     // replace the original delivery failure. No native pointers are used here.

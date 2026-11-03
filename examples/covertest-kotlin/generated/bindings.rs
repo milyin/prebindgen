@@ -6540,6 +6540,28 @@ fn __pb_cleanup_objects_CallbackRowResource_CallbackRowResource_809fe3db74d18534
     );
 }
 #[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_CallbackRowResource_b77aa2e671341444<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let raw = unsafe {
+                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
+            }?;
+            if raw != 0 {
+                let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                    ::prebindgen_jni_runtime::drop_pointer::<
+                        perftest_flat::CallbackRowResource,
+                    >(raw)
+                });
+            }
+            Ok(())
+        },
+    );
+}
+#[allow(dead_code, non_snake_case)]
 fn __pb_cleanup_objects_CallbackRowResource_fe7840dff172f0fa<'local>(
     env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
@@ -83944,6 +83966,445 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1mixed_1frames_1fold_1e9474c6b8b0056cf<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i64,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::jni_output_mixed_frames(
+                __prebindgen_argument_0,
+            );
+            let ret_w0_source: ::std::vec::Vec<
+                Vec<perftest_flat::CallbackRowResource>,
+            > = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "([B)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                }?;
+                let mut ret_w4_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                    ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>(),
+                );
+                let ret_w5_source: &::std::vec::Vec<
+                    perftest_flat::CallbackRowResource,
+                > = &(&ret_w1);
+                let ret_w7 = <[perftest_flat::CallbackRowResource]>::len(
+                    ::core::convert::AsRef::<
+                        [perftest_flat::CallbackRowResource],
+                    >::as_ref(ret_w5_source),
+                );
+                let ret_w5 = ret_w4_writer
+                    .rows(
+                        ret_w7,
+                        ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
+                        ::core::mem::align_of::<__PbBulk_i64_59a3202a71549093>(),
+                    )?;
+                let ret_w5_owners = unsafe {
+                    ret_w4_writer
+                        .own_rows(
+                            ret_w5,
+                            ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
+                            __pb_cleanup_native_CallbackRowResource_3d076fe7283e5b05,
+                        )
+                };
+                for (ret_w8, ret_w6) in ::core::iter::Iterator::enumerate(
+                    <[perftest_flat::CallbackRowResource]>::iter(
+                        ::core::convert::AsRef::<
+                            [perftest_flat::CallbackRowResource],
+                        >::as_ref(ret_w5_source),
+                    ),
+                ) {
+                    let mut ret_w9 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ::core::clone::Clone::clone(ret_w6),
+                    });
+                    ret_w4_writer
+                        .write(
+                            (ret_w5.offset as usize
+                                + ret_w8
+                                    * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>())
+                                + ::core::mem::offset_of!(
+                                    __PbBulk_i64_59a3202a71549093, v0
+                                ),
+                            ((&mut *ret_w9)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::CallbackRowResource,
+                                >) as i64,
+                        )?;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        let _ = Box::into_raw(ret_w9).expose_provenance();
+                    })();
+                    unsafe {
+                        ret_w4_writer.commit_rows(ret_w5_owners, ret_w8 + 1);
+                    }
+                }
+                let ret_w5 = Some(ret_w5);
+                ret_w4_writer
+                    .range(
+                        ::core::mem::offset_of!(__PbBulk_Range_f673a6355cb08de9, v0),
+                        ret_w5,
+                    )?;
+                let ret_w4 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                    jni_environment
+                        .byte_array_from_slice(ret_w4_writer.bytes())
+                        .map_err(|e| e.to_string())?,
+                );
+                let ret_w0_callback_object_0 = ret_w4;
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: ret_w0_callback_object_0.as_raw(),
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4_writer.commit();
+                })();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1fold_1drop_1fold_18e0eaffd2786301c<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let source_value = perftest_flat::jni_output_fold_drop();
+            let ret_w0_source: ::std::vec::Vec<
+                Vec<perftest_flat::CallbackRowResource>,
+            > = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                }?;
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::CallbackRowResource> = ret_w1;
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                let ret_w4 = ::prebindgen_jni_runtime::array(
+                    &mut jni_environment,
+                    ret_w6,
+                )?;
+                let mut ret_w4_owner = unsafe {
+                    ::prebindgen_jni_runtime::OutputRows::new(
+                        &mut jni_environment,
+                        &ret_w4,
+                        __pb_cleanup_objects_CallbackRowResource_b77aa2e671341444,
+                    )
+                }?;
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                ) {
+                    let ret_w4_frame = unsafe {
+                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                    }?;
+                    let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w5,
+                    });
+                    let ret_w4_row = ::prebindgen_jni_runtime::array(
+                        &mut jni_environment,
+                        1usize,
+                    )?;
+                    let object = jni_environment
+                        .call_static_method(
+                            "java/lang/Long",
+                            "valueOf",
+                            "(J)Ljava/lang/Long;",
+                            &[
+                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                    ((&mut *ret_w8)
+                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                            perftest_flat::CallbackRowResource,
+                                        >) as i64,
+                                ),
+                            ],
+                        )
+                        .and_then(|v| v.l())
+                        .map_err(|e| e.to_string())?;
+                    jni_environment
+                        .set_object_array_element(&ret_w4_row, 0i32, &object)
+                        .map_err(|e| e.to_string())?;
+                    jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                    jni_environment
+                        .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
+                        .map_err(|e| e.to_string())?;
+                    #[allow(
+                        clippy::redundant_closure_call,
+                        clippy::let_unit_value,
+                        clippy::unused_unit
+                    )]
+                    let _: () = (|| -> () {
+                        let _ = Box::into_raw(ret_w8).expose_provenance();
+                    })();
+                    unsafe {
+                        ret_w4_owner.complete_row();
+                    }
+                    drop(ret_w4_frame);
+                }
+                let ret_w4 = Some(ret_w4);
+                let ret_w0_callback_object_0 = match (ret_w4).as_ref() {
+                    Some(value) => {
+                        jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                    }
+                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                };
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: ret_w0_callback_object_0.as_raw(),
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    ret_w4_owner.commit();
+                })();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1fold_1fold_130e359f733b27f80<
     'local,
 >(
@@ -84266,6 +84727,526 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1rows_1fold_1d4a060fc1b46cffe<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let source_value = perftest_flat::output_cleanup_rows();
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::OutputCleanupRow> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(JJJ)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
+                }?;
+                let ret_w4_record = ret_w1;
+                let ret_w4_f0 = ret_w4_record.id;
+                let (_, (ret_w4_f1_present_value0,), ret_w4_f1_present_commit) = if let Some(
+                    ret_w4_f1_payload,
+                ) = ret_w4_record.first
+                {
+                    let mut ret_w4_f1_some = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w4_f1_payload,
+                    });
+                    let ret_w4_f1_present_values = (
+                        (&mut *ret_w4_f1_some)
+                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                perftest_flat::OwnedResource,
+                            >,
+                    );
+                    (
+                        1i32,
+                        ret_w4_f1_present_values,
+                        Some(move || {
+                            let _ = Box::into_raw(ret_w4_f1_some).expose_provenance();
+                        }),
+                    )
+                } else {
+                    (0i32, (std::ptr::null_mut(),), None)
+                };
+                let (_, (ret_w4_f2_present_value0,), ret_w4_f2_present_commit) = if let Some(
+                    ret_w4_f2_payload,
+                ) = ret_w4_record.second
+                {
+                    let mut ret_w4_f2_some = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w4_f2_payload,
+                    });
+                    let ret_w4_f2_present_values = (
+                        (&mut *ret_w4_f2_some)
+                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                perftest_flat::OwnedResource,
+                            >,
+                    );
+                    (
+                        1i32,
+                        ret_w4_f2_present_values,
+                        Some(move || {
+                            let _ = Box::into_raw(ret_w4_f2_some).expose_provenance();
+                        }),
+                    )
+                } else {
+                    (0i32, (std::ptr::null_mut(),), None)
+                };
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f0,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: (ret_w4_f1_present_value0) as i64,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: (ret_w4_f2_present_value0) as i64,
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    if let Some(ret_w4_f1_present_action) = ret_w4_f1_present_commit {
+                        ret_w4_f1_present_action();
+                    }
+                    if let Some(ret_w4_f2_present_action) = ret_w4_f2_present_commit {
+                        ret_w4_f2_present_action();
+                    }
+                })();
+                drop(ret_w0_callback_frame);
+            }
+            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
+            let __pb_direct_object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1nested_1fold_14f16ec74e528db69<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&__pb_output_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid sequence output acknowledgement".into());
+        }
+        if __pb_callback.is_null() {
+            return Err("null sequence callback".into());
+        }
+        {
+            let source_value = perftest_flat::output_cleanup_nested();
+            let ret_w0_source: ::std::vec::Vec<
+                Option<Vec<perftest_flat::OutputCleanupRow>>,
+            > = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            jni_environment
+                .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_class = jni_environment
+                .get_object_class(&__pb_callback)
+                .map_err(|e| e.to_string())?;
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .delete_local_ref(ret_w0_callback_class)
+                .map_err(|e| e.to_string())?;
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w0_callback_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
+                }?;
+                let (_, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w1 {
+                    let ret_w6_source: ::std::vec::Vec<
+                        perftest_flat::OutputCleanupRow,
+                    > = ret_w5;
+                    let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
+                    let ret_w6 = ::prebindgen_jni_runtime::array(
+                        &mut jni_environment,
+                        ret_w8,
+                    )?;
+                    let mut ret_w6_owner = unsafe {
+                        ::prebindgen_jni_runtime::OutputRows::new(
+                            &mut jni_environment,
+                            &ret_w6,
+                            __pb_cleanup_objects_OwnedResource_OwnedResource_cc6f1ee47434b577,
+                        )
+                    }?;
+                    for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
+                        ::core::iter::IntoIterator::into_iter(ret_w6_source),
+                    ) {
+                        let ret_w6_frame = unsafe {
+                            ::prebindgen_jni_runtime::LocalFrame::new(
+                                &jni_environment,
+                                11i32,
+                            )
+                        }?;
+                        let ret_w10_record = ret_w7;
+                        let ret_w10_f0 = ret_w10_record.id;
+                        let (
+                            _,
+                            (ret_w10_f1_present_value0,),
+                            ret_w10_f1_present_commit,
+                        ) = if let Some(ret_w10_f1_payload) = ret_w10_record.first {
+                            let mut ret_w10_f1_some = Box::new(::prebindgen_jni_runtime::Allocation {
+                                value: ret_w10_f1_payload,
+                            });
+                            let ret_w10_f1_present_values = (
+                                (&mut *ret_w10_f1_some)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        perftest_flat::OwnedResource,
+                                    >,
+                            );
+                            (
+                                1i32,
+                                ret_w10_f1_present_values,
+                                Some(move || {
+                                    let _ = Box::into_raw(ret_w10_f1_some).expose_provenance();
+                                }),
+                            )
+                        } else {
+                            (0i32, (std::ptr::null_mut(),), None)
+                        };
+                        let (
+                            _,
+                            (ret_w10_f2_present_value0,),
+                            ret_w10_f2_present_commit,
+                        ) = if let Some(ret_w10_f2_payload) = ret_w10_record.second {
+                            let mut ret_w10_f2_some = Box::new(::prebindgen_jni_runtime::Allocation {
+                                value: ret_w10_f2_payload,
+                            });
+                            let ret_w10_f2_present_values = (
+                                (&mut *ret_w10_f2_some)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        perftest_flat::OwnedResource,
+                                    >,
+                            );
+                            (
+                                1i32,
+                                ret_w10_f2_present_values,
+                                Some(move || {
+                                    let _ = Box::into_raw(ret_w10_f2_some).expose_provenance();
+                                }),
+                            )
+                        } else {
+                            (0i32, (std::ptr::null_mut(),), None)
+                        };
+                        let ret_w6_row = ::prebindgen_jni_runtime::array(
+                            &mut jni_environment,
+                            3usize,
+                        )?;
+                        let object = jni_environment
+                            .call_static_method(
+                                "java/lang/Long",
+                                "valueOf",
+                                "(J)Ljava/lang/Long;",
+                                &[
+                                    ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                        ret_w10_f0,
+                                    ),
+                                ],
+                            )
+                            .and_then(|v| v.l())
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .set_object_array_element(&ret_w6_row, 0i32, &object)
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .delete_local_ref(object)
+                            .map_err(|e| e.to_string())?;
+                        let object = jni_environment
+                            .call_static_method(
+                                "java/lang/Long",
+                                "valueOf",
+                                "(J)Ljava/lang/Long;",
+                                &[
+                                    ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                        (ret_w10_f1_present_value0) as i64,
+                                    ),
+                                ],
+                            )
+                            .and_then(|v| v.l())
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .set_object_array_element(&ret_w6_row, 1i32, &object)
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .delete_local_ref(object)
+                            .map_err(|e| e.to_string())?;
+                        let object = jni_environment
+                            .call_static_method(
+                                "java/lang/Long",
+                                "valueOf",
+                                "(J)Ljava/lang/Long;",
+                                &[
+                                    ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                        (ret_w10_f2_present_value0) as i64,
+                                    ),
+                                ],
+                            )
+                            .and_then(|v| v.l())
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .set_object_array_element(&ret_w6_row, 2i32, &object)
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .delete_local_ref(object)
+                            .map_err(|e| e.to_string())?;
+                        jni_environment
+                            .set_object_array_element(
+                                &ret_w6,
+                                ret_w9 as i32,
+                                &ret_w6_row,
+                            )
+                            .map_err(|e| e.to_string())?;
+                        #[allow(
+                            clippy::redundant_closure_call,
+                            clippy::let_unit_value,
+                            clippy::unused_unit
+                        )]
+                        let _: () = (|| -> () {
+                            if let Some(ret_w10_f1_present_action) = ret_w10_f1_present_commit {
+                                ret_w10_f1_present_action();
+                            }
+                            if let Some(ret_w10_f2_present_action) = ret_w10_f2_present_commit {
+                                ret_w10_f2_present_action();
+                            }
+                        })();
+                        unsafe {
+                            ret_w6_owner.complete_row();
+                        }
+                        drop(ret_w6_frame);
+                    }
+                    let ret_w6 = Some(ret_w6);
+                    let ret_w4_values = (ret_w6,);
+                    (
+                        1i32,
+                        ret_w4_values,
+                        Some(move || {
+                            ret_w6_owner.commit();
+                        }),
+                    )
+                } else {
+                    (0i32, (None,), None)
+                };
+                let ret_w0_callback_object_0 = match (ret_w4_value0).as_ref() {
+                    Some(value) => {
+                        jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                    }
+                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                };
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            ret_w0_callback_method,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: ret_w0_callback_object_0.as_raw(),
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    if let Some(ret_w4_action) = ret_w4_commit {
+                        ret_w4_action();
+                    }
+                })();
                 drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);

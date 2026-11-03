@@ -110,22 +110,85 @@ pub(crate) fn fold(
         cleanup_failure: None,
         ..*context
     };
-    let child = kotlin::output_kotlin(element, &ctx)?;
+    // Lexical row cleanup keeps partially constructed wrappers in scope. Only
+    // dynamic nested collections need the shared owner journal; fixed fields
+    // can use their existing locals without allocating a journal or a lambda.
+    fn nested_owners(node: &kotlin::JniNode) -> bool {
+        match node {
+            prebindgen_flat::WireNode::Chain {
+                meta: JniChain::Sequence(_),
+                child,
+                ..
+            } => kotlin::input_handles(child, false),
+            prebindgen_flat::WireNode::Chain { child, .. } => nested_owners(child),
+            prebindgen_flat::WireNode::Branch { children, .. } => {
+                children.iter().any(nested_owners)
+            }
+            _ => false,
+        }
+    }
+    let unread = kotlin::output_kotlin(element, &ctx)?;
+    let shared = nested_owners(element);
+    let owners = "__pb_foldOwners";
+    let child = if shared {
+        kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?
+    } else {
+        unread.clone()
+    };
     let present = format!("{}[{position}] != null", context.result);
     let raw = "__pb_rows";
     let types = child.callback_type_parameters()?;
     let args = child.delivered.join(", ");
     let failure = context.failure;
+    let resources = !unread.cleanup.is_empty();
+    let mut locals = String::from("var __pb_accumulator: A? = null\n");
+    let mut initialize = String::new();
+    let mut row = format!("{}\ncurrent = fold(current, {args})\n", child.materialize);
+    let mut discard = String::new();
+    let mut cleanup = String::new();
+    if resources {
+        locals.push_str("var __pb_processed = 0\n");
+        let release = if shared {
+            locals.push_str(&format!(
+                "var {owners}: {}.CollectionOwners? = null\n",
+                context.package
+            ));
+            initialize = format!(
+                "if ({raw}.isNotEmpty()) {owners} = {}.CollectionOwners()\n",
+                context.package
+            );
+            row = format!(
+                "{}\n{owners}!!.complete = true\ncurrent = fold(current, {args})\n",
+                child.materialize
+            );
+            format!(
+                "{owners}?.close({failure})\nif ({owners}?.complete != true) {{\n{}\n}}",
+                child.cleanup
+            )
+        } else {
+            child.cleanup.clone()
+        };
+        let delivered = if shared {
+            format!("{owners}!!.release()\n")
+        } else {
+            String::new()
+        };
+        // Account for the current row before cleanup, so a secondary cleanup
+        // failure cannot make the outer failure scan destroy it a second time.
+        row = format!("try {{\n{row}}} catch ({failure}: Throwable) {{\n__pb_processed++\ntry {{\n{release}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\nthrow {failure}\n}}\n__pb_processed++\n{delivered}");
+        discard = format!("fun __pb_discard({failure}: Throwable, start: Int = 0) {{\nfor (index in start until {raw}.size) {{\ntry {{\nval __pb_fold_row = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\n}}\n}}\n", unread.output_locals, unread.cleanup);
+        cleanup = format!("if ({present}) __pb_discard({failure}, __pb_processed)\n");
+    }
     Ok(Fold {
-        parameter:format!("fold: (A, {types}) -> A"),
-        discard:format!("fun __pb_discard({failure}: Throwable) {{ for (rawRow in __pb_rows) {{ val {row} = rawRow as kotlin.Array<*>\n{}\n{}\n}} }}\n",child.output_locals,child.cleanup),
-        output:KotlinOutput {
-            result_names:vec![None],
-            delivered:vec![if optional{"__pb_accumulator".into()}else{"__pb_accumulator as A".into()}],
-            result_types:vec![if optional{"A?".into()}else{"A".into()}],
-            output_locals:"var __pb_accumulator: A? = null\nvar __pb_processed = 0\nvar __pb_pending: ((Throwable) -> Unit)? = null\n".into(),
-            materialize:format!("if ({present}) {{\nvar current = initial\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array<*>\n{}\n__pb_pending = {{ {failure} -> {} }}\n{}\ncurrent = fold(current, {args})\n__pb_pending = null\n__pb_processed++\n}}\n__pb_accumulator = current\n}}\n",child.output_locals,child.cleanup,child.materialize),
-            cleanup:format!("__pb_pending?.invoke({failure})\nif ({present}) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}}\n",child.output_locals,child.cleanup),
+        parameter: format!("fold: (A, {types}) -> A"),
+        discard,
+        output: KotlinOutput {
+            result_names: vec![None],
+            delivered: vec![if optional { "__pb_accumulator".into() } else { "__pb_accumulator as A".into() }],
+            result_types: vec![if optional { "A?".into() } else { "A".into() }],
+            output_locals: locals,
+            materialize: format!("if ({present}) {{\n{initialize}var current = initial\nfor (rawRow in {raw}) {{\nval __pb_fold_row = rawRow as kotlin.Array<*>\n{}\n{row}}}\n__pb_accumulator = current\n}}\n", child.output_locals),
+            cleanup,
         },
     })
 }
