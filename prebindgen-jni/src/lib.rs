@@ -17,6 +17,7 @@ pub use enums::{EnumClassDecl, JniEnum};
 mod callback;
 #[cfg(test)]
 mod callback_tests;
+mod cleanup;
 mod optional;
 mod sequence;
 mod sequence_callback;
@@ -1346,6 +1347,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         })
         .collect::<Result<_>>()?;
     bulk::emit(flat, &mut rust, &mut native, &mut files)?;
+    rust.extend(cleanup::emit(flat)?);
     callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,

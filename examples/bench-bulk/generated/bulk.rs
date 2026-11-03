@@ -382,6 +382,70 @@ pub extern "system" fn Java_bench_bulk_JNINative_bulkLayouts(
         }
     }
 }
+#[allow(dead_code, non_snake_case)]
+unsafe fn __pb_cleanup_native_InputHandle_567ed8299898558e(
+    reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
+    base: usize,
+) {
+    let _ = ::prebindgen_runtime::boundary(|| {
+        let raw = reader
+            .read::<
+                i64,
+            >(base + ::core::mem::offset_of!(__PbBulk_i64_i64_b3c08eb92fbbc74c, v0))?;
+        if raw != 0 {
+            let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                ::prebindgen_jni_runtime::drop_pointer::<bench_flat::InputHandle>(raw)
+            });
+        }
+        Ok(())
+    });
+}
+#[allow(dead_code, non_snake_case)]
+unsafe fn __pb_cleanup_native_InputHandle_6935c4b287d7a13d(
+    reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
+    base: usize,
+) {
+    let _ = ::prebindgen_runtime::boundary(|| {
+        let raw = reader
+            .read::<
+                i64,
+            >(base + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0))?;
+        if raw != 0 {
+            let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                ::prebindgen_jni_runtime::drop_pointer::<bench_flat::InputHandle>(raw)
+            });
+        }
+        Ok(())
+    });
+}
+#[allow(dead_code, non_snake_case)]
+unsafe fn __pb_cleanup_native_Rows_ca08f1b833732d9d(
+    reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
+    base: usize,
+) {
+    let _ = ::prebindgen_runtime::boundary(|| {
+        if let Some(range) = reader
+            .range(base + ::core::mem::offset_of!(__PbBulk_Range_49da87bb4c377b9a, v0))?
+        {
+            let (start, length) = reader
+                .rows(
+                    Some(range),
+                    ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                )?;
+            for index in 0..length {
+                unsafe {
+                    __pb_cleanup_native_InputHandle_6935c4b287d7a13d(
+                        reader,
+                        start
+                            + index
+                                * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
+                    );
+                }
+            }
+        }
+        Ok(())
+    });
+}
 #[allow(
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
@@ -1264,34 +1328,12 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
                     ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                     ::core::mem::align_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                 )?;
-            unsafe fn ret_w1_release_row(
-                reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
-                base: usize,
-            ) {
-                let _ = ::prebindgen_runtime::boundary(|| {
-                    let raw = reader
-                        .read::<
-                            i64,
-                        >(
-                            base
-                                + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                        )?;
-                    if raw != 0 {
-                        unsafe {
-                            ::prebindgen_jni_runtime::drop_pointer::<
-                                bench_flat::InputHandle,
-                            >(raw)?;
-                        }
-                    }
-                    Ok(())
-                });
-            }
             let ret_w1_owners = unsafe {
                 ret_w0_writer
                     .own_rows(
                         ret_w1,
                         ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
-                        ret_w1_release_row,
+                        __pb_cleanup_native_InputHandle_6935c4b287d7a13d,
                     )
             };
             for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
@@ -1584,36 +1626,12 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
                     ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
                     ::core::mem::align_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
                 )?;
-            unsafe fn ret_w1_release_row(
-                reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
-                base: usize,
-            ) {
-                let _ = ::prebindgen_runtime::boundary(|| {
-                    let raw = reader
-                        .read::<
-                            i64,
-                        >(
-                            base
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                ),
-                        )?;
-                    if raw != 0 {
-                        unsafe {
-                            ::prebindgen_jni_runtime::drop_pointer::<
-                                bench_flat::InputHandle,
-                            >(raw)?;
-                        }
-                    }
-                    Ok(())
-                });
-            }
             let ret_w1_owners = unsafe {
                 ret_w0_writer
                     .own_rows(
                         ret_w1,
                         ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
-                        ret_w1_release_row,
+                        __pb_cleanup_native_InputHandle_567ed8299898558e,
                     )
             };
             for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
@@ -1942,56 +1960,12 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                     ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>(),
                     ::core::mem::align_of::<__PbBulk_Range_49da87bb4c377b9a>(),
                 )?;
-            unsafe fn ret_w1_release_row(
-                reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
-                base: usize,
-            ) {
-                let _ = ::prebindgen_runtime::boundary(|| {
-                    if let Some(range) = reader
-                        .range(
-                            base
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_Range_49da87bb4c377b9a, v0
-                                ),
-                        )?
-                    {
-                        let (start, length) = reader
-                            .rows(
-                                Some(range),
-                                ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
-                            )?;
-                        for index in 0..length {
-                            let base = start
-                                + index
-                                    * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>();
-                            let _ = ::prebindgen_runtime::boundary(|| {
-                                let raw = reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        base
-                                            + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                                    )?;
-                                if raw != 0 {
-                                    unsafe {
-                                        ::prebindgen_jni_runtime::drop_pointer::<
-                                            bench_flat::InputHandle,
-                                        >(raw)?;
-                                    }
-                                }
-                                Ok(())
-                            });
-                        }
-                    }
-                    Ok(())
-                });
-            }
             let ret_w1_owners = unsafe {
                 ret_w0_writer
                     .own_rows(
                         ret_w1,
                         ::core::mem::size_of::<__PbBulk_Range_49da87bb4c377b9a>(),
-                        ret_w1_release_row,
+                        __pb_cleanup_native_Rows_ca08f1b833732d9d,
                     )
             };
             for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
@@ -2005,34 +1979,12 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                         ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                         ::core::mem::align_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                     )?;
-                unsafe fn ret_w5_release_row(
-                    reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
-                    base: usize,
-                ) {
-                    let _ = ::prebindgen_runtime::boundary(|| {
-                        let raw = reader
-                            .read::<
-                                i64,
-                            >(
-                                base
-                                    + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                            )?;
-                        if raw != 0 {
-                            unsafe {
-                                ::prebindgen_jni_runtime::drop_pointer::<
-                                    bench_flat::InputHandle,
-                                >(raw)?;
-                            }
-                        }
-                        Ok(())
-                    });
-                }
                 let ret_w5_owners = unsafe {
                     ret_w0_writer
                         .own_rows(
                             ret_w5,
                             ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
-                            ret_w5_release_row,
+                            __pb_cleanup_native_InputHandle_6935c4b287d7a13d,
                         )
                 };
                 for (ret_w8, ret_w6) in ::core::iter::Iterator::enumerate(

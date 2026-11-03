@@ -2,7 +2,7 @@
 use super::*;
 use crate::kotlin::{JniNode, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
-use prebindgen_flat::{InputConversion, Wire, WireNode};
+use prebindgen_flat::{Wire, WireNode};
 use std::rc::Rc;
 
 /// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
@@ -22,7 +22,7 @@ fn field_type(w: &JniWire) -> Result<syn::Type> {
         _=>w.rust_type(),
     })
 }
-fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
+pub(crate) fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
     let fields = crate::group::row_fields(node)
         .enumerate()
         .map(|(i, w)| Ok((format_ident!("v{i}"), field_type(&w.kind)?)))
@@ -253,74 +253,6 @@ pub(crate) fn sequence_input(
     })
 }
 
-// Destruction reads only completed rows, whose nested descriptors and handle
-// fields have all been written. Each field catches user destructor panics.
-fn release_row(node: &JniNode) -> Result<TokenStream> {
-    release_row_in(node, false)
-}
-
-pub(crate) fn release_jni_row(node: &JniNode) -> Result<TokenStream> {
-    release_row_in(node, true)
-}
-
-fn release_row_in(node: &JniNode, jni: bool) -> Result<TokenStream> {
-    let layout = record(node)?;
-    let row = &layout.name;
-    let mut cleanup = TokenStream::new();
-    for (i, field) in crate::group::row_fields(node).enumerate() {
-        let member = format_ident!("v{i}");
-        let at = quote!(base + ::core::mem::offset_of!(#row, #member));
-        let release = match &field.kind {
-            JniWire::Handle { handle, .. } => {
-                if handle.access != prebindgen_conversions::Access::Move {
-                    return Err("bulk output handles must transfer owned boxed allocations".into());
-                }
-                let ty = &handle.ty;
-                quote! {
-                    let raw = reader.read::<i64>(#at)?;
-                    if raw != 0 { unsafe { ::prebindgen_jni_runtime::drop_pointer::<#ty>(raw)?; } }
-                }
-            }
-            JniWire::NativeRows { .. } => {
-                let child =
-                    sequence_child(node, &field.name).ok_or("missing bulk collection element")?;
-                let child_cleanup = release_row_in(child, jni)?;
-                if child_cleanup.is_empty() {
-                    continue;
-                }
-                let child_layout = record(child)?;
-                let child_row = &child_layout.name;
-                quote! {
-                    if let Some(range) = reader.range(#at)? {
-                        let (start, length) = reader.rows(Some(range), ::core::mem::size_of::<#child_row>())?;
-                        for index in 0..length {
-                            let base = start + index * ::core::mem::size_of::<#child_row>();
-                            #child_cleanup
-                        }
-                    }
-                }
-            }
-            JniWire::NativeBuffer { .. }
-            | JniWire::Native128 { .. }
-            | JniWire::Scalar { .. }
-            | JniWire::Enum { .. }
-            | JniWire::Selector { .. } => continue,
-            _ => return Err("bulk output ownership requires native field encodings".into()),
-        };
-        let release = quote! {
-            let _ = ::prebindgen_runtime::boundary(|| { #release Ok(()) });
-        };
-        cleanup.extend(if jni {
-            // A native destructor may itself call JNI. Isolate its pending
-            // exception before the next sibling destructor can run.
-            quote!(::prebindgen_jni_runtime::reclaim_output(env, |env| { #release Ok(()) });)
-        } else {
-            release
-        });
-    }
-    Ok(cleanup)
-}
-
 pub(crate) fn sequence_output(
     wire: syn::Ident,
     length: syn::Ident,
@@ -332,17 +264,11 @@ pub(crate) fn sequence_output(
     let row = &layout.name;
     let writer = parameter("bulk_writer");
     let owner = format_ident!("{wire}_owners");
-    let release = format_ident!("{wire}_release_row");
-    let cleanup = release_row(element)?;
-    let owners = if cleanup.is_empty() {
-        quote!()
+    let release = crate::cleanup::helper(element, crate::cleanup::Carrier::Native)?;
+    let owners = if let Some(release) = &release {
+        quote!(let #owner = unsafe { #writer.own_rows(#wire, ::core::mem::size_of::<#row>(), #release) };)
     } else {
-        quote! {
-            unsafe fn #release(reader: &::prebindgen_jni_runtime::bulk::Reader<'_>, base: usize) {
-                #cleanup
-            }
-            let #owner = unsafe { #writer.own_rows(#wire, ::core::mem::size_of::<#row>(), #release) };
-        }
+        quote!()
     };
     let mut store = TokenStream::new();
     for (i, (w, value)) in crate::group::row_values(element, values)?
@@ -359,7 +285,7 @@ pub(crate) fn sequence_output(
     }
     let commit_element = parameter("commit_element");
     store.extend(quote!(#commit_element));
-    if !cleanup.is_empty() {
+    if release.is_some() {
         store.extend(quote!(unsafe { #writer.commit_rows(#owner, #index + 1); }));
     }
     Ok(SequenceOutput {
@@ -952,32 +878,9 @@ pub(crate) fn emit(
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
     let mut catalogue = BTreeMap::new();
-    let mut nodes = Vec::new();
-    for f in flat.functions.values() {
-        for p in &f.params {
-            if let Some(plan) = &p.ty.slot {
-                nodes.push((true, plan.input_node()));
-            }
-        }
-        if let Some(plan) = &f.ret.slot {
-            let outcomes = plan.output_outcomes();
-            nodes.extend(
-                std::iter::once(&outcomes.success)
-                    .chain(outcomes.source_error.iter())
-                    .chain(outcomes.binding_failure.iter())
-                    .map(|node| (false, node)),
-            );
-        }
-        if let Some(error) = f.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            nodes.push((false, &error.output.output_outcomes().success));
-        }
-    }
-    for input in &flat.metadata.callbacks {
-        nodes.push((true, input.input_node()));
-    }
     let prefix = &flat.metadata.package;
     let mut writers = BTreeMap::new();
-    for (input, node) in nodes {
+    for (input, node) in crate::metadata::nodes(flat) {
         records(node, &mut catalogue)?;
         input_writers(node, input, prefix, &mut writers)?;
     }
