@@ -69,7 +69,10 @@ def build(args):
     revisions={str(p):revision(p) for p in {checkout,ROOT}}
     project=prepare(checkout,output)
     env=dict(os.environ,CARGO_TARGET_DIR=str(output/'target'))
-    metadata=json.loads(subprocess.check_output(['cargo','metadata','--offline','--locked','--format-version=1'],cwd=project,env=env))
+    rustc=subprocess.check_output(['rustc','-vV'],text=True)
+    host=next(line.split(': ',1)[1] for line in rustc.splitlines() if line.startswith('host: '))
+    if args.fetch:subprocess.run(['cargo','fetch','--locked'],cwd=project,env=env,check=True)
+    metadata=json.loads(subprocess.check_output(['cargo','metadata','--offline','--locked','--filter-platform',host,'--format-version=1'],cwd=project,env=env))
     package=next(p['id'] for p in metadata['packages'] if p['name']=='c-collection-bench')
     command=['cargo','build','--offline','--locked','--release','--message-format=json']
     if args.count_allocations:command+=['--features','count-allocations']
@@ -92,7 +95,7 @@ def build(args):
             if path.is_file():configs.append(path)
     report=dict(revisions=revisions,checkout=str(checkout),count_allocations=args.count_allocations,
                 fixture_sha256={name:sha(FIXTURE/name) for name in FILES},
-                rustc=subprocess.check_output(['rustc','-vV'],text=True),
+                rustc=rustc,
                 cc=subprocess.check_output([*cc,'--version'],text=True),compile_command=compile_command,
                 cargo_command=command,cargo_profile=artifact['profile'],
                 lock_sha256=sha(project/'Cargo.lock'),cargo_configs={str(p):sha(p) for p in set(configs)},
@@ -113,6 +116,7 @@ if __name__=='__main__':
     p.add_argument('--checkout',type=Path,default=ROOT)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--count-allocations',action='store_true')
+    p.add_argument('--fetch',action='store_true')
     p.add_argument('--record-generated',action='store_true')
     p.add_argument('--check-generated',action='store_true')
     a=p.parse_args()
