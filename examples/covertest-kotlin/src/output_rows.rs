@@ -10,6 +10,21 @@ use prebindgen_jni_runtime::{
 fn release<'local>(env: &mut JNIEnv<'local>, row: &JObjectArray<'local>) {
     prebindgen_jni_runtime::reclaim_output(env, |env| {
         let raw = unsafe { prebindgen_jni_runtime::output_handle(env, row, 0)? };
+        let allocation =
+            unsafe { &*(raw as *const Allocation<perftest_flat::CallbackRowResource>) };
+        if perftest_flat::callback_row_resource_id(&allocation.value) == 777 {
+            env.throw_new(
+                "java/lang/IllegalStateException",
+                "secondary destructor exception",
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            assert!(!env.exception_check().map_err(|e| e.to_string())?);
+            let sibling = env
+                .new_string("sibling cleanup after secondary exception")
+                .map_err(|e| e.to_string())?;
+            env.delete_local_ref(sibling).map_err(|e| e.to_string())?;
+        }
         let _ = prebindgen_runtime::boundary(|| unsafe {
             prebindgen_jni_runtime::drop_pointer::<perftest_flat::CallbackRowResource>(raw)
         });

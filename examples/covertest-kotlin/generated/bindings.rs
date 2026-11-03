@@ -30072,45 +30072,57 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                                 &bytes,
                             );
                             let base = 0usize;
-                            let _ = ::prebindgen_runtime::boundary(|| {
-                                if let Some(range) = reader
-                                    .range(
-                                        base
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_Range_f673a6355cb08de9, v0
-                                            ),
-                                    )?
-                                {
-                                    let (start, length) = reader
-                                        .rows(
-                                            Some(range),
-                                            ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
-                                        )?;
-                                    for index in 0..length {
-                                        let base = start
-                                            + index
-                                                * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>();
-                                        let _ = ::prebindgen_runtime::boundary(|| {
-                                            let raw = reader
-                                                .read::<
-                                                    i64,
-                                                >(
-                                                    base
-                                                        + ::core::mem::offset_of!(__PbBulk_i64_59a3202a71549093, v0),
+                            ::prebindgen_jni_runtime::reclaim_output(
+                                env,
+                                |env| {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        if let Some(range) = reader
+                                            .range(
+                                                base
+                                                    + ::core::mem::offset_of!(
+                                                        __PbBulk_Range_f673a6355cb08de9, v0
+                                                    ),
+                                            )?
+                                        {
+                                            let (start, length) = reader
+                                                .rows(
+                                                    Some(range),
+                                                    ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
                                                 )?;
-                                            if raw != 0 {
-                                                unsafe {
-                                                    ::prebindgen_jni_runtime::drop_pointer::<
-                                                        perftest_flat::CallbackRowResource,
-                                                    >(raw)?;
-                                                }
+                                            for index in 0..length {
+                                                let base = start
+                                                    + index
+                                                        * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>();
+                                                ::prebindgen_jni_runtime::reclaim_output(
+                                                    env,
+                                                    |env| {
+                                                        let _ = ::prebindgen_runtime::boundary(|| {
+                                                            let raw = reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    base
+                                                                        + ::core::mem::offset_of!(__PbBulk_i64_59a3202a71549093, v0),
+                                                                )?;
+                                                            if raw != 0 {
+                                                                unsafe {
+                                                                    ::prebindgen_jni_runtime::drop_pointer::<
+                                                                        perftest_flat::CallbackRowResource,
+                                                                    >(raw)?;
+                                                                }
+                                                            }
+                                                            Ok(())
+                                                        });
+                                                        Ok(())
+                                                    },
+                                                );
                                             }
-                                            Ok(())
-                                        });
-                                    }
-                                }
-                                Ok(())
-                            });
+                                        }
+                                        Ok(())
+                                    });
+                                    Ok(())
+                                },
+                            );
                         }
                         Ok(())
                     },

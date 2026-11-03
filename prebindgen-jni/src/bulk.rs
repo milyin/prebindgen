@@ -255,7 +255,15 @@ pub(crate) fn sequence_input(
 
 // Destruction reads only completed rows, whose nested descriptors and handle
 // fields have all been written. Each field catches user destructor panics.
-pub(crate) fn release_row(node: &JniNode) -> Result<TokenStream> {
+fn release_row(node: &JniNode) -> Result<TokenStream> {
+    release_row_in(node, false)
+}
+
+pub(crate) fn release_jni_row(node: &JniNode) -> Result<TokenStream> {
+    release_row_in(node, true)
+}
+
+fn release_row_in(node: &JniNode, jni: bool) -> Result<TokenStream> {
     let layout = record(node)?;
     let row = &layout.name;
     let mut cleanup = TokenStream::new();
@@ -276,7 +284,7 @@ pub(crate) fn release_row(node: &JniNode) -> Result<TokenStream> {
             JniWire::NativeRows { .. } => {
                 let child =
                     sequence_child(node, &field.name).ok_or("missing bulk collection element")?;
-                let child_cleanup = release_row(child)?;
+                let child_cleanup = release_row_in(child, jni)?;
                 if child_cleanup.is_empty() {
                     continue;
                 }
@@ -299,8 +307,15 @@ pub(crate) fn release_row(node: &JniNode) -> Result<TokenStream> {
             | JniWire::Selector { .. } => continue,
             _ => return Err("bulk output ownership requires native field encodings".into()),
         };
-        cleanup.extend(quote! {
+        let release = quote! {
             let _ = ::prebindgen_runtime::boundary(|| { #release Ok(()) });
+        };
+        cleanup.extend(if jni {
+            // A native destructor may itself call JNI. Isolate its pending
+            // exception before the next sibling destructor can run.
+            quote!(::prebindgen_jni_runtime::reclaim_output(env, |env| { #release Ok(()) });)
+        } else {
+            release
         });
     }
     Ok(cleanup)

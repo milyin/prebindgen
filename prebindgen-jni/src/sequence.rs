@@ -173,7 +173,7 @@ fn release_row(node: &JniNode) -> Result<TokenStream> {
             }
             JniWire::BulkBuffer { .. } => {
                 let child = carrier_child(node, &field.name).ok_or("missing JNI bulk element")?;
-                let child_cleanup = crate::bulk::release_row(child)?;
+                let child_cleanup = crate::bulk::release_jni_row(child)?;
                 if child_cleanup.is_empty() {
                     continue;
                 }
