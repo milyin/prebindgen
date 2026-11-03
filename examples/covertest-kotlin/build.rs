@@ -465,7 +465,7 @@ fn main() {
             // Compile a mixed prepared tree directly: declaration defaults
             // deliberately lift inner bulk modifiers to the enclosing sequence.
             let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
-            let recipe=sequence(prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed)))),None);
+            let recipe=sequence(prebindgen_declarations::Output::Combine(vec![prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed))))]),None);
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec,"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();

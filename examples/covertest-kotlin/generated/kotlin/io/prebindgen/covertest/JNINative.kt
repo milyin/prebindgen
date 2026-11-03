@@ -146,7 +146,7 @@ internal object JNINative {
     @JvmStatic external fun call_getter_fields_new_6223254642400003(returns: Return_Long_Long_String3_ErrorEmpty_857937f364385c79): Unit
     @JvmStatic external fun call_getter_callback_261a8655bbbdf16f(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_jni_output_optional_b3a3cb08bb632879(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
-    @JvmStatic external fun call_jni_output_mixed_23877cf213bf0c0c(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_jni_output_mixed_23877cf213bf0c0c(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_c_output_rows_76dcbc8fbe8acf89(p0_w1: Long, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     @JvmStatic external fun call_c_output_nested_09e14469d381a037(p0_w1: Long, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     @JvmStatic external fun call_c_output_pair_654ab15b1845473b(p0_w1: Long, returns: Return_Array_Any___Array_Any__2_ErrorLong1_59a6678d4242c812): Unit
