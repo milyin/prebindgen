@@ -249,6 +249,7 @@ impl<'local> OutputRows<'local> {
     /// The array's local reference must outlive the guard. Each completed row
     /// must match `release` and transfer all its native owners to this guard.
     /// Disarm nested guards before their enclosing local-reference frame ends.
+    #[inline]
     pub unsafe fn new(
         env: &mut JNIEnv<'local>,
         rows: &JObjectArray<'local>,
@@ -275,16 +276,22 @@ impl<'local> OutputRows<'local> {
     /// # Safety
     /// The next row must be fully inserted and all its native owners transferred
     /// exactly once. No row may be modified after it is recorded.
+    #[inline]
     pub unsafe fn complete_row(&mut self) {
         self.completed += 1;
     }
     /// Transfer all completed rows to their enclosing output or Kotlin recipient.
+    #[inline]
     pub fn commit(mut self) {
         self.completed = 0;
     }
 }
 impl Drop for OutputRows<'_> {
+    #[inline]
     fn drop(&mut self) {
+        if self.completed == 0 {
+            return;
+        }
         unsafe {
             reclaim_rows(&mut self.env, self.rows, self.completed, self.release);
         }

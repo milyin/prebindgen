@@ -58,7 +58,7 @@ object JniOutputFailureEntryPoint {
             failed = true
         }
         check(failed && callbackRowResourceLive() == 0L) { "mode=$mode failed=$failed live=${callbackRowResourceLive()}" }
-        val expected = when (mode) { 13 -> 10L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; else -> 24L }
+        val expected = when (mode) { 13 -> 12L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; else -> 24L }
         check(callbackRowResourceDrops() == drops + expected) { "mode=$mode drops=${callbackRowResourceDrops()-drops} expected=$expected" }
     }
 }

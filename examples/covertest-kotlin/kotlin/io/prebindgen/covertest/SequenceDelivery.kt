@@ -94,6 +94,12 @@ fun checkSequenceDelivery() {
     check(ownedResourceDrops() == start + 12uL)
     check(sequenceLateDropFold(0, onBindingError = JniErrorHandler { -1 }, onError = fail) { _, _ -> error("fold after late native panic") } == -1)
     check(ownedResourceDrops() == start + 14uL)
+    val beforeCloseThenThrow = ownedResourceDrops()
+    try {
+        sequencePartsFold(0, Unit, onError = fail) { _, _, _, resource -> resource.close(); throw original }
+        error("folder did not throw")
+    } catch (caught: IllegalStateException) { check(caught === original) }
+    check(ownedResourceDrops() == beforeCloseThenThrow + 3uL)
     val nestedStart = ownedResourceDrops()
     val nestedInputs = listOf(listOf(collectionResourceNew(91), collectionResourceNew(92)), listOf(collectionResourceNew(93)))
     var nestedEscaped: List<io.prebindgen.covertest.resources.OwnedResource>? = null
