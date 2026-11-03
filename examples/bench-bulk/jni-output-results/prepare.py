@@ -6,6 +6,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
+
+sys.dont_write_bytecode = True
 
 p = argparse.ArgumentParser(__doc__)
 p.add_argument('--checkout', type=Path, required=True)

@@ -4735,6 +4735,11 @@ pub struct __PbBulk_Range_83cf990f0be55ad5 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_Range_840975b732d62e1f {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_Range_87bd2f61e8a69677 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
@@ -4999,7 +5004,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, 7377770770425850989i64, if cfg!(target_endian = "big") { 1 } else { 0
+            1i64, - 6133035539168531837i64, if cfg!(target_endian = "big") { 1 } else { 0
             }, ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
@@ -5450,6 +5455,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_83cf990f0be55ad5>(),
                 ::core::mem::align_of::<__PbBulk_Range_83cf990f0be55ad5>(),
                 ::core::mem::offset_of!(__PbBulk_Range_83cf990f0be55ad5, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_Range_840975b732d62e1f>(),
+                ::core::mem::align_of::<__PbBulk_Range_840975b732d62e1f>(),
+                ::core::mem::offset_of!(__PbBulk_Range_840975b732d62e1f, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -30044,15 +30058,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::jni_output_mixed(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_4870fc95cea3097a>(),
+                ::core::mem::size_of::<__PbBulk_Range_840975b732d62e1f>(),
             );
-            let ret_w1_source: ::std::vec::Vec<Vec<perftest_flat::CallbackRow>> = source_value;
+            let ret_w1_source: ::std::vec::Vec<
+                Vec<perftest_flat::CallbackRowResource>,
+            > = source_value;
             let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
-                    ::core::mem::align_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                    ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>(),
+                    ::core::mem::align_of::<__PbBulk_Range_f673a6355cb08de9>(),
                 )?;
             unsafe fn ret_w1_release_row(
                 reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
@@ -30063,51 +30079,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                         .range(
                             base
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_Range_070bbcf38f849ff2, v0
+                                    __PbBulk_Range_f673a6355cb08de9, v0
                                 ),
                         )?
                     {
                         let (start, length) = reader
                             .rows(
                                 Some(range),
-                                ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_f508a557893415ce,
-                                >(),
+                                ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
                             )?;
                         for index in 0..length {
                             let base = start
                                 + index
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_f508a557893415ce,
-                                    >();
+                                    * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>();
                             let _ = ::prebindgen_runtime::boundary(|| {
                                 let raw = reader
                                     .read::<
                                         i64,
                                     >(
                                         base
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_Range_f508a557893415ce, v0
-                                            ),
-                                    )?;
-                                if raw != 0 {
-                                    unsafe {
-                                        ::prebindgen_jni_runtime::drop_pointer::<
-                                            perftest_flat::CallbackRowResource,
-                                        >(raw)?;
-                                    }
-                                }
-                                Ok(())
-                            });
-                            let _ = ::prebindgen_runtime::boundary(|| {
-                                let raw = reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        base
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_Range_f508a557893415ce, v2
-                                            ),
+                                            + ::core::mem::offset_of!(__PbBulk_i64_59a3202a71549093, v0),
                                     )?;
                                 if raw != 0 {
                                     unsafe {
@@ -30127,20 +30118,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                 ret_w0_writer
                     .own_rows(
                         ret_w1,
-                        ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>(),
+                        ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>(),
                         ret_w1_release_row,
                     )
             };
             for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w1_source),
             ) {
-                let ret_w5_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w2;
-                let ret_w7 = ::std::vec::Vec::len(&ret_w5_source);
+                let ret_w5_source: &::std::vec::Vec<
+                    perftest_flat::CallbackRowResource,
+                > = &(ret_w2);
+                let ret_w7 = <[perftest_flat::CallbackRowResource]>::len(
+                    ::core::convert::AsRef::<
+                        [perftest_flat::CallbackRowResource],
+                    >::as_ref(ret_w5_source),
+                );
                 let ret_w5 = ret_w0_writer
                     .rows(
                         ret_w7,
-                        ::core::mem::size_of::<__PbBulk_i64_Range_f508a557893415ce>(),
-                        ::core::mem::align_of::<__PbBulk_i64_Range_f508a557893415ce>(),
+                        ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
+                        ::core::mem::align_of::<__PbBulk_i64_59a3202a71549093>(),
                     )?;
                 unsafe fn ret_w5_release_row(
                     reader: &::prebindgen_jni_runtime::bulk::Reader<'_>,
@@ -30152,28 +30149,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                                 i64,
                             >(
                                 base
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_Range_f508a557893415ce, v0
-                                    ),
-                            )?;
-                        if raw != 0 {
-                            unsafe {
-                                ::prebindgen_jni_runtime::drop_pointer::<
-                                    perftest_flat::CallbackRowResource,
-                                >(raw)?;
-                            }
-                        }
-                        Ok(())
-                    });
-                    let _ = ::prebindgen_runtime::boundary(|| {
-                        let raw = reader
-                            .read::<
-                                i64,
-                            >(
-                                base
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_Range_f508a557893415ce, v2
-                                    ),
+                                    + ::core::mem::offset_of!(__PbBulk_i64_59a3202a71549093, v0),
                             )?;
                         if raw != 0 {
                             unsafe {
@@ -30189,64 +30165,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                     ret_w0_writer
                         .own_rows(
                             ret_w5,
-                            ::core::mem::size_of::<
-                                __PbBulk_i64_Range_f508a557893415ce,
-                            >(),
+                            ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>(),
                             ret_w5_release_row,
                         )
                 };
                 for (ret_w8, ret_w6) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w5_source),
+                    <[perftest_flat::CallbackRowResource]>::iter(
+                        ::core::convert::AsRef::<
+                            [perftest_flat::CallbackRowResource],
+                        >::as_ref(ret_w5_source),
+                    ),
                 ) {
-                    let ret_w9_record = &(ret_w6);
-                    let mut ret_w9_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ::core::clone::Clone::clone(&ret_w9_record.first),
-                    });
-                    let ret_w9_f1_source = &ret_w9_record.label;
-                    let ret_w9_f1 = Some(
-                        ret_w0_writer.append_buffer(ret_w9_f1_source.as_bytes())?,
-                    );
-                    let mut ret_w9_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ::core::clone::Clone::clone(&ret_w9_record.second),
+                    let mut ret_w9 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ::core::clone::Clone::clone(ret_w6),
                     });
                     ret_w0_writer
                         .write(
                             (ret_w5.offset as usize
                                 + ret_w8
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_f508a557893415ce,
-                                    >())
+                                    * ::core::mem::size_of::<__PbBulk_i64_59a3202a71549093>())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_f508a557893415ce, v0
+                                    __PbBulk_i64_59a3202a71549093, v0
                                 ),
-                            ((&mut *ret_w9_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::CallbackRowResource,
-                                >) as i64,
-                        )?;
-                    ret_w0_writer
-                        .range(
-                            (ret_w5.offset as usize
-                                + ret_w8
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_f508a557893415ce,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_f508a557893415ce, v1
-                                ),
-                            ret_w9_f1,
-                        )?;
-                    ret_w0_writer
-                        .write(
-                            (ret_w5.offset as usize
-                                + ret_w8
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_f508a557893415ce,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_f508a557893415ce, v2
-                                ),
-                            ((&mut *ret_w9_f2)
+                            ((&mut *ret_w9)
                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                     perftest_flat::CallbackRowResource,
                                 >) as i64,
@@ -30257,8 +30198,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {
-                        let _ = Box::into_raw(ret_w9_f0).expose_provenance();
-                        let _ = Box::into_raw(ret_w9_f2).expose_provenance();
+                        let _ = Box::into_raw(ret_w9).expose_provenance();
                     })();
                     unsafe {
                         ret_w0_writer.commit_rows(ret_w5_owners, ret_w8 + 1);
@@ -30269,9 +30209,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                     .range(
                         (ret_w1.offset as usize
                             + ret_w4
-                                * ::core::mem::size_of::<__PbBulk_Range_070bbcf38f849ff2>())
+                                * ::core::mem::size_of::<__PbBulk_Range_f673a6355cb08de9>())
                             + ::core::mem::offset_of!(
-                                __PbBulk_Range_070bbcf38f849ff2, v0
+                                __PbBulk_Range_f673a6355cb08de9, v0
                             ),
                         ret_w5,
                     )?;
@@ -30288,7 +30228,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let ret_w1 = Some(ret_w1);
             ret_w0_writer
                 .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_4870fc95cea3097a, v0),
+                    ::core::mem::offset_of!(__PbBulk_Range_840975b732d62e1f, v0),
                     ret_w1,
                 )?;
             let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(

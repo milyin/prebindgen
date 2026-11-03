@@ -304,9 +304,7 @@ fn main() {
             .fun(fun!(jni_output_optional)
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
                 .output(ordinary_rows(Output::Optional(Box::new(ordinary_rows(row()))))))
-            .fun(fun!(jni_output_mixed)
-                .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(Output::Bulk(Box::new(ordinary_rows(row()))))))
+            .fun(fun!(jni_output_mixed))
             .fun(fun!(c_output_rows).name("jniOutputRows")
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
                 .output(ordinary_rows(row())))
@@ -464,6 +462,12 @@ fn main() {
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
+            // Compile a mixed prepared tree directly: declaration defaults
+            // deliberately lift inner bulk modifiers to the enclosing sequence.
+            let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
+            let recipe=sequence(prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed)))),None);
+            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec,"jni_output_mixed",&recipe,&())?;
+            flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;

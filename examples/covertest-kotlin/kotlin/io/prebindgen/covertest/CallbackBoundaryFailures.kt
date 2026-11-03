@@ -6,6 +6,7 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicReference
 
 internal object CallbackFailureProbe {
+    @JvmStatic external fun progress(): Int
     init { NativeLibrary.ensureLoaded() }
     @JvmStatic external fun exercise(mode: Int): Int
 }

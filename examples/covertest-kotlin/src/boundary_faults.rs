@@ -11,6 +11,11 @@ struct Fault {
     oom: jclass,
     remaining: jint,
     failures: jint,
+    first_array: jobjectArray,
+    root_stores: jint,
+    progress: jint,
+    mode: jint,
+    initial_drops: i64,
 }
 thread_local! { static FAULT: RefCell<Option<Fault>> = const { RefCell::new(None) }; }
 
@@ -22,6 +27,11 @@ fn current() -> Option<(Fault, bool)> {
         fault.remaining = (fault.remaining - 1).max(0);
         if inject {
             fault.failures += 1;
+            fault.progress = if fault.mode == 16 {
+                ((perftest_flat::callback_row_resource_drops() - fault.initial_drops) / 2) as jint
+            } else {
+                fault.root_stores
+            };
         }
         Some((*fault, inject))
     })
@@ -59,7 +69,28 @@ unsafe extern "system" fn fail_array(
         out_of_memory(env, fault);
         std::ptr::null_mut()
     } else {
-        ((*fault.original).NewObjectArray.unwrap())(env, length, class, value)
+        let array = ((*fault.original).NewObjectArray.unwrap())(env, length, class, value);
+        FAULT.with(|slot| {
+            if let Some(fault) = slot.borrow_mut().as_mut() {
+                if fault.first_array.is_null() {
+                    fault.first_array = array;
+                }
+            }
+        });
+        array
+    }
+}
+
+unsafe extern "system" fn track_store(
+    env: *mut JNIEnv,
+    array: jobjectArray,
+    index: jsize,
+    value: jobject,
+) {
+    let fault = FAULT.with(|slot| slot.borrow().expect("installed hook"));
+    ((*fault.original).SetObjectArrayElement.unwrap())(env, array, index, value);
+    if array == fault.first_array && ((*fault.original).ExceptionCheck.unwrap())(env) == JNI_FALSE {
+        FAULT.with(|slot| slot.borrow_mut().as_mut().unwrap().root_stores += 1);
     }
 }
 
@@ -117,6 +148,9 @@ impl Hook {
             16 => table.NewStringUTF = Some(fail_string),
             _ => unreachable!(),
         }
+        if mode >= 13 && mode != 16 {
+            table.SetObjectArrayElement = Some(track_store);
+        }
         FAULT.with(|slot| {
             *slot.borrow_mut() = Some(Fault {
                 original,
@@ -127,6 +161,8 @@ impl Hook {
                     9
                 } else if mode == 18 {
                     3
+                } else if mode == 14 {
+                    8
                 } else if mode >= 13 {
                     // Fail after completed rows; the pair also has an already
                     // completed first output when conversion of the second fails.
@@ -139,6 +175,11 @@ impl Hook {
                     1
                 },
                 failures: 0,
+                first_array: std::ptr::null_mut(),
+                root_stores: 0,
+                progress: 0,
+                mode,
+                initial_drops: perftest_flat::callback_row_resource_drops(),
             })
         });
         *raw = &*table;
@@ -149,6 +190,14 @@ impl Hook {
             _oom: oom,
         })
     }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_progress(
+    _: prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _: JClass<'_>,
+) -> jint {
+    FAULT.with(|slot| slot.borrow().as_ref().map_or(0, |fault| fault.progress))
 }
 impl Drop for Hook {
     fn drop(&mut self) {

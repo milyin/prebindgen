@@ -16,7 +16,7 @@ fun checkJniOutputOwnership() {
             { jniOutputPair(fail, onError = ResultFailureHandler(::unexpectedOutputError)) { first, second -> close(first); close(second) } },
             { jniOutputFold(fail, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> close(listOf(row)) } },
             { jniOutputOptional(fail).filterNotNull().forEach(::close) },
-            { jniOutputMixed(fail).forEach(::close) },
+            { jniOutputMixed(fail).flatten().forEach { it.close() } },
         )
         for (operation in operations) {
             var failed = false
@@ -42,6 +42,7 @@ object JniOutputRuntimeProbe {
 object JniOutputFailureEntryPoint {
     @JvmStatic fun run(mode: Int) {
         var failed = false
+        val drops = callbackRowResourceDrops()
         try {
             when (mode) {
                 13 -> jniOutputRows(-1, onError = ResultFailureHandler(::unexpectedOutputError)).forEach { it.first.close(); it.second.close() }
@@ -49,12 +50,15 @@ object JniOutputFailureEntryPoint {
                 15 -> jniOutputPair(-1, onError = ResultFailureHandler(::unexpectedOutputError)) { first, second -> (first + second).forEach { it.first.close(); it.second.close() } }
                 16 -> jniOutputFold(-1, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> row.first.close(); row.second.close() }
                 17 -> jniOutputOptional(-1).filterNotNull().flatten().forEach { it.first.close(); it.second.close() }
-                18 -> jniOutputMixed(-1).flatten().forEach { it.first.close(); it.second.close() }
+                18 -> jniOutputMixed(-1).flatten().forEach { it.close() }
             }
         } catch (failure: OutOfMemoryError) {
             check(failure.message == "injected callback allocation failure")
+            check(CallbackFailureProbe.progress() > 0) { "fault occurred before any accepted row: mode=$mode" }
             failed = true
         }
-        check(failed && callbackRowResourceLive() == 0L)
+        check(failed && callbackRowResourceLive() == 0L) { "mode=$mode failed=$failed live=${callbackRowResourceLive()}" }
+        val expected = when (mode) { 13 -> 10L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; else -> 24L }
+        check(callbackRowResourceDrops() == drops + expected) { "mode=$mode drops=${callbackRowResourceDrops()-drops} expected=$expected" }
     }
 }

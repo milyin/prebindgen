@@ -525,8 +525,11 @@ pub fn jni_output_optional(fail_at: i64) -> Vec<Option<Vec<CallbackRow>>> {
     ]
 }
 #[prebindgen]
-pub fn jni_output_mixed(fail_at: i64) -> Vec<Vec<CallbackRow>> {
+pub fn jni_output_mixed(fail_at: i64) -> Vec<Vec<CallbackRowResource>> {
     native_bulk_nested(fail_at)
+        .into_iter()
+        .map(|rows| rows.into_iter().map(|row| row.second).collect())
+        .collect()
 }
 #[prebindgen]
 pub fn c_output_nested(fail_at: i64) -> Result<Vec<Vec<CallbackRow>>, ResultFailure> {
