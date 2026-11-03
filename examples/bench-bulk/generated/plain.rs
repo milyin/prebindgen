@@ -54,6 +54,81 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_drop_1WideRowReturnHand
         ::prebindgen_jni_runtime::fail(&mut env, &e);
     }
 }
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_InputHandle_2099cab566bedd37<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let raw = unsafe {
+                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
+            }?;
+            if raw != 0 {
+                let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                    ::prebindgen_jni_runtime::drop_pointer::<
+                        bench_flat::InputHandle,
+                    >(raw)
+                });
+            }
+            Ok(())
+        },
+    );
+}
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let raw = unsafe {
+                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
+            }?;
+            if raw != 0 {
+                let _ = ::prebindgen_runtime::boundary(|| unsafe {
+                    ::prebindgen_jni_runtime::drop_pointer::<
+                        bench_flat::InputHandle,
+                    >(raw)
+                });
+            }
+            Ok(())
+        },
+    );
+}
+#[allow(dead_code, non_snake_case)]
+fn __pb_cleanup_objects_Rows_c27fddfa623fb18e<'local>(
+    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+) {
+    ::prebindgen_jni_runtime::reclaim_output(
+        env,
+        |env| {
+            let rows = env
+                .get_object_array_element(row, 0usize as i32)
+                .map_err(|e| e.to_string())?;
+            let rows = env
+                .auto_local(
+                    ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(rows),
+                );
+            if !rows.is_null() {
+                let length = env.get_array_length(&*rows).map_err(|e| e.to_string())?
+                    as usize;
+                unsafe {
+                    ::prebindgen_jni_runtime::reclaim_rows(
+                        env,
+                        rows.as_raw(),
+                        length,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                    );
+                }
+            }
+            Ok(())
+        },
+    );
+}
 #[allow(
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
@@ -922,32 +997,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             let ret_w0_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            fn ret_w0_release_row<'local>(
-                env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
-            ) {
-                ::prebindgen_jni_runtime::reclaim_output(
-                    env,
-                    |env| {
-                        let raw = unsafe {
-                            ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-                        }?;
-                        if raw != 0 {
-                            let _ = ::prebindgen_runtime::boundary(|| unsafe {
-                                ::prebindgen_jni_runtime::drop_pointer::<
-                                    bench_flat::InputHandle,
-                                >(raw)
-                            });
-                        }
-                        Ok(())
-                    },
-                );
-            }
             let mut ret_w0_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new(
                     &mut jni_environment,
                     &ret_w0,
-                    ret_w0_release_row,
+                    __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
                 )
             }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
@@ -1231,32 +1285,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
             let ret_w0_source: ::std::vec::Vec<bench_flat::HandleRecord> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            fn ret_w0_release_row<'local>(
-                env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
-            ) {
-                ::prebindgen_jni_runtime::reclaim_output(
-                    env,
-                    |env| {
-                        let raw = unsafe {
-                            ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-                        }?;
-                        if raw != 0 {
-                            let _ = ::prebindgen_runtime::boundary(|| unsafe {
-                                ::prebindgen_jni_runtime::drop_pointer::<
-                                    bench_flat::InputHandle,
-                                >(raw)
-                            });
-                        }
-                        Ok(())
-                    },
-                );
-            }
             let mut ret_w0_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new(
                     &mut jni_environment,
                     &ret_w0,
-                    ret_w0_release_row,
+                    __pb_cleanup_objects_InputHandle_2099cab566bedd37,
                 )
             }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
@@ -1590,67 +1623,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
             let ret_w0_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
-            fn ret_w0_release_row<'local>(
-                env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
-            ) {
-                ::prebindgen_jni_runtime::reclaim_output(
-                    env,
-                    |env| {
-                        fn release_nested<'local>(
-                            env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                            row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<
-                                'local,
-                            >,
-                        ) {
-                            ::prebindgen_jni_runtime::reclaim_output(
-                                env,
-                                |env| {
-                                    let raw = unsafe {
-                                        ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-                                    }?;
-                                    if raw != 0 {
-                                        let _ = ::prebindgen_runtime::boundary(|| unsafe {
-                                            ::prebindgen_jni_runtime::drop_pointer::<
-                                                bench_flat::InputHandle,
-                                            >(raw)
-                                        });
-                                    }
-                                    Ok(())
-                                },
-                            );
-                        }
-                        let rows = env
-                            .get_object_array_element(row, 0usize as i32)
-                            .map_err(|e| e.to_string())?;
-                        let rows = env
-                            .auto_local(
-                                ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                    rows,
-                                ),
-                            );
-                        if !rows.is_null() {
-                            let length = env
-                                .get_array_length(&*rows)
-                                .map_err(|e| e.to_string())? as usize;
-                            unsafe {
-                                ::prebindgen_jni_runtime::reclaim_rows(
-                                    env,
-                                    rows.as_raw(),
-                                    length,
-                                    release_nested,
-                                );
-                            }
-                        }
-                        Ok(())
-                    },
-                );
-            }
             let mut ret_w0_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new(
                     &mut jni_environment,
                     &ret_w0,
-                    ret_w0_release_row,
+                    __pb_cleanup_objects_Rows_c27fddfa623fb18e,
                 )
             }?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
@@ -1665,32 +1642,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     &mut jni_environment,
                     ret_w6,
                 )?;
-                fn ret_w4_release_row<'local>(
-                    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
-                ) {
-                    ::prebindgen_jni_runtime::reclaim_output(
-                        env,
-                        |env| {
-                            let raw = unsafe {
-                                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-                            }?;
-                            if raw != 0 {
-                                let _ = ::prebindgen_runtime::boundary(|| unsafe {
-                                    ::prebindgen_jni_runtime::drop_pointer::<
-                                        bench_flat::InputHandle,
-                                    >(raw)
-                                });
-                            }
-                            Ok(())
-                        },
-                    );
-                }
                 let mut ret_w4_owner = unsafe {
                     ::prebindgen_jni_runtime::OutputRows::new(
                         &mut jni_environment,
                         &ret_w4,
-                        ret_w4_release_row,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
                     )
                 }?;
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
@@ -6913,32 +6869,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     &mut jni_environment,
                     ret_w6,
                 )?;
-                fn ret_w4_release_row<'local>(
-                    env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-                    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
-                ) {
-                    ::prebindgen_jni_runtime::reclaim_output(
-                        env,
-                        |env| {
-                            let raw = unsafe {
-                                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-                            }?;
-                            if raw != 0 {
-                                let _ = ::prebindgen_runtime::boundary(|| unsafe {
-                                    ::prebindgen_jni_runtime::drop_pointer::<
-                                        bench_flat::InputHandle,
-                                    >(raw)
-                                });
-                            }
-                            Ok(())
-                        },
-                    );
-                }
                 let mut ret_w4_owner = unsafe {
                     ::prebindgen_jni_runtime::OutputRows::new(
                         &mut jni_environment,
                         &ret_w4,
-                        ret_w4_release_row,
+                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
                     )
                 }?;
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
