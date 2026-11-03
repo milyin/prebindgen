@@ -1,0 +1,615 @@
+{
+  "builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-normal-v3/target/release/build/c-collection-bench-5cd4c567c6f37856/out",
+        "-L/tmp/c-output-before-normal-v3/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-normal-v3/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-normal-v3/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "library_sha256": "eb23da49505a173e963769a50e75c1d7dd06b2f3cae767c4d30d4e2f8ba376bb",
+      "driver": "/tmp/c-output-before-normal-v3/driver",
+      "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners": "1c2e5ecf26698db059f6fa6547508c112b7ec012"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-after-normal/target/release/build/c-collection-bench-2ccd1a380737f4eb/out",
+        "-L/tmp/c-output-after-normal/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-after-normal/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-after-normal/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "library_sha256": "b700d60afe86b7d31fb0a3f722df6cb74d538565c49f6f31dc6791a0cda93ca0",
+      "driver": "/tmp/c-output-after-normal/driver",
+      "driver_sha256": "d6b1162d06eaf3228d345c741aae8df2c4f72dadfcc875657e2ec2ecead6eb3f",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "2e33accbf2cea7c2eade7ac1ae9ae86b53e0c83adfd6c5ea2eea7a6eff16d060"
+    }
+  },
+  "effective_builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-normal-v3/target/release/build/c-collection-bench-5cd4c567c6f37856/out",
+        "-L/tmp/c-output-before-normal-v3/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-normal-v3/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-normal-v3/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "library_sha256": "eb23da49505a173e963769a50e75c1d7dd06b2f3cae767c4d30d4e2f8ba376bb",
+      "driver": "/tmp/c-output-before-normal-v3/driver",
+      "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-normal-v3/target/release/build/c-collection-bench-5cd4c567c6f37856/out",
+        "-L/tmp/c-output-before-normal-v3/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-normal-v3/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-normal-v3/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "library_sha256": "eb23da49505a173e963769a50e75c1d7dd06b2f3cae767c4d30d4e2f8ba376bb",
+      "driver": "/tmp/c-output-before-normal-v3/driver",
+      "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    }
+  },
+  "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+  "settings": {
+    "before": "/tmp/c-output-before-normal-v3",
+    "after": "/tmp/c-output-after-normal",
+    "output": "/tmp/c-output-aa",
+    "kind": "time",
+    "forks": 4,
+    "same_build": "before",
+    "smoke": false
+  },
+  "cells": [
+    [
+      "control",
+      1
+    ],
+    [
+      "handles",
+      512
+    ]
+  ],
+  "runs": [
+    {
+      "id": "0-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "7d6c2e8b0e03ff4afda54c857bab4f081fd68b04bded894ddc6a167b8effe0a6"
+    },
+    {
+      "id": "0-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c88fbeaaa390f93b1429bc6e6a3a3057c7117c1b30a06f3a5e3244f5b67a90cb"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5ad1262d3dd11ee67c253257b9e3f290ccbb30baf0790ab6d416b3a6b558068e"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ae11423ec6425463d2e360c5759ebb460ee55b7ac8778ef396d3ddd8b32bddfa"
+    },
+    {
+      "id": "1-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0ec7aab65fd2f15a78cf3d8e799de38341015cc967e2cda87441d64c77bb953c"
+    },
+    {
+      "id": "1-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ae75ac5cae7168dd9df629072ad082a439ac9bade8a9a39d6e77832e7effa6f1"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d8dabb457712aae91bcf2e17db23da6f0693a0b4b087cd31e478bc4885e2f8b0"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "db1a4ef9b48fc7885eb996b6ae9947f2914e7357e5c7faa0288574f05c772a35"
+    },
+    {
+      "id": "2-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d322c05c37baf65ebd683a45e3f7b0c574ef7b70989c9260376c9593e01b903e"
+    },
+    {
+      "id": "2-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ffd94e5acdafde92d9c1a05675b134ac675a98fa5a5d8c7303cc60833f4284f3"
+    },
+    {
+      "id": "2-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "17330702ed46a6ed3322614b2d79aa5dae29d81f89a8e03d73b1070c2771682b"
+    },
+    {
+      "id": "2-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0534aefb5c7e8b5d8c78334b7dfec01aadde14bae6ba5e8e26b238529016fa70"
+    },
+    {
+      "id": "3-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "126268dbb2da7cb82a9d8db331ed6207124a78184ae8dc6072843c797ce601f1"
+    },
+    {
+      "id": "3-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e2200753e7b2dd27f5d2aa080d62945163da188123dfae788277d43aa927df7b"
+    },
+    {
+      "id": "3-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e4a298fba8111114d0ec08d303ad5e6fc7a97b3497f1f0c14df85b5404a5cf49"
+    },
+    {
+      "id": "3-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0ecf5480042fe45bf02559c89dce90b1e06e1d62ce8450def2121aa2be3852dc"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 3.0742982149124147,
+        "cpu_ns": 3.07442769408226,
+        "min_wall_ns": 2.9788806796073914,
+        "max_wall_ns": 3.2575550258159636,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3.086029362678528,
+            "cpu_ns": 3.086126387119293
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2.9788806796073914,
+            "cpu_ns": 2.978861927986145
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3.2575550258159636,
+            "cpu_ns": 3.2559434175491333
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3.0625670671463014,
+            "cpu_ns": 3.062729001045227
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 3.0016623735427856,
+        "cpu_ns": 3.0015673339366913,
+        "min_wall_ns": 2.9575245797634127,
+        "max_wall_ns": 3.3172821402549744,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3.3172821402549744,
+            "cpu_ns": 3.3169443011283875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3.023864710330963,
+            "cpu_ns": 3.0237552523612976
+          },
+          {
+            "fork": 2,
+            "wall_ns": 2.9575245797634127,
+            "cpu_ns": 2.9576163291931152
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2.9794600367546082,
+            "cpu_ns": 2.979379415512085
+          }
+        ]
+      },
+      "wall_change_percent": -2.3626804002713997,
+      "cpu_change_percent": -2.3698836790278843,
+      "paired_wall_changes_percent": [
+        7.493537824790164,
+        1.5100984417240948,
+        -9.21029556445937,
+        -2.713639524280931
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "wall_ns": 17380.920532226562,
+        "cpu_ns": 17349.426025390625,
+        "min_wall_ns": 17157.106640625,
+        "max_wall_ns": 17745.795678710936,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 17157.106640625,
+            "cpu_ns": 17079.43017578125
+          },
+          {
+            "fork": 1,
+            "wall_ns": 17536.24494628906,
+            "cpu_ns": 17528.642578125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 17225.596118164063,
+            "cpu_ns": 17170.20947265625
+          },
+          {
+            "fork": 3,
+            "wall_ns": 17745.795678710936,
+            "cpu_ns": 17727.829345703125
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 17206.58123779297,
+        "cpu_ns": 17201.184326171875,
+        "min_wall_ns": 16639.68466796875,
+        "max_wall_ns": 18125.23210449219,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 16723.99006347656,
+            "cpu_ns": 16715.691650390625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 18125.23210449219,
+            "cpu_ns": 18122.9130859375
+          },
+          {
+            "fork": 2,
+            "wall_ns": 17689.172412109376,
+            "cpu_ns": 17686.677001953125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 16639.68466796875,
+            "cpu_ns": 16603.4619140625
+          }
+        ]
+      },
+      "wall_change_percent": -1.0030498333522986,
+      "cpu_change_percent": -0.8544472825890659,
+      "paired_wall_changes_percent": [
+        -2.524415020670756,
+        3.3586845987103153,
+        2.6912061026235223,
+        -6.233087717048102
+      ]
+    }
+  ],
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "loader_environment": {},
+  "samples_sha256": "6fd66fc74852bd68faf7a9a8a7a93ba0fb3c34a5a697190055d00a56b4f87e59",
+  "runner_sha256": "1c7c2ac19e04335961b8443b7298639615f22779fafeec49f156f2edc43ec339"
+}

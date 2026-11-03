@@ -1,0 +1,3185 @@
+{
+  "builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-counts/target/release/build/c-collection-bench-2d3a6a8235357d1c/out",
+        "-L/tmp/c-output-before-counts/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-counts/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-counts/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "library_sha256": "2ac7a212b3d463d41eadd685d3556ce94ca537cf6d7e00efd406ebab89c059e0",
+      "driver": "/tmp/c-output-before-counts/driver",
+      "driver_sha256": "f71a1fd711b16261b427106fe46b0678477fabb2fbcedd74705e1c60320ddecf",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners": "1c2e5ecf26698db059f6fa6547508c112b7ec012"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-after-counts/target/release/build/c-collection-bench-720ede519972f412/out",
+        "-L/tmp/c-output-after-counts/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-after-counts/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-after-counts/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "library_sha256": "69b09597bf69b9b54e6414d0bd36cd08de9bd07dfd70bfee8fdf991285c83eee",
+      "driver": "/tmp/c-output-after-counts/driver",
+      "driver_sha256": "aa057af04389da12e5571aae7ce7ef1453e47cc2f31419584efedbee7575dc06",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "2e33accbf2cea7c2eade7ac1ae9ae86b53e0c83adfd6c5ea2eea7a6eff16d060"
+    }
+  },
+  "effective_builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-counts/target/release/build/c-collection-bench-2d3a6a8235357d1c/out",
+        "-L/tmp/c-output-before-counts/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-counts/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-counts/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "library_sha256": "2ac7a212b3d463d41eadd685d3556ce94ca537cf6d7e00efd406ebab89c059e0",
+      "driver": "/tmp/c-output-before-counts/driver",
+      "driver_sha256": "f71a1fd711b16261b427106fe46b0678477fabb2fbcedd74705e1c60320ddecf",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners": "1c2e5ecf26698db059f6fa6547508c112b7ec012"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-after-counts/target/release/build/c-collection-bench-720ede519972f412/out",
+        "-L/tmp/c-output-after-counts/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-after-counts/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-after-counts/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "library_sha256": "69b09597bf69b9b54e6414d0bd36cd08de9bd07dfd70bfee8fdf991285c83eee",
+      "driver": "/tmp/c-output-after-counts/driver",
+      "driver_sha256": "aa057af04389da12e5571aae7ce7ef1453e47cc2f31419584efedbee7575dc06",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "2e33accbf2cea7c2eade7ac1ae9ae86b53e0c83adfd6c5ea2eea7a6eff16d060"
+    }
+  },
+  "driver_sha256": "f71a1fd711b16261b427106fe46b0678477fabb2fbcedd74705e1c60320ddecf",
+  "settings": {
+    "before": "/tmp/c-output-before-counts",
+    "after": "/tmp/c-output-after-counts",
+    "output": "/tmp/c-output-counts",
+    "kind": "count",
+    "forks": 2,
+    "same_build": null,
+    "smoke": false
+  },
+  "cells": [
+    [
+      "handles",
+      0
+    ],
+    [
+      "handles",
+      1
+    ],
+    [
+      "handles",
+      8
+    ],
+    [
+      "handles",
+      64
+    ],
+    [
+      "handles",
+      512
+    ],
+    [
+      "handles",
+      4096
+    ],
+    [
+      "records",
+      0
+    ],
+    [
+      "records",
+      1
+    ],
+    [
+      "records",
+      8
+    ],
+    [
+      "records",
+      64
+    ],
+    [
+      "records",
+      512
+    ],
+    [
+      "records",
+      4096
+    ],
+    [
+      "nested",
+      0
+    ],
+    [
+      "nested",
+      1
+    ],
+    [
+      "nested",
+      8
+    ],
+    [
+      "nested",
+      64
+    ],
+    [
+      "nested",
+      512
+    ],
+    [
+      "nested",
+      4096
+    ],
+    [
+      "many",
+      0
+    ],
+    [
+      "many",
+      1
+    ],
+    [
+      "many",
+      8
+    ],
+    [
+      "many",
+      64
+    ],
+    [
+      "many",
+      512
+    ],
+    [
+      "many",
+      4096
+    ],
+    [
+      "numbers",
+      0
+    ],
+    [
+      "numbers",
+      1
+    ],
+    [
+      "numbers",
+      8
+    ],
+    [
+      "numbers",
+      64
+    ],
+    [
+      "numbers",
+      512
+    ],
+    [
+      "numbers",
+      4096
+    ],
+    [
+      "control",
+      1
+    ]
+  ],
+  "runs": [
+    {
+      "id": "0-many-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6e8ca75deec67d391910f176cf0bda1d0dab00b6a32102b1c10bb03fe43ade82"
+    },
+    {
+      "id": "0-many-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c2c2ce6bde34587f3ddd9db0c38544abaee84a53828ceadf92ef29c0223e8c1a"
+    },
+    {
+      "id": "0-many-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "92f63e6f62aa0af8dc34546ed0d317aca7fcdf17966e08c68c60a8a1b2af9b7f"
+    },
+    {
+      "id": "0-many-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "37ce610ef4d3fd6ed4c3d5b9a47fb918afe383e8b202eb59525466dbfa6560cb"
+    },
+    {
+      "id": "0-handles-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "0-handles-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "0-numbers-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "02633bf96caed398c339aac7ff570c5c76f0174b121495a817d869cf8048abad"
+    },
+    {
+      "id": "0-numbers-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c8113f471464aff978048d7161544ca2595fe7cc12a22e93d99e0d02f1946556"
+    },
+    {
+      "id": "0-records-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "332c29c1957d6daf1db875d5fa244e0c2e09e7bfb4759ff9234f5142b0e10e64"
+    },
+    {
+      "id": "0-records-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f821451fc78672d7da61b9eb9c3220eb873a948554e58845cb5afa8185322644"
+    },
+    {
+      "id": "0-records-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "edb9ca003ec06ab01929ab825bd0fa15319c4aee44ee5bebda6a258409695f10"
+    },
+    {
+      "id": "0-records-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f5a28b2c5f7af8bf5fecc4bfdfcf812d62f631b55db54c1fc9e781cb7c9a2fb3"
+    },
+    {
+      "id": "0-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "88a1939aadd04ae2af1e7df99d634e0236c46630637c0e514c0b9a2901cb3faa"
+    },
+    {
+      "id": "0-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed94df2bac0d2a9d256f88aa84128a4ed13043b72971a4ac7dd0a85ce266585e"
+    },
+    {
+      "id": "0-records-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4167d59738e412cc28497dbb17b6c2f61264aa638b34f3f27ac810de9bd0c5ea"
+    },
+    {
+      "id": "0-records-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8148ced596521a56f37876e7eb0164b77e2857a58d40c32a7c597cf21f7e439c"
+    },
+    {
+      "id": "0-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0a62f1ba24c07de8533df5a6ed7ef5d3d18eeb39a8b1163dff2d510bea792373"
+    },
+    {
+      "id": "0-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "34bb05221fbafec187428c268d938e8db681b29042d1295f1a57402ea7216ec5"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "0-many-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "eb9199e2ea9f4f476f8888b16742db0332ba6974e1060181b5ade84893851f92"
+    },
+    {
+      "id": "0-many-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4a6929fc389bbd79295dfbae839deef1e11bcfbfb1bdfb21bf4a18f5d27c81fe"
+    },
+    {
+      "id": "0-records-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "64b814d6a12ada76496d03d851904f90aac626f171288ace8194c92f7b813010"
+    },
+    {
+      "id": "0-records-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a6086dd781f4b2f92054cbb1b80c2e26255501448043958e80a9ba2878b69297"
+    },
+    {
+      "id": "0-many-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "0-many-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "0-nested-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b37f267daa6809c2c3e00ec0295990db280eaa7d9337b30724dd3c8e82b8249f"
+    },
+    {
+      "id": "0-nested-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "881cafee6e5b9971b8061a71175b103345598e7b0354c7358150c196ae313c17"
+    },
+    {
+      "id": "0-nested-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "faa4dfcb360e468f4cb8cc1705f2b8a52ca19ee6827bae4626f7e31d4886e911"
+    },
+    {
+      "id": "0-nested-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f998c86743d9ce8ea6f56ad4aac8acfd89c5f6b069f83ac72d3a72f07d4416c7"
+    },
+    {
+      "id": "0-nested-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "77e2164cc3a0bc26b4e24756427967121efe7afb7e4b192e8e8fead8fa2fe300"
+    },
+    {
+      "id": "0-nested-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a2ffa7700f6ee68468dab635651f0394915a67bd7525b2d02dceb48aa770acbf"
+    },
+    {
+      "id": "0-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "7502a201e8e54f019456f68752a24a76abff5923099896f73ecf46a20ac91cf6"
+    },
+    {
+      "id": "0-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a70b58289330acc7f1fc878cd3a66148229f9438bcdf8c53f00388a7846ff24c"
+    },
+    {
+      "id": "0-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "807d60f508bf0e0fc72031288b73df84d22506fdba12525cff4721638c8f6790"
+    },
+    {
+      "id": "0-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "448798e0b1eab536a4aef7417f964ebbff0706409b6f96c89286cc5e68508f5b"
+    },
+    {
+      "id": "0-numbers-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "0-numbers-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "0-many-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9e2c87949b75e66c993d791f4291a8f499c2145a96e58b4ad912b7c8a06f0305"
+    },
+    {
+      "id": "0-many-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "97bd5acf2c34b4c7d599b46407bda35738098b90e0be0ca938e2a6e62c52f64e"
+    },
+    {
+      "id": "0-records-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "133e44ca89e902c5c360e71bf88c497906b1f60877b0a9586cf2c7ddf664f809"
+    },
+    {
+      "id": "0-records-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b3d2289d5fe951d226e95ef9a01294637021db4a15a57a13e7066f2efefc1ee9"
+    },
+    {
+      "id": "0-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "fe6083fbc2ca089648beef652680ca32a6b042d92d29086e851e652530f1a8f7"
+    },
+    {
+      "id": "0-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "aec6e5a946a8206b648267305d2468f79b1b02b49d7e488eaec5406fab07ee75"
+    },
+    {
+      "id": "0-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "1d2321f61b4fda08288926e9015a0bbbfce02efaf20860578059660ded5868a0"
+    },
+    {
+      "id": "0-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d4afe87af1f1049c2974e67c4ff3120e0514ededf0ef40ed75e465c7d2f6b586"
+    },
+    {
+      "id": "0-numbers-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9560781da348e354c1095975c3b9cad791e84fb33698cc3abd7273986cff4a2b"
+    },
+    {
+      "id": "0-numbers-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "043a83ba3d8d4e94b029e483df8462dadaf3271bd9e3ecf02cfd2971c8344ba4"
+    },
+    {
+      "id": "0-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4fb75ee70e6c0e1690df2e6fe523fdb2d7a358b7234f0743276e8daad2fa5fd0"
+    },
+    {
+      "id": "0-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d5f3fe91e80226aab92b971934c21fa0f173f55365510aea050631d05e64c000"
+    },
+    {
+      "id": "0-many-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0b8f8773147b0f4e1141d1971be1a779e830332c8b2a3874281353df0f5aedf0"
+    },
+    {
+      "id": "0-many-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5dcdf8403477a6f4e553b0fdd63d9369c6f9a9dc76b9278bd5f0776b5debf73a"
+    },
+    {
+      "id": "0-records-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "0-records-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "0-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8bab63753571d77ee2fb97dfc318c79624cc214a1fbf2b8422071f8bc4b5ada2"
+    },
+    {
+      "id": "0-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e608a58e0481ad3bc8536259ea0fad29fe0890096599c5cf0754d4decc28179f"
+    },
+    {
+      "id": "0-handles-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9e6956a3d5a981c00f14500bf8cee5ab6b3970a93165b11944fc46633929ad9e"
+    },
+    {
+      "id": "0-handles-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "97e8d3e74ef6b11308ace20aff14ca10969b2f5d888fc4b0427a8604a17605c8"
+    },
+    {
+      "id": "0-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed098e19a995d6f52230695d6c14fb4c436006bc1581ec68d56540dd8edbcff7"
+    },
+    {
+      "id": "0-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "03d850201b49f726a226da6222541006f7ec7eeec1f872696321895f3642c7c2"
+    },
+    {
+      "id": "0-handles-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6712b07703a4f810e77e6b735e7cd9c42ef0ece46139e88d236e0d544262904d"
+    },
+    {
+      "id": "0-handles-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d0178b92c3c63e0d20c16b7f1af58cf033a7cac444d227937e6744576315e79e"
+    },
+    {
+      "id": "1-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d4afe87af1f1049c2974e67c4ff3120e0514ededf0ef40ed75e465c7d2f6b586"
+    },
+    {
+      "id": "1-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "1d2321f61b4fda08288926e9015a0bbbfce02efaf20860578059660ded5868a0"
+    },
+    {
+      "id": "1-records-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f821451fc78672d7da61b9eb9c3220eb873a948554e58845cb5afa8185322644"
+    },
+    {
+      "id": "1-records-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "332c29c1957d6daf1db875d5fa244e0c2e09e7bfb4759ff9234f5142b0e10e64"
+    },
+    {
+      "id": "1-handles-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "97e8d3e74ef6b11308ace20aff14ca10969b2f5d888fc4b0427a8604a17605c8"
+    },
+    {
+      "id": "1-handles-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9e6956a3d5a981c00f14500bf8cee5ab6b3970a93165b11944fc46633929ad9e"
+    },
+    {
+      "id": "1-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "03d850201b49f726a226da6222541006f7ec7eeec1f872696321895f3642c7c2"
+    },
+    {
+      "id": "1-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed098e19a995d6f52230695d6c14fb4c436006bc1581ec68d56540dd8edbcff7"
+    },
+    {
+      "id": "1-numbers-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c8113f471464aff978048d7161544ca2595fe7cc12a22e93d99e0d02f1946556"
+    },
+    {
+      "id": "1-numbers-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "02633bf96caed398c339aac7ff570c5c76f0174b121495a817d869cf8048abad"
+    },
+    {
+      "id": "1-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed94df2bac0d2a9d256f88aa84128a4ed13043b72971a4ac7dd0a85ce266585e"
+    },
+    {
+      "id": "1-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "88a1939aadd04ae2af1e7df99d634e0236c46630637c0e514c0b9a2901cb3faa"
+    },
+    {
+      "id": "1-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e608a58e0481ad3bc8536259ea0fad29fe0890096599c5cf0754d4decc28179f"
+    },
+    {
+      "id": "1-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8bab63753571d77ee2fb97dfc318c79624cc214a1fbf2b8422071f8bc4b5ada2"
+    },
+    {
+      "id": "1-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "448798e0b1eab536a4aef7417f964ebbff0706409b6f96c89286cc5e68508f5b"
+    },
+    {
+      "id": "1-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "807d60f508bf0e0fc72031288b73df84d22506fdba12525cff4721638c8f6790"
+    },
+    {
+      "id": "1-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d5f3fe91e80226aab92b971934c21fa0f173f55365510aea050631d05e64c000"
+    },
+    {
+      "id": "1-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4fb75ee70e6c0e1690df2e6fe523fdb2d7a358b7234f0743276e8daad2fa5fd0"
+    },
+    {
+      "id": "1-records-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b3d2289d5fe951d226e95ef9a01294637021db4a15a57a13e7066f2efefc1ee9"
+    },
+    {
+      "id": "1-records-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "133e44ca89e902c5c360e71bf88c497906b1f60877b0a9586cf2c7ddf664f809"
+    },
+    {
+      "id": "1-many-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5dcdf8403477a6f4e553b0fdd63d9369c6f9a9dc76b9278bd5f0776b5debf73a"
+    },
+    {
+      "id": "1-many-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0b8f8773147b0f4e1141d1971be1a779e830332c8b2a3874281353df0f5aedf0"
+    },
+    {
+      "id": "1-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a70b58289330acc7f1fc878cd3a66148229f9438bcdf8c53f00388a7846ff24c"
+    },
+    {
+      "id": "1-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "7502a201e8e54f019456f68752a24a76abff5923099896f73ecf46a20ac91cf6"
+    },
+    {
+      "id": "1-many-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c2c2ce6bde34587f3ddd9db0c38544abaee84a53828ceadf92ef29c0223e8c1a"
+    },
+    {
+      "id": "1-many-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6e8ca75deec67d391910f176cf0bda1d0dab00b6a32102b1c10bb03fe43ade82"
+    },
+    {
+      "id": "1-numbers-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "043a83ba3d8d4e94b029e483df8462dadaf3271bd9e3ecf02cfd2971c8344ba4"
+    },
+    {
+      "id": "1-numbers-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9560781da348e354c1095975c3b9cad791e84fb33698cc3abd7273986cff4a2b"
+    },
+    {
+      "id": "1-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "aec6e5a946a8206b648267305d2468f79b1b02b49d7e488eaec5406fab07ee75"
+    },
+    {
+      "id": "1-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "fe6083fbc2ca089648beef652680ca32a6b042d92d29086e851e652530f1a8f7"
+    },
+    {
+      "id": "1-many-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "97bd5acf2c34b4c7d599b46407bda35738098b90e0be0ca938e2a6e62c52f64e"
+    },
+    {
+      "id": "1-many-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9e2c87949b75e66c993d791f4291a8f499c2145a96e58b4ad912b7c8a06f0305"
+    },
+    {
+      "id": "1-nested-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a2ffa7700f6ee68468dab635651f0394915a67bd7525b2d02dceb48aa770acbf"
+    },
+    {
+      "id": "1-nested-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "77e2164cc3a0bc26b4e24756427967121efe7afb7e4b192e8e8fead8fa2fe300"
+    },
+    {
+      "id": "1-handles-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d0178b92c3c63e0d20c16b7f1af58cf033a7cac444d227937e6744576315e79e"
+    },
+    {
+      "id": "1-handles-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6712b07703a4f810e77e6b735e7cd9c42ef0ece46139e88d236e0d544262904d"
+    },
+    {
+      "id": "1-numbers-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "1-numbers-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "1-nested-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "881cafee6e5b9971b8061a71175b103345598e7b0354c7358150c196ae313c17"
+    },
+    {
+      "id": "1-nested-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b37f267daa6809c2c3e00ec0295990db280eaa7d9337b30724dd3c8e82b8249f"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "1-nested-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f998c86743d9ce8ea6f56ad4aac8acfd89c5f6b069f83ac72d3a72f07d4416c7"
+    },
+    {
+      "id": "1-nested-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "faa4dfcb360e468f4cb8cc1705f2b8a52ca19ee6827bae4626f7e31d4886e911"
+    },
+    {
+      "id": "1-records-1-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f5a28b2c5f7af8bf5fecc4bfdfcf812d62f631b55db54c1fc9e781cb7c9a2fb3"
+    },
+    {
+      "id": "1-records-1-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "edb9ca003ec06ab01929ab825bd0fa15319c4aee44ee5bebda6a258409695f10"
+    },
+    {
+      "id": "1-handles-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "1-handles-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "1-many-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "1-many-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "1-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "34bb05221fbafec187428c268d938e8db681b29042d1295f1a57402ea7216ec5"
+    },
+    {
+      "id": "1-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "nested",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0a62f1ba24c07de8533df5a6ed7ef5d3d18eeb39a8b1163dff2d510bea792373"
+    },
+    {
+      "id": "1-records-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8148ced596521a56f37876e7eb0164b77e2857a58d40c32a7c597cf21f7e439c"
+    },
+    {
+      "id": "1-records-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4167d59738e412cc28497dbb17b6c2f61264aa638b34f3f27ac810de9bd0c5ea"
+    },
+    {
+      "id": "1-records-512-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a6086dd781f4b2f92054cbb1b80c2e26255501448043958e80a9ba2878b69297"
+    },
+    {
+      "id": "1-records-512-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "64b814d6a12ada76496d03d851904f90aac626f171288ace8194c92f7b813010"
+    },
+    {
+      "id": "1-records-0-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d2bc11c288b664d5ff32fe2c2f9594601c6b9c8b976fd8cc81ae845f890a64e1"
+    },
+    {
+      "id": "1-records-0-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5e875c20b41ef298777b133eb1db8df5d6f98fb5f75e36d0511d50e6f659611e"
+    },
+    {
+      "id": "1-many-8-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4a6929fc389bbd79295dfbae839deef1e11bcfbfb1bdfb21bf4a18f5d27c81fe"
+    },
+    {
+      "id": "1-many-8-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "eb9199e2ea9f4f476f8888b16742db0332ba6974e1060181b5ade84893851f92"
+    },
+    {
+      "id": "1-many-4096-after",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "37ce610ef4d3fd6ed4c3d5b9a47fb918afe383e8b202eb59525466dbfa6560cb"
+    },
+    {
+      "id": "1-many-4096-before",
+      "command": [
+        "/tmp/c-output-before-counts/driver",
+        "count",
+        "many",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-counts/target/release/libc_collection_bench.so",
+      "stdout_sha256": "92f63e6f62aa0af8dc34546ed0d317aca7fcdf17966e08c68c60a8a1b2af9b7f"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 32.0,
+          "min": 32,
+          "max": 32
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 24.0,
+          "min": 24,
+          "max": 24
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 11.0,
+          "min": 11,
+          "max": 11
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 256.0,
+          "min": 256,
+          "max": 256
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 10.0,
+          "min": 10,
+          "max": 10
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 192.0,
+          "min": 192,
+          "max": 192
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 67.0,
+          "min": 67,
+          "max": 67
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 2048.0,
+          "min": 2048,
+          "max": 2048
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 66.0,
+          "min": 66,
+          "max": 66
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1536.0,
+          "min": 1536,
+          "max": 1536
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 515.0,
+          "min": 515,
+          "max": 515
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 16384.0,
+          "min": 16384,
+          "max": 16384
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 514.0,
+          "min": 514,
+          "max": 514
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 12288.0,
+          "min": 12288,
+          "max": 12288
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 4099.0,
+          "min": 4099,
+          "max": 4099
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 131072.0,
+          "min": 131072,
+          "max": 131072
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 4098.0,
+          "min": 4098,
+          "max": 4098
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 98304.0,
+          "min": 98304,
+          "max": 98304
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 7.0,
+          "min": 7,
+          "max": 7
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 112.0,
+          "min": 112,
+          "max": 112
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 5.0,
+          "min": 5,
+          "max": 5
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 64.0,
+          "min": 64,
+          "max": 64
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 35.0,
+          "min": 35,
+          "max": 35
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 896.0,
+          "min": 896,
+          "max": 896
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 26.0,
+          "min": 26,
+          "max": 26
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 512.0,
+          "min": 512,
+          "max": 512
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 259.0,
+          "min": 259,
+          "max": 259
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 7168.0,
+          "min": 7168,
+          "max": 7168
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 194.0,
+          "min": 194,
+          "max": 194
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 4096.0,
+          "min": 4096,
+          "max": 4096
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 2051.0,
+          "min": 2051,
+          "max": 2051
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 57344.0,
+          "min": 57344,
+          "max": 57344
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1538.0,
+          "min": 1538,
+          "max": 1538
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 32768.0,
+          "min": 32768,
+          "max": 32768
+        }
+      }
+    },
+    {
+      "case": "many",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 16387.0,
+          "min": 16387,
+          "max": 16387
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 458752.0,
+          "min": 458752,
+          "max": 458752
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 12290.0,
+          "min": 12290,
+          "max": 12290
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 262144.0,
+          "min": 262144,
+          "max": 262144
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 240.0,
+          "min": 240,
+          "max": 240
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 120.0,
+          "min": 120,
+          "max": 120
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 7.0,
+          "min": 7,
+          "max": 7
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 272.0,
+          "min": 272,
+          "max": 272
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 5.0,
+          "min": 5,
+          "max": 5
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 144.0,
+          "min": 144,
+          "max": 144
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 14.0,
+          "min": 14,
+          "max": 14
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 496.0,
+          "min": 496,
+          "max": 496
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 12.0,
+          "min": 12,
+          "max": 12
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 312.0,
+          "min": 312,
+          "max": 312
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 70.0,
+          "min": 70,
+          "max": 70
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 2288.0,
+          "min": 2288,
+          "max": 2288
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 68.0,
+          "min": 68,
+          "max": 68
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1656.0,
+          "min": 1656,
+          "max": 1656
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 518.0,
+          "min": 518,
+          "max": 518
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 16624.0,
+          "min": 16624,
+          "max": 16624
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 516.0,
+          "min": 516,
+          "max": 516
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 12408.0,
+          "min": 12408,
+          "max": 12408
+        }
+      }
+    },
+    {
+      "case": "nested",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 4102.0,
+          "min": 4102,
+          "max": 4102
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 131312.0,
+          "min": 131312,
+          "max": 131312
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 4100.0,
+          "min": 4100,
+          "max": 4100
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 98424.0,
+          "min": 98424,
+          "max": 98424
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 16.0,
+          "min": 16,
+          "max": 16
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 16.0,
+          "min": 16,
+          "max": 16
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 128.0,
+          "min": 128,
+          "max": 128
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 128.0,
+          "min": 128,
+          "max": 128
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1024.0,
+          "min": 1024,
+          "max": 1024
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1024.0,
+          "min": 1024,
+          "max": 1024
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 8192.0,
+          "min": 8192,
+          "max": 8192
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 8192.0,
+          "min": 8192,
+          "max": 8192
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 65536.0,
+          "min": 65536,
+          "max": 65536
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 65536.0,
+          "min": 65536,
+          "max": 65536
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 5.0,
+          "min": 5,
+          "max": 5
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 80.0,
+          "min": 80,
+          "max": 80
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 64.0,
+          "min": 64,
+          "max": 64
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 19.0,
+          "min": 19,
+          "max": 19
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 640.0,
+          "min": 640,
+          "max": 640
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 18.0,
+          "min": 18,
+          "max": 18
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 512.0,
+          "min": 512,
+          "max": 512
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 131.0,
+          "min": 131,
+          "max": 131
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 5120.0,
+          "min": 5120,
+          "max": 5120
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 130.0,
+          "min": 130,
+          "max": 130
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 4096.0,
+          "min": 4096,
+          "max": 4096
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 1027.0,
+          "min": 1027,
+          "max": 1027
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 40960.0,
+          "min": 40960,
+          "max": 40960
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1026.0,
+          "min": 1026,
+          "max": 1026
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 32768.0,
+          "min": 32768,
+          "max": 32768
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 8195.0,
+          "min": 8195,
+          "max": 8195
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 327680.0,
+          "min": 327680,
+          "max": 327680
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 8194.0,
+          "min": 8194,
+          "max": 8194
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 262144.0,
+          "min": 262144,
+          "max": 262144
+        }
+      }
+    }
+  ],
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "loader_environment": {},
+  "samples_sha256": "9b93413747f3100cb73ff5bff5a30207e29d1f5cfe835ed46a81ce4cc983fdd7",
+  "runner_sha256": "1c7c2ac19e04335961b8443b7298639615f22779fafeec49f156f2edc43ec339"
+}

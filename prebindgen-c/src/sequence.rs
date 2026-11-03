@@ -50,6 +50,20 @@ pub(crate) fn output(
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
+    let release_name = format_ident!("{wire}_release_row");
+    let owned_fields = crate::group::row_fields(element)
+        .enumerate()
+        .map(|(i, wire)| {
+            let field = format_ident!("v{i}");
+            (wire, quote!(row.#field))
+        })
+        .collect::<Vec<_>>();
+    let cleanup = release_fields(
+        element,
+        &owned_fields,
+        &|wire| prebindgen_conversions::template_parameter(&format!("row_{}", wire.name)),
+        true,
+    );
     let fields = crate::group::row_values(element, values)?
         .into_iter()
         .enumerate()
@@ -62,18 +76,28 @@ pub(crate) fn output(
             name: wire.clone(),
             kind: CWire::Rows,
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: false,
         metadata: CChain::Sequence(CSequence::Buffered),
-        begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
+        begin: quote! {
+            unsafe fn #release_name(row: &#row) { #cleanup }
+            let mut #wire = unsafe { ::prebindgen_runtime::OutputRows::<#row>::new(#length, #release_name) };
+        },
         enter: quote!(),
-        store: quote!(#wire.push(#row {#(#fields),*});),
-        finish: quote!(let #wire=#wire.into_boxed_slice();),
+        store: {
+            let commit = prebindgen_conversions::template_parameter("commit_element");
+            quote! {
+                unsafe { #wire.write_next(#row {#(#fields),*}); }
+                #commit
+                unsafe { #wire.commit_row(); }
+            }
+        },
+        finish: quote!(),
         values: vec![(
             wire.clone(),
             quote!(__PbRows {data:if #wire.is_empty(){::core::ptr::null()}else{#wire.as_ptr().cast()},len:#wire.len()}),
         )],
-        commit: quote!(let _=Box::into_raw(#wire);),
+        commit: quote!(#wire.commit();),
     })
 }
 #[allow(clippy::type_complexity)] // Pair each sequence carrier with its element tree.
@@ -193,6 +217,25 @@ pub(crate) fn release(
     context: &CContext,
     catch_panics: bool,
 ) -> TokenStream {
+    release_fields(
+        layout,
+        fields,
+        &|wire| {
+            let row = &context.row_types[&wire.name.to_string()];
+            quote!(#row)
+        },
+        catch_panics,
+    )
+}
+
+// The same schema destruction is used before delivery (row-type placeholders)
+// and after delivery (resolved wrapper context), including nested collections.
+fn release_fields(
+    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    fields: &[(&Wire, TokenStream)],
+    row_type: &impl Fn(&Wire) -> TokenStream,
+    catch_panics: bool,
+) -> TokenStream {
     let mut schemas = Vec::new();
     self::schemas(layout, &mut schemas);
     let mut code = TokenStream::new();
@@ -213,10 +256,10 @@ pub(crate) fn release(
                 code.extend(drop);
             }
             CWire::Rows => {
-                let row=&context.row_types[&wire.name.to_string()];
+                let row=row_type(wire);
                 let element=schemas.iter().find(|(carrier,_,_)|carrier.name==wire.name).unwrap().1;
                 let fields=crate::group::row_fields(element).enumerate().map(|(i,wire)|{let field=format_ident!("v{i}");(wire,quote!(row.#field))}).collect::<Vec<_>>();
-                let child=release(element,&fields,context,catch_panics);
+                let child=release_fields(element,&fields,row_type,catch_panics);
                 code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
             }
             _=>{}
