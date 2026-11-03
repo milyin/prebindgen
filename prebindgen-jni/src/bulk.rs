@@ -255,7 +255,7 @@ pub(crate) fn sequence_input(
 
 // Destruction reads only completed rows, whose nested descriptors and handle
 // fields have all been written. Each field catches user destructor panics.
-fn release_row(node: &JniNode) -> Result<TokenStream> {
+pub(crate) fn release_row(node: &JniNode) -> Result<TokenStream> {
     let layout = record(node)?;
     let row = &layout.name;
     let mut cleanup = TokenStream::new();

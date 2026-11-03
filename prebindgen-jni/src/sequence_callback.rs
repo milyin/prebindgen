@@ -36,6 +36,7 @@ pub(crate) fn transport(
     descriptor.push_str(")V");
     let capacity = i32::try_from(crate::group::callback_parameters(element).len() + 8)
         .map_err(|_| "too many callback fields")?;
+    let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
@@ -44,10 +45,13 @@ pub(crate) fn transport(
                 null_niche_available: true,
             },
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: true,
         metadata: JniChain::Sequence(JniSequence::Callback),
         begin: quote! {
+            // Every accepted row belongs to the Kotlin collector, including
+            // when a later row fails. Publish this before any row can arrive.
+            #env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
             #env.delete_local_ref(#class).map_err(|e|e.to_string())?;
@@ -58,6 +62,7 @@ pub(crate) fn transport(
             // The method was resolved on this callback object with exactly these
             // JVM wire types. The generated bridge only retains raw fields.
             unsafe {#env.call_method_unchecked(&__pb_callback,#method,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[#(#args),*])}.map_err(|e|e.to_string())?;
+            #commit_element
             drop(#frame);
         },
         // Only a presence marker crosses back; row payloads crossed through run.

@@ -1,6 +1,8 @@
 //! Array row transport and Kotlin list conversion; schemas live in sequence nodes.
 use super::*;
-use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
+use crate::kotlin::{
+    input_kotlin, JniNode, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
+};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
 /// Selected delivery of a logical sequence.
@@ -79,6 +81,22 @@ pub(crate) fn output(
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
     let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
     let frame = format_ident!("{wire}_frame");
+    let owner = format_ident!("{wire}_owner");
+    let release = format_ident!("{wire}_release_row");
+    let cleanup = release_row(element)?;
+    let (own, complete, commit) = if cleanup.is_empty() {
+        (quote!(), quote!(), quote!())
+    } else {
+        (
+            quote! {
+                fn #release<'local>(env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>, row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>) { #cleanup }
+                let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new(&mut #env, &#wire, #release)}?;
+            },
+            quote!(unsafe {#owner.complete_row();}),
+            quote!(#owner.commit();),
+        )
+    };
+    let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
@@ -87,20 +105,105 @@ pub(crate) fn output(
                 null_niche_available: true,
             },
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: true,
         metadata: JniChain::Sequence(JniSequence::Buffered),
-        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
+        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
             let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;#encode
             #env.set_object_array_element(&#wire,#index as i32,&#row).map_err(|e|e.to_string())?;
+            #commit_element
+            #complete
             drop(#frame);
         },
         finish: quote!(let #wire=Some(#wire);),
         values: vec![(wire.clone(), quote!(#wire))],
-        commit: quote!(),
+        commit,
     })
+}
+
+fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNode> {
+    match node {
+        JniNode::Chain {
+            controls, child, ..
+        } if controls.iter().any(|w| &w.name == name) => Some(child),
+        JniNode::Chain { child, .. } => carrier_child(child, name),
+        JniNode::Branch { children, .. } => {
+            children.iter().find_map(|child| carrier_child(child, name))
+        }
+        _ => None,
+    }
+}
+
+// Accepted rows contain only generated wire fields. Walk them only on failure;
+// successful output conversion adds neither JNI calls nor native owner storage.
+fn release_row(node: &JniNode) -> Result<TokenStream> {
+    let mut cleanup = TokenStream::new();
+    for (index, field) in crate::group::row_fields(node).enumerate() {
+        let release = match &field.kind {
+            JniWire::Handle { handle, .. } => {
+                if handle.access != prebindgen_conversions::Access::Move {
+                    return Err("JNI output rows must transfer owned handle allocations".into());
+                }
+                let ty = &handle.ty;
+                quote! {
+                    let raw=unsafe {::prebindgen_jni_runtime::output_handle(env,row,#index)}?;
+                    if raw != 0 {
+                        let _=::prebindgen_runtime::boundary(|| unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(raw)});
+                    }
+                }
+            }
+            JniWire::Rows { .. } => {
+                let child =
+                    carrier_child(node, &field.name).ok_or("missing JNI collection element")?;
+                let child_cleanup = release_row(child)?;
+                if child_cleanup.is_empty() {
+                    continue;
+                }
+                quote! {
+                    fn release_nested<'local>(env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>, row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>) { #child_cleanup }
+                    let rows=env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?;
+                    let rows=env.auto_local(::prebindgen_jni_runtime::jni::objects::JObjectArray::from(rows));
+                    if !rows.is_null() {
+                        let length=env.get_array_length(&*rows).map_err(|e|e.to_string())? as usize;
+                        unsafe {::prebindgen_jni_runtime::reclaim_rows(env,rows.as_raw(),length,release_nested);}
+                    }
+                }
+            }
+            JniWire::BulkBuffer { .. } => {
+                let child = carrier_child(node, &field.name).ok_or("missing JNI bulk element")?;
+                let child_cleanup = crate::bulk::release_row(child)?;
+                if child_cleanup.is_empty() {
+                    continue;
+                }
+                quote! {
+                    let bytes=env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?;
+                    let bytes=env.auto_local(::prebindgen_jni_runtime::jni::objects::JByteArray::from(bytes));
+                    if !bytes.is_null() {
+                        let bytes=env.convert_byte_array(&*bytes).map_err(|e|e.to_string())?;
+                        let reader=::prebindgen_jni_runtime::bulk::Reader::new(&bytes);
+                        let base=0usize;
+                        #child_cleanup
+                    }
+                }
+            }
+            JniWire::Scalar { .. }
+            | JniWire::Enum { .. }
+            | JniWire::Selector { .. }
+            | JniWire::Text { .. }
+            | JniWire::Bytes { .. }
+            | JniWire::NativeBuffer { .. }
+            | JniWire::Native128 { .. } => continue,
+            JniWire::Callback { .. } | JniWire::NativeRows { .. } => {
+                return Err("unsupported owning JNI row field".into())
+            }
+        };
+        cleanup.extend(quote! {
+            ::prebindgen_jni_runtime::reclaim_output(env, |env| { #release Ok(()) });
+        });
+    }
+    Ok(cleanup)
 }
 
 pub(crate) fn input_list(

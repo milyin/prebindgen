@@ -90,6 +90,11 @@ fn main() {
             fun!(nested_owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
                 .expand_return(expand_return!(InputHandle).field_self_into().bulk())
         } else {fun!(nested_owned_handles_echo)};
+        let (owned_handles, nested_owners) = if bulk {
+            (owned_handles, nested_owners)
+        } else {
+            (owned_handles.callback_return(), nested_owners.callback_return())
+        };
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)

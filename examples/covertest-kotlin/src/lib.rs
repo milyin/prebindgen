@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types, unused_variables)]
 mod diagnostics;
+mod output_rows;
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 // Binding-error delivery and its native fallback must preserve pending JVM exceptions.

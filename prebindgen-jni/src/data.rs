@@ -753,10 +753,6 @@ impl Codec for DataCodec<'_> {
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_output(plan, extra)?;
-        if sequence::callback_delivery(&plan.outcomes.success)? {
-            let env = prebindgen_conversions::template_parameter("environment");
-            plan.delivery.statements.extend(quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;));
-        }
         Ok(())
     }
     fn callback_input(

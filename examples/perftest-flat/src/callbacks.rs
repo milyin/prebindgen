@@ -512,6 +512,23 @@ pub fn c_output_rows(fail_at: i64) -> Result<Vec<CallbackRow>, ResultFailure> {
     Ok(native_bulk_rows(fail_at))
 }
 #[prebindgen]
+pub fn jni_output_fold(fail_at: i64) -> Result<Vec<CallbackRow>, ResultFailure> {
+    c_output_rows(fail_at)
+}
+#[prebindgen]
+pub fn jni_output_optional(fail_at: i64) -> Vec<Option<Vec<CallbackRow>>> {
+    vec![
+        None,
+        Some(native_bulk_values(-1)),
+        None,
+        Some(native_bulk_values(fail_at)),
+    ]
+}
+#[prebindgen]
+pub fn jni_output_mixed(fail_at: i64) -> Vec<Vec<CallbackRow>> {
+    native_bulk_nested(fail_at)
+}
+#[prebindgen]
 pub fn c_output_nested(fail_at: i64) -> Result<Vec<Vec<CallbackRow>>, ResultFailure> {
     Ok(native_bulk_nested(fail_at))
 }

@@ -2793,3 +2793,36 @@ fn resource_free_collection_outputs_have_no_cleanup_bookkeeping() {
     assert!(!text.contains("cleanupError"));
     assert!(text.contains("kotlin.collections.ArrayList("));
 }
+
+#[test]
+fn jni_collection_outputs_transfer_rows_without_native_commit_queues() {
+    for callback in [false, true] {
+        let function = if callback {
+            fun!(values).callback_return_only()
+        } else {
+            fun!(values)
+        };
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Vec<Option<Vec<Owner>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(function))
+            .build()
+            .unwrap();
+        assert!(!generated.rust.contains("_commits"), "{}", generated.rust);
+        assert!(generated.rust.contains("OutputRows::new"));
+        assert!(generated.rust.contains("complete_row"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+    let generated = JniGen::builder()
+        .flat(flat("pub fn values()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(values).callback_return()))
+        .build()
+        .unwrap();
+    assert!(!generated.rust.contains("_commits"));
+    assert!(!generated.rust.contains("OutputRows::new"));
+}

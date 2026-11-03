@@ -117,8 +117,9 @@ fun checkSequenceDelivery() {
     }
     check(ownedResourceDrops() == nestedStart + 9uL)
 
-    // A failing raw collector is a pending JVM exception: native ownership never
-    // commits and the original exception must survive JNI's binding-error fallback.
+    // Each accepted raw row belongs to the collector. A later failure leaves
+    // earlier rows with it; native code reclaims the rejected row and unread input.
+    // The original exception must survive JNI's binding-error fallback.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
     val nativeParts = native.declaredMethods.single { method ->
         val p = method.parameterTypes.dropLast(1)
@@ -126,16 +127,20 @@ fun checkSequenceDelivery() {
     }.also { it.isAccessible = true }
     val sinkType = nativeParts.parameterTypes[1]
     var collectorCalls = 0
-    val sink = java.lang.reflect.Proxy.newProxyInstance(sinkType.classLoader, arrayOf(sinkType)) { _, method, _ ->
+    var acceptedRaw = 0L
+    val sink = java.lang.reflect.Proxy.newProxyInstance(sinkType.classLoader, arrayOf(sinkType)) { _, method, values ->
         check(method.name == "run")
         if (++collectorCalls == 2) throw original
+        acceptedRaw = values!![2] as Long
         null
     }
     val beforeCollector = ownedResourceDrops()
     val outputAccepted = BooleanArray(1)
     try { nativeParts.invokePacket( 0, sink, outputAccepted); error("collector did not throw") }
     catch (caught: java.lang.reflect.InvocationTargetException) { check(caught.cause === original) }
-    check(!outputAccepted[0] && collectorCalls == 2 && ownedResourceDrops() == beforeCollector + 3uL)
+    check(outputAccepted[0] && collectorCalls == 2 && ownedResourceDrops() == beforeCollector + 2uL)
+    io.prebindgen.covertest.resources.OwnedResource(acceptedRaw).close()
+    check(ownedResourceDrops() == beforeCollector + 3uL)
     collectorCalls = 0
     val invalidAck = nativeParts.invokePacket(0, sink, BooleanArray(0))
     check(invalidAck[0] == "invalid sequence output acknowledgement" && collectorCalls == 0)

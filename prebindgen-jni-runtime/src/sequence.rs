@@ -129,3 +129,164 @@ impl Drop for LocalFrame<'_> {
         let _ = unsafe { self.env.pop_local_frame(&JObject::null()) };
     }
 }
+
+/// Reclaim generated output storage while preserving an already pending exception.
+///
+/// This runs only on rollback. Destructors must catch their own panics so that
+/// sibling fields can still be reclaimed. Failure to read trusted output storage
+/// cannot be recovered without leaking native owners, so it aborts the process.
+pub fn reclaim_output<'local>(
+    env: &mut JNIEnv<'local>,
+    reclaim: impl FnOnce(&mut JNIEnv<'local>) -> Result<()>,
+) {
+    let pending = env
+        .exception_occurred()
+        .unwrap_or_else(|_| std::process::abort());
+    if !pending.is_null() {
+        env.exception_clear()
+            .unwrap_or_else(|_| std::process::abort());
+    }
+    let result = prebindgen_runtime::boundary(|| reclaim(env));
+    // A user destructor can itself interact with the JVM. Its exception must
+    // not interfere with siblings or replace the original delivery failure.
+    if env
+        .exception_check()
+        .unwrap_or_else(|_| std::process::abort())
+    {
+        env.exception_clear()
+            .unwrap_or_else(|_| std::process::abort());
+    }
+    if result.is_err() {
+        std::process::abort();
+    }
+    if !pending.is_null() {
+        env.throw(&pending)
+            .unwrap_or_else(|_| std::process::abort());
+        let _ = env.delete_local_ref(pending);
+    }
+}
+
+static OUTPUT_LONG: std::sync::OnceLock<jni::objects::JFieldID> = std::sync::OnceLock::new();
+
+/// Read an owned handle from a trusted generated output row during rollback.
+///
+/// # Safety
+/// `OutputRows::new` must have succeeded, and the field must be a boxed Long
+/// produced by generated code. No arbitrary foreign row may be read this way.
+pub unsafe fn output_handle(
+    env: &mut JNIEnv<'_>,
+    row: &JObjectArray<'_>,
+    index: usize,
+) -> Result<i64> {
+    let value = env
+        .get_object_array_element(row, index as i32)
+        .map_err(|e| e.to_string())?;
+    let value = env.auto_local(value);
+    if value.is_null() {
+        return Ok(0);
+    }
+    env.get_field_unchecked(
+        &value,
+        *OUTPUT_LONG.get().expect("output cleanup initialized"),
+        jni::signature::ReturnType::Primitive(jni::signature::Primitive::Long),
+    )
+    .and_then(|value| value.j())
+    .map_err(|e| e.to_string())
+}
+
+/// Reclaim a completed prefix of generated object-array output rows.
+///
+/// # Safety
+/// Every row in the prefix must have the schema expected by `release`, which
+/// must reclaim each of its native owners exactly once. The caller must own
+/// those resources, and all array references must remain valid during cleanup.
+pub unsafe fn reclaim_rows<'local>(
+    env: &mut JNIEnv<'local>,
+    rows: jni::sys::jobjectArray,
+    completed: usize,
+    release: for<'a> fn(&mut JNIEnv<'a>, &JObjectArray<'a>),
+) {
+    if completed == 0 {
+        return;
+    }
+    reclaim_output(env, |env| {
+        for index in 0..completed {
+            reclaim_output(env, |env| {
+                // Read the existing array reference without manufacturing a
+                // second Rust owner for that same JNI local-reference slot.
+                let table = env.get_native_interface();
+                let raw = ((**table).GetObjectArrayElement.expect("JNI array access"))(
+                    table,
+                    rows,
+                    index as i32,
+                );
+                if env.exception_check().map_err(|e| e.to_string())? || raw.is_null() {
+                    return Err("cannot read completed JNI output row".into());
+                }
+                let row = env.auto_local(JObjectArray::from_raw(raw));
+                release(env, &row);
+                Ok(())
+            });
+        }
+        Ok(())
+    });
+}
+
+/// Owns the completed prefix of a generated JNI collection until final transfer.
+///
+/// The final JVM array is also the ownership journal: successful row insertion
+/// requires only incrementing a stack counter, with no per-row native storage.
+pub struct OutputRows<'local> {
+    env: JNIEnv<'local>,
+    rows: jni::sys::jobjectArray,
+    completed: usize,
+    release: for<'a> fn(&mut JNIEnv<'a>, &JObjectArray<'a>),
+}
+impl<'local> OutputRows<'local> {
+    /// Start owning a newly allocated collection's completed rows.
+    ///
+    /// # Safety
+    /// The array's local reference must outlive the guard. Each completed row
+    /// must match `release` and transfer all its native owners to this guard.
+    /// Disarm nested guards before their enclosing local-reference frame ends.
+    pub unsafe fn new(
+        env: &mut JNIEnv<'local>,
+        rows: &JObjectArray<'local>,
+        release: for<'a> fn(&mut JNIEnv<'a>, &JObjectArray<'a>),
+    ) -> Result<Self> {
+        // java.lang.Long is a bootstrap class and cannot unload. The field
+        // ID is shared by all generated row schemas and initialized before
+        // any row transfers ownership; rollback does no class/method lookup.
+        if OUTPUT_LONG.get().is_none() {
+            let field = env
+                .get_field_id("java/lang/Long", "value", "J")
+                .map_err(|e| e.to_string())?;
+            let _ = OUTPUT_LONG.set(field);
+        }
+        Ok(Self {
+            env: env.unsafe_clone(),
+            rows: rows.as_raw(),
+            completed: 0,
+            release,
+        })
+    }
+    /// Record a row after insertion and infallible transfer of its native owners.
+    ///
+    /// # Safety
+    /// The next row must be fully inserted and all its native owners transferred
+    /// exactly once. No row may be modified after it is recorded.
+    pub unsafe fn complete_row(&mut self) {
+        self.completed += 1;
+    }
+    /// Transfer all completed rows to their enclosing output or Kotlin recipient.
+    pub fn commit(mut self) {
+        self.completed = 0;
+    }
+}
+impl Drop for OutputRows<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            reclaim_rows(&mut self.env, self.rows, self.completed, self.release);
+        }
+    }
+}

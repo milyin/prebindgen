@@ -113,14 +113,28 @@ impl Hook {
             }
             2 | 4 | 6 | 8 => table.NewStringUTF = Some(fail_string),
             3 | 5 | 7 | 9 | 10 | 11 | 12 => table.NewByteArray = Some(fail_bytes),
+            13..=15 | 17..=18 => table.NewObjectArray = Some(fail_array),
+            16 => table.NewStringUTF = Some(fail_string),
             _ => unreachable!(),
         }
         FAULT.with(|slot| {
             *slot.borrow_mut() = Some(Fault {
                 original,
                 oom: oom.as_obj().as_raw(),
-                remaining: if (8..=9).contains(&mode) || mode == 11 {
+                remaining: if (8..=9).contains(&mode) || mode == 11 || mode == 16 {
                     2
+                } else if mode == 17 {
+                    9
+                } else if mode == 18 {
+                    3
+                } else if mode >= 13 {
+                    // Fail after completed rows; the pair also has an already
+                    // completed first output when conversion of the second fails.
+                    if mode == 15 {
+                        6
+                    } else {
+                        4
+                    }
                 } else {
                     1
                 },
@@ -152,7 +166,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercis
     mode: jint,
 ) -> jint {
     prebindgen_runtime::boundary(|| {
-        if !(0..=12).contains(&mode) {
+        if !(0..=18).contains(&mode) {
             return Err("unknown allocation probe".into());
         }
         // Resolve Java entry points before arming the selected JNI allocation
@@ -164,8 +178,10 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercis
                 "io/prebindgen/covertest/BufferFailureEntryPoint"
             } else if mode < 10 {
                 "io/prebindgen/covertest/BufferReturnFailureEntryPoint"
-            } else {
+            } else if mode <= 12 {
                 "io/prebindgen/covertest/NativeOutputFailureEntryPoint"
+            } else {
+                "io/prebindgen/covertest/JniOutputFailureEntryPoint"
             })
             .map_err(|e| e.to_string())?;
         let hook = unsafe { Hook::install(&mut env, mode) }?;

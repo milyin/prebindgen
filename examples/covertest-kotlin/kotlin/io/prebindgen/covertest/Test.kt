@@ -29,6 +29,7 @@ fun main() {
     checkCollections()
     checkOutputCleanup()
     checkNativeOutputOwnership()
+    checkJniOutputOwnership()
     checkSequenceDelivery()
     checkResults()
     checkOptions()
