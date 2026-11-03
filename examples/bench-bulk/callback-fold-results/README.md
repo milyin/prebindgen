@@ -6,7 +6,7 @@ This compares #824 after merging #859/#860 (`57cbaa3d7`) with the callback-fold 
 
 Collection callback returns first collect raw rows during JNI execution. Kotlin then reconstructs each row and calls the user's fold after the native invocation and handle locks finish. Previously a per-row cleanup lambda retained partially reconstructed wrappers. Cleanup now uses a lexical row catch. Fixed fields use their local wrapper variables without a journal. Nested handle collections reuse one per-invocation `CollectionOwners` journal; successful delivery clears wrapper references while retaining its storage. Failure cleanup closes the current row and unread rows, preserving earlier delivered rows and the original exception.
 
-Resource-free rows emit no cleanup lambda, discard traversal, processed-row counter or cleanup catch. The old empty lambda was already shared by the JVM in this fixture: deleting its bookkeeping does not reduce measured primitive-record allocation.
+Resource-free rows emit no cleanup lambda, discard traversal, processed-row counter or cleanup catch. Removing empty-lambda bookkeeping does not reduce measured primitive-record allocation in this fixture.
 
 Both generated benchmark Rust files (`plain.rs`, `bulk.rs`) are byte-identical to the baseline. The native libraries have different hashes; no native-machine-code identity claim is made. Measurements use the plain module's object-array inputs and either object-array outputs or collection callback folds. Bulk-module snapshots are also recorded, but bulk delivery is not measured here.
 
