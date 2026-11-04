@@ -190,17 +190,10 @@ pub(crate) fn input(
     let mut arguments = vec![];
     for (i, source_type) in signature.arguments.into_iter().enumerate() {
         let binding = format_ident!("callback_source_{i}");
-        let (ty, borrowed) = match &source_type {
-            syn::Type::Reference(r) if r.mutability.is_none() => match &*r.elem {
-                syn::Type::Slice(_) => (source_type.clone(), false),
-                syn::Type::Path(p) if p.path.is_ident("str") => (source_type.clone(), false),
-                ty => (ty.clone(), true),
-            },
-            syn::Type::Reference(_) => {
-                return Err("mutable callback arguments are unsupported".into())
-            }
-            _ => (source_type.clone(), false),
-        };
+        if matches!(&source_type, syn::Type::Reference(r) if r.mutability.is_some()) {
+            return Err("mutable callback arguments are unsupported".into());
+        }
+        let ty = source_type.clone();
         let value = quote!(#binding);
         if contains_result(&ty) {
             return Err(
@@ -208,16 +201,28 @@ pub(crate) fn input(
             );
         }
         let recipe = &configuration.arguments[i];
+        // Copy permission for an exact reference type must not change the
+        // existing callback cleanup contract. Whole exposed-value defaults and
+        // explicit callback overrides still select author-owned delivery.
+        let exposed_type = match &source_type {
+            syn::Type::Reference(r)
+                if !matches!(r.elem.as_ref(), syn::Type::Slice(_))
+                    && !matches!(r.elem.as_ref(), syn::Type::Path(p) if p.path.is_ident("str")) =>
+            {
+                &*r.elem
+            }
+            _ => &source_type,
+        };
         let scoped = !configuration.explicit_arguments.contains(&i)
-            && !explicit_outputs.contains(&type_key(&ty))
-            && !explicit_outputs.contains(&type_key(subject_type(&ty)));
+            && !explicit_outputs.contains(&type_key(exposed_type))
+            && !explicit_outputs.contains(&type_key(subject_type(exposed_type)));
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
             &data::DataCodec::default(),
             &ty,
             recipe,
             i,
-            borrowed,
+            false,
             &(),
         )?;
         sequence::validate_buffered(&output.output_outcomes().success)?;
@@ -873,7 +878,7 @@ pub(crate) fn files(
             .collect::<Vec<_>>();
         if let Some(previous) = ownership_by_name.insert(callback.fqn(), ownership.clone()) {
             if previous != ownership {
-                return Err("callback interface ownership collision; use callback!(...).name(...) for a distinct interface".into());
+                return Err(format!("callback interface ownership collision for `{}`; use callback!(...).name(...) for a distinct interface", callback.fqn()));
             }
         }
         let text = format!("package {}\n\n/** Invoked by Rust, possibly from a native worker thread.{contract} */\npublic fun interface {} {{\n    public fun run({}){return_type}\n}}\n", callback.package, callback.name, params.join(", "));

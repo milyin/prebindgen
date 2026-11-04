@@ -190,11 +190,7 @@ impl Codec for EnumCodec<'_> {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
-        if callback.foreign.is_some()
-            || callback.namespace.is_some()
-            || !callback.explicit_arguments.is_empty()
-            || callback.explicit_return
-        {
+        if callback.foreign.is_some() || callback.namespace.is_some() || callback.explicit_return {
             return Err("configured callbacks are unsupported by the C adapter".into());
         }
         callback::input(flat, callback, wire, var, active)
@@ -258,6 +254,31 @@ impl Codec for EnumCodec<'_> {
             ));
         }
         CCodec.output_leaf(flat, ty, e, w, v, borrowed)
+    }
+
+    fn output_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<CWire>> {
+        if self.mapping(flat, ty).is_some() {
+            if !projection.fields.is_empty() {
+                return Err("enum values do not have projection fields".into());
+            }
+            return self.output_leaf(
+                flat,
+                ty,
+                &(),
+                wire,
+                value,
+                projection.mode == prebindgen_declarations::ProjectionMode::Borrowed,
+            );
+        }
+        CCodec.output_projected(flat, ty, &(), wire, value, projection)
     }
 
     fn output_return_reference(

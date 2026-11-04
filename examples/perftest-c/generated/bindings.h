@@ -46,6 +46,10 @@ typedef int32_t perftest_code;
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
+typedef struct perftest_borrow_packet perftest_borrow_packet;
+void perftest_drop_borrow_packet(perftest_borrow_packet *ptr);
+typedef struct perftest_borrow_no_clone perftest_borrow_no_clone;
+void perftest_drop_borrow_no_clone(perftest_borrow_no_clone *ptr);
 typedef struct perftest_c_output_resource perftest_c_output_resource;
 void perftest_drop_c_output_resource(perftest_c_output_resource *ptr);
 typedef struct perftest_getter_owner perftest_getter_owner;
@@ -113,273 +117,310 @@ void perftest_drop_owned_vec_u8_672e72343c1b4cb4(perftest_owned_vec_u8_672e72343
 size_t perftest_owned_vec_u8_672e72343c1b4cb4_len(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Borrowed view; never free it. The owner retains the allocation. */
 perftest_buffer_view perftest_owned_vec_u8_672e72343c1b4cb4_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
-/* Rust signature: ()->perftest_flat :: CallbackReturnResource. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_return_resource * (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_0e60b44d7236d10d;
-/* Rust signature: ()->i64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    int64_t (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_15f1a05217a2ceea;
-typedef struct {
-    perftest_callback_return_resource * v0;
-    uint32_t v1;
-} perftest_callback_24a5c7966da050a9_result;
-/* Rust signature: ()->perftest_flat :: CallbackReturnPair. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_24a5c7966da050a9_result (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_24a5c7966da050a9;
-/* Rust signature: (i64)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    void (*run)(void *context, int64_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_321f7c4288706a27;
-/* Rust signature: (bool)->bool. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    uint8_t (*run)(void *context, uint8_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_490413898821d50d;
-typedef struct {
-    perftest_c_output_resource * v0;
-    perftest_owned_string v1;
-    perftest_c_output_resource * v2;
-} perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_row;
-typedef struct { perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_row *data; size_t len; } perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows;
-/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
-void perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows_free(perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows rows);
-typedef struct {
-    perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows v0;
-} perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_row;
-typedef struct { perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_row *data; size_t len; } perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows;
-/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
-void perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows rows);
-/* Rust signature: (Vec < Vec < perftest_flat :: CallbackRow > >)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    void (*run)(void *context, perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_4cf53ee6dc85aa46;
-typedef struct {
-    int64_t v0;
-    perftest_buffer v1;
-} perftest_callback_589eef1af0230719_result;
-/* Rust signature: (perftest_flat :: CallbackReturnRecord)->perftest_flat :: CallbackReturnRecord. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_589eef1af0230719_result (*run)(void *context, int64_t arg0, perftest_owned_string arg1);
-    void *context;
-    void (*drop)(void *context);
-    void (*release_result)(void *context, const perftest_callback_589eef1af0230719_result *result);
-} perftest_callback_589eef1af0230719;
-typedef struct {
-    perftest_callback_return_resource * v0;
-    uint32_t v1;
-} perftest_callback_5f675dc767965255_result;
-/* Rust signature: ()->perftest_flat :: CallbackReturnBorrowedPair. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_5f675dc767965255_result (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_5f675dc767965255;
-typedef struct {
-    int64_t v0;
-} perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_row;
-typedef struct { perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_row *data; size_t len; } perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows;
-/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
-void perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows_free(perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows rows);
-typedef struct {
-    int64_t v0;
-} perftest_callback_5fdca16b0dadfb25_callback_return_w1_row;
-typedef struct { perftest_callback_5fdca16b0dadfb25_callback_return_w1_row *data; size_t len; } perftest_callback_5fdca16b0dadfb25_callback_return_w1_rows;
-/* Rust signature: (Vec < i64 >)->Vec < i64 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_5fdca16b0dadfb25_callback_return_w1_rows (*run)(void *context, perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows arg0);
-    void *context;
-    void (*drop)(void *context);
-    void (*release_result)(void *context, const perftest_callback_5fdca16b0dadfb25_callback_return_w1_rows *result);
-} perftest_callback_5fdca16b0dadfb25;
-/* Rust signature: (f32)->f32. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    float (*run)(void *context, float arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_6a62e9f8e6773c45;
-/* Rust signature: ()->Option < perftest_flat :: CallbackReturnResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_return_resource * (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_6e20e8b97ebb3c88;
-/* Rust signature: (char)->char. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    uint32_t (*run)(void *context, uint32_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_73c3c177e4a73331;
-/* Rust signature: ()->char. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    uint32_t (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_8831734aa5203b29;
-/* Rust signature: (i128)->i128. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_int128 (*run)(void *context, perftest_int128 arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_9067021b3e3252ad;
-/* Rust signature: (u128)->u128. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_int128 (*run)(void *context, perftest_int128 arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_91e558069da45345;
-typedef struct {
-    perftest_callback_return_resource * v0;
-} perftest_callback_b0a36b18d83434ed_callback_return_w1_row;
-typedef struct { perftest_callback_b0a36b18d83434ed_callback_return_w1_row *data; size_t len; } perftest_callback_b0a36b18d83434ed_callback_return_w1_rows;
-/* Rust signature: ()->Vec < perftest_flat :: CallbackReturnResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_b0a36b18d83434ed_callback_return_w1_rows (*run)(void *context);
-    void *context;
-    void (*drop)(void *context);
-    void (*release_result)(void *context, const perftest_callback_b0a36b18d83434ed_callback_return_w1_rows *result);
-} perftest_callback_b0a36b18d83434ed;
-/* Rust signature: (i64)->i64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    int64_t (*run)(void *context, int64_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_cef6210f15ef4535;
-/* Rust signature: (f64)->f64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    double (*run)(void *context, double arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_d58f9fdf78f56c8d;
-/* Rust signature: (perftest_flat :: CallbackReturnChoice)->perftest_flat :: CallbackReturnChoice. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_return_choice (*run)(void *context, perftest_callback_return_choice arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_de793b4a6fb814fd;
-/* Rust signature: (Vec < u8 >)->Vec < u8 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_buffer (*run)(void *context, perftest_owned_vec_u8_672e72343c1b4cb4 arg0);
-    void *context;
-    void (*drop)(void *context);
-    void (*release_result)(void *context, const perftest_buffer *result);
-} perftest_callback_df547e71faee3c03;
-/* Rust signature: (i16)->i16. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    int16_t (*run)(void *context, int16_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_e51dd6cac1e6761d;
-/* Rust signature: (u64)->u64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    uint64_t (*run)(void *context, uint64_t arg0);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_ea174d88bac9b485;
-typedef struct {
-    int32_t v0;
-    int64_t v1;
-} perftest_callback_ea6b56ec3d11492d_result;
-/* Rust signature: (Option < i64 >)->Option < i64 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
-typedef struct {
-    perftest_callback_ea6b56ec3d11492d_result (*run)(void *context, int32_t arg0, int64_t arg1);
-    void *context;
-    void (*drop)(void *context);
-} perftest_callback_ea6b56ec3d11492d;
 /* Rust signature: (String)->String. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_buffer (*run)(void *context, perftest_owned_string arg0);
     void *context;
     void (*drop)(void *context);
     void (*release_result)(void *context, const perftest_buffer *result);
-} perftest_callback_efc3c673f144160f;
+} perftest_callback_0254ff800a6840ea;
+/* Rust signature: (& perftest_flat :: BorrowPacket)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, perftest_borrow_packet * arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_078f14fba1e1a0bf;
+typedef struct {
+    perftest_callback_return_resource * v0;
+} perftest_callback_0c7ae0f660edb387_callback_return_w1_row;
+typedef struct { perftest_callback_0c7ae0f660edb387_callback_return_w1_row *data; size_t len; } perftest_callback_0c7ae0f660edb387_callback_return_w1_rows;
+/* Rust signature: ()->Vec < perftest_flat :: CallbackReturnResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_0c7ae0f660edb387_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const perftest_callback_0c7ae0f660edb387_callback_return_w1_rows *result);
+} perftest_callback_0c7ae0f660edb387;
+/* Rust signature: (f64)->f64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    double (*run)(void *context, double arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_1877262b1efa0588;
+/* Rust signature: (perftest_flat :: CallbackReturnChoice)->perftest_flat :: CallbackReturnChoice. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_return_choice (*run)(void *context, perftest_callback_return_choice arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_1e259c5420a05522;
+typedef struct {
+    int64_t v0;
+    perftest_buffer v1;
+} perftest_callback_3c5d45f70fd17829_result;
+/* Rust signature: (perftest_flat :: CallbackReturnRecord)->perftest_flat :: CallbackReturnRecord. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_3c5d45f70fd17829_result (*run)(void *context, int64_t arg0, perftest_owned_string arg1);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const perftest_callback_3c5d45f70fd17829_result *result);
+} perftest_callback_3c5d45f70fd17829;
+/* Rust signature: ()->perftest_flat :: CallbackReturnResource. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_return_resource * (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_4f6170b342252c1b;
+/* Rust signature: (Vec < u8 >)->Vec < u8 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_buffer (*run)(void *context, perftest_owned_vec_u8_672e72343c1b4cb4 arg0);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const perftest_buffer *result);
+} perftest_callback_629e2a5bc2c646bd;
+typedef struct {
+    perftest_callback_return_resource * v0;
+    uint32_t v1;
+} perftest_callback_6ad92de9db85defc_result;
+/* Rust signature: ()->perftest_flat :: CallbackReturnPair. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_6ad92de9db85defc_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_6ad92de9db85defc;
+/* Rust signature: (& perftest_flat :: BorrowNoClone)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, const perftest_borrow_no_clone * arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_73d1696b3b705bd1;
+typedef struct {
+    int32_t v0;
+    int64_t v1;
+} perftest_callback_7955cb4745523772_result;
+/* Rust signature: (Option < i64 >)->Option < i64 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_7955cb4745523772_result (*run)(void *context, int32_t arg0, int64_t arg1);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_7955cb4745523772;
+/* Rust signature: ()->i64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    int64_t (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_80df196c35a25faa;
+/* Rust signature: (char)->char. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    uint32_t (*run)(void *context, uint32_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_87ab5bb17593ae00;
+/* Rust signature: (& perftest_flat :: BorrowPacket)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, uintptr_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_8df66309051ff0c4;
+/* Rust signature: (u128)->u128. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_int128 (*run)(void *context, perftest_int128 arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_932558439be4ffca;
+/* Rust signature: (i16)->i16. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    int16_t (*run)(void *context, int16_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_9b2f0dd74406582c;
+/* Rust signature: (Option < & perftest_flat :: BorrowPacket >)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, const perftest_borrow_packet * arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_a1983d7a373db49d;
+/* Rust signature: (i64)->i64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    int64_t (*run)(void *context, int64_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_a4bc3153f04892c6;
+typedef struct {
+    int64_t v0;
+} perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_row;
+typedef struct { perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_row *data; size_t len; } perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows_free(perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows rows);
+typedef struct {
+    int64_t v0;
+} perftest_callback_aaca2bf4492ad16a_callback_return_w1_row;
+typedef struct { perftest_callback_aaca2bf4492ad16a_callback_return_w1_row *data; size_t len; } perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows;
+/* Rust signature: (Vec < i64 >)->Vec < i64 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows (*run)(void *context, perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows arg0);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows *result);
+} perftest_callback_aaca2bf4492ad16a;
+/* Rust signature: (& perftest_flat :: BorrowPacket)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, const perftest_borrow_packet * arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_ad0b57894c7bbea6;
+/* Rust signature: (i128)->i128. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_int128 (*run)(void *context, perftest_int128 arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_af8866ae3e4d0e12;
+typedef struct {
+    perftest_c_output_resource * v0;
+    perftest_owned_string v1;
+    perftest_c_output_resource * v2;
+} perftest_callback_b98c737eadfea95e_callback_arg_0_w4_row;
+typedef struct { perftest_callback_b98c737eadfea95e_callback_arg_0_w4_row *data; size_t len; } perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows_free(perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows rows);
+typedef struct {
+    perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows v0;
+} perftest_callback_b98c737eadfea95e_callback_arg_0_w0_row;
+typedef struct { perftest_callback_b98c737eadfea95e_callback_arg_0_w0_row *data; size_t len; } perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows_free(perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows rows);
+/* Rust signature: (Vec < Vec < perftest_flat :: CallbackRow > >)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_b98c737eadfea95e;
+/* Rust signature: ()->Option < perftest_flat :: CallbackReturnResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_return_resource * (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_bf3665103e007fe6;
+/* Rust signature: (u64)->u64. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    uint64_t (*run)(void *context, uint64_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_cdccf65221eab046;
+/* Rust signature: (i64)->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, int64_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_cfa0a1cf790c7d8d;
+/* Rust signature: (f32)->f32. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    float (*run)(void *context, float arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_d47c7bdcce5eb73a;
+/* Rust signature: ()->char. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    uint32_t (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_e79b477ebab70ab0;
 /* Rust signature: (i8)->i8. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     int8_t (*run)(void *context, int8_t arg0);
     void *context;
     void (*drop)(void *context);
-} perftest_callback_f5f6b40488a06bd3;
-typedef perftest_callback_4cf53ee6dc85aa46 perftest_c_output_callback_callback;
-typedef perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows perftest_c_output_callback_callback_arg0;
-static inline void perftest_c_output_callback_callback_arg0_free(perftest_c_output_callback_callback_arg0 value) { perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(value); }
-typedef perftest_callback_490413898821d50d perftest_callback_return_bool_callback;
+} perftest_callback_e7c993c21d79dcc8;
+typedef struct {
+    perftest_callback_return_resource * v0;
+    uint32_t v1;
+} perftest_callback_f8aec5520f68a9c7_result;
+/* Rust signature: ()->perftest_flat :: CallbackReturnBorrowedPair. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_f8aec5520f68a9c7_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_f8aec5520f68a9c7;
+/* Rust signature: (bool)->bool. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    uint8_t (*run)(void *context, uint8_t arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_fac4c5ae31f5b10e;
+typedef perftest_callback_73d1696b3b705bd1 perftest_borrow_no_clone_emit_callback;
+typedef perftest_callback_ad0b57894c7bbea6 perftest_borrow_packet_emit_callback;
+typedef perftest_callback_078f14fba1e1a0bf perftest_borrow_packet_emit_copy_callback;
+typedef perftest_callback_8df66309051ff0c4 perftest_borrow_packet_emit_expanded_callback;
+typedef perftest_callback_8df66309051ff0c4 perftest_borrow_packet_emit_expanded_other_callback;
+typedef perftest_callback_a1983d7a373db49d perftest_borrow_packet_emit_optional_callback;
+typedef perftest_callback_ad0b57894c7bbea6 perftest_borrow_packet_emit_worker_callback;
+typedef perftest_callback_b98c737eadfea95e perftest_c_output_callback_callback;
+typedef perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows perftest_c_output_callback_callback_arg0;
+static inline void perftest_c_output_callback_callback_arg0_free(perftest_c_output_callback_callback_arg0 value) { perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows_free(value); }
+typedef perftest_callback_fac4c5ae31f5b10e perftest_callback_return_bool_callback;
 typedef uint8_t perftest_callback_return_bool_callback_return;
-typedef perftest_callback_5f675dc767965255 perftest_callback_return_borrowed_pair_catch_callback;
-typedef perftest_callback_5f675dc767965255_result perftest_callback_return_borrowed_pair_catch_callback_return;
-typedef perftest_callback_df547e71faee3c03 perftest_callback_return_bytes_callback;
+typedef perftest_callback_f8aec5520f68a9c7 perftest_callback_return_borrowed_pair_catch_callback;
+typedef perftest_callback_f8aec5520f68a9c7_result perftest_callback_return_borrowed_pair_catch_callback_return;
+typedef perftest_callback_629e2a5bc2c646bd perftest_callback_return_bytes_callback;
 typedef perftest_buffer perftest_callback_return_bytes_callback_return;
-typedef perftest_callback_73c3c177e4a73331 perftest_callback_return_c_result_callback;
+typedef perftest_callback_87ab5bb17593ae00 perftest_callback_return_c_result_callback;
 typedef uint32_t perftest_callback_return_c_result_callback_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_catch_callback;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_catch_callback;
 typedef int64_t perftest_callback_return_catch_callback_return;
-typedef perftest_callback_73c3c177e4a73331 perftest_callback_return_char_callback;
+typedef perftest_callback_87ab5bb17593ae00 perftest_callback_return_char_callback;
 typedef uint32_t perftest_callback_return_char_callback_return;
-typedef perftest_callback_8831734aa5203b29 perftest_callback_return_char_catch_callback;
+typedef perftest_callback_e79b477ebab70ab0 perftest_callback_return_char_catch_callback;
 typedef uint32_t perftest_callback_return_char_catch_callback_return;
-typedef perftest_callback_de793b4a6fb814fd perftest_callback_return_enum_callback;
+typedef perftest_callback_1e259c5420a05522 perftest_callback_return_enum_callback;
 typedef perftest_callback_return_choice perftest_callback_return_enum_callback_return;
-typedef perftest_callback_6a62e9f8e6773c45 perftest_callback_return_f32_callback;
+typedef perftest_callback_d47c7bdcce5eb73a perftest_callback_return_f32_callback;
 typedef float perftest_callback_return_f32_callback_return;
-typedef perftest_callback_d58f9fdf78f56c8d perftest_callback_return_float_callback;
+typedef perftest_callback_1877262b1efa0588 perftest_callback_return_float_callback;
 typedef double perftest_callback_return_float_callback_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_handler_many_handlers;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_handler_many_handlers;
 typedef int64_t perftest_callback_return_handler_many_handlers_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_handler_new_callback;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_handler_new_callback;
 typedef int64_t perftest_callback_return_handler_new_callback_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_handler_value_handler;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_handler_value_handler;
 typedef int64_t perftest_callback_return_handler_value_handler_return;
-typedef perftest_callback_e51dd6cac1e6761d perftest_callback_return_i16_callback;
+typedef perftest_callback_9b2f0dd74406582c perftest_callback_return_i16_callback;
 typedef int16_t perftest_callback_return_i16_callback_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_i64_callback;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_i64_callback;
 typedef int64_t perftest_callback_return_i64_callback_return;
-typedef perftest_callback_f5f6b40488a06bd3 perftest_callback_return_i8_callback;
+typedef perftest_callback_e7c993c21d79dcc8 perftest_callback_return_i8_callback;
 typedef int8_t perftest_callback_return_i8_callback_return;
-typedef perftest_callback_ea6b56ec3d11492d perftest_callback_return_optional_callback;
-typedef perftest_callback_ea6b56ec3d11492d_result perftest_callback_return_optional_callback_return;
-typedef perftest_callback_0e60b44d7236d10d perftest_callback_return_owned_callback;
+typedef perftest_callback_7955cb4745523772 perftest_callback_return_optional_callback;
+typedef perftest_callback_7955cb4745523772_result perftest_callback_return_optional_callback_return;
+typedef perftest_callback_4f6170b342252c1b perftest_callback_return_owned_callback;
 typedef perftest_callback_return_resource * perftest_callback_return_owned_callback_return;
-typedef perftest_callback_6e20e8b97ebb3c88 perftest_callback_return_owned_optional_callback;
+typedef perftest_callback_bf3665103e007fe6 perftest_callback_return_owned_optional_callback;
 typedef perftest_callback_return_resource * perftest_callback_return_owned_optional_callback_return;
-typedef perftest_callback_b0a36b18d83434ed perftest_callback_return_owned_vector_callback;
-typedef perftest_callback_b0a36b18d83434ed_callback_return_w1_rows perftest_callback_return_owned_vector_callback_return;
-typedef perftest_callback_b0a36b18d83434ed_callback_return_w1_row perftest_callback_return_owned_vector_callback_return_row;
-typedef perftest_callback_b0a36b18d83434ed perftest_callback_return_owned_vector_catch_callback;
-typedef perftest_callback_b0a36b18d83434ed_callback_return_w1_rows perftest_callback_return_owned_vector_catch_callback_return;
-typedef perftest_callback_b0a36b18d83434ed_callback_return_w1_row perftest_callback_return_owned_vector_catch_callback_return_row;
-typedef perftest_callback_24a5c7966da050a9 perftest_callback_return_pair_catch_callback;
-typedef perftest_callback_24a5c7966da050a9_result perftest_callback_return_pair_catch_callback_return;
-typedef perftest_callback_589eef1af0230719 perftest_callback_return_record_callback;
-typedef perftest_callback_589eef1af0230719_result perftest_callback_return_record_callback_return;
-typedef perftest_callback_cef6210f15ef4535 perftest_callback_return_spawn_callback;
+typedef perftest_callback_0c7ae0f660edb387 perftest_callback_return_owned_vector_callback;
+typedef perftest_callback_0c7ae0f660edb387_callback_return_w1_rows perftest_callback_return_owned_vector_callback_return;
+typedef perftest_callback_0c7ae0f660edb387_callback_return_w1_row perftest_callback_return_owned_vector_callback_return_row;
+typedef perftest_callback_0c7ae0f660edb387 perftest_callback_return_owned_vector_catch_callback;
+typedef perftest_callback_0c7ae0f660edb387_callback_return_w1_rows perftest_callback_return_owned_vector_catch_callback_return;
+typedef perftest_callback_0c7ae0f660edb387_callback_return_w1_row perftest_callback_return_owned_vector_catch_callback_return_row;
+typedef perftest_callback_6ad92de9db85defc perftest_callback_return_pair_catch_callback;
+typedef perftest_callback_6ad92de9db85defc_result perftest_callback_return_pair_catch_callback_return;
+typedef perftest_callback_3c5d45f70fd17829 perftest_callback_return_record_callback;
+typedef perftest_callback_3c5d45f70fd17829_result perftest_callback_return_record_callback_return;
+typedef perftest_callback_a4bc3153f04892c6 perftest_callback_return_spawn_callback;
 typedef int64_t perftest_callback_return_spawn_callback_return;
-typedef perftest_callback_efc3c673f144160f perftest_callback_return_text_callback;
+typedef perftest_callback_0254ff800a6840ea perftest_callback_return_text_callback;
 typedef perftest_buffer perftest_callback_return_text_callback_return;
-typedef perftest_callback_91e558069da45345 perftest_callback_return_u128_callback;
+typedef perftest_callback_932558439be4ffca perftest_callback_return_u128_callback;
 typedef perftest_int128 perftest_callback_return_u128_callback_return;
-typedef perftest_callback_321f7c4288706a27 perftest_callback_return_unit_callback;
-typedef perftest_callback_ea174d88bac9b485 perftest_callback_return_unsigned_callback;
+typedef perftest_callback_cfa0a1cf790c7d8d perftest_callback_return_unit_callback;
+typedef perftest_callback_cdccf65221eab046 perftest_callback_return_unsigned_callback;
 typedef uint64_t perftest_callback_return_unsigned_callback_return;
-typedef perftest_callback_5fdca16b0dadfb25 perftest_callback_return_vector_callback;
-typedef perftest_callback_5fdca16b0dadfb25_callback_return_w1_rows perftest_callback_return_vector_callback_return;
-typedef perftest_callback_5fdca16b0dadfb25_callback_return_w1_row perftest_callback_return_vector_callback_return_row;
-typedef perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows perftest_callback_return_vector_callback_arg0;
-static inline void perftest_callback_return_vector_callback_arg0_free(perftest_callback_return_vector_callback_arg0 value) { perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows_free(value); }
-typedef perftest_callback_9067021b3e3252ad perftest_callback_return_wide_callback;
+typedef perftest_callback_aaca2bf4492ad16a perftest_callback_return_vector_callback;
+typedef perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows perftest_callback_return_vector_callback_return;
+typedef perftest_callback_aaca2bf4492ad16a_callback_return_w1_row perftest_callback_return_vector_callback_return_row;
+typedef perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows perftest_callback_return_vector_callback_arg0;
+static inline void perftest_callback_return_vector_callback_arg0_free(perftest_callback_return_vector_callback_arg0 value) { perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows_free(value); }
+typedef perftest_callback_af8866ae3e4d0e12 perftest_callback_return_wide_callback;
 typedef perftest_int128 perftest_callback_return_wide_callback_return;
-typedef perftest_callback_15f1a05217a2ceea perftest_callback_return_zero_callback;
+typedef perftest_callback_80df196c35a25faa perftest_callback_return_zero_callback;
 typedef int64_t perftest_callback_return_zero_callback_return;
 typedef struct {
     int64_t code;
@@ -462,6 +503,23 @@ perftest_archive * perftest_archive_new(void);
 void perftest_archive_store(perftest_archive * p0_w1, int32_t p1_w1, int64_t p1_w4, double p1_w6, perftest_summary * p1_w8);
 perftest_blob * perftest_blob_value_echo(perftest_blob * p0_w1);
 perftest_blob * perftest_blob_value_new(int64_t p0_w1, perftest_buffer p1_w1);
+void perftest_borrow_no_clone_emit(const perftest_borrow_no_clone * p0_w1, perftest_callback_73d1696b3b705bd1 p1_callback);
+perftest_borrow_no_clone * perftest_borrow_no_clone_new(void);
+int64_t perftest_borrow_no_clone_value(const perftest_borrow_no_clone * p0_w1);
+uintptr_t perftest_borrow_packet_counter(uintptr_t p0_w1);
+void perftest_borrow_packet_emit(const perftest_borrow_packet * p0_w1, perftest_callback_ad0b57894c7bbea6 p1_callback, uintptr_t p2_w1);
+void perftest_borrow_packet_emit_copy(const perftest_borrow_packet * p0_w1, perftest_callback_078f14fba1e1a0bf p1_callback, uintptr_t p2_w1);
+void perftest_borrow_packet_emit_expanded(const perftest_borrow_packet * p0_w1, perftest_callback_8df66309051ff0c4 p1_callback, uintptr_t p2_w1);
+void perftest_borrow_packet_emit_expanded_other(const perftest_borrow_packet * p0_w1, perftest_callback_8df66309051ff0c4 p1_callback, uintptr_t p2_w1);
+void perftest_borrow_packet_emit_optional(const perftest_borrow_packet * p0_w1, perftest_callback_a1983d7a373db49d p1_callback, uint8_t p2_w1);
+void perftest_borrow_packet_emit_worker(const perftest_borrow_packet * p0_w1, perftest_callback_ad0b57894c7bbea6 p1_callback);
+uintptr_t perftest_borrow_packet_len(const perftest_borrow_packet * p0_w1);
+perftest_borrow_packet * perftest_borrow_packet_new(uintptr_t p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value == NULL means None; non-null means Some. */
+const perftest_borrow_packet * perftest_borrow_packet_optional(const perftest_borrow_packet * p0_w1, uint8_t p1_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+const perftest_borrow_packet * perftest_borrow_packet_ref(const perftest_borrow_packet * p0_w1);
 uintptr_t perftest_buffer_views_address(void);
 perftest_owned_vec_u8_672e72343c1b4cb4 perftest_buffer_views_bytes(uintptr_t *out1);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
@@ -469,7 +527,7 @@ int32_t perftest_buffer_views_optional_bytes(uint8_t p0_w1, perftest_owned_vec_u
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
 int32_t perftest_buffer_views_optional_text(uint8_t p0_w1, perftest_owned_string *out1, uintptr_t *out2);
 perftest_owned_string perftest_buffer_views_text(uintptr_t *out1);
-void perftest_c_output_callback(int64_t p0_w1, perftest_callback_4cf53ee6dc85aa46 p1_callback);
+void perftest_c_output_callback(int64_t p0_w1, perftest_callback_b98c737eadfea95e p1_callback);
 typedef struct {
     perftest_c_output_resource * v0;
     perftest_owned_string v1;
@@ -556,22 +614,22 @@ bool perftest_c_result_rich_error(uint8_t p0_w1, perftest_rich_error *error);
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool perftest_c_result_structured(perftest_buffer p0_w1, int32_t p1_w1, int64_t *out0, perftest_result_error *error);
-uint8_t perftest_callback_return_bool(perftest_callback_490413898821d50d p0_callback);
-int64_t perftest_callback_return_borrowed_pair_catch(perftest_callback_5f675dc767965255 p0_callback);
-perftest_owned_vec_u8_672e72343c1b4cb4 perftest_callback_return_bytes(perftest_callback_df547e71faee3c03 p0_callback);
+uint8_t perftest_callback_return_bool(perftest_callback_fac4c5ae31f5b10e p0_callback);
+int64_t perftest_callback_return_borrowed_pair_catch(perftest_callback_f8aec5520f68a9c7 p0_callback);
+perftest_owned_vec_u8_672e72343c1b4cb4 perftest_callback_return_bytes(perftest_callback_629e2a5bc2c646bd p0_callback);
 /* Result: success field v0 is returned directly; 1114112 means failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
-uint32_t perftest_callback_return_c_result(perftest_callback_73c3c177e4a73331 p0_callback, size_t *ownership, char * *error);
-int64_t perftest_callback_return_catch(perftest_callback_cef6210f15ef4535 p0_callback);
-uint32_t perftest_callback_return_char(perftest_callback_73c3c177e4a73331 p0_callback);
-uint32_t perftest_callback_return_char_catch(perftest_callback_8831734aa5203b29 p0_callback);
-uint8_t perftest_callback_return_enum(perftest_callback_de793b4a6fb814fd p0_callback);
-float perftest_callback_return_f32(perftest_callback_6a62e9f8e6773c45 p0_callback);
-double perftest_callback_return_float(perftest_callback_d58f9fdf78f56c8d p0_callback);
+uint32_t perftest_callback_return_c_result(perftest_callback_87ab5bb17593ae00 p0_callback, size_t *ownership, char * *error);
+int64_t perftest_callback_return_catch(perftest_callback_a4bc3153f04892c6 p0_callback);
+uint32_t perftest_callback_return_char(perftest_callback_87ab5bb17593ae00 p0_callback);
+uint32_t perftest_callback_return_char_catch(perftest_callback_e79b477ebab70ab0 p0_callback);
+uint8_t perftest_callback_return_enum(perftest_callback_1e259c5420a05522 p0_callback);
+float perftest_callback_return_f32(perftest_callback_d47c7bdcce5eb73a p0_callback);
+double perftest_callback_return_float(perftest_callback_1877262b1efa0588 p0_callback);
 int64_t perftest_callback_return_handler_call(const perftest_callback_return_handler * p0_w1, int64_t p1_w1);
 typedef struct {
-    perftest_callback_cef6210f15ef4535 v0;
+    perftest_callback_a4bc3153f04892c6 v0;
 } perftest_callback_return_handler_many_p0_w1_row;
 typedef struct { perftest_callback_return_handler_many_p0_w1_row *data; size_t len; } perftest_callback_return_handler_many_p0_w1_rows;
 /* Collection handlers: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
@@ -579,29 +637,29 @@ int64_t perftest_callback_return_handler_many(perftest_callback_return_handler_m
 /* Result: success field v0 is returned directly; NULL means failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
-perftest_callback_return_handler * perftest_callback_return_handler_new(perftest_callback_cef6210f15ef4535 p0_callback, uint8_t p1_w1, size_t *ownership, char * *error);
-int64_t perftest_callback_return_handler_value(perftest_callback_cef6210f15ef4535 p0_w2);
-int16_t perftest_callback_return_i16(perftest_callback_e51dd6cac1e6761d p0_callback);
-int64_t perftest_callback_return_i64(perftest_callback_cef6210f15ef4535 p0_callback);
-int8_t perftest_callback_return_i8(perftest_callback_f5f6b40488a06bd3 p0_callback);
+perftest_callback_return_handler * perftest_callback_return_handler_new(perftest_callback_a4bc3153f04892c6 p0_callback, uint8_t p1_w1, size_t *ownership, char * *error);
+int64_t perftest_callback_return_handler_value(perftest_callback_a4bc3153f04892c6 p0_w2);
+int16_t perftest_callback_return_i16(perftest_callback_9b2f0dd74406582c p0_callback);
+int64_t perftest_callback_return_i64(perftest_callback_a4bc3153f04892c6 p0_callback);
+int8_t perftest_callback_return_i8(perftest_callback_e7c993c21d79dcc8 p0_callback);
 int64_t perftest_callback_return_join(perftest_callback_return_job * p0_w1);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
-int32_t perftest_callback_return_optional(perftest_callback_ea6b56ec3d11492d p0_callback, uint8_t p1_w1, int64_t *out1);
-int64_t perftest_callback_return_owned(perftest_callback_0e60b44d7236d10d p0_callback);
+int32_t perftest_callback_return_optional(perftest_callback_7955cb4745523772 p0_callback, uint8_t p1_w1, int64_t *out1);
+int64_t perftest_callback_return_owned(perftest_callback_4f6170b342252c1b p0_callback);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
-int32_t perftest_callback_return_owned_optional(perftest_callback_6e20e8b97ebb3c88 p0_callback, int64_t *out1);
-int64_t perftest_callback_return_owned_vector(perftest_callback_b0a36b18d83434ed p0_callback);
-int64_t perftest_callback_return_owned_vector_catch(perftest_callback_b0a36b18d83434ed p0_callback);
-int64_t perftest_callback_return_pair_catch(perftest_callback_24a5c7966da050a9 p0_callback);
-int64_t perftest_callback_return_record(perftest_callback_589eef1af0230719 p0_callback);
+int32_t perftest_callback_return_owned_optional(perftest_callback_bf3665103e007fe6 p0_callback, int64_t *out1);
+int64_t perftest_callback_return_owned_vector(perftest_callback_0c7ae0f660edb387 p0_callback);
+int64_t perftest_callback_return_owned_vector_catch(perftest_callback_0c7ae0f660edb387 p0_callback);
+int64_t perftest_callback_return_pair_catch(perftest_callback_6ad92de9db85defc p0_callback);
+int64_t perftest_callback_return_record(perftest_callback_3c5d45f70fd17829 p0_callback);
 int64_t perftest_callback_return_resource_id(const perftest_callback_return_resource * p0_w1);
 uint64_t perftest_callback_return_resource_live(void);
 perftest_callback_return_resource * perftest_callback_return_resource_new(int64_t p0_w1);
-perftest_callback_return_job * perftest_callback_return_spawn(perftest_callback_cef6210f15ef4535 p0_callback);
-perftest_owned_string perftest_callback_return_text(perftest_callback_efc3c673f144160f p0_callback);
-perftest_int128 perftest_callback_return_u128(perftest_callback_91e558069da45345 p0_callback);
-void perftest_callback_return_unit(perftest_callback_321f7c4288706a27 p0_callback);
-uint64_t perftest_callback_return_unsigned(perftest_callback_ea174d88bac9b485 p0_callback);
+perftest_callback_return_job * perftest_callback_return_spawn(perftest_callback_a4bc3153f04892c6 p0_callback);
+perftest_owned_string perftest_callback_return_text(perftest_callback_0254ff800a6840ea p0_callback);
+perftest_int128 perftest_callback_return_u128(perftest_callback_932558439be4ffca p0_callback);
+void perftest_callback_return_unit(perftest_callback_cfa0a1cf790c7d8d p0_callback);
+uint64_t perftest_callback_return_unsigned(perftest_callback_cdccf65221eab046 p0_callback);
 typedef struct {
     int64_t v0;
 } perftest_callback_return_vector_ret_w0_row;
@@ -609,9 +667,9 @@ typedef struct { perftest_callback_return_vector_ret_w0_row *data; size_t len; }
 /* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
 void perftest_callback_return_vector_ret_w0_rows_free(perftest_callback_return_vector_ret_w0_rows rows);
 /* Collection return: ret_w0 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
-perftest_callback_return_vector_ret_w0_rows perftest_callback_return_vector(perftest_callback_5fdca16b0dadfb25 p0_callback);
-perftest_int128 perftest_callback_return_wide(perftest_callback_9067021b3e3252ad p0_callback);
-int64_t perftest_callback_return_zero(perftest_callback_15f1a05217a2ceea p0_callback);
+perftest_callback_return_vector_ret_w0_rows perftest_callback_return_vector(perftest_callback_aaca2bf4492ad16a p0_callback);
+perftest_int128 perftest_callback_return_wide(perftest_callback_af8866ae3e4d0e12 p0_callback);
+int64_t perftest_callback_return_zero(perftest_callback_80df196c35a25faa p0_callback);
 int64_t perftest_callback_row_resource_id(const perftest_c_output_resource * p0_w1);
 int64_t perftest_callback_row_resource_live(void);
 typedef struct {

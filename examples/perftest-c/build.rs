@@ -6,6 +6,54 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("borrow_packet", pq!(BorrowPacket))
+        .opaque_ptr("borrow_no_clone", pq!(BorrowNoClone))
+        .function(fun!(borrow_packet_new))
+        .panic()
+        .function(fun!(borrow_packet_len))
+        .panic()
+        .function(fun!(borrow_packet_ref))
+        .panic()
+        .function(fun!(borrow_packet_optional))
+        .panic()
+        .function(fun!(borrow_packet_emit))
+        .panic()
+        .function(
+            fun!(borrow_packet_emit_copy).expand_param(
+                "callback",
+                prebindgen_declarations::callback!(impl Fn(&BorrowPacket))
+                    .expand_param(0, expand_return!(BorrowPacket).field_self_ref()),
+            ),
+        )
+        .panic()
+        .function(fun!(borrow_packet_emit_expanded).expand_param(
+            "callback",
+            prebindgen_declarations::callback!(impl Fn(&BorrowPacket)).expand_param(
+                0,
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len)),
+            ),
+        ))
+        .panic()
+        .function(fun!(borrow_packet_emit_expanded_other).expand_param(
+            "callback",
+            prebindgen_declarations::callback!(impl Fn(&BorrowPacket)).expand_param(
+                0,
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len_plus_one)),
+            ),
+        ))
+        .panic()
+        .function(fun!(borrow_packet_emit_optional))
+        .panic()
+        .function(fun!(borrow_packet_emit_worker))
+        .panic()
+        .function(fun!(borrow_packet_counter))
+        .panic()
+        .function(fun!(borrow_no_clone_new))
+        .panic()
+        .function(fun!(borrow_no_clone_value))
+        .panic()
+        .function(fun!(borrow_no_clone_emit))
+        .panic()
         .opaque_ptr("c_output_resource", pq!(CallbackRowResource))
         .expand(
             expand_return!(CallbackRow)
@@ -251,9 +299,10 @@ fn main() {
         .panic()
         .function(
             fun!(getter_fields_new).expand_return(
-                expand_return!(GetterOwner)
-                    .field_self_into()
-                    .fields(fields!(getter_owner_details)),
+                expand_return!(GetterOwner).field_self_into().fields(
+                    fields!(getter_owner_details)
+                        .field("text", expand_return!(String).field_self_ref()),
+                ),
             ),
         )
         .panic()
@@ -673,7 +722,12 @@ fn main() {
         )
         .expand(
             expand_return!(Report)
-                .fields(fields!(report_to_struct))
+                .view(prebindgen_declarations::Output::getter(
+                    "report_to_struct",
+                    prebindgen_declarations::Output::OwnedFields(
+                        vec![prebindgen_declarations::Output::auto(); 3],
+                    ),
+                ))
                 .field_self(),
         )
         .function(fun!(blob_value_new))

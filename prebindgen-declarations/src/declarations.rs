@@ -485,24 +485,17 @@ impl Declarations {
                     }
                     let mut arguments = Vec::with_capacity(signature.arguments.len());
                     for (index, source) in signature.arguments.iter().enumerate() {
-                        // References expose the referred value, except the borrowed
-                        // string/slice views handled by ordinary output conversions.
-                        let ty = match source {
-                            syn::Type::Reference(reference) if reference.mutability.is_none() => {
-                                match reference.elem.as_ref() {
-                                    syn::Type::Slice(_) => source,
-                                    syn::Type::Path(path) if path.path.is_ident("str") => source,
-                                    payload => payload,
-                                }
-                            }
-                            _ => source,
-                        };
-                        arguments.push(self.resolve_output(
+                        // Retain the source reference for exact type overrides.
+                        // As with getters, referent defaults may expand a borrow;
+                        // compilation preserves its lifetime and ownership.
+                        arguments.push(self.output(
                             flat,
                             codec,
-                            ty,
+                            source,
                             selected.params.get(&index).unwrap_or(&Output::auto()),
                             extra,
+                            &mut vec![],
+                            true,
                         )?);
                     }
                     let ret = resolve(

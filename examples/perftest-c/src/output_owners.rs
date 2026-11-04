@@ -35,17 +35,17 @@ unsafe extern "C" fn receive(context: *mut core::ffi::c_void, rows: __PbRows) {
     if rows.len != 0 {
         for row in core::slice::from_raw_parts(
             rows.data
-                .cast::<__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0>(),
+                .cast::<__PbRow_callback_b98c737eadfea95e_callback_arg_0_w0>(),
             rows.len,
         ) {
             close_rows!(
                 row.v0,
-                __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
-                perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows_free
+                __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4,
+                perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows_free
             );
         }
     }
-    perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(rows);
+    perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows_free(rows);
 }
 fn sentinel() -> __PbRows {
     __PbRows {
@@ -121,7 +121,7 @@ fn generated_buffered_outputs_release_partial_nested_and_independent_rows() {
             let mut calls = 0usize;
             perftest_c_output_callback(
                 fail,
-                perftest_callback_4cf53ee6dc85aa46 {
+                perftest_callback_b98c737eadfea95e {
                     run: Some(receive),
                     context: (&mut calls as *mut usize).cast(),
                     drop: None,

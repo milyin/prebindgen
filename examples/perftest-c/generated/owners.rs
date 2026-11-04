@@ -503,23 +503,7 @@ impl Drop for __PbCallbackOwner {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_callback_1782e472ad837f0b_callback_return_w1 {
-    pub v0: __PbOwned_packet,
-    pub v1: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct owner_callback_1782e472ad837f0b {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    pub release_result: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
-    >,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct owner_callback_7a0d2e4eb3c7fbb1 {
+pub struct owner_callback_0c47d5ea09f8970c {
     pub run: Option<
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
@@ -531,13 +515,13 @@ pub struct owner_callback_7a0d2e4eb3c7fbb1 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_callback_d1e1f55a20f3880c_callback_return_w1 {
+pub struct __PbRow_callback_805117dbed50edfb_callback_return_w1 {
     pub v0: __PbOwned_packet,
     pub v1: *mut perftest_flat::InlineChild,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct owner_callback_d1e1f55a20f3880c {
+pub struct owner_callback_805117dbed50edfb {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
@@ -547,7 +531,24 @@ pub struct owner_callback_d1e1f55a20f3880c {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct owner_callback_df547e71faee3c03 {
+pub struct owner_callback_c381621a1cf6edc5_result {
+    pub v0: __PbOwned_packet,
+    pub v1: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct owner_callback_c381621a1cf6edc5 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> owner_callback_c381621a1cf6edc5_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct owner_callback_f5757ec9aa1c45d2 {
     pub run: Option<
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
@@ -559,20 +560,19 @@ pub struct owner_callback_df547e71faee3c03 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct owner_callback_e857880e5782d2cb_result {
+pub struct __PbRow_callback_f5d26722508e30c3_callback_return_w1 {
     pub v0: __PbOwned_packet,
     pub v1: u32,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct owner_callback_e857880e5782d2cb {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-        ) -> owner_callback_e857880e5782d2cb_result,
-    >,
+pub struct owner_callback_f5d26722508e30c3 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
+    >,
 }
 #[repr(C)]
 pub struct owner_inline_boxed_numbers_len_result {
@@ -954,7 +954,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn owner_inline_bytes_callback(
-    p0_callback: owner_callback_df547e71faee3c03,
+    p0_callback: owner_callback_f5757ec9aa1c45d2,
 ) -> usize {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -1043,7 +1043,7 @@ pub unsafe extern "C" fn owner_inline_bytes_callback(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_df547e71faee3c03",
+                                    "owner_callback_f5757ec9aa1c45d2",
                                     "(Vec < u8 >)->Vec < u8 >",
                                     &error,
                                 );
@@ -1405,7 +1405,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
-    p0_callback: owner_callback_d1e1f55a20f3880c,
+    p0_callback: owner_callback_805117dbed50edfb,
 ) -> u64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -1458,19 +1458,19 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                             );
                             ::prebindgen_runtime::validate_slice(
                                 callback_return_w1.data
-                                    as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1,
+                                    as *const __PbRow_callback_805117dbed50edfb_callback_return_w1,
                                 callback_return_w1.len,
                             )?;
                             for index in 0..callback_return_w1.len {
                                 let callback_return_w6 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1)
+                                        as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
                                         .add(index)))
                                         .v0
                                 };
                                 let callback_return_w8 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1)
+                                        as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
                                         .add(index)))
                                         .v1
                                 };
@@ -1479,7 +1479,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                         .receive_inline(
                                             (::core::ptr::addr_of!(
                                                 (* ((callback_return_w1.data as * const
-                                                __PbRow_callback_d1e1f55a20f3880c_callback_return_w1)
+                                                __PbRow_callback_805117dbed50edfb_callback_return_w1)
                                                 .add(index))).v0
                                             ) as *const __PbOwned_packet)
                                                 .cast::<perftest_flat::InlinePacket>(),
@@ -1501,7 +1501,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                     let callback_return_w2 = callback_return_w1.len;
                                     ::prebindgen_runtime::validate_slice(
                                         callback_return_w1.data
-                                            as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1,
+                                            as *const __PbRow_callback_805117dbed50edfb_callback_return_w1,
                                         callback_return_w2,
                                     )?;
                                     let mut callback_return_w1_accesses = __prebindgen_input_aliases
@@ -1512,13 +1512,13 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                     for callback_return_w3 in 0..callback_return_w2 {
                                         let callback_return_w6 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1)
+                                                as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v0
                                         };
                                         let callback_return_w8 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_d1e1f55a20f3880c_callback_return_w1)
+                                                as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v1
                                         };
@@ -1623,7 +1623,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_d1e1f55a20f3880c",
+                                    "owner_callback_805117dbed50edfb",
                                     "()->Vec < perftest_flat :: InlineMixed >",
                                     &error,
                                 );
@@ -1886,7 +1886,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn owner_inline_packet_callback(
-    p0_callback: owner_callback_7a0d2e4eb3c7fbb1,
+    p0_callback: owner_callback_0c47d5ea09f8970c,
 ) -> usize {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -1977,7 +1977,7 @@ pub unsafe extern "C" fn owner_inline_packet_callback(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_7a0d2e4eb3c7fbb1",
+                                    "owner_callback_0c47d5ea09f8970c",
                                     "(perftest_flat :: InlinePacket)->perftest_flat :: InlinePacket",
                                     &error,
                                 );
@@ -2698,7 +2698,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn owner_inline_return_catch(
-    p0_callback: owner_callback_e857880e5782d2cb,
+    p0_callback: owner_callback_c381621a1cf6edc5,
 ) -> u8 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -2820,7 +2820,7 @@ pub unsafe extern "C" fn owner_inline_return_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_e857880e5782d2cb",
+                                    "owner_callback_c381621a1cf6edc5",
                                     "()->perftest_flat :: InlineReturn",
                                     &error,
                                 );
@@ -2865,7 +2865,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn owner_inline_rows_catch(
-    p0_callback: owner_callback_1782e472ad837f0b,
+    p0_callback: owner_callback_f5d26722508e30c3,
 ) -> u8 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -2916,19 +2916,19 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                             );
                             ::prebindgen_runtime::validate_slice(
                                 callback_return_w1.data
-                                    as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1,
+                                    as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1,
                                 callback_return_w1.len,
                             )?;
                             for index in 0..callback_return_w1.len {
                                 let callback_return_w6 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1)
+                                        as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
                                         .add(index)))
                                         .v0
                                 };
                                 let callback_return_w8 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1)
+                                        as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
                                         .add(index)))
                                         .v1
                                 };
@@ -2937,7 +2937,7 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                         .receive_inline(
                                             (::core::ptr::addr_of!(
                                                 (* ((callback_return_w1.data as * const
-                                                __PbRow_callback_1782e472ad837f0b_callback_return_w1)
+                                                __PbRow_callback_f5d26722508e30c3_callback_return_w1)
                                                 .add(index))).v0
                                             ) as *const __PbOwned_packet)
                                                 .cast::<perftest_flat::InlinePacket>(),
@@ -2953,20 +2953,20 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                     let callback_return_w2 = callback_return_w1.len;
                                     ::prebindgen_runtime::validate_slice(
                                         callback_return_w1.data
-                                            as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1,
+                                            as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1,
                                         callback_return_w2,
                                     )?;
                                     callback_return_w0.reserve_exact(callback_return_w2);
                                     for callback_return_w3 in 0..callback_return_w2 {
                                         let callback_return_w6 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1)
+                                                as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v0
                                         };
                                         let callback_return_w8 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_1782e472ad837f0b_callback_return_w1)
+                                                as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v1
                                         };
@@ -3037,7 +3037,7 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_1782e472ad837f0b",
+                                    "owner_callback_f5d26722508e30c3",
                                     "()->Vec < perftest_flat :: InlineReturn >",
                                     &error,
                                 );

@@ -77,7 +77,8 @@ impl ExpandReturnDecl {
         self
     }
     /// Append a getter view. An explicit `.name()` labels the delivered view.
-    /// Shared results are observed or cloned before another view moves the owner.
+    /// Shared results are observed before another view moves the owner. An
+    /// owning opaque copy requires an explicit projection or cloning accessor.
     pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();
@@ -115,7 +116,8 @@ impl ExpandReturnDecl {
         self.output = self.output.field_self();
         self
     }
-    /// Append an explicit borrowed projection.
+    /// Append an explicit shared projection. Owning opaque representations clone
+    /// the value; record/collection projections permit copying borrowed leaves.
     pub fn field_self_ref(self) -> Self {
         self.project_self(Projection::borrowed())
     }

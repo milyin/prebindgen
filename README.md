@@ -170,8 +170,9 @@ Getters used by output expansions may return shared values such as `&Child`,
 `&str`, `&[Row]`, `Option<&Child>` or `&Option<Child>`. A borrowed getter result
 uses the referent's output defaults, so nested getters and record projections
 work without cloning the owner or an intermediate object. Text and fields are
-copied as required by the foreign representation. JNI handle leaves clone their
-referents into independent owning allocations and require `Clone`. C opaque
+copied as required by the foreign representation. JNI opaque handle leaves require
+an explicit copy projection such as `field_self_ref()`; that projection clones
+their referents into independent owning allocations and requires `Clone`. C opaque
 reference leaves are loans: a getter expansion must retain its owner as described
 below, or explicitly request an independent owning copy. Borrowed
 results cannot satisfy an owned projection. Each getter runs once per configured
@@ -186,8 +187,10 @@ cloning or allocating. Optional references use null for absence. This also works
 in the success value of `Result`. The C caller must
 keep the referenced storage alive at a stable address and obey Rust's aliasing
 rules, including exclusive access while using a mutable borrow. Never free or
-pass a borrowed pointer to a consuming function. JNI still
-clones opaque references into independent owning handles.
+pass a borrowed pointer to a consuming function. These rules also apply to shared
+C callback arguments, whose loans last only for the callback invocation. JNI
+diagnoses unconfigured borrowed opaque outputs; select an explicit owning copy
+or expand the referenced value into fields.
 For example, a function returning `&Child` can
 use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
 name instead of a child pointer/handle. Explicit borrowed projections select
@@ -1629,7 +1632,9 @@ Absent inputs skip payload validation, resource checks, acquisition and construc
 Absent outputs skip payload conversion. Prepared output allocations remain owned
 by Rust until delivery succeeds, and Kotlin rollback closes only present handles.
 Borrowed text, byte slices and handle inputs are supported inside `Option`;
-shared-reference outputs copy values or clone handles into independently owned outputs.
+shared-reference outputs preserve the adapter's borrow policy. C opaque references
+remain loans; JNI opaque references require an explicit owning-copy projection
+or field expansion. Optional wrapping does not authorize copying.
 
 A **niche** is a wire representation unavailable to a present payload. The shared
 compiler uses an eligible niche instead of adding a presence wire:

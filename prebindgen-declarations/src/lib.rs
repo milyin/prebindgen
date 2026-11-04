@@ -316,7 +316,8 @@ pub enum Output<P = std::convert::Infallible> {
         function: String,
         /// Conversion of the getter's result. Shared results retain their borrow
         /// while being observed or cloned; they cannot satisfy an owned projection.
-        /// Rust checks `Clone` when a borrowed opaque leaf becomes an owning handle.
+        /// An owning opaque copy requires an explicit shared projection or clone
+        /// accessor; Rust then checks `Clone`.
         output: Box<Output<P>>,
     },
     /// Produce several views of one value. At most one child may consume it.
@@ -1184,8 +1185,9 @@ pub trait Codec {
     /// has the source function's lifetime contract. Adapters may expose it as a
     /// non-owning foreign pointer. `reference` preserves the referent and mutability;
     /// `value` produces exactly that Rust reference.
-    /// This also applies inside optional and successful Result returns, but not
-    /// inside getter expansions, record decomposition or callback arguments.
+    /// This also applies inside optional and successful Result returns and to
+    /// getter results whose receiver remains alive. Callback arguments supplied as references
+    /// also use this hook: their loan lasts only for the foreign invocation.
     /// The foreign caller must preserve the referenced storage and Rust aliasing
     /// rules. No runtime lifetime tracking is implied.
     ///
@@ -1409,7 +1411,7 @@ fn compile_output_at<C: Codec>(
             .output_root(ty, recipe, extra, value, false, true)?,
         OutputPosition::CallbackArgument { index, borrowed } => {
             Compiler::new(flat, codec, format!("callback_arg_{index}"))
-                .output_root(ty, recipe, extra, value, borrowed, false)?
+                .output_root(ty, recipe, extra, value, borrowed, true)?
         }
     };
     finalize_output_schema(codec, &mut plan, extra)?;
@@ -1520,6 +1522,9 @@ fn finalize_output_schema<C: Codec>(
 
 struct Compiler<'a, C: Codec> {
     bulk: std::cell::Cell<bool>,
+    // Explicit borrowed collection/record projections authorize owning copies
+    // of borrowed leaves, without changing conversions of owned getter results.
+    copy_borrowed: std::cell::Cell<bool>,
     grouped_input: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
@@ -1533,6 +1538,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             bulk: std::cell::Cell::new(false),
+            copy_borrowed: std::cell::Cell::new(false),
             grouped_input: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
@@ -1551,6 +1557,18 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.temporary_receiver.set(previous || temporary);
         let result = prepare();
         self.temporary_receiver.set(previous);
+        result
+    }
+    fn with_copy_permission<T>(
+        &self,
+        explicit: bool,
+        prepare: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        let previous = self
+            .copy_borrowed
+            .replace(self.copy_borrowed.get() || explicit);
+        let result = prepare();
+        self.copy_borrowed.set(previous);
         result
     }
     fn name(&self) -> syn::Ident {
@@ -2172,6 +2190,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let (element_type, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection")?;
+                let explicit_copy = *mode == Some(ProjectionMode::Borrowed);
                 let mode = mode.unwrap_or_else(|| {
                     if borrowed || !sequence_parts(ty).unwrap().1.is_owned() {
                         ProjectionMode::Borrowed
@@ -2188,20 +2207,22 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let ordinary = self.ordinary_collections.replace(
                     self.ordinary_collections.get() || *delivery != SequenceDelivery::Auto,
                 );
-                let child = self.with_temporary_receiver(
-                    mode == ProjectionMode::Borrowed
-                        && !borrowed
-                        && sequence_parts(ty).unwrap().1.is_owned(),
-                    || {
-                        self.output(
-                            element_type,
-                            element,
-                            extra,
-                            quote!(#payload),
-                            mode == ProjectionMode::Borrowed,
-                        )
-                    },
-                );
+                let child = self.with_copy_permission(explicit_copy, || {
+                    self.with_temporary_receiver(
+                        mode == ProjectionMode::Borrowed
+                            && !borrowed
+                            && sequence_parts(ty).unwrap().1.is_owned(),
+                        || {
+                            self.output(
+                                element_type,
+                                element,
+                                extra,
+                                quote!(#payload),
+                                mode == ProjectionMode::Borrowed,
+                            )
+                        },
+                    )
+                });
                 self.ordinary_collections.set(ordinary);
                 let child = child?;
                 return sequence::output(
@@ -2249,6 +2270,27 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Output::Request(never) => match *never {},
             Output::Leaf => {
                 let w = wire_name.cloned().unwrap_or_else(|| self.name());
+                if borrowed && self.copy_borrowed.get() {
+                    return if self.bulk.get() {
+                        self.codec.output_bulk_projected(
+                            self.flat,
+                            ty,
+                            extra,
+                            w,
+                            value,
+                            &Projection::borrowed(),
+                        )
+                    } else {
+                        self.codec.output_projected(
+                            self.flat,
+                            ty,
+                            extra,
+                            w,
+                            value,
+                            &Projection::borrowed(),
+                        )
+                    };
+                }
                 return if self.bulk.get() {
                     self.codec
                         .output_bulk_leaf(self.flat, ty, extra, w, value, borrowed)
@@ -2322,24 +2364,33 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     .as_ref()
                     .map(|w| format_ident!("{w}_record"))
                     .unwrap_or_else(|| self.name());
-                let mut plan = self.with_temporary_receiver(!owned && !borrowed, || {
-                    if owned {
-                        record_output_owned(
-                            self.codec,
-                            var,
-                            value,
-                            r.fields.iter().map(|f| f.name.clone()),
-                            convert,
-                        )
-                    } else {
-                        record_output(
-                            self.codec,
-                            var,
-                            value,
-                            r.fields.iter().map(|f| f.name.clone()),
-                            convert,
-                        )
+                let explicit_copy = matches!(
+                    recipe,
+                    Output::Record {
+                        mode: Some(ProjectionMode::Borrowed),
+                        ..
                     }
+                );
+                let mut plan = self.with_copy_permission(explicit_copy, || {
+                    self.with_temporary_receiver(!owned && !borrowed, || {
+                        if owned {
+                            record_output_owned(
+                                self.codec,
+                                var,
+                                value,
+                                r.fields.iter().map(|f| f.name.clone()),
+                                convert,
+                            )
+                        } else {
+                            record_output(
+                                self.codec,
+                                var,
+                                value,
+                                r.fields.iter().map(|f| f.name.clone()),
+                                convert,
+                            )
+                        }
+                    })
                 })?;
                 if let Some(wire) = wire {
                     self.codec

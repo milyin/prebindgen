@@ -59,12 +59,98 @@ fn static_reference_outputs_keep_independent_jni_handles() {
             "pub type Child=String;pub fn fixed()->&'static Child{}",
         ))
         .set_package_prefix("test")
-        .package(package!().class(ptr_class!(Child)).fun(fun!(fixed)))
+        .package(
+            package!()
+                .class(ptr_class!(Child))
+                .fun(fun!(fixed).expand_return(expand_return!(Child).field_self_ref())),
+        )
         .build()
         .unwrap();
     assert!(generated.rust.contains("Clone"));
     assert!(generated.kotlin["test/Functions.kt"].contains("Child"));
     syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn borrowed_opaque_defaults_are_diagnosed_in_results_callbacks_and_rows() {
+    for signature in [
+        "pub fn f(v:&Handle)->&Handle{}",
+        "pub fn f(v:&Handle)->Option<&Handle>{}",
+        "pub fn f(cb:impl Fn(&Handle)){}",
+        "pub fn f(cb:impl Fn(Option<&Handle>)){}",
+        "pub fn f(cb:impl Fn(&[Row])){}",
+    ] {
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(&format!(
+                    "pub type Handle=String; pub struct Row {{pub owner:Handle}} {signature}"
+                )))
+                .set_package_prefix("test")
+                .package(
+                    package!()
+                        .class(ptr_class!(Handle))
+                        .class(data_class!(Row))
+                        .fun(fun!(f)),
+                ),
+        );
+        assert!(
+            error.contains("would clone and allocate"),
+            "{signature}: {error}"
+        );
+        assert!(error.contains("field_self_ref()"));
+    }
+}
+
+#[test]
+fn reference_copy_defaults_and_callback_local_views_are_independent() {
+    for local in [false, true] {
+        let callback = if local {
+            fun!(call).expand_param(
+                "cb",
+                callback!(impl Fn(&Handle))
+                    .expand_param(0, expand_return!(Handle).field(fun!(length))),
+            )
+        } else {
+            fun!(call)
+        };
+        let generated=JniGen::builder()
+            .flat(flat("pub type Handle=String;pub fn read(v:&Handle)->&Handle{}pub fn call(cb:impl Fn(&Handle)){}pub fn length(v:&Handle)->i64{}"))
+            .set_package_prefix("test")
+            .expand(expand_return!(&Handle).field_self_ref())
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(callback))
+            .build().unwrap();
+        assert_eq!(
+            generated.rust.matches("Clone::clone").count(),
+            if local { 1 } else { 2 }
+        );
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn explicit_borrowed_record_and_collection_copies_work_in_bulk_and_ordinary_outputs() {
+    for bulk in [false, true] {
+        for container in [false, true] {
+            let mut expansion = if container {
+                expand_return!(&'static [Row]).field_self_ref()
+            } else {
+                expand_return!(Row).field_self_ref()
+            };
+            if bulk {
+                expansion = expansion.bulk();
+            }
+            let generated=JniGen::builder()
+                .flat(flat("pub type Handle=String;pub struct Row {pub owner:Handle,pub text:String,pub number:i64}pub fn rows()->&'static [Row]{}"))
+                .set_package_prefix("test")
+                .set_bulk_collection_outputs(false)
+                .package(package!().class(ptr_class!(Handle)).class(data_class!(Row))
+                    .fun(fun!(rows).expand_return(expansion)))
+                .build().unwrap();
+            assert!(generated.rust.contains("Clone::clone"));
+            assert_eq!(generated.kotlin.contains_key("test/BulkLayouts.kt"), bulk);
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
 }
 
 #[test]
@@ -374,12 +460,13 @@ fn explicit_shared_data_outputs_resolve_ordinary_record_defaults() {
 }
 
 #[test]
-fn plain_borrowed_handles_keep_their_abi_while_explicit_views_can_expand() {
+fn borrowed_handles_require_explicit_copies_while_views_can_expand() {
     let generated = JniGen::builder()
         .flat(flat("pub type Handle=String;pub fn label(v:&Handle)->&str{}pub fn plain()->Option<&Handle>{}pub fn projected()->&Handle{}"))
         .set_package_prefix("test")
         .expand(expand_return!(Handle).field(fun!(label)))
-        .package(package!().class(ptr_class!(Handle)).fun(fun!(plain))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(plain)
+            .expand_return(expand_return!(Handle).field_self_ref()))
             .fun(fun!(projected).expand_return(expand_return!(Handle).field(fun!(label)))))
         .build().unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
@@ -1662,7 +1749,14 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
         .package(
             package!("calls")
                 .fun(fun!(first))
-                .fun(fun!(second))
+                .fun(
+                    fun!(second).expand_param(
+                        "cb",
+                        callback!(impl Fn(&Original))
+                            .name("OriginalBorrowedCopy")
+                            .expand_param(0, expand_return!(Original).field_self_ref()),
+                    ),
+                )
                 .fun(fun!(empty)),
         )
         .prepare()
@@ -1886,7 +1980,9 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
         .flat(flat("pub type Handle=String; pub struct Row { pub handle:Handle, pub optional:Option<Handle>, pub label:String } pub fn owned(cb:impl Fn(Vec<Row>)){} pub fn borrowed(cb:impl Fn(&[Row])){} pub fn nested(cb:impl Fn(Option<Vec<Option<Row>>>)){} pub fn handles(cb:impl Fn(Vec<Handle>)){}"))
         .set_package_prefix("test")
         .package(package!("rows").class(ptr_class!(Handle)).class(data_class!(Row)))
-        .package(package!().fun(fun!(owned)).fun(fun!(borrowed)).fun(fun!(nested)).fun(fun!(handles)))
+        .package(package!().fun(fun!(owned)).fun(fun!(borrowed).expand_param("cb",callback!(impl Fn(&[Row]))
+            .expand_param(0,expand_return!(Row).field_self_ref())))
+            .fun(fun!(nested)).fun(fun!(handles)))
         .build().unwrap();
     assert!(generated.kotlin["test/RowVecCallback.kt"]
         .contains("kotlin.collections.List<test.rows.Row>"));
@@ -2055,7 +2151,7 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
     let view = prebindgen_declarations::Output::Optional(Box::new(
         prebindgen_declarations::Output::Record {
-            mode: None,
+            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
             fields: vec![prebindgen_declarations::Output::Leaf; 4],
         },
     ));
@@ -2983,6 +3079,7 @@ fn cleanup_helpers_share_resolved_shapes_across_functions_callbacks_and_nested_r
         ",
             ))
             .set_package_prefix("test")
+            .expand(expand_return!(&Owner).field_self_ref())
             .set_bulk_collection_outputs(false)
             .package(package)
             .build()

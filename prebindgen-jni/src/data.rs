@@ -11,8 +11,9 @@ use std::rc::Rc;
 /// including returns and callback arguments; they remain unsupported as inputs.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
-/// field overrides. Legacy `field_self()` and unexpanded outputs keep a fixed
-/// borrowed policy, including for handles (which then require `Clone`).
+/// field overrides. `field_self()` and unexpanded outputs follow the source:
+/// owned records move fields, while borrowed records observe them. Copying opaque
+/// handle fields requires an explicit borrowed projection and Rust `Clone`.
 /// Moving Rust fields requires that the record itself does not implement `Drop`.
 /// Callers close each returned handle explicitly; data-class `copy` shares those
 /// handle objects and does not duplicate native ownership. References, empty
@@ -458,6 +459,21 @@ impl Codec for DataCodec<'_> {
             self.output_leaf(flat, ty, &(), w, v, borrowed)
         } else {
             crate::bulk::output_leaf(flat, ty, w, v, borrowed)
+        }
+    }
+    fn output_bulk_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<OutputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.output_projected(flat, ty, &(), wire, value, projection)
+        } else {
+            JniCodec.output_bulk_projected(flat, ty, &(), wire, value, projection)
         }
     }
     fn bulk_input(
