@@ -233,6 +233,10 @@ impl Codec for CCodec {
             }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::View | CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::MutableView => quote!(__PbBufferMut {
+                data: std::ptr::null_mut(),
+                len: 0
+            }),
             CWire::Owned {
                 owner,
                 by_value: true,
@@ -370,10 +374,9 @@ impl Codec for CCodec {
             return Ok(owned_pointer_output(ty, w, v).0);
         }
         if let syn::Type::Reference(r) = ty {
-            if r.mutability.is_none()
-                && matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
-            {
-                return Ok(byte_view(w, v));
+            let payload = prebindgen_flat::type_key(&r.elem);
+            if payload == "[u8]" || (payload == "str" && r.mutability.is_none()) {
+                return Ok(byte_view(w, v, r.mutability.is_some()));
             }
         }
         if prebindgen_flat::sequence_parts(ty).is_some() {
@@ -524,10 +527,9 @@ impl Codec for CCodec {
                 },
             )));
         }
-        if reference.mutability.is_none()
-            && matches!(prebindgen_flat::type_key(ty).as_str(), "str" | "[u8]")
-        {
-            return Ok(Some(byte_view(wire, value)));
+        let payload = prebindgen_flat::type_key(ty);
+        if payload == "[u8]" || (payload == "str" && reference.mutability.is_none()) {
+            return Ok(Some(byte_view(wire, value, reference.mutability.is_some())));
         }
         // Scalars, enums and buffers retain their value conversions. Only an
         // opaque source type has an address-preserving C representation.
@@ -609,13 +611,17 @@ impl Codec for CCodec {
                 matches!(
                     w.kind,
                     CWire::View
+                        | CWire::MutableView
                         | CWire::Owned {
                             access: Access::Shared | Access::Exclusive,
                             ..
                         }
                 ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access!=Access::Move)
             });
-            if has_loan && owner.helper("view") != getter {
+            let heap_view = owner.helper("view") == getter
+                || (prebindgen_flat::type_key(&owner.ty) == "Vec < u8 >"
+                    && owner.helper("view_mut") == getter);
+            if has_loan && !heap_view {
                 return Err("inline owner getter loans require a generated heap view accessor; a reference into the movable descriptor cannot escape".into());
             }
         }
@@ -643,6 +649,7 @@ impl Codec for CCodec {
             matches!(
                 &w.kind,
                 CWire::View
+                    | CWire::MutableView
                     | CWire::Owned {
                         access: Access::Shared | Access::Exclusive,
                         ..
@@ -1049,6 +1056,13 @@ impl Cbindgen {
     pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
     }
+    /// Reference the generated exclusive byte-view getter for a `Vec<u8>` owner.
+    /// Use as the single getter alongside its owning identity in an output
+    /// expansion. The C caller keeps the owner alive and preserves exclusive
+    /// access until the view's last use. No copy or write-back is performed.
+    pub fn owned_view_mut(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view_mut"))
+    }
     /// Bind a fieldless source enum as a named `int32_t` C type and constants.
     /// Source integer discriminants are preserved and checked on input. Register
     /// the type explicitly; `name` is the unprefixed C typedef/constant prefix.
@@ -1347,8 +1361,20 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn byte_view(wire: syn::Ident, value: TokenStream) -> OutputPlan<CWire> {
-    let buffer = prebindgen_conversions::template_parameter("buffer_type");
+fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> OutputPlan<CWire> {
+    let (kind, buffer, pointer) = if mutable {
+        (
+            CWire::MutableView,
+            quote!(__PbBufferMut),
+            quote!(#wire.as_mut_ptr()),
+        )
+    } else {
+        (
+            CWire::View,
+            prebindgen_conversions::template_parameter("buffer_type"),
+            quote!(#wire.as_ptr()),
+        )
+    };
     OutputPlan {
         fallible: false,
         context: Default::default(),
@@ -1356,12 +1382,12 @@ fn byte_view(wire: syn::Ident, value: TokenStream) -> OutputPlan<CWire> {
         outcomes: prebindgen_flat::Outcomes {
             success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
-                kind: CWire::View,
+                kind,
             }]),
             source_error: None,
             binding_failure: None,
         },
-        statements: quote!(let #wire = #value; let #wire = #buffer {data:#wire.as_ptr().cast::<u8>(),len:#wire.len()};),
+        statements: quote!(let #wire = #value; let #wire = #buffer {data:#pointer.cast::<u8>(),len:#wire.len()};),
         values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     }
@@ -1407,6 +1433,7 @@ fn c_ty(
             format!("{qualifier}{prefix}_{name} *")
         }
         CWire::View => format!("{prefix}_buffer_view"),
+        CWire::MutableView => format!("{prefix}_buffer_view_mut"),
         CWire::Owned {
             owner,
             access,
@@ -1543,6 +1570,7 @@ where
         free.to_string(),
         free_error.to_string(),
         format!("{prefix}_buffer_view"),
+        format!("{prefix}_buffer_view_mut"),
         format!("{prefix}_buffer"),
         format!("{prefix}_int128"),
         format!("{prefix}_H"),
@@ -1713,6 +1741,7 @@ where
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbRows {pub data:*const ::core::ffi::c_void,pub len:usize}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBufferMut {pub data:*mut u8,pub len:usize}
        unsafe fn __pb_report_message(message:String,error:*mut *mut std::ffi::c_char){
            if !error.is_null(){std::ptr::write(error,std::ffi::CString::new(message.replace('\0',"?")).unwrap().into_raw());}
        }
@@ -1770,7 +1799,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         ));
     }
     header.push_str(&format!(
-        "typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer_view;\n"
+        "typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer_view;\n/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */\ntypedef struct {{ uint8_t *data; size_t len; }} {prefix}_buffer_view_mut;\n"
     ));
     for info in flat.types.values() {
         if let Some(owner) = &info.metadata.owned {
@@ -1941,6 +1970,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 || matches!(
                     w.kind,
                     CWire::View
+                        | CWire::MutableView
                         | CWire::Owned {
                             access: Access::Shared | Access::Exclusive,
                             ..
@@ -2151,6 +2181,7 @@ where
             || matches!(
                 &w.kind,
                 CWire::View
+                    | CWire::MutableView
                     | CWire::Owned {
                         access: Access::Shared | Access::Exclusive,
                         ..
@@ -2374,6 +2405,185 @@ mod generation_tests {
         .unwrap()
     }
     #[test]
+    fn mutable_byte_views_preserve_ownership_and_optional_layers() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{} pub fn maybe(o:&mut Owner)->Option<&mut [u8]>{} pub fn nested(o:&mut Owner)->Option<Option<&mut [u8]>>{} pub fn fallible(o:&mut Owner)->Result<&mut [u8],String>{} pub fn optional(o:&mut Owner)->Result<Option<&mut [u8]>,String>{} pub fn message(e:&String)->String{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_error(syn::parse_quote!(String),fun!(message))
+            .function(fun!(bytes)).panic().function(fun!(maybe)).panic()
+            .function(fun!(nested)).panic().function(fun!(fallible)).function(fun!(optional))
+            .prepare().unwrap();
+        for name in ["bytes", "maybe", "nested", "fallible", "optional"] {
+            let plan = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            let views = crate::group::result_packet_fields(&plan.outcomes.success)
+                .filter(|w| matches!(w.kind, CWire::MutableView))
+                .count();
+            assert_eq!(views, 1, "{name}");
+            assert!(!plan.statements.to_string().contains("Clone"));
+            assert!(!plan.statements.to_string().contains("Box"));
+        }
+        let generated = generate(&flat).unwrap();
+        assert!(generated
+            .header
+            .contains("pb_buffer_view_mut pb_bytes(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("uint8_t *data; size_t len; } pb_buffer_view_mut"));
+        assert!(generated.header.contains("pb_buffer_view_mut *out"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_byte_views_reject_temporary_owners_and_duplicate_views() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model(
+                "pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{}",
+            ))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+        };
+        let error = Cbindgen::new(error_model("pub fn temp(o:&String)->&mut [u8]{}"))
+            .function(fun!(temp))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reconstructed reference input"), "{error}");
+        let error = model()
+            .function(
+                fun!(bytes).expand_return(expand_return!(&mut [u8]).field_self().field_self()),
+            )
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable reference cannot supply multiple output views"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn mutable_byte_views_reject_shared_getter_receivers_and_callback_arguments() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model("pub fn borrowed(v:&Vec<u8>)->&Vec<u8>{} pub fn rows(v:&Vec<Vec<u8>>)->&Vec<Vec<u8>>{}"))
+            .opaque_owned_struct("bytes",syn::parse_quote!(Vec<u8>),OpaqueLayout::auto::<Vec<u8>>())
+            .opaque_ptr("vectors",syn::parse_quote!(Vec<Vec<u8>>))
+        };
+        let getter = || expand_return!(Vec<u8>).field(Cbindgen::owned_view_mut("bytes"));
+        for function in [fun!(borrowed), fun!(rows)] {
+            let error = model()
+                .function(function.expand_return(getter()))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("getter") && error.contains("must take exactly"),
+                "{error}"
+            );
+        }
+        let error=Cbindgen::new(error_model("pub type Owner=String; pub fn bytes(v:&mut Owner)->&mut [u8]{} pub fn peek(v:&&mut [u8])->&[u8]{}"))
+            .opaque_ptr("owner",syn::parse_quote!(Owner))
+            .function(fun!(bytes).expand_return(expand_return!(&mut [u8]).field_self().field(fun!(peek))))
+            .panic().build().err().unwrap();
+        assert!(
+            error.contains("mutable reference cannot supply multiple output views"),
+            "{error}"
+        );
+        for argument in ["&mut [u8]", "Option<&mut [u8]>", "Vec<&mut [u8]>"] {
+            let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
+            let error = Cbindgen::new(error_model(&source))
+                .function(fun!(emit))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("mutable callback arguments are unsupported"),
+                "{argument}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_composite_callback_borrows_remain_generation_errors() {
+        use prebindgen_declarations::fun;
+        // Arrays use the same recursive collection guard. Other shapes have no
+        // declared C representation and must not silently accept borrowed data.
+        for argument in [
+            "[&mut [u8]; 1]",
+            "(&mut [u8],)",
+            "Box<&mut [u8]>",
+            "Result<&mut [u8],i64>",
+        ] {
+            let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
+            let parsed = syn::parse_file(&source).unwrap();
+            let result = Bindings::parse(
+                parsed
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .and_then(|flat| Cbindgen::new(flat).function(fun!(emit)).panic().build());
+            assert!(result.is_err(), "{argument}");
+        }
+    }
+
+    #[test]
+    fn mutable_owned_byte_view_requires_a_single_getter_and_vec_storage() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model("pub fn make()->Vec<u8>{}")).opaque_owned_struct(
+                "bytes",
+                syn::parse_quote!(Vec<u8>),
+                OpaqueLayout::auto::<Vec<u8>>(),
+            )
+        };
+        let expansion = || {
+            expand_return!(Vec<u8>)
+                .field_self_into()
+                .field(Cbindgen::owned_view_mut("bytes"))
+        };
+        let generated = model()
+            .function(fun!(make).expand_return(expansion()))
+            .build()
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("pb_buffer_view_mut pb_bytes_view_mut(pb_bytes *value)"));
+        assert!(!generated.header.contains("pb_owned_string_view_mut"));
+        let error = model()
+            .function(fun!(make).expand_return(expansion().field(Cbindgen::owned_len("bytes"))))
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable owner getter must be the only getter view"),
+            "{error}"
+        );
+        let generated = Cbindgen::new(error_model("pub fn text()->String{}"))
+            .function(fun!(text))
+            .build()
+            .unwrap();
+        assert!(!generated.header.contains("pb_owned_string_view_mut"));
+        let error = Cbindgen::new(error_model(
+            "pub type Owner=String; pub fn text(o:&mut Owner)->&mut str{}",
+        ))
+        .opaque_ptr("owner", syn::parse_quote!(Owner))
+        .function(fun!(text))
+        .panic()
+        .build()
+        .err()
+        .unwrap();
+        assert!(
+            error.contains("mutable-reference outputs are unsupported"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn direct_shared_returns_are_non_owning_nullable_const_pointers() {
         use prebindgen_declarations::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&Owner)->&Child{}pub fn maybe(owner:&Owner)->Option<&Child>{}pub fn nested(owner:&Owner)->Option<Option<&Child>>{}pub fn fallible(owner:&Owner)->Result<&Child,String>{}pub fn optional(owner:&Owner)->Result<Option<&Child>,String>{}pub fn message(error:&String)->String{}"))
@@ -2460,7 +2670,7 @@ mod generation_tests {
     #[test]
     fn mutable_value_and_collection_outputs_have_no_copying_fallback() {
         use prebindgen_declarations::fun;
-        for returned in ["&mut i64", "&mut [u8]"] {
+        for returned in ["&mut i64", "&mut str", "&mut [i64]"] {
             let source =
                 format!("pub type Owner=String;pub fn value(owner:&mut Owner)->{returned}{{}}");
             let error = Cbindgen::new(error_model(&source))

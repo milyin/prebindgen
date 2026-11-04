@@ -671,6 +671,15 @@ additional values use output pointers. Unit functions and destructors return
 `&[u8]` borrow that memory, while owned inputs copy it. Owned `String` and `Vec<T>`
 returns use inline opaque owners. Borrowed `&str` and `&[u8]` returns use a distinct
 `buffer_view` type: keep the source alive and never free the view.
+A returned `&mut [u8]` uses `buffer_view_mut` with a writable `uint8_t *data`
+and `size_t len`. C writes change the original bytes directly, without allocation,
+copying or write-back. Keep the source alive and preserve exclusive access until
+the view's last use: do not read, mutate, move, consume or drop the owner, or use
+other views of overlapping storage during that borrow. End the borrow before
+calling other functions on the owner. The mutable view has no destructor and
+cannot be passed to the owning buffer destructor. `Option` preserves a separate
+presence flag, including for present empty slices; `Result` uses its normal error
+channel. Loans from reconstructed temporary inputs remain rejected.
 
 A non-Result function with a fallible binding conversion must be explicitly
 declared with `.function(fun!(name)).panic()`. Without that declaration, generation
@@ -701,7 +710,7 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 Further JNI object-array ABI optimization remains separate work.
 
-C source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
+C source callback parameters, data-carrying enums, maps/sets, mutable text views, mutable byte inputs, methods,
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
@@ -744,7 +753,26 @@ pb_drop_bytes(&bytes);
 
 String and vector owners get a generated `*_len` accessor. String and byte-vector
 owners also get `*_view`, returning a borrowed `{ data, len }` byte view; strings
-contain UTF-8 without an added terminator. Other vectors get `*_get(owner, index)`,
+contain UTF-8 without an added terminator. Byte-vector owners also get
+`*_view_mut(owner)`, returning an exclusive `buffer_view_mut` into the existing
+allocation. Obtaining a mutable view invalidates earlier views, even if no bytes
+are changed; obtain a fresh read-only view after ending the mutable borrow.
+String owners have no mutable byte accessor, preserving their UTF-8
+invariant. A mutable view can accompany a newly returned byte-vector owner:
+
+```rust,ignore
+fun!(make_bytes).expand_return(
+    expand_return!(Vec<u8>)
+        .field_self_into()
+        .field(Cbindgen::owned_view_mut("bytes")))
+```
+
+The mutable getter must be the only getter in that owner expansion. Its view
+points into the vector's heap allocation, so returning the inline owner does not
+relocate the bytes. The C caller ends the exclusive borrow before using or
+dropping the returned owner.
+
+Other vectors get `*_get(owner, index)`,
 which returns a borrowed element pointer or null for an out-of-range index.
 Primitive elements use their C scalar type; opaque elements use a declared
 `opaque_ptr` type; other elements use `const void *`. No element conversion or

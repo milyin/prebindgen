@@ -55,6 +55,7 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
                 CWire::Scalar { .. } => type_key(&wire.rust_type()),
                 CWire::Rows => "rows".into(),
                 CWire::View => "view".into(),
+                CWire::MutableView => "view_mut".into(),
                 CWire::Buffer => "buffer".into(),
                 CWire::Callback { callback } => format!("callback:{}", callback.name),
             };
@@ -129,7 +130,7 @@ pub(crate) fn input(
     let codec = enums::EnumCodec::default();
     let mut arguments = Vec::new();
     for (index, source) in signature.arguments.into_iter().enumerate() {
-        if matches!(&source, syn::Type::Reference(r) if r.mutability.is_some()) {
+        if has_mutable_reference(&source) {
             return Err("mutable callback arguments are unsupported".into());
         }
         let ty = source.clone();
@@ -252,6 +253,18 @@ fn contains_result(ty: &syn::Type) -> bool {
         || prebindgen_flat::option_inner(ty).is_some_and(contains_result)
         || prebindgen_flat::sequence_parts(ty).is_some_and(|(t, _)| contains_result(t))
         || matches!(ty,syn::Type::Reference(r) if contains_result(&r.elem))
+}
+fn has_mutable_reference(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Reference(reference) => {
+            reference.mutability.is_some() || has_mutable_reference(&reference.elem)
+        }
+        _ => {
+            prebindgen_flat::option_inner(ty).is_some_and(has_mutable_reference)
+                || prebindgen_flat::sequence_parts(ty)
+                    .is_some_and(|(ty, _)| has_mutable_reference(ty))
+        }
+    }
 }
 fn has_reference(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Reference(_))

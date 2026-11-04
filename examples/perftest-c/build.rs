@@ -6,6 +6,26 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("mutable_bytes", pq!(MutableBytes))
+        .function(fun!(mutable_bytes_new))
+        .panic()
+        .function(fun!(mutable_bytes_mut))
+        .panic()
+        .function(fun!(mutable_bytes_optional))
+        .panic()
+        .function(fun!(mutable_bytes_nested))
+        .panic()
+        .function(fun!(mutable_bytes_result))
+        .function(fun!(mutable_bytes_result_optional))
+        .function(fun!(mutable_bytes_address))
+        .panic()
+        .function(fun!(mutable_bytes_value))
+        .panic()
+        .function(fun!(mutable_bytes_capacity))
+        .panic()
+        .function(fun!(mutable_bytes_drops))
+        .panic()
+        .function(fun!(mutable_bytes_vector))
         .opaque_ptr("borrow_packet", pq!(BorrowPacket))
         .opaque_ptr("borrow_no_clone", pq!(BorrowNoClone))
         .function(fun!(borrow_packet_new))
@@ -973,6 +993,13 @@ fn main() {
         owners = owners.function(f).panic();
     }
     owners = owners
+        .function(
+            fun!(mutable_bytes_vector_expanded).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(prebindgen_c::Cbindgen::owned_view_mut("bytes")),
+            ),
+        )
         .function(
             fun!(inline_packet_result).expand_return(
                 expand_return!(InlinePacket)

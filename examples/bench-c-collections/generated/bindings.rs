@@ -47,6 +47,12 @@ pub struct __PbBuffer {
     pub data: *const u8,
     pub len: usize,
 }
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbBufferMut {
+    pub data: *mut u8,
+    pub len: usize,
+}
 unsafe fn __pb_report_message(message: String, error: *mut *mut std::ffi::c_char) {
     if !error.is_null() {
         std::ptr::write(

@@ -336,6 +336,10 @@ pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
             };
             functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view(value: &#ty) -> &[u8] {#expression}));
         }
+        if prebindgen_flat::type_key(ty) == "Vec < u8 >" {
+            let view_mut = owner.helper("view_mut");
+            functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view_mut(value: &mut #ty) -> &mut [u8] {value.as_mut_slice()}));
+        }
         for function in functions {
             let name = function.sig.ident.clone();
             if flat.functions.contains_key(&name.to_string()) {
@@ -347,6 +351,10 @@ pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
                 syn::ReturnType::Type(_, ty) => (**ty).clone(),
                 _ => unreachable!(),
             };
+            let receiver = match function.sig.inputs.first().unwrap() {
+                syn::FnArg::Typed(parameter) => (*parameter.ty).clone(),
+                _ => unreachable!(),
+            };
             flat.functions.insert(
                 name.to_string(),
                 prebindgen_flat::Function {
@@ -356,7 +364,7 @@ pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
                     params: vec![prebindgen_flat::Param {
                         name: syn::parse_quote!(value),
                         ty: prebindgen_flat::TypeUse {
-                            ty: syn::parse_quote!(&#ty),
+                            ty: receiver,
                             slot: None,
                         },
                     }],
@@ -400,8 +408,19 @@ pub(crate) fn emit_accessors(
         if !symbols.insert(view.to_string()) {
             return Err("generated owner view accessor collides with a C symbol".into());
         }
-        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while its returned view is used."] #[no_mangle] pub unsafe extern "C" fn #view(value:*const #carrier)->__PbBuffer {let bytes=#helper((*value).as_rust());__PbBuffer{data:bytes.as_ptr(),len:bytes.len()}}));
-        header.push_str(&format!("/* Borrowed view; never free it. The owner retains the allocation. */\n{prefix}_buffer_view {view}(const {prefix}_{} *value);\n",owner.name));
+        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed."] #[no_mangle] pub unsafe extern "C" fn #view(value:*const #carrier)->__PbBuffer {let bytes=#helper((*value).as_rust());__PbBuffer{data:bytes.as_ptr(),len:bytes.len()}}));
+        header.push_str(&format!("/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */\n{prefix}_buffer_view {view}(const {prefix}_{} *value);\n",owner.name));
+        if key == "Vec < u8 >" {
+            let view_mut = format_ident!("{prefix}_{}_view_mut", owner.name);
+            let helper_mut = owner.helper("view_mut");
+            if !symbols.insert(view_mut.to_string()) {
+                return Err(
+                    "generated owner mutable view accessor collides with a C symbol".into(),
+                );
+            }
+            tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and stationary. Preserve exclusive access to its allocation until the returned view's last use; do not access, consume or drop the owner during that borrow."] #[no_mangle] pub unsafe extern "C" fn #view_mut(value:*mut #carrier)->__PbBufferMut {let bytes=#helper_mut((*value).as_rust_mut());__PbBufferMut{data:bytes.as_mut_ptr(),len:bytes.len()}}));
+            header.push_str(&format!("/* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */\n{prefix}_buffer_view_mut {view_mut}({prefix}_{} *value);\n",owner.name));
+        }
     } else if let Some((element, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
         let get = format_ident!("{prefix}_{}_get", owner.name);
         if !symbols.insert(get.to_string()) {

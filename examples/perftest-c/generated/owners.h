@@ -25,6 +25,8 @@ void owner_drop_child(owner_child *ptr);
 typedef struct owner_boxed_numbers owner_boxed_numbers;
 void owner_drop_boxed_numbers(owner_boxed_numbers *ptr);
 typedef struct { const uint8_t *data; size_t len; } owner_buffer_view;
+/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */
+typedef struct { uint8_t *data; size_t len; } owner_buffer_view_mut;
 typedef struct {
 #ifdef __cplusplus
     alignas(8)
@@ -46,7 +48,7 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_text(owner_text *value);
 size_t owner_text_len(const owner_text *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 owner_buffer_view owner_text_view(const owner_text *value);
 typedef struct {
 #ifdef __cplusplus
@@ -72,8 +74,10 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_bytes(owner_bytes *value);
 size_t owner_bytes_len(const owner_bytes *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 owner_buffer_view owner_bytes_view(const owner_bytes *value);
+/* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */
+owner_buffer_view_mut owner_bytes_view_mut(owner_bytes *value);
 /* Rust signature: (perftest_flat :: InlinePacket)->perftest_flat :: InlinePacket. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     owner_packet (*run)(void *context, owner_packet arg0);
@@ -187,6 +191,8 @@ owner_text owner_inline_text(void);
 uintptr_t owner_inline_text_capacity(const owner_text * p0_w1);
 owner_text owner_inline_text_new(void);
 uintptr_t owner_inline_text_take(owner_text * p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+owner_bytes owner_mutable_bytes_vector_expanded(uintptr_t p0_w1, owner_buffer_view_mut *out1);
 #ifdef __cplusplus
 }
 #endif
