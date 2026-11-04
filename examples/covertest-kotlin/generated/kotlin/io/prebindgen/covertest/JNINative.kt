@@ -3,6 +3,8 @@ package io.prebindgen.covertest
 internal object JNINative {
     init { io.prebindgen.covertest.NativeLibrary.ensureLoaded() }
     @JvmStatic external fun drop_Archive_0aa4417b9f320a03(id: Long)
+    @JvmStatic external fun drop_BorrowNoClone_583d0749922ca782(id: Long)
+    @JvmStatic external fun drop_BorrowPacket_969214a55d92aefe(id: Long)
     @JvmStatic external fun drop_BulkHandle_393b82dfa5eaa2d5(id: Long)
     @JvmStatic external fun drop_CallbackBoundaryHandler_0e611baf5b66c32b(id: Long)
     @JvmStatic external fun drop_CallbackConfigHandler_67dc52e4c6670317(id: Long)
@@ -46,6 +48,21 @@ internal object JNINative {
     @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
     init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_ByteArray_1_92dc0f7ab995287c::class.java, SequenceRow_Int_Long_String_4_3817dc835fa26831::class.java, SequenceRow_Int_Long_String_7_e1006826998dc4d4::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Double_2_012db11776ed72c5::class.java, SequenceRow_Long_Long_Long_127_725c521ebd1c733a::class.java, SequenceRow_Long_Long_Long_3_ad466713697fa9e4::class.java, SequenceRow_Long_String_2_3ea2c8aa47ab7590::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java, SequenceRow_Long_String_Long_3_b4558cb7b740d7c6::class.java)) }
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_borrow_enum_rows_fbee7d589d39a15c(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_borrow_packet_new_87a8c3bbfa51949d(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_packet_len_f44087df1886287f(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_packet_ref_525aea8a4625b4ab(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_packet_optional_b9702e82a2a7745d(p0_w1: Long, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_packet_ref_expanded_98d55bbe97fc7731(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_packet_emit_6a011a727c003b46(p0_w1: Long, p1_callback: Any?, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_borrow_packet_emit_copy_83692072a1cd52fa(p0_w1: Long, p1_callback: Any?, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_borrow_packet_emit_optional_0ace9e6862aca0bc(p0_w1: Long, p1_callback: Any?, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_borrow_packet_emit_expanded_09b841584f055332(p0_w1: Long, p1_callback: Any?, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_borrow_packet_emit_worker_7748edffc0058eaa(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_borrow_packet_counter_4b9e951a734376ce(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_no_clone_new_62088c19c27300c5(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_no_clone_value_060972b43273ddf2(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_borrow_no_clone_emit_9cb2c5f86e183e3f(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_collection_input_plain_49edb34e988dff39(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_collection_input_bulk_7564a92b14e3a524(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_collection_input_custom_3f5932b5fe2bdeb0(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

@@ -79,8 +79,9 @@ pub use prebindgen_declarations::{
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
 /// Generated code requires `Send` because the handle can be closed on any JVM
-/// thread. Foreign output observations also require `Clone`. Inputs may own,
-/// share or exclusively borrow the source value.
+/// thread. Explicit owning output copies also require `Clone`. Inputs may own,
+/// share or exclusively borrow the source value. Borrowed opaque outputs require
+/// an explicit owning-copy projection or a field expansion.
 #[derive(Clone)]
 pub struct PtrClassDecl {
     /// Source type, resolved against the selected flat model.
@@ -1011,9 +1012,84 @@ impl Codec for JniCodec {
                 JniWire::scalar(p),
             ),
             Some(Value::Text | Value::Bytes) => unreachable!("buffers prepared above"),
-            None => prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
+            None if borrowed => Err(format!(
+                "borrowed opaque JNI output `{}` would clone and allocate; select field_self_ref() for an explicit owning copy, or expand its fields",
+                type_key(ty)
+            )),
+            None => prebindgen_conversions::boxed::output(&storage(), ty, w, v, false, |b| {
                 JniWire::handle(b, "true")
             }),
+        }
+    }
+
+    fn output_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        mut value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<JniWire>> {
+        use prebindgen_declarations::ProjectionMode;
+        if !projection.fields.is_empty() {
+            return Err("this output converter does not support field projection overrides".into());
+        }
+        let borrowed = projection.mode == ProjectionMode::Borrowed;
+        let mut payload = ty;
+        while let syn::Type::Reference(reference) = payload {
+            if !borrowed {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            if reference.mutability.is_some() {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            if matches!(reference.elem.as_ref(), syn::Type::Slice(_))
+                || matches!(reference.elem.as_ref(),syn::Type::Path(p) if p.path.is_ident("str"))
+            {
+                break;
+            }
+            payload = &reference.elem;
+            value = quote!(*(#value));
+        }
+        if borrowed && Value::of(payload).is_none() {
+            // The explicit projection, rather than the existence of a borrow,
+            // authorizes cloning into the Kotlin handle's owned allocation.
+            return self.output_leaf(
+                flat,
+                payload,
+                &(),
+                wire,
+                quote!(::core::clone::Clone::clone(#value)),
+                false,
+            );
+        }
+        self.output_leaf(flat, payload, &(), wire, value, borrowed)
+    }
+
+    fn output_bulk_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<JniWire>> {
+        if !projection.fields.is_empty() {
+            return Err("bulk leaf projection has field overrides".into());
+        }
+        if Value::of(ty).is_none() {
+            self.output_projected(flat, ty, &(), wire, value, projection)
+        } else {
+            self.output_bulk_leaf(
+                flat,
+                ty,
+                &(),
+                wire,
+                value,
+                projection.mode == prebindgen_declarations::ProjectionMode::Borrowed,
+            )
         }
     }
 

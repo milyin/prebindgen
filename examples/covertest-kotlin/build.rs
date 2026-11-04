@@ -151,6 +151,31 @@ fn main() {
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
     let binding = JniGen::builder()
+        .expand(expand_return!(&CallbackOwned).field_self_ref())
+        .expand(expand_return!(&BorrowPacket).field_self_ref())
+        .package(package!("borrowcopies")
+            .class(ptr_class!(BorrowPacket)).class(ptr_class!(BorrowNoClone))
+            .class(enum_class!(BorrowMode)).class(data_class!(BorrowEnumRow))
+            .fun(fun!(borrow_enum_rows).expand_return(expand_return!(BorrowEnumRow).field_self_ref().bulk()))
+            .class(callback!(impl Fn(&BorrowPacket)).name("BorrowPacketCopy")
+                .expand_param(0,expand_return!(BorrowPacket).field_self_ref()))
+            .fun(fun!(borrow_packet_new)).fun(fun!(borrow_packet_len))
+            .fun(fun!(borrow_packet_ref)).fun(fun!(borrow_packet_optional))
+            .fun(fun!(borrow_packet_ref_expanded).expand_return(
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len))))
+            .fun(fun!(borrow_packet_emit)).fun(fun!(borrow_packet_emit_copy))
+            .fun(fun!(borrow_packet_emit_optional).expand_param("callback",
+                callback!(impl Fn(Option<&BorrowPacket>)).name("OptionalBorrowCopy")
+                    .expand_param(0,expand_return!(BorrowPacket).field_self_ref())))
+            .fun(fun!(borrow_packet_emit_expanded).expand_param("callback",
+                callback!(impl Fn(&BorrowPacket)).name("BorrowPacketLength")
+                    .expand_param(0,expand_return!(BorrowPacket).field(fun!(borrow_packet_len)))))
+            .fun(fun!(borrow_packet_emit_worker))
+            .fun(fun!(borrow_packet_counter))
+            .fun(fun!(borrow_no_clone_new)).fun(fun!(borrow_no_clone_value))
+            .fun(fun!(borrow_no_clone_emit).expand_param("callback",
+                callback!(impl Fn(&BorrowNoClone)).name("NoCloneNumber")
+                    .expand_param(0,expand_return!(BorrowNoClone).field(fun!(borrow_no_clone_value))))))
         .package(package!("collectioninputs")
             .fun(fun!(collection_input_plain))
             .fun(fun!(collection_input_bulk).expand_param("values", expand_param!(Vec<i64>).variant_self().bulk()))
@@ -270,6 +295,7 @@ fn main() {
                 callback!(impl Fn(Option<JniBufferRow>)).name("OwnedBufferViews")
                     .expand_param(0, expand_return!(JniBufferRow)
                         .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))))
+        .expand(expand_return!(&GetterLeaf).field_self_ref())
         .expand(expand_return!(GetterChild)
             .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
         .package(package!("getters")
@@ -283,14 +309,15 @@ fn main() {
             .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
                 .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
             .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
-            .fun(fun!(getter_static_leaf))
+            .fun(fun!(getter_static_leaf).expand_return(expand_return!(GetterLeaf).field_self_ref()))
             .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
                 .view(prebindgen_declarations::Output::getter("getter_owner_leaf",
                     prebindgen_declarations::Output::combine([
-                        prebindgen_declarations::Output::Leaf, prebindgen_declarations::Output::Leaf])))))
+                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed()),
+                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())])))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -591,7 +618,8 @@ fn main() {
             .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(data_class!(OptionalFields))
             .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
-            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref))
+            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref)
+                .expand_return(expand_return!(ProjectionHandle).field_self_ref()))
             .class(data_class!(OptionalResource))
             .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
             .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
@@ -1497,7 +1525,7 @@ fn main() {
                 // The owned Summary expansion does not apply to &Summary.
                 .fun(fun!(archive_new))
                 .fun(fun!(archive_store))
-                .fun(fun!(archive_latest))
+                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self_ref()))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))

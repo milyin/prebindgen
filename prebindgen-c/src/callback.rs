@@ -23,6 +23,90 @@ struct Argument {
     output: OutputPlan<CWire>,
 }
 
+// Stable wire semantics, without spans, generated local names or recipe Debug.
+fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
+    fn access(value: Access) -> &'static str {
+        match value {
+            Access::Move => "owned",
+            Access::Shared => "shared",
+            Access::Exclusive => "exclusive",
+        }
+    }
+    fn fields(wires: &[Wire], out: &mut String) {
+        for wire in wires {
+            let value = match &wire.kind {
+                CWire::Pointer { pointer, .. } => format!(
+                    "pointer:{}:{}",
+                    access(pointer.access),
+                    type_key(&pointer.ty)
+                ),
+                CWire::Owned {
+                    owner,
+                    access: mode,
+                    by_value,
+                } => format!(
+                    "inline:{}:{}:{}:{}",
+                    owner.name,
+                    type_key(&owner.ty),
+                    access(*mode),
+                    by_value
+                ),
+                CWire::Enum { name, .. } => format!("enum:{name}"),
+                CWire::Scalar { .. } => type_key(&wire.rust_type()),
+                CWire::Rows => "rows".into(),
+                CWire::View => "view".into(),
+                CWire::Buffer => "buffer".into(),
+                CWire::Callback { callback } => format!("callback:{}", callback.name),
+            };
+            out.push_str(&format!("{}:{value};", value.len()));
+        }
+    }
+    match node {
+        WireNode::Leaf(wires) => {
+            out.push('L');
+            fields(wires, out);
+        }
+        WireNode::Chain {
+            controls,
+            child,
+            meta,
+        } => {
+            out.push('(');
+            match meta {
+                CChain::Sequence(_) => out.push('S'),
+                CChain::Optional(optional) => {
+                    out.push('O');
+                    match optional.niche() {
+                        Some(CNiche::Null) => out.push('N'),
+                        Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
+                        None => out.push('F'),
+                    }
+                }
+            }
+            fields(controls, out);
+            schema(child, out);
+            out.push(')');
+        }
+        WireNode::Branch {
+            controls,
+            children,
+            meta,
+        } => {
+            out.push(if matches!(meta, CBranch::Alternatives) {
+                'A'
+            } else {
+                'G'
+            });
+            out.push('[');
+            fields(controls, out);
+            for child in children {
+                schema(child, out);
+            }
+            out.push(']');
+        }
+    }
+}
+
 pub(crate) fn input(
     flat: &Bindings,
     configuration: &CallbackInput,
@@ -42,24 +126,13 @@ pub(crate) fn input(
             .join(","),
         type_key(&signature.return_type)
     );
-    let hash = key.bytes().fold(0xcbf29ce484222325u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
-    });
-    let name = format!("{}_callback_{hash:016x}", flat.metadata.prefix);
     let codec = enums::EnumCodec::default();
     let mut arguments = Vec::new();
     for (index, source) in signature.arguments.into_iter().enumerate() {
         if matches!(&source, syn::Type::Reference(r) if r.mutability.is_some()) {
             return Err("mutable callback arguments are unsupported".into());
         }
-        let (ty, borrowed) = match &source {
-            syn::Type::Reference(r)
-                if !matches!(&*r.elem, syn::Type::Slice(_)) && type_key(&r.elem) != "str" =>
-            {
-                ((*r.elem).clone(), true)
-            }
-            _ => (source.clone(), false),
-        };
+        let ty = source.clone();
         if contains_result(&ty) {
             return Err(
                 "Result callback arguments require an explicit value representation".into(),
@@ -71,7 +144,7 @@ pub(crate) fn input(
             &ty,
             &configuration.arguments[index],
             index,
-            borrowed,
+            false,
             &(),
         )?;
         sequence::validate_buffered(&output.outcomes.success)?;
@@ -106,6 +179,20 @@ pub(crate) fn input(
             )?,
         ))
     };
+    let mut layout_key = format!("{key}:abi:");
+    for argument in &arguments {
+        schema(&argument.output.outcomes.success, &mut layout_key);
+    }
+    layout_key.push_str("->");
+    if let Some((_, plan)) = &returned {
+        schema(&plan.node, &mut layout_key);
+    }
+    let hash = layout_key
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        });
+    let name = format!("{}_callback_{hash:016x}", flat.metadata.prefix);
     let callback = Rc::new(CCallback {
         name,
         signature: key,

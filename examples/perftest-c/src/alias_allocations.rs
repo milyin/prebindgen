@@ -51,6 +51,69 @@ fn allocations(call: impl FnOnce()) -> usize {
 }
 
 #[test]
+fn borrowed_callbacks_allocate_only_when_copying_is_requested() {
+    unsafe extern "C" fn borrowed(
+        context: *mut core::ffi::c_void,
+        value: *const perftest_flat::BorrowPacket,
+    ) {
+        assert_eq!(value.cast::<core::ffi::c_void>(), context.cast_const());
+        assert_eq!(super::perftest_borrow_packet_len(value), 65536);
+    }
+    unsafe extern "C" fn copied(
+        context: *mut core::ffi::c_void,
+        value: *mut perftest_flat::BorrowPacket,
+    ) {
+        assert_ne!(value.cast::<core::ffi::c_void>(), context);
+        assert_eq!(super::perftest_borrow_packet_len(value), 65536);
+        super::perftest_drop_borrow_packet(value);
+    }
+    unsafe {
+        let packet = super::perftest_borrow_packet_new(65536);
+        let clones = perftest_flat::borrow_packet_counter(0);
+        let bytes = perftest_flat::borrow_packet_counter(1);
+        let drops = perftest_flat::borrow_packet_counter(2);
+        let shared = allocations(|| {
+            super::perftest_borrow_packet_emit(
+                packet,
+                super::perftest_callback_ad0b57894c7bbea6 {
+                    run: Some(borrowed),
+                    context: packet.cast(),
+                    drop: None,
+                },
+                1000,
+            )
+        });
+        assert_eq!(shared, 0);
+        assert_eq!(perftest_flat::borrow_packet_counter(0), clones);
+        assert_eq!(perftest_flat::borrow_packet_counter(1), bytes);
+        assert_eq!(perftest_flat::borrow_packet_counter(2), drops);
+        let copied = allocations(|| {
+            super::perftest_borrow_packet_emit_copy(
+                packet,
+                super::perftest_callback_078f14fba1e1a0bf {
+                    run: Some(copied),
+                    context: packet.cast(),
+                    drop: None,
+                },
+                1000,
+            )
+        });
+        assert_eq!(
+            copied, 2000,
+            "one payload and one handle allocation per explicit copy"
+        );
+        assert_eq!(perftest_flat::borrow_packet_counter(0), clones + 1000);
+        assert_eq!(
+            perftest_flat::borrow_packet_counter(1),
+            bytes + 1000 * 65536
+        );
+        assert_eq!(perftest_flat::borrow_packet_counter(2), drops + 1000);
+        super::perftest_drop_borrow_packet(packet);
+        println!("C borrowed callback allocation budget: shared=0, explicit_copy=2000 allocations, copied_bytes={} for 1000 x 65536-byte callbacks",1000*65536);
+    }
+}
+
+#[test]
 fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
     let _getters = super::GETTER_TESTS
         .lock()

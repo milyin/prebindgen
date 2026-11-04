@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 /// How a source value is supplied to its output converter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectionMode {
-    /// Observe through a shared reference; a handle converter may clone it.
+    /// Observe through a shared reference. Explicitly selecting this mode
+    /// permits cloning into owning foreign handles, including descendant fields.
     Borrowed,
     /// Transfer the owned value to its converter.
     Owned,
@@ -23,7 +24,8 @@ pub struct Projection {
     pub fields: BTreeMap<String, Projection>,
 }
 impl Projection {
-    /// Observe the value and its fields through shared references.
+    /// Observe the value and its fields through shared references, explicitly
+    /// permitting the copies needed by their owning foreign representations.
     pub fn borrowed() -> Self {
         Self {
             mode: ProjectionMode::Borrowed,

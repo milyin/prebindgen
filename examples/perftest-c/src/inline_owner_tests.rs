@@ -10,21 +10,21 @@ mod tests {
     }
     unsafe extern "C" fn bad_pair(
         _: *mut core::ffi::c_void,
-    ) -> owner_callback_e857880e5782d2cb_result {
-        owner_callback_e857880e5782d2cb_result {
+    ) -> owner_callback_c381621a1cf6edc5_result {
+        owner_callback_c381621a1cf6edc5_result {
             v0: owner_inline_packet_new(),
             v1: 0xd800,
         }
     }
     unsafe extern "C" fn bad_rows(context: *mut core::ffi::c_void) -> __PbRows {
-        let rows = &*(context as *const Vec<__PbRow_callback_1782e472ad837f0b_callback_return_w1>);
+        let rows = &*(context as *const Vec<__PbRow_callback_f5d26722508e30c3_callback_return_w1>);
         __PbRows {
             data: rows.as_ptr().cast(),
             len: rows.len(),
         }
     }
     unsafe extern "C" fn mixed_rows(context: *mut core::ffi::c_void) -> __PbRows {
-        let rows = &*(context as *const Vec<__PbRow_callback_d1e1f55a20f3880c_callback_return_w1>);
+        let rows = &*(context as *const Vec<__PbRow_callback_805117dbed50edfb_callback_return_w1>);
         __PbRows { data: rows.as_ptr().cast(), len: rows.len() }
     }
     #[test]
@@ -32,11 +32,11 @@ mod tests {
         let _guard = OWNERS.lock().unwrap();
         unsafe {
             let before = owner_inline_packet_drops();
-            let mut rows: Vec<_> = (0..32).map(|i| __PbRow_callback_d1e1f55a20f3880c_callback_return_w1 {
+            let mut rows: Vec<_> = (0..32).map(|i| __PbRow_callback_805117dbed50edfb_callback_return_w1 {
                 v0: owner_inline_packet_new(),
                 v1: Box::into_raw(Box::new(perftest_flat::InlineChild { id: i })),
             }).collect();
-            let total = owner_inline_mixed_rows_sum(owner_callback_d1e1f55a20f3880c {
+            let total = owner_inline_mixed_rows_sum(owner_callback_805117dbed50edfb {
                 run: Some(mixed_rows), context: (&mut rows as *mut Vec<_>).cast(),
                 drop: None, release_result: None,
             });
@@ -74,7 +74,7 @@ mod tests {
             owner_drop_packet(&mut moved);
             assert_eq!(owner_inline_packet_drops(), before + 1);
             assert_eq!(
-                owner_inline_packet_callback(owner_callback_7a0d2e4eb3c7fbb1 {
+                owner_inline_packet_callback(owner_callback_0c47d5ea09f8970c {
                     run: Some(echo_packet),
                     context: core::ptr::null_mut(),
                     drop: None
@@ -83,7 +83,7 @@ mod tests {
             );
             assert_eq!(owner_inline_packet_drops(), before + 2);
             assert_eq!(
-                owner_inline_return_catch(owner_callback_e857880e5782d2cb {
+                owner_inline_return_catch(owner_callback_c381621a1cf6edc5 {
                     run: Some(bad_pair),
                     context: core::ptr::null_mut(),
                     drop: None
@@ -103,17 +103,17 @@ mod tests {
             owner_free_error(error);
             assert_eq!(owner_inline_packet_drops(), before + 4);
             let mut rows = vec![
-                __PbRow_callback_1782e472ad837f0b_callback_return_w1 {
+                __PbRow_callback_f5d26722508e30c3_callback_return_w1 {
                     v0: owner_inline_packet_new(),
                     v1: 'a' as u32,
                 },
-                __PbRow_callback_1782e472ad837f0b_callback_return_w1 {
+                __PbRow_callback_f5d26722508e30c3_callback_return_w1 {
                     v0: owner_inline_packet_new(),
                     v1: 0xd800,
                 },
             ];
             assert_eq!(
-                owner_inline_rows_catch(owner_callback_1782e472ad837f0b {
+                owner_inline_rows_catch(owner_callback_f5d26722508e30c3 {
                     run: Some(bad_rows),
                     context: (&mut rows as *mut Vec<_>).cast(),
                     drop: None,

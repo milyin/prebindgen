@@ -4,7 +4,7 @@ import io.prebindgen.covertest.buffers.*
 import io.prebindgen.covertest.callbacks.*
 import java.util.concurrent.atomic.AtomicReference
 
-private object BufferAllocationProbe {
+internal object BufferAllocationProbe {
     init { NativeLibrary.ensureLoaded() }
     @JvmStatic external fun start()
     @JvmStatic external fun stop(): Long

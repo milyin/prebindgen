@@ -9,13 +9,13 @@
     free_rows(rows); \
 } while (0)
 
-static void receive_output_rows(void *context, perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows rows) {
+static void receive_output_rows(void *context, perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows rows) {
     ++*(size_t *)context;
     for (size_t i=0; i<rows.len; ++i) {
-        perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows child=rows.data[i].v0;
-        CLOSE_OUTPUT_ROWS(child,perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows_free);
+        perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows child=rows.data[i].v0;
+        CLOSE_OUTPUT_ROWS(child,perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows_free);
     }
-    perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(rows);
+    perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows_free(rows);
 }
 static void check_output_owners(void) {
     assert(perftest_callback_row_resource_live()==0);
@@ -33,7 +33,7 @@ static void check_output_owners(void) {
         }
         assert(perftest_callback_row_resource_live()==0);
         size_t calls=0;
-        perftest_c_output_callback(fail,(perftest_callback_4cf53ee6dc85aa46){receive_output_rows,&calls,NULL});
+        perftest_c_output_callback(fail,(perftest_callback_b98c737eadfea95e){receive_output_rows,&calls,NULL});
         assert(calls==(size_t)(fail<0));
         assert(perftest_callback_row_resource_live()==0);
     }

@@ -19,6 +19,7 @@ fun main() {
     checkCollectionInputs()
     checkBorrowedBuffers()
     checkBorrowedGetters()
+    checkExplicitBorrowCopies()
     checkCallbackConfiguration()
     checkCallbackReturns()
     checkCallbackDiagnostics()

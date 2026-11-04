@@ -2719,6 +2719,145 @@ pub fn projection_pair_views() -> ProjectionPair {
     projection_pair_borrowed()
 }
 
+// Borrowed opaque outputs: copies are deliberate, loans retain the original address.
+static BORROW_PACKET_CLONES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+static BORROW_PACKET_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static BORROW_PACKET_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct BorrowPacketImpl(Vec<u8>);
+impl Clone for BorrowPacketImpl {
+    fn clone(&self) -> Self {
+        use std::sync::atomic::Ordering::SeqCst;
+        BORROW_PACKET_CLONES.fetch_add(1, SeqCst);
+        BORROW_PACKET_BYTES.fetch_add(self.0.len(), SeqCst);
+        Self(self.0.clone())
+    }
+}
+impl Drop for BorrowPacketImpl {
+    fn drop(&mut self) {
+        BORROW_PACKET_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type BorrowPacket = BorrowPacketImpl;
+#[prebindgen]
+pub fn borrow_packet_new(size: usize) -> BorrowPacket {
+    BorrowPacketImpl(vec![7; size])
+}
+#[prebindgen]
+pub fn borrow_packet_len(value: &BorrowPacket) -> usize {
+    value.0.len()
+}
+#[prebindgen]
+pub fn borrow_packet_len_plus_one(value: &BorrowPacket) -> usize {
+    value.0.len() + 1
+}
+#[prebindgen]
+pub fn borrow_packet_ref(value: &BorrowPacket) -> &BorrowPacket {
+    value
+}
+#[prebindgen]
+pub fn borrow_packet_ref_expanded(value: &BorrowPacket) -> &BorrowPacket {
+    value
+}
+#[prebindgen]
+pub fn borrow_packet_optional(value: &BorrowPacket, present: bool) -> Option<&BorrowPacket> {
+    present.then_some(value)
+}
+#[prebindgen]
+pub fn borrow_packet_emit(value: &BorrowPacket, callback: impl Fn(&BorrowPacket), count: usize) {
+    for _ in 0..count {
+        callback(value);
+    }
+}
+#[prebindgen]
+pub fn borrow_packet_emit_copy(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_optional(
+    value: &BorrowPacket,
+    callback: impl Fn(Option<&BorrowPacket>),
+    present: bool,
+) {
+    callback(present.then_some(value));
+}
+#[prebindgen]
+pub fn borrow_packet_emit_expanded(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_expanded_other(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_worker(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket) + Send + Sync,
+) {
+    std::thread::scope(|scope| {
+        scope.spawn(|| callback(value)).join().unwrap();
+    });
+}
+#[prebindgen]
+pub fn borrow_packet_counter(index: usize) -> usize {
+    use std::sync::atomic::Ordering::SeqCst;
+    match index {
+        0 => BORROW_PACKET_CLONES.load(SeqCst),
+        1 => BORROW_PACKET_BYTES.load(SeqCst),
+        2 => BORROW_PACKET_DROPS.load(SeqCst),
+        _ => panic!("invalid borrow counter"),
+    }
+}
+pub struct BorrowNoCloneImpl(i64);
+#[prebindgen]
+pub type BorrowNoClone = BorrowNoCloneImpl;
+#[prebindgen]
+pub fn borrow_no_clone_new() -> BorrowNoClone {
+    BorrowNoCloneImpl(91)
+}
+#[prebindgen]
+pub fn borrow_no_clone_value(value: &BorrowNoClone) -> i64 {
+    value.0
+}
+#[prebindgen]
+pub fn borrow_no_clone_emit(value: &BorrowNoClone, callback: impl Fn(&BorrowNoClone)) {
+    callback(value);
+}
+#[prebindgen]
+pub enum BorrowMode {
+    Ready,
+    Idle,
+}
+#[prebindgen]
+pub struct BorrowEnumRow {
+    pub packet: BorrowPacket,
+    pub mode: BorrowMode,
+}
+#[prebindgen]
+pub fn borrow_enum_rows() -> &'static [BorrowEnumRow] {
+    static ROWS: std::sync::OnceLock<Vec<BorrowEnumRow>> = std::sync::OnceLock::new();
+    ROWS.get_or_init(|| {
+        vec![BorrowEnumRow {
+            packet: borrow_packet_new(128),
+            mode: BorrowMode::Ready,
+        }]
+    })
+    .as_slice()
+}
+
 // Option boundary fixtures shared by C and JNI.
 #[prebindgen]
 pub fn option_i64(value: Option<i64>) -> Option<i64> {

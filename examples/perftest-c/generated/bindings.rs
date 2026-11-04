@@ -188,6 +188,36 @@ const _: () = {
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
+pub unsafe extern "C" fn perftest_drop_borrow_packet(
+    ptr: *mut perftest_flat::BorrowPacket,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_borrow_no_clone(
+    ptr: *mut perftest_flat::BorrowNoClone,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
 pub unsafe extern "C" fn perftest_drop_c_output_resource(
     ptr: *mut perftest_flat::CallbackRowResource,
 ) {
@@ -694,244 +724,39 @@ impl Drop for __PbCallbackOwner {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_0e60b44d7236d10d {
+pub struct perftest_callback_0254ff800a6840ea {
     pub run: Option<
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
-        ) -> *mut perftest_flat::CallbackReturnResource,
-    >,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_15f1a05217a2ceea {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> i64>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_24a5c7966da050a9_result {
-    pub v0: *mut perftest_flat::CallbackReturnResource,
-    pub v1: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_24a5c7966da050a9 {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-        ) -> perftest_callback_24a5c7966da050a9_result,
-    >,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_321f7c4288706a27 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> ()>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_490413898821d50d {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u8) -> u8>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4 {
-    pub v0: *mut perftest_flat::CallbackRowResource,
-    pub v1: __PbOwned_owned_string,
-    pub v2: *mut perftest_flat::CallbackRowResource,
-}
-/**# Safety
-The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
-#[no_mangle]
-pub unsafe extern "C" fn perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w4_rows_free(
-    rows: __PbRows,
-) {
-    if rows.len != 0 {
-        drop(
-            Box::from_raw(
-                std::ptr::slice_from_raw_parts_mut(
-                    rows.data
-                        as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
-                    rows.len,
-                ),
-            ),
-        );
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0 {
-    pub v0: __PbRows,
-}
-/**# Safety
-The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
-#[no_mangle]
-pub unsafe extern "C" fn perftest_callback_4cf53ee6dc85aa46_callback_arg_0_w0_rows_free(
-    rows: __PbRows,
-) {
-    if rows.len != 0 {
-        drop(
-            Box::from_raw(
-                std::ptr::slice_from_raw_parts_mut(
-                    rows.data
-                        as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
-                    rows.len,
-                ),
-            ),
-        );
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_4cf53ee6dc85aa46 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbRows) -> ()>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_589eef1af0230719_result {
-    pub v0: i64,
-    pub v1: __PbBuffer,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_589eef1af0230719 {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            i64,
             __PbOwned_owned_string,
-        ) -> perftest_callback_589eef1af0230719_result,
+        ) -> __PbBuffer,
     >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
     pub release_result: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            *const perftest_callback_589eef1af0230719_result,
-        ),
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbBuffer),
     >,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_5f675dc767965255_result {
-    pub v0: *mut perftest_flat::CallbackReturnResource,
-    pub v1: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_5f675dc767965255 {
+pub struct perftest_callback_078f14fba1e1a0bf {
     pub run: Option<
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
-        ) -> perftest_callback_5f675dc767965255_result,
+            *mut perftest_flat::BorrowPacket,
+        ) -> (),
     >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0 {
-    pub v0: i64,
-}
-/**# Safety
-The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
-#[no_mangle]
-pub unsafe extern "C" fn perftest_callback_5fdca16b0dadfb25_callback_arg_0_w0_rows_free(
-    rows: __PbRows,
-) {
-    if rows.len != 0 {
-        drop(
-            Box::from_raw(
-                std::ptr::slice_from_raw_parts_mut(
-                    rows.data
-                        as *mut __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
-                    rows.len,
-                ),
-            ),
-        );
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_callback_5fdca16b0dadfb25_callback_return_w1 {
-    pub v0: i64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_5fdca16b0dadfb25 {
-    pub run: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbRows) -> __PbRows,
-    >,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    pub release_result: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
-    >,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_6a62e9f8e6773c45 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, f32) -> f32>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_6e20e8b97ebb3c88 {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-        ) -> *mut perftest_flat::CallbackReturnResource,
-    >,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_73c3c177e4a73331 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u32) -> u32>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_8831734aa5203b29 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> u32>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_9067021b3e3252ad {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __Pb128) -> __Pb128>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_91e558069da45345 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __Pb128) -> __Pb128>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_callback_b0a36b18d83434ed_callback_return_w1 {
+pub struct __PbRow_callback_0c7ae0f660edb387_callback_return_w1 {
     pub v0: *mut perftest_flat::CallbackReturnResource,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_b0a36b18d83434ed {
+pub struct perftest_callback_0c7ae0f660edb387 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
@@ -941,28 +766,57 @@ pub struct perftest_callback_b0a36b18d83434ed {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_cef6210f15ef4535 {
-    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> i64>,
-    pub context: *mut ::core::ffi::c_void,
-    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_d58f9fdf78f56c8d {
+pub struct perftest_callback_1877262b1efa0588 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, f64) -> f64>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_de793b4a6fb814fd {
+pub struct perftest_callback_1e259c5420a05522 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i32) -> i32>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_df547e71faee3c03 {
+pub struct perftest_callback_3c5d45f70fd17829_result {
+    pub v0: i64,
+    pub v1: __PbBuffer,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_3c5d45f70fd17829 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            i64,
+            __PbOwned_owned_string,
+        ) -> perftest_callback_3c5d45f70fd17829_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_callback_3c5d45f70fd17829_result,
+        ),
+    >,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_4f6170b342252c1b {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> *mut perftest_flat::CallbackReturnResource,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_629e2a5bc2c646bd {
     pub run: Option<
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
@@ -977,56 +831,287 @@ pub struct perftest_callback_df547e71faee3c03 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_e51dd6cac1e6761d {
+pub struct perftest_callback_6ad92de9db85defc_result {
+    pub v0: *mut perftest_flat::CallbackReturnResource,
+    pub v1: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_6ad92de9db85defc {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> perftest_callback_6ad92de9db85defc_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_73d1696b3b705bd1 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_flat::BorrowNoClone,
+        ) -> (),
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_7955cb4745523772_result {
+    pub v0: i32,
+    pub v1: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_7955cb4745523772 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            i32,
+            i64,
+        ) -> perftest_callback_7955cb4745523772_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_80df196c35a25faa {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> i64>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_87ab5bb17593ae00 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u32) -> u32>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_8df66309051ff0c4 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, usize) -> ()>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_932558439be4ffca {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __Pb128) -> __Pb128>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_9b2f0dd74406582c {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i16) -> i16>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_ea174d88bac9b485 {
+pub struct perftest_callback_a1983d7a373db49d {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_flat::BorrowPacket,
+        ) -> (),
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_a4bc3153f04892c6 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> i64>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0 {
+    pub v0: i64,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data
+                        as *mut __PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_aaca2bf4492ad16a_callback_return_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_aaca2bf4492ad16a {
+    pub run: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbRows) -> __PbRows,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
+    >,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_ad0b57894c7bbea6 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_flat::BorrowPacket,
+        ) -> (),
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_af8866ae3e4d0e12 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __Pb128) -> __Pb128>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4 {
+    pub v0: *mut perftest_flat::CallbackRowResource,
+    pub v1: __PbOwned_owned_string,
+    pub v2: *mut perftest_flat::CallbackRowResource,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_b98c737eadfea95e_callback_arg_0_w4_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data
+                        as *mut __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_b98c737eadfea95e_callback_arg_0_w0 {
+    pub v0: __PbRows,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_callback_b98c737eadfea95e_callback_arg_0_w0_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data
+                        as *mut __PbRow_callback_b98c737eadfea95e_callback_arg_0_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_b98c737eadfea95e {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbRows) -> ()>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_bf3665103e007fe6 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> *mut perftest_flat::CallbackReturnResource,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_cdccf65221eab046 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u64) -> u64>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_ea6b56ec3d11492d_result {
-    pub v0: i32,
-    pub v1: i64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct perftest_callback_ea6b56ec3d11492d {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            i32,
-            i64,
-        ) -> perftest_callback_ea6b56ec3d11492d_result,
-    >,
+pub struct perftest_callback_cfa0a1cf790c7d8d {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> ()>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_efc3c673f144160f {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            __PbOwned_owned_string,
-        ) -> __PbBuffer,
-    >,
+pub struct perftest_callback_d47c7bdcce5eb73a {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, f32) -> f32>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    pub release_result: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbBuffer),
-    >,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct perftest_callback_f5f6b40488a06bd3 {
+pub struct perftest_callback_e79b477ebab70ab0 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> u32>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_e7c993c21d79dcc8 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i8) -> i8>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_f8aec5520f68a9c7_result {
+    pub v0: *mut perftest_flat::CallbackReturnResource,
+    pub v1: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_f8aec5520f68a9c7 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> perftest_callback_f8aec5520f68a9c7_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_fac4c5ae31f5b10e {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u8) -> u8>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
@@ -2056,6 +2141,1405 @@ pub unsafe extern "C" fn perftest_blob_value_new(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_borrow_no_clone_emit_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_no_clone_emit(
+    p0_w1: *const perftest_flat::BorrowNoClone,
+    p1_callback: perftest_callback_73d1696b3b705bd1,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_no_clone_emit_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowNoClone
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowNoClone = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowNoClone|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0: *const perftest_flat::BorrowNoClone = callback_source_0
+                                as *const perftest_flat::BorrowNoClone;
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_73d1696b3b705bd1",
+                                "(& perftest_flat :: BorrowNoClone)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let source_value = perftest_flat::borrow_no_clone_emit(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let result = perftest_borrow_no_clone_emit_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_no_clone_new_result {
+    pub v0: *mut perftest_flat::BorrowNoClone,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_no_clone_new() -> *mut perftest_flat::BorrowNoClone {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_no_clone_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::borrow_no_clone_new();
+            let ret_w0: *mut perftest_flat::BorrowNoClone = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_borrow_no_clone_new_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_no_clone_value_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_no_clone_value(
+    p0_w1: *const perftest_flat::BorrowNoClone,
+) -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_no_clone_value_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowNoClone
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowNoClone = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_no_clone_value(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_borrow_no_clone_value_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_counter_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_counter(p0_w1: usize) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_counter_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_counter(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_borrow_packet_counter_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_ad0b57894c7bbea6,
+    p2_w1: usize,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowPacket|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0: *const perftest_flat::BorrowPacket = callback_source_0
+                                as *const perftest_flat::BorrowPacket;
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_ad0b57894c7bbea6",
+                                "(& perftest_flat :: BorrowPacket)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: usize = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = perftest_borrow_packet_emit_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_copy_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit_copy(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_078f14fba1e1a0bf,
+    p2_w1: usize,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_copy_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowPacket|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0: *mut perftest_flat::BorrowPacket = Box::into_raw(
+                                Box::new(::core::clone::Clone::clone(callback_source_0)),
+                            );
+                            let callback_arg_0_w0_owner = __PbOutputOwner(
+                                callback_arg_0_w0,
+                            );
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0;
+                            {
+                                ::core::mem::forget(callback_arg_0_w0_owner);
+                            }
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_078f14fba1e1a0bf",
+                                "(& perftest_flat :: BorrowPacket)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: usize = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit_copy(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = perftest_borrow_packet_emit_copy_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_expanded_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit_expanded(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_8df66309051ff0c4,
+    p2_w1: usize,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_expanded_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowPacket|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0 = perftest_flat::borrow_packet_len(
+                                callback_source_0,
+                            );
+                            let callback_arg_0_w1 = callback_arg_0_w0;
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w1;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_8df66309051ff0c4",
+                                "(& perftest_flat :: BorrowPacket)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: usize = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit_expanded(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = perftest_borrow_packet_emit_expanded_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_expanded_other_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit_expanded_other(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_8df66309051ff0c4,
+    p2_w1: usize,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_expanded_other_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowPacket|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0 = perftest_flat::borrow_packet_len_plus_one(
+                                callback_source_0,
+                            );
+                            let callback_arg_0_w1 = callback_arg_0_w0;
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w1;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_8df66309051ff0c4",
+                                "(& perftest_flat :: BorrowPacket)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: usize = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit_expanded_other(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = perftest_borrow_packet_emit_expanded_other_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_optional_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit_optional(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_a1983d7a373db49d,
+    p2_w1: u8,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: Option<&perftest_flat::BorrowPacket>|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let (
+                                _,
+                                (callback_arg_0_w0_value0,),
+                                callback_arg_0_w0_commit,
+                            ) = if let Some(callback_arg_0_w1) = callback_source_0 {
+                                let callback_arg_0_w2: *const perftest_flat::BorrowPacket = callback_arg_0_w1
+                                    as *const perftest_flat::BorrowPacket;
+                                let callback_arg_0_w0_values = (callback_arg_0_w2,);
+                                (1i32, callback_arg_0_w0_values, Some(move || {}))
+                            } else {
+                                (0i32, (std::ptr::null(),), None)
+                            };
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0_value0;
+                            {
+                                if let Some(callback_arg_0_w0_action) = callback_arg_0_w0_commit {
+                                    callback_arg_0_w0_action();
+                                }
+                            }
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_a1983d7a373db49d",
+                                "(Option < & perftest_flat :: BorrowPacket >)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: bool = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit_optional(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = perftest_borrow_packet_emit_optional_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_emit_worker_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_emit_worker(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_callback: perftest_callback_ad0b57894c7bbea6,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_emit_worker_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |
+                        callback_source_0: &perftest_flat::BorrowPacket|
+                    {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0: *const perftest_flat::BorrowPacket = callback_source_0
+                                as *const perftest_flat::BorrowPacket;
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "perftest_callback_ad0b57894c7bbea6",
+                                "(& perftest_flat :: BorrowPacket)->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_emit_worker(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let result = perftest_borrow_packet_emit_worker_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_len_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_len(
+    p0_w1: *const perftest_flat::BorrowPacket,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_len_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_len(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_borrow_packet_len_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_new_result {
+    pub v0: *mut perftest_flat::BorrowPacket,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_new(
+    p0_w1: usize,
+) -> *mut perftest_flat::BorrowPacket {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_new(__prebindgen_argument_0);
+            let ret_w0: *mut perftest_flat::BorrowPacket = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_borrow_packet_new_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_optional_result {
+    pub v0: *const perftest_flat::BorrowPacket,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_optional(
+    p0_w1: *const perftest_flat::BorrowPacket,
+    p1_w1: u8,
+) -> *const perftest_flat::BorrowPacket {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: bool = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_optional(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2: *const perftest_flat::BorrowPacket = ret_w1
+                    as *const perftest_flat::BorrowPacket;
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (std::ptr::null(),), None)
+            };
+            let result = perftest_borrow_packet_optional_result {
+                v0: ret_w0_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_borrow_packet_ref_result {
+    pub v0: *const perftest_flat::BorrowPacket,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_borrow_packet_ref(
+    p0_w1: *const perftest_flat::BorrowPacket,
+) -> *const perftest_flat::BorrowPacket {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_borrow_packet_ref_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::BorrowPacket
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::BorrowPacket = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::borrow_packet_ref(__prebindgen_argument_0);
+            let ret_w0: *const perftest_flat::BorrowPacket = source_value
+                as *const perftest_flat::BorrowPacket;
+            let result = perftest_borrow_packet_ref_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_buffer_views_address_result {
     pub v0: usize,
 }
@@ -2383,7 +3867,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_c_output_callback(
     p0_w1: i64,
-    p1_callback: perftest_callback_4cf53ee6dc85aa46,
+    p1_callback: perftest_callback_b98c737eadfea95e,
 ) {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -2438,13 +3922,13 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                                 &callback_arg_0_w0_source,
                             );
                             unsafe fn callback_arg_0_w0_release_row(
-                                row: &__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
+                                row: &__PbRow_callback_b98c737eadfea95e_callback_arg_0_w0,
                             ) {
                                 if (row.v0).len != 0 {
                                     let rows = Box::from_raw(
                                         std::ptr::slice_from_raw_parts_mut(
                                             (row.v0).data
-                                                as *mut __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                                as *mut __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4,
                                             (row.v0).len,
                                         ),
                                     );
@@ -2478,7 +3962,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                             }
                             let mut callback_arg_0_w0 = unsafe {
                                 ::prebindgen_runtime::OutputRows::<
-                                    __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0,
+                                    __PbRow_callback_b98c737eadfea95e_callback_arg_0_w0,
                                 >::new(callback_arg_0_w2, callback_arg_0_w0_release_row)
                             };
                             for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
@@ -2493,7 +3977,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                                     &callback_arg_0_w4_source,
                                 );
                                 unsafe fn callback_arg_0_w4_release_row(
-                                    row: &__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                    row: &__PbRow_callback_b98c737eadfea95e_callback_arg_0_w4,
                                 ) {
                                     if !(row.v0).is_null() {
                                         let _ = ::prebindgen_runtime::boundary(|| {
@@ -2522,7 +4006,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                                 }
                                 let mut callback_arg_0_w4 = unsafe {
                                     ::prebindgen_runtime::OutputRows::<
-                                        __PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4,
+                                        __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4,
                                     >::new(callback_arg_0_w6, callback_arg_0_w4_release_row)
                                 };
                                 for (callback_arg_0_w7, callback_arg_0_w5) in ::core::iter::Iterator::enumerate(
@@ -2556,7 +4040,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                                     );
                                     unsafe {
                                         callback_arg_0_w4
-                                            .write_next(__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w4 {
+                                            .write_next(__PbRow_callback_b98c737eadfea95e_callback_arg_0_w4 {
                                                 v0: callback_arg_0_w9,
                                                 v1: callback_arg_0_w11.0,
                                                 v2: callback_arg_0_w13,
@@ -2578,7 +4062,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                                 }
                                 unsafe {
                                     callback_arg_0_w0
-                                        .write_next(__PbRow_callback_4cf53ee6dc85aa46_callback_arg_0_w0 {
+                                        .write_next(__PbRow_callback_b98c737eadfea95e_callback_arg_0_w0 {
                                             v0: __PbRows {
                                                 data: if callback_arg_0_w4.is_empty() {
                                                     ::core::ptr::null()
@@ -2624,7 +4108,7 @@ pub unsafe extern "C" fn perftest_c_output_callback(
                         });
                         if let Err(error) = result {
                             ::prebindgen_runtime::report_callback_error(
-                                "perftest_callback_4cf53ee6dc85aa46",
+                                "perftest_callback_b98c737eadfea95e",
                                 "(Vec < Vec < perftest_flat :: CallbackRow > >)->()",
                                 &error,
                             );
@@ -4593,7 +6077,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_bool(
-    p0_callback: perftest_callback_490413898821d50d,
+    p0_callback: perftest_callback_fac4c5ae31f5b10e,
 ) -> u8 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -4662,7 +6146,7 @@ pub unsafe extern "C" fn perftest_callback_return_bool(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_490413898821d50d",
+                                    "perftest_callback_fac4c5ae31f5b10e",
                                     "(bool)->bool",
                                     &error,
                                 );
@@ -4707,7 +6191,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
-    p0_callback: perftest_callback_5f675dc767965255,
+    p0_callback: perftest_callback_f8aec5520f68a9c7,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -4818,7 +6302,7 @@ pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_5f675dc767965255",
+                                    "perftest_callback_f8aec5520f68a9c7",
                                     "()->perftest_flat :: CallbackReturnBorrowedPair",
                                     &error,
                                 );
@@ -4863,7 +6347,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_bytes(
-    p0_callback: perftest_callback_df547e71faee3c03,
+    p0_callback: perftest_callback_629e2a5bc2c646bd,
 ) -> __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -4943,7 +6427,7 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_df547e71faee3c03",
+                                    "perftest_callback_629e2a5bc2c646bd",
                                     "(Vec < u8 >)->Vec < u8 >",
                                     &error,
                                 );
@@ -4990,7 +6474,7 @@ Success, ownership and nonnull error outputs must be writable and pairwise disjo
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_c_result(
-    p0_callback: perftest_callback_73c3c177e4a73331,
+    p0_callback: perftest_callback_87ab5bb17593ae00,
     ownership: *mut usize,
     error: *mut *mut std::ffi::c_char,
 ) -> u32 {
@@ -5070,7 +6554,7 @@ pub unsafe extern "C" fn perftest_callback_return_c_result(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_73c3c177e4a73331",
+                                    "perftest_callback_87ab5bb17593ae00",
                                     "(char)->char",
                                     &error,
                                 );
@@ -5148,7 +6632,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_catch(
-    p0_callback: perftest_callback_cef6210f15ef4535,
+    p0_callback: perftest_callback_a4bc3153f04892c6,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5217,7 +6701,7 @@ pub unsafe extern "C" fn perftest_callback_return_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_cef6210f15ef4535",
+                                    "perftest_callback_a4bc3153f04892c6",
                                     "(i64)->i64",
                                     &error,
                                 );
@@ -5262,7 +6746,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_char(
-    p0_callback: perftest_callback_73c3c177e4a73331,
+    p0_callback: perftest_callback_87ab5bb17593ae00,
 ) -> u32 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5334,7 +6818,7 @@ pub unsafe extern "C" fn perftest_callback_return_char(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_73c3c177e4a73331",
+                                    "perftest_callback_87ab5bb17593ae00",
                                     "(char)->char",
                                     &error,
                                 );
@@ -5379,7 +6863,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_char_catch(
-    p0_callback: perftest_callback_8831734aa5203b29,
+    p0_callback: perftest_callback_e79b477ebab70ab0,
 ) -> u32 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5447,7 +6931,7 @@ pub unsafe extern "C" fn perftest_callback_return_char_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_8831734aa5203b29",
+                                    "perftest_callback_e79b477ebab70ab0",
                                     "()->char",
                                     &error,
                                 );
@@ -5492,7 +6976,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_enum(
-    p0_callback: perftest_callback_de793b4a6fb814fd,
+    p0_callback: perftest_callback_1e259c5420a05522,
 ) -> u8 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5571,7 +7055,7 @@ pub unsafe extern "C" fn perftest_callback_return_enum(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_de793b4a6fb814fd",
+                                    "perftest_callback_1e259c5420a05522",
                                     "(perftest_flat :: CallbackReturnChoice)->perftest_flat :: CallbackReturnChoice",
                                     &error,
                                 );
@@ -5616,7 +7100,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_f32(
-    p0_callback: perftest_callback_6a62e9f8e6773c45,
+    p0_callback: perftest_callback_d47c7bdcce5eb73a,
 ) -> f32 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5685,7 +7169,7 @@ pub unsafe extern "C" fn perftest_callback_return_f32(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_6a62e9f8e6773c45",
+                                    "perftest_callback_d47c7bdcce5eb73a",
                                     "(f32)->f32",
                                     &error,
                                 );
@@ -5730,7 +7214,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_float(
-    p0_callback: perftest_callback_d58f9fdf78f56c8d,
+    p0_callback: perftest_callback_1877262b1efa0588,
 ) -> f64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -5799,7 +7283,7 @@ pub unsafe extern "C" fn perftest_callback_return_float(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_d58f9fdf78f56c8d",
+                                    "perftest_callback_1877262b1efa0588",
                                     "(f64)->f64",
                                     &error,
                                 );
@@ -5916,7 +7400,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_call(
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __PbRow_callback_return_handler_many_p0_w1 {
-    pub v0: perftest_callback_cef6210f15ef4535,
+    pub v0: perftest_callback_a4bc3153f04892c6,
 }
 #[repr(C)]
 pub struct perftest_callback_return_handler_many_result {
@@ -6017,7 +7501,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_many(p0_w1: __PbRows) 
                                     result
                                         .unwrap_or_else(|error| {
                                             ::prebindgen_runtime::report_callback_error(
-                                                "perftest_callback_cef6210f15ef4535",
+                                                "perftest_callback_a4bc3153f04892c6",
                                                 "(i64)->i64",
                                                 &error,
                                             );
@@ -6087,7 +7571,7 @@ Success, ownership and nonnull error outputs must be writable and pairwise disjo
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_handler_new(
-    p0_callback: perftest_callback_cef6210f15ef4535,
+    p0_callback: perftest_callback_a4bc3153f04892c6,
     p1_w1: u8,
     ownership: *mut usize,
     error: *mut *mut std::ffi::c_char,
@@ -6165,7 +7649,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_new(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_cef6210f15ef4535",
+                                    "perftest_callback_a4bc3153f04892c6",
                                     "(i64)->i64",
                                     &error,
                                 );
@@ -6271,7 +7755,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_handler_value(
-    p0_w2: perftest_callback_cef6210f15ef4535,
+    p0_w2: perftest_callback_a4bc3153f04892c6,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -6333,7 +7817,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_value(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_cef6210f15ef4535",
+                                    "perftest_callback_a4bc3153f04892c6",
                                     "(i64)->i64",
                                     &error,
                                 );
@@ -6389,7 +7873,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_i16(
-    p0_callback: perftest_callback_e51dd6cac1e6761d,
+    p0_callback: perftest_callback_9b2f0dd74406582c,
 ) -> i16 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -6458,7 +7942,7 @@ pub unsafe extern "C" fn perftest_callback_return_i16(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_e51dd6cac1e6761d",
+                                    "perftest_callback_9b2f0dd74406582c",
                                     "(i16)->i16",
                                     &error,
                                 );
@@ -6503,7 +7987,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_i64(
-    p0_callback: perftest_callback_cef6210f15ef4535,
+    p0_callback: perftest_callback_a4bc3153f04892c6,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -6572,7 +8056,7 @@ pub unsafe extern "C" fn perftest_callback_return_i64(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_cef6210f15ef4535",
+                                    "perftest_callback_a4bc3153f04892c6",
                                     "(i64)->i64",
                                     &error,
                                 );
@@ -6617,7 +8101,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_i8(
-    p0_callback: perftest_callback_f5f6b40488a06bd3,
+    p0_callback: perftest_callback_e7c993c21d79dcc8,
 ) -> i8 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -6686,7 +8170,7 @@ pub unsafe extern "C" fn perftest_callback_return_i8(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_f5f6b40488a06bd3",
+                                    "perftest_callback_e7c993c21d79dcc8",
                                     "(i8)->i8",
                                     &error,
                                 );
@@ -6809,7 +8293,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_optional(
-    p0_callback: perftest_callback_ea6b56ec3d11492d,
+    p0_callback: perftest_callback_7955cb4745523772,
     p1_w1: u8,
     out1: *mut i64,
 ) -> i32 {
@@ -6917,7 +8401,7 @@ pub unsafe extern "C" fn perftest_callback_return_optional(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_ea6b56ec3d11492d",
+                                    "perftest_callback_7955cb4745523772",
                                     "(Option < i64 >)->Option < i64 >",
                                     &error,
                                 );
@@ -6988,7 +8472,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_owned(
-    p0_callback: perftest_callback_0e60b44d7236d10d,
+    p0_callback: perftest_callback_4f6170b342252c1b,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -7083,7 +8567,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_0e60b44d7236d10d",
+                                    "perftest_callback_4f6170b342252c1b",
                                     "()->perftest_flat :: CallbackReturnResource",
                                     &error,
                                 );
@@ -7129,7 +8613,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_owned_optional(
-    p0_callback: perftest_callback_6e20e8b97ebb3c88,
+    p0_callback: perftest_callback_bf3665103e007fe6,
     out1: *mut i64,
 ) -> i32 {
     #[allow(unused_mut)]
@@ -7247,7 +8731,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_optional(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_6e20e8b97ebb3c88",
+                                    "perftest_callback_bf3665103e007fe6",
                                     "()->Option < perftest_flat :: CallbackReturnResource >",
                                     &error,
                                 );
@@ -7304,7 +8788,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_owned_vector(
-    p0_callback: perftest_callback_b0a36b18d83434ed,
+    p0_callback: perftest_callback_0c7ae0f660edb387,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -7357,13 +8841,13 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                             );
                             ::prebindgen_runtime::validate_slice(
                                 callback_return_w1.data
-                                    as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
+                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                 callback_return_w1.len,
                             )?;
                             for index in 0..callback_return_w1.len {
                                 let callback_return_w5 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1)
+                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
                                         .add(index)))
                                         .v0
                                 };
@@ -7384,7 +8868,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                     let callback_return_w2 = callback_return_w1.len;
                                     ::prebindgen_runtime::validate_slice(
                                         callback_return_w1.data
-                                            as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
+                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                         callback_return_w2,
                                     )?;
                                     let mut callback_return_w1_accesses = __prebindgen_input_aliases
@@ -7395,7 +8879,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                     for callback_return_w3 in 0..callback_return_w2 {
                                         let callback_return_w5 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1)
+                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v0
                                         };
@@ -7479,7 +8963,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_b0a36b18d83434ed",
+                                    "perftest_callback_0c7ae0f660edb387",
                                     "()->Vec < perftest_flat :: CallbackReturnResource >",
                                     &error,
                                 );
@@ -7524,7 +9008,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
-    p0_callback: perftest_callback_b0a36b18d83434ed,
+    p0_callback: perftest_callback_0c7ae0f660edb387,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -7577,13 +9061,13 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                             );
                             ::prebindgen_runtime::validate_slice(
                                 callback_return_w1.data
-                                    as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
+                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                 callback_return_w1.len,
                             )?;
                             for index in 0..callback_return_w1.len {
                                 let callback_return_w5 = unsafe {
                                     (*((callback_return_w1.data
-                                        as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1)
+                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
                                         .add(index)))
                                         .v0
                                 };
@@ -7604,7 +9088,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                     let callback_return_w2 = callback_return_w1.len;
                                     ::prebindgen_runtime::validate_slice(
                                         callback_return_w1.data
-                                            as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1,
+                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                         callback_return_w2,
                                     )?;
                                     let mut callback_return_w1_accesses = __prebindgen_input_aliases
@@ -7615,7 +9099,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                     for callback_return_w3 in 0..callback_return_w2 {
                                         let callback_return_w5 = unsafe {
                                             (*((callback_return_w1.data
-                                                as *const __PbRow_callback_b0a36b18d83434ed_callback_return_w1)
+                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
                                                 .add(callback_return_w3)))
                                                 .v0
                                         };
@@ -7699,7 +9183,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_b0a36b18d83434ed",
+                                    "perftest_callback_0c7ae0f660edb387",
                                     "()->Vec < perftest_flat :: CallbackReturnResource >",
                                     &error,
                                 );
@@ -7744,7 +9228,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_pair_catch(
-    p0_callback: perftest_callback_24a5c7966da050a9,
+    p0_callback: perftest_callback_6ad92de9db85defc,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -7877,7 +9361,7 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_24a5c7966da050a9",
+                                    "perftest_callback_6ad92de9db85defc",
                                     "()->perftest_flat :: CallbackReturnPair",
                                     &error,
                                 );
@@ -7922,7 +9406,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_record(
-    p0_callback: perftest_callback_589eef1af0230719,
+    p0_callback: perftest_callback_3c5d45f70fd17829,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8045,7 +9529,7 @@ pub unsafe extern "C" fn perftest_callback_return_record(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_589eef1af0230719",
+                                    "perftest_callback_3c5d45f70fd17829",
                                     "(perftest_flat :: CallbackReturnRecord)->perftest_flat :: CallbackReturnRecord",
                                     &error,
                                 );
@@ -8254,7 +9738,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_spawn(
-    p0_callback: perftest_callback_cef6210f15ef4535,
+    p0_callback: perftest_callback_a4bc3153f04892c6,
 ) -> *mut perftest_flat::CallbackReturnJob {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8323,7 +9807,7 @@ pub unsafe extern "C" fn perftest_callback_return_spawn(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_cef6210f15ef4535",
+                                    "perftest_callback_a4bc3153f04892c6",
                                     "(i64)->i64",
                                     &error,
                                 );
@@ -8373,7 +9857,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_text(
-    p0_callback: perftest_callback_efc3c673f144160f,
+    p0_callback: perftest_callback_0254ff800a6840ea,
 ) -> __PbOwned_owned_string {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8458,7 +9942,7 @@ pub unsafe extern "C" fn perftest_callback_return_text(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_efc3c673f144160f",
+                                    "perftest_callback_0254ff800a6840ea",
                                     "(String)->String",
                                     &error,
                                 );
@@ -8505,7 +9989,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_u128(
-    p0_callback: perftest_callback_91e558069da45345,
+    p0_callback: perftest_callback_932558439be4ffca,
 ) -> __Pb128 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8583,7 +10067,7 @@ pub unsafe extern "C" fn perftest_callback_return_u128(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_91e558069da45345",
+                                    "perftest_callback_932558439be4ffca",
                                     "(u128)->u128",
                                     &error,
                                 );
@@ -8634,7 +10118,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_unit(
-    p0_callback: perftest_callback_321f7c4288706a27,
+    p0_callback: perftest_callback_cfa0a1cf790c7d8d,
 ) {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8683,7 +10167,7 @@ pub unsafe extern "C" fn perftest_callback_return_unit(
                         });
                         if let Err(error) = result {
                             ::prebindgen_runtime::report_callback_error(
-                                "perftest_callback_321f7c4288706a27",
+                                "perftest_callback_cfa0a1cf790c7d8d",
                                 "(i64)->()",
                                 &error,
                             );
@@ -8724,7 +10208,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_unsigned(
-    p0_callback: perftest_callback_ea174d88bac9b485,
+    p0_callback: perftest_callback_cdccf65221eab046,
 ) -> u64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8793,7 +10277,7 @@ pub unsafe extern "C" fn perftest_callback_return_unsigned(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_ea174d88bac9b485",
+                                    "perftest_callback_cdccf65221eab046",
                                     "(u64)->u64",
                                     &error,
                                 );
@@ -8860,7 +10344,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_vector(
-    p0_callback: perftest_callback_5fdca16b0dadfb25,
+    p0_callback: perftest_callback_aaca2bf4492ad16a,
 ) -> __PbRows {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -8900,11 +10384,11 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 &callback_arg_0_w0_source,
                             );
                             unsafe fn callback_arg_0_w0_release_row(
-                                row: &__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
+                                row: &__PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0,
                             ) {}
                             let mut callback_arg_0_w0 = unsafe {
                                 ::prebindgen_runtime::OutputRows::<
-                                    __PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0,
+                                    __PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0,
                                 >::new(callback_arg_0_w2, callback_arg_0_w0_release_row)
                             };
                             for (callback_arg_0_w3, callback_arg_0_w1) in ::core::iter::Iterator::enumerate(
@@ -8915,7 +10399,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 let callback_arg_0_w4 = callback_arg_0_w1;
                                 unsafe {
                                     callback_arg_0_w0
-                                        .write_next(__PbRow_callback_5fdca16b0dadfb25_callback_arg_0_w0 {
+                                        .write_next(__PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0 {
                                             v0: callback_arg_0_w4,
                                         });
                                 }
@@ -8960,14 +10444,14 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 let callback_return_w2 = callback_return_w1.len;
                                 ::prebindgen_runtime::validate_slice(
                                     callback_return_w1.data
-                                        as *const __PbRow_callback_5fdca16b0dadfb25_callback_return_w1,
+                                        as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1,
                                     callback_return_w2,
                                 )?;
                                 callback_return_w0.reserve_exact(callback_return_w2);
                                 for callback_return_w3 in 0..callback_return_w2 {
                                     let callback_return_w5 = unsafe {
                                         (*((callback_return_w1.data
-                                            as *const __PbRow_callback_5fdca16b0dadfb25_callback_return_w1)
+                                            as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1)
                                             .add(callback_return_w3)))
                                             .v0
                                     };
@@ -9012,7 +10496,7 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_5fdca16b0dadfb25",
+                                    "perftest_callback_aaca2bf4492ad16a",
                                     "(Vec < i64 >)->Vec < i64 >",
                                     &error,
                                 );
@@ -9093,7 +10577,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_wide(
-    p0_callback: perftest_callback_9067021b3e3252ad,
+    p0_callback: perftest_callback_af8866ae3e4d0e12,
 ) -> __Pb128 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -9171,7 +10655,7 @@ pub unsafe extern "C" fn perftest_callback_return_wide(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_9067021b3e3252ad",
+                                    "perftest_callback_af8866ae3e4d0e12",
                                     "(i128)->i128",
                                     &error,
                                 );
@@ -9222,7 +10706,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_zero(
-    p0_callback: perftest_callback_15f1a05217a2ceea,
+    p0_callback: perftest_callback_80df196c35a25faa,
 ) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -9287,7 +10771,7 @@ pub unsafe extern "C" fn perftest_callback_return_zero(
                         result
                             .unwrap_or_else(|error| {
                                 ::prebindgen_runtime::report_callback_error(
-                                    "perftest_callback_15f1a05217a2ceea",
+                                    "perftest_callback_80df196c35a25faa",
                                     "()->i64",
                                     &error,
                                 );
@@ -24725,7 +26209,7 @@ pub unsafe extern "C" fn perftest_report_new(
             );
             let ret_w0_owner = __PbOutputOwner(ret_w0);
             let ret_w1 = perftest_flat::report_to_struct(unsafe { &*(ret_w0) });
-            let ret_w2 = &(ret_w1);
+            let ret_w2 = ret_w1;
             let ret_w3 = perftest_flat::summary_count(&ret_w2.summary);
             let ret_w4 = ret_w3;
             let ret_w5 = perftest_flat::summary_total(&ret_w2.summary);
@@ -24734,9 +26218,7 @@ pub unsafe extern "C" fn perftest_report_new(
             let ret_w8 = ret_w7;
             let ret_w9 = perftest_flat::stamp_nanos(&ret_w2.origin);
             let ret_w10 = ret_w9;
-            let ret_w11 = __PbOwned_owned_string::guard(
-                ::core::clone::Clone::clone(&ret_w2.label),
-            );
+            let ret_w11 = __PbOwned_owned_string::guard(ret_w2.label);
             let result = perftest_report_new_result {
                 v0: ret_w4,
                 v1: ret_w6,
@@ -29155,6 +30637,14 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BlobValue > () != 0,
     "flat object `BlobValue` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BorrowNoClone > () != 0,
+    "flat object `BorrowNoClone` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BorrowPacket > () != 0,
+    "flat object `BorrowPacket` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CDropError > () != 0,

@@ -9,6 +9,7 @@ static perftest_buffer_view text_view(const perftest_owned_string *value) { retu
 static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value) { return perftest_owned_vec_u8_672e72343c1b4cb4_view(value); }
 #include "callback_returns.h"
 #include "borrowed_getters.h"
+#include "explicit_borrows.h"
 #include "runtime_costs.h"
 #include "inline_owners.h"
 #include "output_owners.h"
@@ -584,6 +585,7 @@ static void check_results(void) {
 int main(void) {
     check_inline_owners();
     check_borrowed_getters();
+    check_explicit_borrows();
     check_borrowed_pointers();
     check_mutable_borrowed_pointers();
     check_owner_backed_views();

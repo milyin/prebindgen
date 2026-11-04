@@ -73,6 +73,9 @@ use quote::{format_ident, quote};
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct CCodec;
+fn explicit_copy_error(ty: &syn::Type) -> String {
+    format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_ref(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
+}
 impl Codec for CCodec {
     type Schema = CSchema;
     type Niche = CNiche;
@@ -351,12 +354,7 @@ impl Codec for CCodec {
                 return Ok(owned::borrowed(owner, w, value, access));
             }
             if borrowed {
-                // An explicit borrowed value projection requests an owning copy.
-                return Ok(owned::output(
-                    owner,
-                    w,
-                    quote!(::core::clone::Clone::clone(#v)),
-                ));
+                return Err(explicit_copy_error(ty));
             }
             return Ok(owned::output(owner, w, v));
         }
@@ -366,12 +364,10 @@ impl Codec for CCodec {
                     .output_return_reference(_flat, r, &(), w, v)?
                     .expect("declared opaque reference"));
             }
-            let value = if borrowed {
-                quote!(::core::clone::Clone::clone(#v))
-            } else {
-                v
-            };
-            return Ok(owned_pointer_output(ty, w, value).0);
+            if borrowed {
+                return Err(explicit_copy_error(ty));
+            }
+            return Ok(owned_pointer_output(ty, w, v).0);
         }
         if let syn::Type::Reference(r) = ty {
             if r.mutability.is_none()
@@ -452,14 +448,59 @@ impl Codec for CCodec {
                 Ok(out)
             }
             None => {
-                let value = if borrowed {
-                    quote!(::core::clone::Clone::clone(#v))
-                } else {
-                    v
-                };
-                Ok(owned_pointer_output(ty, w, value).0)
+                if borrowed {
+                    return Err(explicit_copy_error(ty));
+                }
+                Ok(owned_pointer_output(ty, w, v).0)
             }
         }
+    }
+
+    fn output_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        mut value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<CWire>> {
+        use prebindgen_declarations::ProjectionMode;
+        if !projection.fields.is_empty() {
+            return Err("opaque/scalar output projection has field overrides".into());
+        }
+        let borrowed = projection.mode == ProjectionMode::Borrowed;
+        let mut payload = ty;
+        while let syn::Type::Reference(reference) = payload {
+            if !borrowed {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            if reference.mutability.is_some() {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            if matches!(reference.elem.as_ref(), syn::Type::Slice(_))
+                || matches!(reference.elem.as_ref(),syn::Type::Path(p) if p.path.is_ident("str"))
+            {
+                break;
+            }
+            payload = &reference.elem;
+            value = quote!(*(#value));
+        }
+        if borrowed
+            && (owned::declaration(flat, payload).is_some()
+                || owned::pointer_declared(flat, payload)
+                || Value::of(payload).is_none())
+        {
+            return self.output_leaf(
+                flat,
+                payload,
+                &(),
+                wire,
+                quote!(::core::clone::Clone::clone(#value)),
+                false,
+            );
+        }
+        self.output_leaf(flat, payload, &(), wire, value, borrowed)
     }
 
     fn output_return_reference(
@@ -2605,7 +2646,73 @@ mod generation_tests {
     }
 
     #[test]
-    fn optional_callback_references_keep_their_owning_copy_contract() {
+    fn callback_borrows_copies_and_expansions_have_distinct_stable_abis() {
+        use prebindgen_declarations::{callback, expand_return, fun};
+        fn prepared(reverse: bool, global_copy: bool) -> Bindings {
+            let mut declarations = vec![
+                fun!(borrowed),
+                fun!(copied).expand_param(
+                    "cb",
+                    callback!(impl Fn(&Handle))
+                        .expand_param(0, expand_return!(Handle).field_self_ref()),
+                ),
+                fun!(expanded).expand_param(
+                    "cb",
+                    callback!(impl Fn(&Handle))
+                        .expand_param(0, expand_return!(Handle).field(fun!(number))),
+                ),
+            ];
+            if reverse {
+                declarations.reverse();
+            }
+            let mut builder=Cbindgen::new(error_model("pub type Handle=String;pub fn borrowed(cb:impl Fn(&Handle)){}pub fn copied(cb:impl Fn(&Handle)){}pub fn expanded(cb:impl Fn(&Handle)){}pub fn number(h:&Handle)->i64{}"))
+                .opaque_ptr("handle",syn::parse_quote!(Handle));
+            if global_copy {
+                builder = builder.expand(expand_return!(&Handle).field_self_ref());
+            }
+            for function in declarations {
+                builder = builder.function(function).panic();
+            }
+            builder.prepare().unwrap()
+        }
+        fn callbacks(flat: &Bindings) -> std::collections::BTreeMap<String, String> {
+            ["borrowed","copied","expanded"].into_iter().map(|name| {
+                let wire=group::function_parameters(flat.function(name).unwrap()).unwrap().next().unwrap();
+                let CWire::Callback {callback}= &wire.kind else {panic!()};
+                let field=callback.argument_fields()[0];
+                match name {
+                    "borrowed" => assert!(matches!(&field.kind,CWire::Pointer{pointer,..} if pointer.access==Access::Shared)),
+                    "copied" => assert!(matches!(&field.kind,CWire::Pointer{pointer,..} if pointer.access==Access::Move)),
+                    _ => assert!(matches!(&field.kind,CWire::Scalar{primitive:Primitive::I64,..})),
+                }
+                (name.into(),callback.name.clone())
+            }).collect()
+        }
+        let first = callbacks(&prepared(false, false));
+        assert_eq!(
+            first
+                .values()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            3
+        );
+        assert_eq!(first, callbacks(&prepared(true, false)));
+        let global = prepared(false, true);
+        let wire = group::function_parameters(global.function("borrowed").unwrap())
+            .unwrap()
+            .next()
+            .unwrap();
+        let CWire::Callback { callback } = &wire.kind else {
+            panic!()
+        };
+        assert!(
+            matches!(&callback.argument_fields()[0].kind,CWire::Pointer{pointer,..} if pointer.access==Access::Move)
+        );
+        assert_eq!(callback.name, first["copied"]);
+    }
+
+    #[test]
+    fn optional_callback_references_preserve_their_borrow() {
         use prebindgen_declarations::{compile_callback_argument, Output};
         let output = compile_callback_argument(
             &error_model("pub type Child=String;"),
@@ -2617,10 +2724,10 @@ mod generation_tests {
             &(),
         )
         .unwrap();
-        assert!(output.statements.to_string().contains("Clone"));
+        assert!(!output.statements.to_string().contains("Clone"));
         assert!(
             crate::group::result_packet_fields(&output.outcomes.success).all(
-                |w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access == Access::Move)
+                |w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access == Access::Shared)
             )
         );
     }
