@@ -5,7 +5,7 @@ Both revisions use the identical extended benchmark fixture. Release libraries a
 
 ## What changes
 
-Flat C rows containing only scalar fields and opaque pointers are borrowed as an immutable Rust slice. Resource-bearing rows validate their complete address group first, then reread values and construct the final Rust vector. The prepared-row closure vector is omitted. Resource-free scalar rows also benefit from the slice reader. Buffers, enums, inline owners, callbacks and nested collections retain their existing preparation strategy. Source constructors run once after validation; error cleanup and consumption-prefix receipts remain in place.
+Flat C rows containing only scalar fields and opaque pointers are borrowed as an immutable Rust slice. Resource-bearing rows validate their complete address group first, then reread values and construct the final Rust vector. The prepared-row closure vector is omitted. Resource-free scalar rows also benefit from the slice reader. Rows with buffers, enums, inline owners or callbacks retain their existing preparation strategy. Nested outer rows retain their transport; eligible inner sequences can use replay. Source constructors run once after validation; error cleanup and consumption-prefix receipts remain in place.
 
 The caller must keep wire rows and descriptors alive and read-only for the whole call, including concurrent or reentrant code and source constructors. This is a stricter precondition than retaining prepared field snapshots. It applies to all collection inputs; pointee ownership and mutation still follow the handle contract. No runtime mutation check or additional lock is added. The shared row slice also forbids conflicting mutable access through aliases.
 

@@ -900,8 +900,8 @@ rows made only of scalar fields and opaque handles instead use two traversals:
 validate and check the complete address group, then reread the rows and construct
 the final Rust vector directly. This omits the prepared-row closure buffer.
 Constructors still run once, after the grouped check. String/buffer, enum,
-inline-owner, callback and nested collection conversions retain their existing
-preparation strategy. C input rows and descriptors must stay alive and unchanged
+inline-owner and callback rows retain their existing preparation strategy.
+Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
 throughout the call, including source constructor invocations; neither reentrant
 code nor another thread may mutate the wire rows or descriptors. This applies to
 all collection inputs. It describes the wire memory, while pointee liveness and
