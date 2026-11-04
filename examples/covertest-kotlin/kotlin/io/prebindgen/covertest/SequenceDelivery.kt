@@ -110,6 +110,12 @@ fun checkSequenceDelivery() {
     check(nestedInputs.flatten().all { it.isClosed })
     check(checkNotNull(nestedEscaped).all { it.isClosed })
     check(ownedResourceDrops() == nestedStart + 3uL)
+    var emptyCalls = 0
+    check(collectionResultOptionalFold(emptyList(), 0, 11L, onError = fail) { a, _ -> emptyCalls++; a } == null)
+    check(collectionResultOptionalFold(emptyList(), 1, 11L, onError = fail) { a, _ -> emptyCalls++; a } == 11L)
+    check(emptyCalls == 0)
+    check(collectionResultOptional(emptyList(), 0, onError = fail) == null)
+    check(collectionResultOptional(emptyList(), 1, onError = fail)?.isEmpty() == true)
     for (mode in 0..2) {
         val inputs = listOf(collectionResourceNew(101), collectionResourceNew(102))
         val result = collectionResultOptionalFold(inputs, mode, 0L, onError = ResultFailureHandler { code -> check(inputs.all { it.isClosed }); -code }) { a, resource ->

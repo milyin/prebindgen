@@ -79,6 +79,7 @@ pub enum SequenceDelivery {
     #[default]
     Value,
     /// Deliver each element through the function's sequence callback.
+    /// Bulk packing inside an element stays inside this delivery boundary.
     Callback,
 }
 
@@ -2136,6 +2137,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mode,
                 delivery,
             } => {
+                if self.bulk.get() && *delivery == SequenceDelivery::Callback {
+                    return Err("bulk cannot enclose callback delivery; apply bulk to the callback element expansion instead".into());
+                }
                 if *delivery == SequenceDelivery::Auto
                     && !self.bulk.get()
                     && !self.ordinary_collections.get()
@@ -2150,7 +2154,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         wire_name,
                     );
                 }
-                if !self.bulk.get() {
+                if !self.bulk.get() && *delivery != SequenceDelivery::Callback {
                     if let Output::Bulk(inner) = element.as_ref() {
                         return self.output_named(
                             ty,

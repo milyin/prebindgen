@@ -305,7 +305,8 @@ fn main() {
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
                 .output(ordinary_rows(Output::Optional(Box::new(ordinary_rows(row()))))))
             .fun(fun!(jni_output_mixed))
-            .fun(fun!(jni_output_mixed_frames).callback_return_only())
+            .fun(fun!(jni_output_mixed_frames).callback_return_only()
+                .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
             .fun(fun!(jni_output_fold_drop).callback_return_only())
             .fun(fun!(c_output_rows).name("jniOutputRows")
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
@@ -457,9 +458,9 @@ fn main() {
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
             ])))
             .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
-            .fun(fun!(output_cleanup_rows_bulk).expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
             .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
-            .fun(fun!(output_cleanup_nested_bulk).expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
             .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) })))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
@@ -520,16 +521,16 @@ fn main() {
             .fun(fun!(collection_optional_items).callback_return())
             .fun(fun!(collection_enum).callback_return())
             .fun(fun!(collection_probe))
-            .fun(fun!(collection_borrow).callback_return())
+            .fun(fun!(collection_borrow).callback_return().expand_return(expand_return!(i64).field_self_ref().bulk()))
             .fun(fun!(collection_slice).callback_return())
             .fun(fun!(collection_resource_new))
             .fun(fun!(collection_handles).callback_return())
             .fun(fun!(collection_alias))
             .fun(fun!(collection_result).callback_return())
             .fun(fun!(collection_fail))
-            .fun(fun!(collection_result_optional).callback_return())
+            .fun(fun!(collection_result_optional).callback_return().expand_return(expand_return!(OwnedResource).field_self_into().bulk()))
             .fun(fun!(sequence_late_drop).callback_return_only().expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))))
-            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into))))
+            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)).bulk()))
             .fun(fun!(sequence_parts).callback_return_only().expand_return(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
 
             .fun(fun!(storage_put_slice).expand_param("payloads",expand_param!(Payload).variant_self()))
@@ -1719,36 +1720,7 @@ fn main() {
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let mut prepared = binding.prepare().expect("prepare supported declarations");
-    // A prepared mixed tree keeps each callback row as a bulk frame instead of
-    // lifting the bulk modifier to the whole per-element callback delivery.
-    let callback_recipe = prebindgen_declarations::Output::Sequence {
-        delivery: prebindgen_declarations::SequenceDelivery::Callback,
-        mode: None,
-        element: Box::new(prebindgen_declarations::Output::Combine(vec![
-            prebindgen_declarations::Output::Bulk(Box::new(
-                prebindgen_declarations::Output::Sequence {
-                    delivery: prebindgen_declarations::SequenceDelivery::Value,
-                    mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-                    element: Box::new(prebindgen_declarations::Output::Leaf),
-                },
-            )),
-        ])),
-    };
-    let conversion = prebindgen_declarations::compile_output(
-        &prepared,
-        &prebindgen_jni::JniCodec,
-        "jni_output_mixed_frames_fold",
-        &callback_recipe,
-        &(),
-    )
-    .expect("mixed callback output");
-    prepared
-        .function_mut("jni_output_mixed_frames_fold")
-        .unwrap()
-        .ret
-        .slot = Some(conversion);
-    let mut jni = prebindgen_jni::generate(&prepared).expect("generate supported declarations");
+    let mut jni = binding.build().expect("build supported declarations");
     // Test-only constructor fault injection: handwritten OutputCleanupRow has
     // the exact generated fields plus an init hook that can throw or take a
     // handle. All Rust/JNI and collection-decoder code remains generated.

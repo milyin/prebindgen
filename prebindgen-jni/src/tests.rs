@@ -2320,7 +2320,7 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
         .package(
             package!().fun(
                 fun!(call)
-                    .expand_return(expand_return!(i64).field_self().bulk())
+                    .expand_return(expand_return!(Vec<i64>).field_self().bulk())
                     .callback_return(),
             ),
         )
@@ -2328,7 +2328,8 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
         .err()
         .unwrap();
     assert!(
-        delivery.contains("bulk") || delivery.contains("callback"),
+        delivery.contains("bulk cannot enclose callback delivery")
+            && delivery.contains("callback element"),
         "{delivery}"
     );
 }
@@ -2787,39 +2788,20 @@ fn fixed_handle_callback_rows_use_lexical_cleanup_without_a_journal() {
 #[test]
 fn nested_callback_rows_reuse_one_owner_journal() {
     for bulk in [false, true] {
-        let declaration = fun!(values).callback_return_only();
-        let mut generated = JniGen::builder()
+        let mut declaration = fun!(values).callback_return_only();
+        if bulk {
+            declaration = declaration
+                .expand_return(expand_return!(Vec<Option<Owner>>).field_self_into().bulk());
+        }
+        let generated = JniGen::builder()
             .flat(flat(
                 "pub type Owner=String;pub fn values()->Option<Vec<Option<Vec<Option<Owner>>>>>{}",
             ))
             .set_package_prefix("test")
             .set_bulk_collection_outputs(false)
             .package(package!().class(ptr_class!(Owner)).fun(declaration))
-            .prepare()
+            .build()
             .unwrap();
-        if bulk {
-            use prebindgen_declarations::{Output, SequenceDelivery};
-            let inner = Output::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-                element: Box::new(Output::Optional(Box::new(Output::Leaf))),
-            };
-            let recipe = Output::Optional(Box::new(Output::Sequence {
-                delivery: SequenceDelivery::Callback,
-                mode: None,
-                element: Box::new(Output::Optional(Box::new(Output::Bulk(Box::new(inner))))),
-            }));
-            let conversion = prebindgen_declarations::compile_output(
-                &generated,
-                &JniCodec,
-                "values_fold",
-                &recipe,
-                &(),
-            )
-            .unwrap();
-            generated.function_mut("values_fold").unwrap().ret.slot = Some(conversion);
-        }
-        let generated = generate(&generated).unwrap();
         let text = &generated.kotlin["test/Functions.kt"];
         assert_eq!(
             text.matches("= test.CollectionOwners()").count(),
@@ -3003,4 +2985,224 @@ fn input_collections_and_callback_results_do_not_emit_output_cleanup_helpers() {
         .package(package!().class(ptr_class!(Owner)).fun(fun!(consume)).fun(fun!(run)))
         .build().unwrap();
     assert!(!generated.rust.contains("__pb_cleanup_"));
+}
+
+// A callback element is one boundary argument even when it expands into many
+// Kotlin values or contains its own dynamic collection.
+fn callback_element_is_bulk(model: &Bindings, function: &str) -> bool {
+    let output = model
+        .function(function)
+        .unwrap()
+        .output_conversion()
+        .unwrap();
+    let (_, element, delivery) =
+        sequence::return_sequence(&output.output_outcomes().success).unwrap();
+    assert!(matches!(delivery, JniSequence::Callback));
+    let fields = group::callback_parameters(element).collect::<Vec<_>>();
+    matches!(fields.as_slice(), [wire] if matches!(wire.kind, JniWire::BulkBuffer { .. }))
+}
+
+#[test]
+fn bulk_row_expansions_compose_with_additional_and_only_callback_delivery() {
+    for only in [false, true] {
+        for global in [false, true] {
+            let mut builder = JniGen::builder()
+                .flat(flat(
+                    "pub struct Row {pub n:i64,pub text:String}pub fn rows()->Vec<Row>{}",
+                ))
+                .set_package_prefix("test")
+                .set_bulk_collection_outputs(false);
+            let expansion = expand_return!(Row).field_self_into().bulk();
+            let mut function = if only {
+                fun!(rows).callback_return_only()
+            } else {
+                fun!(rows).callback_return()
+            };
+            if global {
+                builder = builder.expand(expansion);
+            } else {
+                function = function.expand_return(expansion);
+            }
+            let model = builder
+                .package(package!().class(data_class!(Row)).fun(function))
+                .prepare()
+                .unwrap();
+            assert!(callback_element_is_bulk(&model, "rows_fold"));
+            if !only {
+                assert!(bulk_result(&model, "rows"));
+            }
+            let generated = generate(&model).unwrap();
+            assert!(generated.kotlin["test/Functions.kt"].contains("fold: (A, test.Row) -> A"));
+            assert!(generated.kotlin["test/JNINative.kt"].contains("fun run(v0: ByteArray?)"));
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
+}
+
+#[test]
+fn bulk_callback_batches_and_optional_elements_keep_their_scopes() {
+    for (source, expansion, signature) in [
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->Vec<Vec<Row>>{}",
+            expand_return!(Vec<Row>).field_self_into().bulk(),
+            "fold: (A, kotlin.collections.List<test.Row>) -> A",
+        ),
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->Option<Vec<Option<Vec<Row>>>>{}",
+            expand_return!(Vec<Row>).field_self_into().bulk(),
+            "fold: (A, kotlin.collections.List<test.Row>?) -> A",
+        ),
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->&'static [Row]{}",
+            expand_return!(Row).field_self_ref().bulk(),
+            "fold: (A, test.Row) -> A",
+        ),
+    ] {
+        let model = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!().class(data_class!(Row)).fun(
+                    fun!(batches)
+                        .expand_return(expansion)
+                        .callback_return_only(),
+                ),
+            )
+            .prepare()
+            .unwrap();
+        assert!(callback_element_is_bulk(&model, "batches_fold"));
+        let generated = generate(&model).unwrap();
+        assert!(
+            generated.kotlin["test/Functions.kt"].contains(signature),
+            "{}",
+            generated.kotlin["test/Functions.kt"]
+        );
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn local_callback_output_overrides_replace_bulk_defaults_and_order_is_irrelevant() {
+    let source = "pub struct Row {pub n:i64}pub fn packed()->Vec<Row>{}pub fn plain()->Vec<Row>{}";
+    let build = |reverse| {
+        let local = expand_return!(Row).field_self_into();
+        let plain = if reverse {
+            fun!(plain).expand_return(local).callback_return_only()
+        } else {
+            fun!(plain).callback_return_only().expand_return(local)
+        };
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .expand(expand_return!(Row).field_self_into().bulk())
+            .package(
+                package!()
+                    .class(data_class!(Row))
+                    .fun(fun!(packed).callback_return())
+                    .fun(plain),
+            )
+            .prepare()
+            .unwrap()
+    };
+    let first = build(false);
+    assert!(bulk_result(&first, "packed"));
+    assert!(callback_element_is_bulk(&first, "packed_fold"));
+    assert!(!callback_element_is_bulk(&first, "plain_fold"));
+    let first = generate(&first).unwrap();
+    let second = generate(&build(true)).unwrap();
+    assert_eq!(first.rust, second.rust);
+    assert_eq!(first.kotlin, second.kotlin);
+}
+
+#[test]
+fn bulk_callback_elements_work_through_getters_and_consuming_field_expansions() {
+    let model=JniGen::builder()
+        .flat(flat("pub struct Row {pub n:i64,pub text:String}pub struct Batch {pub unused:i64}pub fn rows()->Vec<Row>{}pub fn batch()->Batch{}pub fn items(b:&Batch)->Vec<Row>{}pub fn parts(row:Row)->Row{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Row).field_self_into().bulk())
+        .package(package!().class(data_class!(Row))
+            .fun(fun!(batch).expand_return(expand_return!(Batch).field(fun!(items))).callback_return())
+            .fun(fun!(rows).callback_return_only().expand_return(expand_return!(Row).fields_into(prebindgen_declarations::fields!(parts)).bulk())))
+        .prepare().unwrap();
+    assert!(bulk_result(&model, "batch"));
+    assert!(callback_element_is_bulk(&model, "batch_fold"));
+    assert!(callback_element_is_bulk(&model, "rows_fold"));
+    let generated = generate(&model).unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("fold: (A, Long, String) -> A"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn whole_collection_bulk_defaults_cannot_enclose_callback_delivery() {
+    let error = JniGen::builder()
+        .flat(flat("pub struct Row {pub n:i64}pub fn rows()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Vec<Row>).field_self_into().bulk())
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .fun(fun!(rows).callback_return_only()),
+        )
+        .build()
+        .err()
+        .unwrap();
+    assert!(
+        error.contains("bulk cannot enclose callback delivery"),
+        "{error}"
+    );
+}
+
+#[test]
+fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() {
+    use prebindgen_declarations::{Output, SequenceDelivery};
+    let mut model = JniGen::builder()
+        .flat(flat(
+            "pub type Owner=String;pub fn rows()->Vec<Option<Vec<Owner>>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(rows).callback_return_only()),
+        )
+        .prepare()
+        .unwrap();
+    // Preserve support for direct request-free trees as well as the public
+    // declaration spelling, which normalizes this to Bulk(Optional(...)).
+    let recipe = Output::Sequence {
+        delivery: SequenceDelivery::Callback,
+        mode: None,
+        element: Box::new(Output::Optional(Box::new(
+            Output::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+                element: Box::new(Output::Leaf),
+            }
+            .bulk(),
+        ))),
+    };
+    let conversion =
+        prebindgen_declarations::compile_output(&model, &JniCodec, "rows_fold", &recipe, &())
+            .unwrap();
+    let (_, element, _) = sequence::return_sequence(&conversion.output_outcomes().success).unwrap();
+    let fields = group::callback_parameters(element).collect::<Vec<_>>();
+    // The optional uses a null frame, so presence stays outside its payload
+    // without adding a separate discriminator argument.
+    assert!(
+        matches!(element, prebindgen_flat::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_flat::WireNode::Chain {meta:JniChain::Bulk(_),..}))
+    );
+    assert_eq!(fields.len(), 1);
+    assert_eq!(
+        fields
+            .iter()
+            .filter(|w| matches!(w.kind, JniWire::BulkBuffer { .. }))
+            .count(),
+        1
+    );
+    model.function_mut("rows_fold").unwrap().ret.slot = Some(conversion);
+    let generated = generate(&model).unwrap();
+    assert!(generated.kotlin["test/Functions.kt"]
+        .contains("fold: (A, kotlin.collections.List<test.Owner>?) -> A"));
+    syn::parse_file(&generated.rust).unwrap();
 }
