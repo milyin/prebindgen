@@ -1293,21 +1293,21 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
 }
 
 public fun <A> `outputCleanupRowsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.cleanup.OutputCleanupRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { v0, v1, v2 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2)); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { v0, v1, v2 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4(v0, v1, v2)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
-for (index in start until __pb_rows.size) {
+for (__pb_rowIndex in start until __pb_rows.size) {
 try {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
         var foldElementg1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementg2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (__pb_fold_row[1] != 0L) {
-            try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            if (__pb_fold_row.c1 != 0L) {
+            try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row.c1) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
             }
-            if (__pb_fold_row[2] != 0L) {
-            try { val owner = foldElementg2_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            if (__pb_fold_row.c2 != 0L) {
+            try { val owner = foldElementg2_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row.c2) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
             }
 
 } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
@@ -1324,28 +1324,28 @@ var __pb_processed = 0
         try {
 if (nativeResult != null) {
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
         var foldElementg1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementg2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
 try {
-            if (__pb_fold_row[1] != 0L) {
-            foldElementg1_g0_0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[1] as Long)
+            if (__pb_fold_row.c1 != 0L) {
+            foldElementg1_g0_0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row.c1)
             }
-            if (__pb_fold_row[2] != 0L) {
-            foldElementg2_g0_0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[2] as Long)
+            if (__pb_fold_row.c2 != 0L) {
+            foldElementg2_g0_0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row.c2)
             }
 
-current = fold(current, io.prebindgen.covertest.cleanup.OutputCleanupRow(__pb_fold_row[0] as Long, if (__pb_fold_row[1] != 0L) requireNotNull(foldElementg1_g0_0) else null, if (__pb_fold_row[2] != 0L) requireNotNull(foldElementg2_g0_0) else null))
+current = fold(current, io.prebindgen.covertest.cleanup.OutputCleanupRow(__pb_fold_row.c0, if (__pb_fold_row.c1 != 0L) requireNotNull(foldElementg1_g0_0) else null, if (__pb_fold_row.c2 != 0L) requireNotNull(foldElementg2_g0_0) else null))
 } catch (failure: Throwable) {
 __pb_processed++
 try {
-            if (__pb_fold_row[1] != 0L) {
-            try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            if (__pb_fold_row.c1 != 0L) {
+            try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row.c1) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
             }
-            if (__pb_fold_row[2] != 0L) {
-            try { val owner = foldElementg2_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            if (__pb_fold_row.c2 != 0L) {
+            try { val owner = foldElementg2_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row.c2) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
             }
 
 } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
@@ -1364,18 +1364,18 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupRowsBulkFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.cleanup.OutputCleanupRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
-for (index in start until __pb_rows.size) {
+for (__pb_rowIndex in start until __pb_rows.size) {
 try {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElementg1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementg2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
  }
             if ((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) != 0L) {
             try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
@@ -1398,14 +1398,14 @@ var __pb_processed = 0
         try {
 if (nativeResult != null) {
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElementg1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementg2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
 try {
-foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
             if ((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) != 0L) {
             foldElementg1_g0_0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) as Long)
             }
@@ -1417,7 +1417,7 @@ current = fold(current, io.prebindgen.covertest.cleanup.OutputCleanupRow((requir
 } catch (failure: Throwable) {
 __pb_processed++
 try {
-if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
  }
             if ((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) != 0L) {
             try { val owner = foldElementg1_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.offsets[1])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
@@ -1442,23 +1442,23 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupNestedFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.cleanup.OutputCleanupRow>?) -> A): A = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_fold_697431074ae8d31b { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_fold_697431074ae8d31b { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
-for (index in start until __pb_rows.size) {
+for (__pb_rowIndex in start until __pb_rows.size) {
 try {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementowners: io.prebindgen.covertest.CollectionOwners? = null
 var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (__pb_fold_row[0] != null) {
+            if (__pb_fold_row.c0 != null) {
 foldElementowners?.close(failure)
 if (foldElementowners?.complete != true) {
 try {
-for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
@@ -1491,17 +1491,17 @@ var __pb_processed = 0
 var __pb_foldOwners: io.prebindgen.covertest.CollectionOwners? = null
         try {
 if (nativeResult != null) {
-if (__pb_rows.isNotEmpty()) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
+if (__pb_rows.size != 0) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
 try {
-            if (__pb_fold_row[0] != null) {
-foldElementlist = kotlin.collections.ArrayList((__pb_fold_row[0] as kotlin.Array<*>).size)
-for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
-val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+            if (__pb_fold_row.c0 != null) {
+foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
@@ -1517,17 +1517,17 @@ foldElementlist.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(foldElement
             }
 
 __pb_foldOwners!!.complete = true
-current = fold(current, if (__pb_fold_row[0] != null) requireNotNull(foldElementlist) else null)
+current = fold(current, if (__pb_fold_row.c0 != null) requireNotNull(foldElementlist) else null)
 } catch (failure: Throwable) {
 __pb_processed++
 try {
 __pb_foldOwners?.close(failure)
 if (__pb_foldOwners?.complete != true) {
-            if (__pb_fold_row[0] != null) {
+            if (__pb_fold_row.c0 != null) {
 try {
-for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
@@ -1562,19 +1562,19 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupNestedBulkFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.cleanup.OutputCleanupRow>?) -> A): A = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
-for (index in start until __pb_rows.size) {
+for (__pb_rowIndex in start until __pb_rows.size) {
 try {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 var foldElementowners: io.prebindgen.covertest.CollectionOwners? = null
 var foldElementbulkRange: io.prebindgen.covertest.BulkRange? = null
 var foldElementbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
  }
             if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rcd29b859e7eb9df2.offsets[0])) == 1) {
 foldElementowners?.close(failure)
@@ -1613,16 +1613,16 @@ var __pb_processed = 0
 var __pb_foldOwners: io.prebindgen.covertest.CollectionOwners? = null
         try {
 if (nativeResult != null) {
-if (__pb_rows.isNotEmpty()) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
+if (__pb_rows.size != 0) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 var foldElementbulkRange: io.prebindgen.covertest.BulkRange? = null
 var foldElementbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
 try {
-foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
             if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rcd29b859e7eb9df2.offsets[0])) == 1) {
 foldElementbulkRange = requireNotNull(foldElementbulkReader).rows(((requireNotNull(foldElementbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rcd29b859e7eb9df2.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.size)
 foldElementbulkList = kotlin.collections.ArrayList(foldElementbulkRange!!.length)
@@ -1649,7 +1649,7 @@ __pb_processed++
 try {
 __pb_foldOwners?.close(failure)
 if (__pb_foldOwners?.complete != true) {
-if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row.c0 as ByteArray)
  }
             if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rcd29b859e7eb9df2.offsets[0])) == 1) {
 try { if (foldElementbulkRange == null) foldElementbulkRange = requireNotNull(foldElementbulkReader).rows(((requireNotNull(foldElementbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rcd29b859e7eb9df2.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r11b10e2543ffa977.size)

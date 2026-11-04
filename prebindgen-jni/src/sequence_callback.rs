@@ -84,6 +84,48 @@ pub(crate) fn transport(
     })
 }
 
+/// Retain only raw wire fields while JNI and handle locks are active. A small
+/// immutable record avoids primitive boxes and generic row arrays without
+/// copying wide rows when the collector grows. Logical projections can share
+/// the same physical JVM record type.
+pub(crate) fn capture(
+    element: &kotlin::JniNode,
+    names: &mut names::Names,
+) -> Result<(String, String)> {
+    let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
+    let signature = fields
+        .iter()
+        .map(|w| w.kind.jvm_descriptor())
+        .collect::<String>();
+    let label = fields
+        .iter()
+        .take(3)
+        .map(|w| w.kind.kotlin_type().trim_end_matches('?'))
+        .collect::<Vec<_>>()
+        .join("_");
+    let label = if fields.is_empty() {
+        "Empty".into()
+    } else {
+        format!("{label}_{}", fields.len())
+    };
+    let kotlin_types = fields
+        .iter()
+        .map(|w| w.kind.kotlin_type())
+        .collect::<Vec<_>>()
+        .join(",");
+    let name = names.name("SequenceRow", &label, &[&signature, &kotlin_types])?;
+    let fields = fields
+        .iter()
+        .enumerate()
+        .map(|(i, w)| format!("@JvmField val c{i}: {}", w.kind.kotlin_type()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok((
+        name.clone(),
+        format!("    internal class {name}({fields})\n"),
+    ))
+}
+
 pub(crate) struct Fold {
     pub output: KotlinOutput,
     pub parameter: String,
@@ -139,11 +181,18 @@ pub(crate) fn fold(
             _ => false,
         }
     }
-    let unread = kotlin::output_kotlin(element, &ctx)?;
+    let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
+    let fields_read = (0..fields.len())
+        .map(|i| format!("__pb_fold_row.c{i}"))
+        .collect::<Vec<_>>();
+    let mut unread = kotlin::output_kotlin(element, &ctx)?;
+    returns::remap(&mut unread, row, &fields, 0, &fields_read);
     let shared = nested_owners(element);
     let owners = "__pb_foldOwners";
     let child = if shared {
-        kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?
+        let mut child = kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?;
+        returns::remap(&mut child, row, &fields, 0, &fields_read);
+        child
     } else {
         unread.clone()
     };
@@ -166,7 +215,7 @@ pub(crate) fn fold(
                 context.package
             ));
             initialize = format!(
-                "if ({raw}.isNotEmpty()) {owners} = {}.CollectionOwners()\n",
+                "if ({raw}.size != 0) {owners} = {}.CollectionOwners()\n",
                 context.package
             );
             row = format!(
@@ -188,7 +237,7 @@ pub(crate) fn fold(
         // Account for the current row before cleanup, so a secondary cleanup
         // failure cannot make the outer failure scan destroy it a second time.
         row = format!("try {{\n{row}}} catch ({failure}: Throwable) {{\n__pb_processed++\ntry {{\n{release}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\nthrow {failure}\n}}\n__pb_processed++\n{delivered}");
-        discard = format!("fun __pb_discard({failure}: Throwable, start: Int = 0) {{\nfor (index in start until {raw}.size) {{\ntry {{\nval __pb_fold_row = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\n}}\n}}\n", unread.output_locals, unread.cleanup);
+        discard = format!("fun __pb_discard({failure}: Throwable, start: Int = 0) {{\nfor (__pb_rowIndex in start until {raw}.size) {{\ntry {{\nval __pb_fold_row = {raw}[__pb_rowIndex]\n{}\n{}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\n}}\n}}\n", unread.output_locals, unread.cleanup);
         cleanup = format!("if ({present}) __pb_discard({failure}, __pb_processed)\n");
     }
     Ok(Fold {
@@ -199,7 +248,7 @@ pub(crate) fn fold(
             delivered: vec![if optional { "__pb_accumulator".into() } else { "__pb_accumulator as A".into() }],
             result_types: vec![if optional { "A?".into() } else { "A".into() }],
             output_locals: locals,
-            materialize: format!("if ({present}) {{\n{initialize}var current = initial\nfor (rawRow in {raw}) {{\nval __pb_fold_row = rawRow as kotlin.Array<*>\n{}\n{row}}}\n__pb_accumulator = current\n}}\n", child.output_locals),
+            materialize: format!("if ({present}) {{\n{initialize}var current = initial\nfor (__pb_rowIndex in 0 until {raw}.size) {{\nval __pb_fold_row = {raw}[__pb_rowIndex]\n{}\n{row}}}\n__pb_accumulator = current\n}}\n", child.output_locals),
             cleanup,
         },
     })

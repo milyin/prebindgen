@@ -153,7 +153,22 @@ pub(crate) fn remap(
         for (i, (wire, value)) in fields.iter().zip(values).enumerate().rev() {
             let old = format!("{result}[{}]", offset + i);
             if !wire.kind.is_reference() {
-                *text = text.replace(&format!("{old} as {}", wire.kind.kotlin_type()), value);
+                let cast = format!("{old} as {}", wire.kind.kotlin_type());
+                let mut remapped = String::new();
+                for (part, suffix) in text.split(&cast).enumerate() {
+                    if part != 0 {
+                        // Do not match a nullable, qualified or longer type's
+                        // prefix: those casts may carry distinct semantics.
+                        let continues_type = suffix
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                            || matches!(suffix.trim_start().chars().next(), Some('?' | '.' | '<'));
+                        remapped.push_str(if continues_type { &cast } else { value });
+                    }
+                    remapped.push_str(suffix);
+                }
+                *text = remapped;
             }
             *text = text.replace(&old, value);
         }

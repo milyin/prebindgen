@@ -3271,3 +3271,86 @@ fn callback_rows_keep_local_frames_for_every_reference_encoding() {
     assert!(generated.rust.contains("let ret_w0_callback_frame"));
     assert!(generated.rust.contains("drop(ret_w0_callback_frame)"));
 }
+
+#[test]
+fn callback_capture_rows_share_jvm_shapes_without_boxing() {
+    let generated=JniGen::builder().flat(flat("pub type Owner=String;pub fn signed()->Vec<i64>{}pub fn unsigned()->Vec<u64>{}pub fn owners()->Vec<Owner>{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(signed).callback_return_only()).fun(fun!(unsigned).callback_return_only()).fun(fun!(owners).callback_return_only()))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
+    assert!(native.contains("(@JvmField val c0: Long)"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains("(__pb_fold_row.c0).toULong()"), "{text}");
+    assert!(text.contains("drop_Owner_") && text.contains("__pb_fold_row.c0"));
+    assert!(!text.contains("__pb_rows.add(kotlin.arrayOf"));
+    assert!(!text.contains("__pb_fold_row["));
+    assert!(!text.contains("rawRow"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn callback_capture_rows_use_all_jvm_carriers_and_keep_nested_cleanup() {
+    let generated=JniGen::builder().flat(flat("pub type Owner=String;pub struct Row {pub b:bool,pub byte:i8,pub short:i16,pub number:i32,pub long:i64,pub float:f32,pub double:f64,pub text:Option<String>,pub bytes:Vec<u8>,pub wide:i128,pub owner:Option<Owner>}pub fn rows()->Option<Vec<Row>>{} pub fn bulk()->Vec<Row>{}pub fn nested()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test").set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(rows).callback_return_only()).fun(fun!(nested).callback_return_only()).fun(fun!(bulk).callback_return_only().expand_return(expand_return!(Row).field_self_into().bulk())))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    let records = native
+        .lines()
+        .filter(|line| line.contains("internal class SequenceRow_"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for ty in [
+        "Boolean",
+        "Byte",
+        "Short",
+        "Int",
+        "Long",
+        "Float",
+        "Double",
+        "String?",
+        "ByteArray?",
+        "Array<Any?>?",
+    ] {
+        assert!(records.contains(&format!(": {ty}")), "{ty}: {records}");
+    }
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 3);
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("__pb_fold_row["));
+    assert!(text.contains("__pb_discard(failure, __pb_processed)"));
+    assert!(text.contains("for (__pb_rowIndex in 0 until __pb_rows.size)"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn typed_output_remapping_preserves_nullable_and_longer_cast_types() {
+    let wire = prebindgen_flat::Wire {
+        name: syn::parse_quote!(value),
+        kind: JniWire::scalar(Primitive::I64),
+    };
+    let mut output = KotlinOutput {
+        delivered: vec![
+            "row[0] as Long".into(),
+            "row[0] as Long?".into(),
+            "row[0] as Long ?".into(),
+            "row[0] as LongExtra".into(),
+            "(row[0] as Long).toULong()".into(),
+            "row[0] as Long\nval other = 0".into(),
+        ],
+        ..Default::default()
+    };
+    returns::remap(&mut output, "row", &[&wire], 0, &["column[index]".into()]);
+    assert_eq!(
+        output.delivered,
+        [
+            "column[index]",
+            "column[index] as Long?",
+            "column[index] as Long ?",
+            "column[index] as LongExtra",
+            "(column[index]).toULong()",
+            "column[index]\nval other = 0"
+        ]
+    );
+}
