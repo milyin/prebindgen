@@ -14,5 +14,7 @@
     "prebindgen-runtime": "c4607ec5ca27a0606b34d22a97eaf6ad72191198",
     "prebindgen-proc-macro": "09c291a5825d29e84fdf55a8745e2059be32ce9e"
   },
-  "driver_source_sha256": "14e192bf5dd1ca576e0cfa33fb675371b5eb56e63859f8c8fb779f6e37f7d82a"
+  "driver_source_sha256": "14e192bf5dd1ca576e0cfa33fb675371b5eb56e63859f8c8fb779f6e37f7d82a",
+  "final_implementation_commit": "2c8c1e8098ce36c5adc605d80e7b73473328fa6f",
+  "driver_jar_sha256": "9dda45e208f54446407f15c0d15fcc3cd1ac1bbab8addbfa8069b6172ea62932"
 }

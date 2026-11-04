@@ -612,8 +612,8 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w
 public fun <A> `ownedHandlesEchoFold`(p0_w1: kotlin.collections.List<bench.plain.InputHandle?>, initial: A, onError: bench.plain.JniErrorHandler<A> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, bench.plain.InputHandle) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w5 }) }, intArrayOf(2)) } else null } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = bench.plain.JNINative.SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626 { v0 -> __pb_rows.add(bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = bench.plain.JNINative.SequenceCollector_owned_handles_echo_fold_8c0e0fda84512cef()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -673,8 +673,8 @@ public fun <A> `nestedOwnedHandlesEchoFold`(p0_w1: kotlin.collections.List<kotli
 val p0_w5_elements = if (true) p0_w5?.toList()?.let { p0_w5_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(p0_w5_snapshot.size) { p0_w5_index -> val p0_w9 = p0_w5_snapshot[p0_w5_index]
 kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w9 }) }, intArrayOf(2)) } else null
 kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w5_elements }) }, null) } else null } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
-val __pb_sink = bench.plain.JNINative.SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a { v0 -> __pb_rows.add(bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
+val __pb_sink = bench.plain.JNINative.SequenceCollector_nested_owned_handles_echo_fold_9847d4ca29b981db()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -772,8 +772,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `rowsForReduceFold`(p0_w1: Long, p1_w1: Long, initial: A, onError: bench.plain.JniErrorHandler<A> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, bench.plain.Row) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<bench.plain.JNINative.SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a>()
-val __pb_sink = bench.plain.JNINative.SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b { v0, v1, v2, v3, v4, v5, v6, v7 -> __pb_rows.add(bench.plain.JNINative.SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a(v0, v1, v2, v3, v4, v5, v6, v7)); kotlin.Unit }
+    val __pb_sink = bench.plain.JNINative.SequenceCollector_rows_for_reduce_fold_bac33805078e0166()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {

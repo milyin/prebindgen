@@ -6032,6 +6032,39 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_16fdab6ebdae
         }
     }
 }
+static __PB_SEQUENCE_CAPACITY: ::std::sync::OnceLock<
+    (
+        ::prebindgen_jni_runtime::jni::objects::GlobalRef,
+        ::prebindgen_jni_runtime::jni::objects::JMethodID,
+    ),
+> = ::std::sync::OnceLock::new();
+#[no_mangle]
+pub extern "system" fn Java_bench_plain_JNINative_init_1SequenceCapacity_1e067e94ae7b50e2a(
+    mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+    capacity: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if __PB_SEQUENCE_CAPACITY.get().is_none() {
+            let reserve = env
+                .get_method_id(&capacity, "reserve", "(I)V")
+                .map_err(|e| e.to_string())?;
+            let class = env.new_global_ref(&capacity).map_err(|e| e.to_string())?;
+            let _ = __PB_SEQUENCE_CAPACITY.set((class, reserve));
+        }
+        let (class, _) = __PB_SEQUENCE_CAPACITY
+            .get()
+            .expect("capacity method initialized");
+        if !env.is_same_object(class.as_obj(), &capacity).map_err(|e| e.to_string())? {
+            return Err(
+                "collection capacity interface registered with a different class".into(),
+            );
+        }
+        Ok(())
+    }) {
+        ::prebindgen_jni_runtime::fail(&mut env, &error);
+    }
+}
 #[allow(
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
@@ -6189,6 +6222,31 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
+                    .map_err(|_| "collection exceeds JVM capacity".to_string())?;
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            *reserve,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    i: capacity,
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+            }
             jni_environment
                 .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
@@ -6507,6 +6565,31 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
                 .map_err(|e| e.to_string())?;
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
+                    .map_err(|_| "collection exceeds JVM capacity".to_string())?;
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            *reserve,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    i: capacity,
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+            }
             jni_environment
                 .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
@@ -6745,6 +6828,31 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(JJJJJJJJ)V")
                 .map_err(|e| e.to_string())?;
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
+                    .map_err(|_| "collection exceeds JVM capacity".to_string())?;
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
+                unsafe {
+                    jni_environment
+                        .call_method_unchecked(
+                            &__pb_callback,
+                            *reserve,
+                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    i: capacity,
+                                },
+                            ],
+                        )
+                }
+                    .map_err(|e| e.to_string())?;
+            }
             jni_environment
                 .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
