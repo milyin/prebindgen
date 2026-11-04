@@ -20,23 +20,33 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
+    let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element))
+        .all(|wire| matches!(wire.kind, CWire::Scalar { .. } | CWire::Pointer { .. }));
+    let slice = format_ident!("{wire}_rows");
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        bind.extend(
-            quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};),
-        );
+        bind.extend(if reread_rows {
+            quote!(let #name=#slice[#index].#member;)
+        } else {
+            quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};)
+        });
         values.push((field.name.clone(), quote!(#name)));
     }
+    // Only these leaves validate into Copy scalars and raw pointers. Buffer,
+    // enum, inline-owner, callback and nested-row conversions keep their prepared
+    // state: validation can decode owned values or execute nested construction.
+    let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {
+        reread_rows,
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
             kind: CWire::Rows,
         }],
         metadata: CChain::Sequence(CSequence::Buffered),
-        open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
+        open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?; #borrow),
         bind,
         validation_values: values.clone(),
         prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
@@ -199,6 +209,9 @@ pub(crate) fn emit_schemas(
         header.push_str(&format!(
             "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
         ));
+        if !is_output {
+            header.push_str("/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */\n");
+        }
         if is_output {
             header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));
             tokens.extend(quote! {

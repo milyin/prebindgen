@@ -601,8 +601,9 @@ pub struct owner_inline_boxed_numbers_len_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -667,8 +668,9 @@ pub struct owner_inline_boxed_numbers_new_result {
     pub v0: *mut Vec<i32>,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -707,8 +709,9 @@ pub struct owner_inline_boxed_numbers_take_result {
     pub v0: i32,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -781,8 +784,9 @@ pub struct owner_inline_bytes_result {
     pub v0: __PbOwned_bytes,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -818,8 +822,9 @@ pub struct owner_inline_bytes_alias_result {
     pub v0: usize,
 }
 /**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -967,8 +972,9 @@ pub struct owner_inline_bytes_callback_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1101,8 +1107,9 @@ pub struct owner_inline_bytes_capacity_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1164,8 +1171,9 @@ pub struct owner_inline_bytes_mutable_result {
     pub v1: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1216,8 +1224,9 @@ pub struct owner_inline_bytes_new_result {
     pub v2: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1278,8 +1287,9 @@ pub struct owner_inline_bytes_take_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1354,8 +1364,9 @@ pub struct owner_inline_child_id_result {
     pub v0: u64,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1418,8 +1429,9 @@ pub struct owner_inline_mixed_rows_sum_result {
     pub v0: u64,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1681,8 +1693,9 @@ pub struct owner_inline_numbers_result {
     pub v0: __PbOwned_numbers,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1718,8 +1731,9 @@ pub struct owner_inline_numbers_capacity_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1780,8 +1794,9 @@ pub struct owner_inline_numbers_new_result {
     pub v0: __PbOwned_numbers,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1817,8 +1832,9 @@ pub struct owner_inline_numbers_take_result {
     pub v0: i64,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1899,8 +1915,9 @@ pub struct owner_inline_packet_callback_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2035,8 +2052,9 @@ pub struct owner_inline_packet_drops_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2072,8 +2090,9 @@ pub struct owner_inline_packet_new_result {
     pub v0: __PbOwned_packet,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2110,8 +2129,9 @@ pub struct owner_inline_packet_optional_result {
     pub v1: __PbOwned_packet,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2186,8 +2206,9 @@ pub struct owner_inline_packet_ref_result {
     pub v0: *const perftest_flat::InlineChild,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2248,8 +2269,9 @@ pub struct owner_inline_packet_result_result {
     pub v1: usize,
 }
 /**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2338,8 +2360,9 @@ pub struct owner_inline_packet_take_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2440,8 +2463,9 @@ pub struct owner_inline_packets_rows_result {
     pub v1: usize,
 }
 /**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2587,8 +2611,9 @@ pub struct owner_inline_packets_take_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2711,8 +2736,9 @@ pub struct owner_inline_return_catch_result {
     pub v0: u8,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2878,8 +2904,9 @@ pub struct owner_inline_rows_catch_result {
     pub v0: u8,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3093,8 +3120,9 @@ pub struct owner_inline_text_result {
     pub v0: __PbOwned_text,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3130,8 +3158,9 @@ pub struct owner_inline_text_capacity_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3192,8 +3221,9 @@ pub struct owner_inline_text_new_result {
     pub v0: __PbOwned_text,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3229,8 +3259,9 @@ pub struct owner_inline_text_take_result {
     pub v0: usize,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3306,8 +3337,9 @@ pub struct owner_mutable_bytes_vector_expanded_result {
     pub v1: __PbBufferMut,
 }
 /**# Safety
-Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,

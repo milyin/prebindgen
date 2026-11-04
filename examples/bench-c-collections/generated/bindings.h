@@ -87,7 +87,53 @@ void bench_make_records_ret_w0_rows_free(bench_make_records_ret_w0_rows rows);
 /* Field return[].tag: row.v1. */
 /* Field return[].second: row.v2. */
 bench_make_records_ret_w0_rows bench_make_records(uintptr_t p0_w1);
+bench_resource * bench_resource_new(uint64_t p0_w1);
 uint64_t bench_resource_value(const bench_resource * p0_w1);
+typedef struct {
+    bench_resource * v0;
+} bench_take_handles_p0_w1_row;
+typedef struct { bench_take_handles_p0_w1_row *data; size_t len; } bench_take_handles_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_handles(bench_take_handles_p0_w1_rows p0_w1);
+typedef struct {
+    uint64_t v0;
+} bench_take_numbers_p0_w1_row;
+typedef struct { bench_take_numbers_p0_w1_row *data; size_t len; } bench_take_numbers_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_numbers(bench_take_numbers_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    uint64_t v1;
+    bench_resource * v2;
+} bench_take_records_p0_w1_row;
+typedef struct { bench_take_records_p0_w1_row *data; size_t len; } bench_take_records_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_records(bench_take_records_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    bench_buffer v1;
+} bench_take_text_p0_w1_row;
+typedef struct { bench_take_text_p0_w1_row *data; size_t len; } bench_take_text_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_text(bench_take_text_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    uint64_t v1;
+    uint64_t v2;
+    uint64_t v3;
+    uint64_t v4;
+    uint64_t v5;
+    uint64_t v6;
+    uint64_t v7;
+} bench_take_wide_p0_w1_row;
+typedef struct { bench_take_wide_p0_w1_row *data; size_t len; } bench_take_wide_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 8 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_wide(bench_take_wide_p0_w1_rows p0_w1);
 #ifdef __cplusplus
 }
 #endif

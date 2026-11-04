@@ -22,3 +22,4 @@ jobs:
           KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc
       - run: python3 examples/bench-c-collections/build.py --output /tmp/c-rows-smoke --fetch --count-allocations --check-generated
       - run: python3 examples/bench-c-collections/compare.py --before /tmp/c-rows-smoke --after /tmp/c-rows-smoke --output /tmp/c-rows-check --kind count --smoke --forks 1
+      - run: python3 examples/bench-c-collections/input-compare.py --before /tmp/c-rows-smoke --after /tmp/c-rows-smoke --output /tmp/c-input-check --kind count --smoke --forks 1
