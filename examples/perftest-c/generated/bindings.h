@@ -106,7 +106,7 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void perftest_drop_owned_string(perftest_owned_string *value);
 size_t perftest_owned_string_len(const perftest_owned_string *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 perftest_buffer_view perftest_owned_string_view(const perftest_owned_string *value);
 typedef struct {
 #ifdef __cplusplus
@@ -119,7 +119,7 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void perftest_drop_owned_vec_u8_672e72343c1b4cb4(perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 size_t perftest_owned_vec_u8_672e72343c1b4cb4_len(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 perftest_buffer_view perftest_owned_vec_u8_672e72343c1b4cb4_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */
 perftest_buffer_view_mut perftest_owned_vec_u8_672e72343c1b4cb4_view_mut(perftest_owned_vec_u8_672e72343c1b4cb4 *value);

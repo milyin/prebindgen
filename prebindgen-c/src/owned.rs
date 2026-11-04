@@ -408,8 +408,8 @@ pub(crate) fn emit_accessors(
         if !symbols.insert(view.to_string()) {
             return Err("generated owner view accessor collides with a C symbol".into());
         }
-        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while its returned view is used."] #[no_mangle] pub unsafe extern "C" fn #view(value:*const #carrier)->__PbBuffer {let bytes=#helper((*value).as_rust());__PbBuffer{data:bytes.as_ptr(),len:bytes.len()}}));
-        header.push_str(&format!("/* Borrowed view; never free it. The owner retains the allocation. */\n{prefix}_buffer_view {view}(const {prefix}_{} *value);\n",owner.name));
+        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed."] #[no_mangle] pub unsafe extern "C" fn #view(value:*const #carrier)->__PbBuffer {let bytes=#helper((*value).as_rust());__PbBuffer{data:bytes.as_ptr(),len:bytes.len()}}));
+        header.push_str(&format!("/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */\n{prefix}_buffer_view {view}(const {prefix}_{} *value);\n",owner.name));
         if key == "Vec < u8 >" {
             let view_mut = format_ident!("{prefix}_{}_view_mut", owner.name);
             let helper_mut = owner.helper("view_mut");

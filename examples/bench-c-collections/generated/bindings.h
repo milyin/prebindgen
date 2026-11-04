@@ -23,6 +23,8 @@ _Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differ
 typedef struct bench_resource bench_resource;
 void bench_drop_resource(bench_resource *ptr);
 typedef struct { const uint8_t *data; size_t len; } bench_buffer_view;
+/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */
+typedef struct { uint8_t *data; size_t len; } bench_buffer_view_mut;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 uint64_t bench_control(uintptr_t p0_w1);

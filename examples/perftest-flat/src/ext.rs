@@ -3970,7 +3970,11 @@ pub fn mutable_bytes_mut(value: &mut MutableBytes) -> &mut [u8] {
 }
 #[prebindgen]
 pub fn mutable_bytes_optional(value: &mut MutableBytes, present: bool) -> Option<&mut [u8]> {
-    present.then(|| value.0.as_mut_slice())
+    if present {
+        Some(value.0.as_mut_slice())
+    } else {
+        None
+    }
 }
 #[prebindgen]
 pub fn mutable_bytes_nested(value: &mut MutableBytes, mode: i32) -> Option<Option<&mut [u8]>> {

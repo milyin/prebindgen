@@ -2508,6 +2508,30 @@ mod generation_tests {
     }
 
     #[test]
+    fn unsupported_composite_callback_borrows_remain_generation_errors() {
+        use prebindgen_declarations::fun;
+        // Arrays use the same recursive collection guard. Other shapes have no
+        // declared C representation and must not silently accept borrowed data.
+        for argument in [
+            "[&mut [u8]; 1]",
+            "(&mut [u8],)",
+            "Box<&mut [u8]>",
+            "Result<&mut [u8],i64>",
+        ] {
+            let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
+            let parsed = syn::parse_file(&source).unwrap();
+            let result = Bindings::parse(
+                parsed
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .and_then(|flat| Cbindgen::new(flat).function(fun!(emit)).panic().build());
+            assert!(result.is_err(), "{argument}");
+        }
+    }
+
+    #[test]
     fn mutable_owned_byte_view_requires_a_single_getter_and_vec_storage() {
         use prebindgen_declarations::{expand_return, fun};
         let model = || {

@@ -9,7 +9,9 @@ failures leave success output storage untouched.
 The caller keeps the source alive and preserves exclusive access until the last
 use of the mutable view. Do not access or move the owner, consume or destroy it,
 or use overlapping views during that borrow. End the borrow before another
-function uses the owner. The view is never an owning buffer. Loans from inputs
+function uses the owner. Obtaining a mutable view invalidates earlier views, even
+if no bytes are changed; obtain a fresh read-only view afterward. The view is
+never an owning buffer. Loans from inputs
 reconstructed in temporary Rust storage remain generation errors. These are
 caller contracts and generation checks; no runtime guard was added.
 

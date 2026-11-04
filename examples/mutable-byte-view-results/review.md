@@ -16,8 +16,11 @@ rejection checks:
   rejects mutable references inside options and collections as well as direct
   references. All three forms have generation-error tests.
 
-All 77 C generator tests and two documentation tests pass. The actual C caller
+All C generator tests and two documentation tests pass. The actual C caller
 passed ASan/UBSan checks and the full Kotlin/JNI regression caller passed CheckJNI.
 Allocation and pointer-identity checks are documented in README.md.
 
-A focused follow-up review was requested after these changes.
+The focused follow-up review reported **no blockers**. Its non-blocking suggestions
+were also addressed: array/tuple/Box/Result callback-borrow rejection cases have
+explicit tests, and the read-only accessor documentation now states that obtaining
+a mutable view invalidates earlier views even without a byte write.

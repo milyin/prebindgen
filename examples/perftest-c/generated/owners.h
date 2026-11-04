@@ -48,7 +48,7 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_text(owner_text *value);
 size_t owner_text_len(const owner_text *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 owner_buffer_view owner_text_view(const owner_text *value);
 typedef struct {
 #ifdef __cplusplus
@@ -74,7 +74,7 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_bytes(owner_bytes *value);
 size_t owner_bytes_len(const owner_bytes *value);
-/* Borrowed view; never free it. The owner retains the allocation. */
+/* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 owner_buffer_view owner_bytes_view(const owner_bytes *value);
 /* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */
 owner_buffer_view_mut owner_bytes_view_mut(owner_bytes *value);

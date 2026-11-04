@@ -603,7 +603,7 @@ pub unsafe extern "C" fn perftest_owned_string_len(
     (*value).as_rust().len()
 }
 /**# Safety
-The owner must remain live and unmodified while its returned view is used.*/
+The owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed.*/
 #[no_mangle]
 pub unsafe extern "C" fn perftest_owned_string_view(
     value: *const __PbOwned_owned_string,
@@ -700,7 +700,7 @@ pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_len(
     (*value).as_rust().len()
 }
 /**# Safety
-The owner must remain live and unmodified while its returned view is used.*/
+The owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed.*/
 #[no_mangle]
 pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_view(
     value: *const __PbOwned_owned_vec_u8_672e72343c1b4cb4,

@@ -292,7 +292,7 @@ pub unsafe extern "C" fn owner_text_len(value: *const __PbOwned_text) -> usize {
     (*value).as_rust().len()
 }
 /**# Safety
-The owner must remain live and unmodified while its returned view is used.*/
+The owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed.*/
 #[no_mangle]
 pub unsafe extern "C" fn owner_text_view(value: *const __PbOwned_text) -> __PbBuffer {
     let bytes = __pb_owned_text_view((*value).as_rust());
@@ -466,7 +466,7 @@ pub unsafe extern "C" fn owner_bytes_len(value: *const __PbOwned_bytes) -> usize
     (*value).as_rust().len()
 }
 /**# Safety
-The owner must remain live and unmodified while its returned view is used.*/
+The owner must remain live and unmodified while its returned view is used. Obtaining a mutable view invalidates earlier views, even if no bytes are changed.*/
 #[no_mangle]
 pub unsafe extern "C" fn owner_bytes_view(value: *const __PbOwned_bytes) -> __PbBuffer {
     let bytes = __pb_owned_bytes_view((*value).as_rust());

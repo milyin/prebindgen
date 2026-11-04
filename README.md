@@ -755,7 +755,9 @@ String and vector owners get a generated `*_len` accessor. String and byte-vecto
 owners also get `*_view`, returning a borrowed `{ data, len }` byte view; strings
 contain UTF-8 without an added terminator. Byte-vector owners also get
 `*_view_mut(owner)`, returning an exclusive `buffer_view_mut` into the existing
-allocation. String owners have no mutable byte accessor, preserving their UTF-8
+allocation. Obtaining a mutable view invalidates earlier views, even if no bytes
+are changed; obtain a fresh read-only view after ending the mutable borrow.
+String owners have no mutable byte accessor, preserving their UTF-8
 invariant. A mutable view can accompany a newly returned byte-vector owner:
 
 ```rust,ignore

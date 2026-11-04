@@ -361,9 +361,7 @@ fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
                     assert_eq!(view.data as usize, address);
                     assert_eq!(view.len, size);
                     if size > 0 {
-                        if size > 0 {
-                            *view.data = (i % 256) as u8;
-                        }
+                        *view.data = (i % 256) as u8;
                     }
                 }
             });
