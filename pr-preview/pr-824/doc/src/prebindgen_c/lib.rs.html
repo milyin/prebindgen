@@ -3496,5 +3496,31 @@
 <a href=#3496 id=3496 data-nosnippet>3496</a>            .build()
 <a href=#3497 id=3497 data-nosnippet>3497</a>            .unwrap();
 <a href=#3498 id=3498 data-nosnippet>3498</a>    }
-<a href=#3499 id=3499 data-nosnippet>3499</a>}
+<a href=#3499 id=3499 data-nosnippet>3499</a>    <span class="attr">#[test]
+<a href=#3500 id=3500 data-nosnippet>3500</a>    </span><span class="kw">fn </span>bulk_callback_elements_are_explicitly_unsupported_by_the_c_codec() {
+<a href=#3501 id=3501 data-nosnippet>3501</a>        <span class="kw">use </span>prebindgen_declarations::{expand_return, fun};
+<a href=#3502 id=3502 data-nosnippet>3502</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn rows()-&gt;Vec&lt;i64&gt;{}"</span>).unwrap();
+<a href=#3503 id=3503 data-nosnippet>3503</a>        <span class="kw">let </span>flat = Bindings::parse(
+<a href=#3504 id=3504 data-nosnippet>3504</a>            source
+<a href=#3505 id=3505 data-nosnippet>3505</a>                .items
+<a href=#3506 id=3506 data-nosnippet>3506</a>                .into_iter()
+<a href=#3507 id=3507 data-nosnippet>3507</a>                .map(|item| (item, Default::default())),
+<a href=#3508 id=3508 data-nosnippet>3508</a>        )
+<a href=#3509 id=3509 data-nosnippet>3509</a>        .unwrap();
+<a href=#3510 id=3510 data-nosnippet>3510</a>        <span class="kw">let </span>error = Cbindgen::new(flat)
+<a href=#3511 id=3511 data-nosnippet>3511</a>            .function(
+<a href=#3512 id=3512 data-nosnippet>3512</a>                <span class="macro">fun!</span>(rows)
+<a href=#3513 id=3513 data-nosnippet>3513</a>                    .callback_return_only()
+<a href=#3514 id=3514 data-nosnippet>3514</a>                    .expand_return(<span class="macro">expand_return!</span>(i64).field_self().bulk()),
+<a href=#3515 id=3515 data-nosnippet>3515</a>            )
+<a href=#3516 id=3516 data-nosnippet>3516</a>            .panic()
+<a href=#3517 id=3517 data-nosnippet>3517</a>            .build()
+<a href=#3518 id=3518 data-nosnippet>3518</a>            .err()
+<a href=#3519 id=3519 data-nosnippet>3519</a>            .unwrap();
+<a href=#3520 id=3520 data-nosnippet>3520</a>        <span class="macro">assert!</span>(
+<a href=#3521 id=3521 data-nosnippet>3521</a>            error.contains(<span class="string">"bulk outputs are unsupported by this codec"</span>),
+<a href=#3522 id=3522 data-nosnippet>3522</a>            <span class="string">"{error}"
+<a href=#3523 id=3523 data-nosnippet>3523</a>        </span>);
+<a href=#3524 id=3524 data-nosnippet>3524</a>    }
+<a href=#3525 id=3525 data-nosnippet>3525</a>}
 </code></pre></div></section></main></body></html>
