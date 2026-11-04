@@ -356,5 +356,52 @@
 <a href=#356 id=356 data-nosnippet>356</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"__pb_return :"</span>));
 <a href=#357 id=357 data-nosnippet>357</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"binding_packet"</span>));
 <a href=#358 id=358 data-nosnippet>358</a>    }
-<a href=#359 id=359 data-nosnippet>359</a>}
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="attr">#[test]
+<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="kw">fn </span>packet_fallback_keeps_callback_collection_presence_scalar() {
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Failure=String; pub fn rows()-&gt;Result&lt;Option&lt;Vec&lt;i64&gt;&gt;,Failure&gt;{} pub fn message(x:Failure)-&gt;String{}"</span>).unwrap();
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = JniGen::builder()
+<a href=#364 id=364 data-nosnippet>364</a>            .items(
+<a href=#365 id=365 data-nosnippet>365</a>                source
+<a href=#366 id=366 data-nosnippet>366</a>                    .items
+<a href=#367 id=367 data-nosnippet>367</a>                    .into_iter()
+<a href=#368 id=368 data-nosnippet>368</a>                    .map(|item| (item, Default::default())),
+<a href=#369 id=369 data-nosnippet>369</a>            )
+<a href=#370 id=370 data-nosnippet>370</a>            .set_package_prefix(<span class="string">"test"</span>)
+<a href=#371 id=371 data-nosnippet>371</a>            .error_mapper(<span class="macro">syn::parse_quote!</span>(Failure), <span class="macro">fun!</span>(message))
+<a href=#372 id=372 data-nosnippet>372</a>            .package(<span class="macro">package!</span>().fun(<span class="macro">fun!</span>(rows).callback_return_only()))
+<a href=#373 id=373 data-nosnippet>373</a>            .prepare()
+<a href=#374 id=374 data-nosnippet>374</a>            .unwrap();
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span>error = flat
+<a href=#376 id=376 data-nosnippet>376</a>            .function_mut(<span class="string">"rows_fold"</span>)
+<a href=#377 id=377 data-nosnippet>377</a>            .unwrap()
+<a href=#378 id=378 data-nosnippet>378</a>            .metadata
+<a href=#379 id=379 data-nosnippet>379</a>            .as_mut()
+<a href=#380 id=380 data-nosnippet>380</a>            .unwrap()
+<a href=#381 id=381 data-nosnippet>381</a>            .error
+<a href=#382 id=382 data-nosnippet>382</a>            .as_mut()
+<a href=#383 id=383 data-nosnippet>383</a>            .unwrap();
+<a href=#384 id=384 data-nosnippet>384</a>        std::rc::Rc::make_mut(error)
+<a href=#385 id=385 data-nosnippet>385</a>            .output
+<a href=#386 id=386 data-nosnippet>386</a>            .rust
+<a href=#387 id=387 data-nosnippet>387</a>            .delivery
+<a href=#388 id=388 data-nosnippet>388</a>            .statements
+<a href=#389 id=389 data-nosnippet>389</a>            .extend(<span class="macro">quote!</span>(<span class="kw">let </span>custom_error_protocol = ();));
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>generation = generate(<span class="kw-2">&amp;</span>flat).unwrap();
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>functions = externs(<span class="kw-2">&amp;</span>generation);
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>function = functions
+<a href=#393 id=393 data-nosnippet>393</a>            .iter()
+<a href=#394 id=394 data-nosnippet>394</a>            .find(|(name, <span class="kw">_</span>)| name.contains(<span class="string">"call_1rows_1fold_1"</span>))
+<a href=#395 id=395 data-nosnippet>395</a>            .unwrap()
+<a href=#396 id=396 data-nosnippet>396</a>            .<span class="number">1</span>;
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="kw">let </span>code = <span class="macro">quote!</span>(#function).to_string();
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="comment">// The fallback still allocates its required outer packet, but no
+<a href=#399 id=399 data-nosnippet>399</a>        // separate marker array or local reference for the collection.
+<a href=#400 id=400 data-nosnippet>400</a>        </span><span class="macro">assert_eq!</span>(code.matches(<span class="string">"prebindgen_jni_runtime :: array"</span>).count(), <span class="number">1</span>);
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"valueOf"</span>));
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"new_local_ref"</span>));
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/Functions.kt"</span>].contains(<span class="string">"if (result[1] as Int == 0)"</span>));
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/JNINative.kt"</span>].contains(<span class="string">"): Array&lt;Any?&gt;"</span>));
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>}
 </code></pre></div></section></main></body></html>
