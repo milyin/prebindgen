@@ -260,7 +260,7 @@
 <a href=#260 id=260 data-nosnippet>260</a>        <span class="kw">let </span>definition = prebindgen_reprc::Record::new(rust_name.clone(), fields)<span class="question-mark">?</span>.definition();
 <a href=#261 id=261 data-nosnippet>261</a>        tokens.extend(<span class="macro">quote!</span> {
 <a href=#262 id=262 data-nosnippet>262</a>            #definition
-<a href=#263 id=263 data-nosnippet>263</a>            <span class="attr">#[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+<a href=#263 id=263 data-nosnippet>263</a>            <span class="attr">#[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
 <a href=#264 id=264 data-nosnippet>264</a>            </span><span class="kw">unsafe fn </span>#helper(#input:#source_ty,error_output:<span class="kw-2">*mut </span>#rust_name,reported:<span class="kw-2">&amp;mut </span>bool)-&gt;<span class="prelude-ty">Result</span>&lt;(),String&gt;{
 <a href=#265 id=265 data-nosnippet>265</a>                <span class="kw">if </span>error_output.is_null(){<span class="kw">return </span><span class="prelude-val">Ok</span>(());}
 <a href=#266 id=266 data-nosnippet>266</a>                #prepare
@@ -420,8 +420,8 @@
 <a href=#420 id=420 data-nosnippet>420</a>        <span class="bool-val">true</span>,
 <a href=#421 id=421 data-nosnippet>421</a>    );
 <a href=#422 id=422 data-nosnippet>422</a>    tokens.extend(<span class="macro">quote!</span> {
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="attr">#[doc=<span class="string">"# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."</span>]
-<a href=#424 id=424 data-nosnippet>424</a>        #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="attr">#[doc=<span class="string">"# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."</span>]
+<a href=#424 id=424 data-nosnippet>424</a>        #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
 <a href=#425 id=425 data-nosnippet>425</a>        #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params),<span class="kw-2">*</span>)-&gt;#rust_return {
 <a href=#426 id=426 data-nosnippet>426</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span>#accepted=::core::cell::Cell::new(<span class="number">0usize</span>);
 <a href=#427 id=427 data-nosnippet>427</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span><span class="kw-2">mut </span>#reported=<span class="bool-val">false</span>;
