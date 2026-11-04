@@ -455,166 +455,24 @@ internal object JNINative {
     @JvmStatic external fun call_blob_value_selected_bb0c7d8f79d57c4b(p0_w1: Int, p0_w3_f0_f0: Long, p0_w3_f0_f1: Long, p0_w3_f1: ByteArray?, p0_w6: Long, p0_w8: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
     @JvmStatic external fun call_blob_value_views_9983ceb667085a50(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f1: ByteArray?, returns: Return_Long_Long_ByteArray9_ErrorEmpty_3b29111153baa628): Unit
     internal fun interface SequenceSink_default_bulk_array_fold_95a8899ff0517a5d { fun run(v0: Long, v1: Double) }
-    internal class SequenceRows_Long_Double_2_c85c80a4c95e62b5 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    var c1: DoubleArray = empty1
-        private set
-    fun add(v0: Long, v1: Double) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty1 = DoubleArray(0)
-        private val empty0 = LongArray(0)
-    }
-}
+    internal class SequenceRow_Long_Double_2_012db11776ed72c5(@JvmField val c0: Long, @JvmField val c1: Double)
     @JvmStatic external fun call_default_bulk_array_fold_8b682a05955403df(callback: SequenceSink_default_bulk_array_fold_95a8899ff0517a5d, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_default_bulk_optional_fold_98317e3c22588d99 { fun run(v0: Long, v1: Double) }
     @JvmStatic external fun call_default_bulk_optional_fold_a9233ea21645798f(p0_w1: Long, callback: SequenceSink_default_bulk_optional_fold_98317e3c22588d99, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 { fun run(v0: ByteArray?) }
-    internal class SequenceRows_ByteArray_1_c88f78a4c989aeb6 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: kotlin.Array<ByteArray?> = empty0
-        private set
-    fun add(v0: ByteArray?) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = arrayOfNulls<ByteArray>(0)
-    }
-}
+    internal class SequenceRow_ByteArray_1_92dc0f7ab995287c(@JvmField val c0: ByteArray?)
     @JvmStatic external fun call_jni_output_mixed_frames_fold_e9474c6b8b0056cf(p0_w1: Long, callback: SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6 { fun run(v0: Array<Any?>?) }
-    internal class SequenceRows_Array_Any___1_20d742411f3e06a5 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: kotlin.Array<Array<Any?>?> = empty0
-        private set
-    fun add(v0: Array<Any?>?) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = arrayOfNulls<Array<Any?>>(0)
-    }
-}
+    internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
     @JvmStatic external fun call_jni_output_fold_drop_fold_8e0eaffd2786301c(callback: SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_fold_fold_a6fbab1712a6f896 { fun run(v0: Long, v1: String?, v2: Long) }
-    internal class SequenceRows_Long_String_Long_3_d589c0a9d5aa93f9 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    var c1: kotlin.Array<String?> = empty1
-        private set
-    var c2: LongArray = empty0
-        private set
-    fun add(v0: Long, v1: String?, v2: Long) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        c2[size] = v2
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        c2 = c2.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = LongArray(0)
-        private val empty1 = arrayOfNulls<String>(0)
-    }
-}
+    internal class SequenceRow_Long_String_Long_3_b4558cb7b740d7c6(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: Long)
     @JvmStatic external fun call_jni_output_fold_fold_30e359f733b27f80(p0_w1: Long, callback: SequenceSink_jni_output_fold_fold_a6fbab1712a6f896, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac { fun run(v0: Long) }
-    internal class SequenceRows_Long_1_0f0dddf786e9ea46 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    fun add(v0: Long) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = LongArray(0)
-    }
-}
+    internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
     @JvmStatic external fun call_callback_boundary_fold_fold_f4fcc537824dc196(p0_callback: Any?, p1_w1: Long, callback: SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { fun run(v0: Long, v1: Long, v2: Long) }
-    internal class SequenceRows_Long_Long_Long_3_f7aa050c7e487bbc {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    var c1: LongArray = empty0
-        private set
-    var c2: LongArray = empty0
-        private set
-    fun add(v0: Long, v1: Long, v2: Long) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        c2[size] = v2
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        c2 = c2.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = LongArray(0)
-    }
-}
+    internal class SequenceRow_Long_Long_Long_3_ad466713697fa9e4(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long)
     @JvmStatic external fun call_output_cleanup_rows_fold_d4a060fc1b46cffe(callback: SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_output_cleanup_rows_bulk_fold_8a047108d9782a30(callback: SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
@@ -623,67 +481,7 @@ internal object JNINative {
     internal fun interface SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_output_cleanup_nested_bulk_fold_2c8fd0b69d9609fe(callback: SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_scalars_fold_70028742f64f0191 { fun run(v0: Boolean, v1: Byte, v2: Short, v3: Int, v4: Long, v5: Float, v6: Double, v7: ByteArray?, v8: String?) }
-    internal class SequenceRows_Boolean_Byte_Short_9_8dfa33a3fad8751b {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: BooleanArray = empty0
-        private set
-    var c1: ByteArray = empty1
-        private set
-    var c2: ShortArray = empty2
-        private set
-    var c3: IntArray = empty3
-        private set
-    var c4: LongArray = empty4
-        private set
-    var c5: FloatArray = empty5
-        private set
-    var c6: DoubleArray = empty6
-        private set
-    var c7: kotlin.Array<ByteArray?> = empty7
-        private set
-    var c8: kotlin.Array<String?> = empty8
-        private set
-    fun add(v0: Boolean, v1: Byte, v2: Short, v3: Int, v4: Long, v5: Float, v6: Double, v7: ByteArray?, v8: String?) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        c2[size] = v2
-        c3[size] = v3
-        c4[size] = v4
-        c5[size] = v5
-        c6[size] = v6
-        c7[size] = v7
-        c8[size] = v8
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        c2 = c2.copyOf(next)
-        c3 = c3.copyOf(next)
-        c4 = c4.copyOf(next)
-        c5 = c5.copyOf(next)
-        c6 = c6.copyOf(next)
-        c7 = c7.copyOf(next)
-        c8 = c8.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = BooleanArray(0)
-        private val empty1 = ByteArray(0)
-        private val empty6 = DoubleArray(0)
-        private val empty5 = FloatArray(0)
-        private val empty3 = IntArray(0)
-        private val empty4 = LongArray(0)
-        private val empty2 = ShortArray(0)
-        private val empty7 = arrayOfNulls<ByteArray>(0)
-        private val empty8 = arrayOfNulls<String>(0)
-    }
-}
+    internal class SequenceRow_Boolean_Byte_Short_9_fa65775165ad52ea(@JvmField val c0: Boolean, @JvmField val c1: Byte, @JvmField val c2: Short, @JvmField val c3: Int, @JvmField val c4: Long, @JvmField val c5: Float, @JvmField val c6: Double, @JvmField val c7: ByteArray?, @JvmField val c8: String?)
     @JvmStatic external fun call_collection_scalars_fold_3627b263ec4e572b(p0_w1: Array<Any?>?, p1_w1: Double, callback: SequenceSink_collection_scalars_fold_70028742f64f0191, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_u128_fold_6f48cddbc993447a { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_u128_fold_5aa4076e5dce00fc(p0_w1: Array<Any?>?, callback: SequenceSink_collection_u128_fold_6f48cddbc993447a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
@@ -694,86 +492,21 @@ internal object JNINative {
     internal fun interface SequenceSink_collection_i64_fold_7481b0c247e22a81 { fun run(v0: Long) }
     @JvmStatic external fun call_collection_i64_fold_808c7d955e03904b(p0_w1: Array<Any?>?, callback: SequenceSink_collection_i64_fold_7481b0c247e22a81, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_text_fold_eee532ef372c2cc4 { fun run(v0: String?) }
-    internal class SequenceRows_String_1_e7b497eac35e1b9b {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: kotlin.Array<String?> = empty0
-        private set
-    fun add(v0: String?) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = arrayOfNulls<String>(0)
-    }
-}
+    internal class SequenceRow_String_1_b5440014bed04f6a(@JvmField val c0: String?)
     @JvmStatic external fun call_collection_text_fold_a7b24a9c45b3e186(p0_w1: Array<Any?>?, callback: SequenceSink_collection_text_fold_eee532ef372c2cc4, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_bytes_fold_6625bb31d7dc18eb { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_bytes_fold_9e9770856c6c4641(p0_w1: Array<Any?>?, callback: SequenceSink_collection_bytes_fold_6625bb31d7dc18eb, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_nested_fold_63e97a79272db78e { fun run(v0: Array<Any?>?) }
     @JvmStatic external fun call_collection_nested_fold_b79bf8a96a5df66c(p0_w1: Array<Any?>?, callback: SequenceSink_collection_nested_fold_63e97a79272db78e, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_options_fold_b6fa2828841c6e69 { fun run(v0: Int, v1: Long) }
-    internal class SequenceRows_Int_Long_2_c85f68a4c9606fc4 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: IntArray = empty0
-        private set
-    var c1: LongArray = empty1
-        private set
-    fun add(v0: Int, v1: Long) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = IntArray(0)
-        private val empty1 = LongArray(0)
-    }
-}
+    internal class SequenceRow_Int_Long_2_2d1ae54437bd2ee1(@JvmField val c0: Int, @JvmField val c1: Long)
     @JvmStatic external fun call_collection_options_fold_ded63bd11a5c595b(p0_w1: Array<Any?>?, p1_w1: Short, callback: SequenceSink_collection_options_fold_b6fa2828841c6e69, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_optional_fold_78209d4e9082c96a { fun run(v0: Long) }
     @JvmStatic external fun call_collection_optional_fold_1efcbb0a1a187e64(p0_w3: Array<Any?>?, callback: SequenceSink_collection_optional_fold_78209d4e9082c96a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_optional_items_fold_0dd26be8936deb87 { fun run(v0: Int, v1: Long) }
     @JvmStatic external fun call_collection_optional_items_fold_912719d84a3df595(p0_w3: Array<Any?>?, callback: SequenceSink_collection_optional_items_fold_0dd26be8936deb87, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c { fun run(v0: Int) }
-    internal class SequenceRows_Int_1_0f0ddcf786e9e893 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: IntArray = empty0
-        private set
-    fun add(v0: Int) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = IntArray(0)
-    }
-}
+    internal class SequenceRow_Int_1_740d8169e2b203e5(@JvmField val c0: Int)
     @JvmStatic external fun call_collection_enum_fold_7a76112af7324a8e(p0_w1: Array<Any?>?, callback: SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_borrow_fold_b4856d1bed461622 { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_borrow_fold_22d09716b260bda8(p0_w1: Array<Any?>?, callback: SequenceSink_collection_borrow_fold_b4856d1bed461622, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
@@ -792,69 +525,9 @@ internal object JNINative {
     internal fun interface SequenceSink_sequence_parts_fold_34d4f8eed2926471 { fun run(v0: Long, v1: String?, v2: Long) }
     @JvmStatic external fun call_sequence_parts_fold_aeb653ed535ad4ab(p0_w1: Int, callback: SequenceSink_sequence_parts_fold_34d4f8eed2926471, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_storage_get_vec_fold_886389afd9ad2e6a { fun run(v0: Long, v1: Int, v2: Double, v3: Boolean) }
-    internal class SequenceRows_Long_Int_Double_4_642f583cefc4f32e {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    var c1: IntArray = empty1
-        private set
-    var c2: DoubleArray = empty2
-        private set
-    var c3: BooleanArray = empty3
-        private set
-    fun add(v0: Long, v1: Int, v2: Double, v3: Boolean) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        c2[size] = v2
-        c3[size] = v3
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        c2 = c2.copyOf(next)
-        c3 = c3.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty3 = BooleanArray(0)
-        private val empty2 = DoubleArray(0)
-        private val empty1 = IntArray(0)
-        private val empty0 = LongArray(0)
-    }
-}
+    internal class SequenceRow_Long_Int_Double_4_5e82f5e29d89a757(@JvmField val c0: Long, @JvmField val c1: Int, @JvmField val c2: Double, @JvmField val c3: Boolean)
     @JvmStatic external fun call_storage_get_vec_fold_5d94b3f03ff97a04(p0_w1: Long, callback: SequenceSink_storage_get_vec_fold_886389afd9ad2e6a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_api_record_rows_fold_5bd1116027b7610c { fun run(v0: Long, v1: String?) }
-    internal class SequenceRows_Long_String_2_7a6435e8e6c38508 {
-    var size: Int = 0
-        private set
-    private var capacity: Int = 0
-    var c0: LongArray = empty0
-        private set
-    var c1: kotlin.Array<String?> = empty1
-        private set
-    fun add(v0: Long, v1: String?) {
-        if (size == capacity) grow()
-        c0[size] = v0
-        c1[size] = v1
-        size++
-    }
-    private fun grow() {
-        if (size == Int.MAX_VALUE) throw OutOfMemoryError("too many callback rows")
-        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()
-        c0 = c0.copyOf(next)
-        c1 = c1.copyOf(next)
-        capacity = next
-    }
-    companion object {
-        private val empty0 = LongArray(0)
-        private val empty1 = arrayOfNulls<String>(0)
-    }
-}
+    internal class SequenceRow_Long_String_2_3ea2c8aa47ab7590(@JvmField val c0: Long, @JvmField val c1: String?)
     @JvmStatic external fun call_api_record_rows_fold_847767faa33a5dce(callback: SequenceSink_api_record_rows_fold_5bd1116027b7610c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
 }

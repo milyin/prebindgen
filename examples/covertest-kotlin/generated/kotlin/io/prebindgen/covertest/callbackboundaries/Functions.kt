@@ -310,8 +310,8 @@ callbackOutput0_bulkList!!.add((requireNotNull(callbackOutput0_bulkReader).text(
 }
 
 public fun <A> `callbackBoundaryFoldFold`(p0_callback: io.prebindgen.covertest.i64Callback?, p1_w1: Long, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long) -> A): A = run {
-    val __pb_rows = io.prebindgen.covertest.JNINative.SequenceRows_Long_1_0f0dddf786e9ea46()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac { v0 -> __pb_rows.add(v0); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -337,9 +337,10 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
 if (nativeResult != null) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 
 
-current = fold(current, __pb_rows.c0[__pb_rowIndex])
+current = fold(current, __pb_fold_row.c0)
 }
 __pb_accumulator = current
 }

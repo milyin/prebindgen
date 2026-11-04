@@ -1597,7 +1597,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             if row_captures.insert(storage.clone()) {
                 native.push_str(&declaration);
             }
-            setup.push_str(&format!("val __pb_rows = {prefix}.JNINative.{storage}()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {arguments} -> __pb_rows.add({arguments}); kotlin.Unit }}\n"));
+            setup.push_str(&format!("val __pb_rows = kotlin.collections.ArrayList<{prefix}.JNINative.{storage}>()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {arguments} -> __pb_rows.add({prefix}.JNINative.{storage}({arguments})); kotlin.Unit }}\n"));
             kt_args.push("__pb_sink".into());
             params.push(quote!(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>));
             raw_params.push("outputAccepted: BooleanArray".into());

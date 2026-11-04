@@ -315,8 +315,8 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
 }
 
 public fun <A> `apiRecordRowsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, `count`: Long, `label`: String) -> A): A = run {
-    val __pb_rows = io.prebindgen.covertest.JNINative.SequenceRows_Long_String_2_7a6435e8e6c38508()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_api_record_rows_fold_5bd1116027b7610c { v0, v1 -> __pb_rows.add(v0, v1); kotlin.Unit }
+    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_String_2_3ea2c8aa47ab7590>()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_api_record_rows_fold_5bd1116027b7610c { v0, v1 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_String_2_3ea2c8aa47ab7590(v0, v1)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -328,9 +328,10 @@ val nativeResult = try { run { val nativeArgument0 = try { __pb_sink } catch (fa
 if (nativeResult != null) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
 
 
-current = fold(current, __pb_rows.c0[__pb_rowIndex], __pb_rows.c1[__pb_rowIndex] as String)
+current = fold(current, __pb_fold_row.c0, __pb_fold_row.c1 as String)
 }
 __pb_accumulator = current
 }

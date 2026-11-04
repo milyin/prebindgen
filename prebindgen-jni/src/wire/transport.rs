@@ -80,10 +80,6 @@ impl JniWire {
     pub fn kotlin_default(&self) -> &'static str {
         self.jvm_type().kotlin_default()
     }
-    /// Typed column storage for raw collection-callback fields.
-    pub(crate) fn kotlin_column(&self) -> (String, String) {
-        self.jvm_type().kotlin_column()
-    }
     pub(crate) fn kotlin_integer(&self, value: i64) -> String {
         if matches!(self.jvm_type(), JvmType::Long) {
             format!("{value}L")
