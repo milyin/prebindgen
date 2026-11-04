@@ -380,8 +380,8 @@ callbackOutput1_bulkList!!.add(requireNotNull(callbackOutput1_bulkItem_bulkList)
 }
 
 public fun <A> `defaultBulkArrayFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.defaults.DefaultBulkRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_default_bulk_array_fold_95a8899ff0517a5d { v0, v1 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1)); kotlin.Unit }
+    val __pb_rows = io.prebindgen.covertest.JNINative.SequenceRows_Long_Double_2_c85c80a4c95e62b5()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_default_bulk_array_fold_95a8899ff0517a5d { v0, v1 -> __pb_rows.add(v0, v1); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -392,11 +392,10 @@ val nativeResult = try { run { val nativeArgument0 = try { __pb_sink } catch (fa
     var __pb_accumulator: A? = null
 if (nativeResult != null) {
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
 
 
-current = fold(current, io.prebindgen.covertest.defaults.DefaultBulkRow(__pb_fold_row[0] as Long, __pb_fold_row[1] as Double))
+current = fold(current, io.prebindgen.covertest.defaults.DefaultBulkRow(__pb_rows.c0[__pb_rowIndex], __pb_rows.c1[__pb_rowIndex]))
 }
 __pb_accumulator = current
 }
@@ -406,8 +405,8 @@ __pb_accumulator as A
 }
 
 public fun <A> `defaultBulkOptionalFold`(p0_w1: Long, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.defaults.DefaultBulkRow) -> A): A? = run {
-    val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_default_bulk_optional_fold_98317e3c22588d99 { v0, v1 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1)); kotlin.Unit }
+    val __pb_rows = io.prebindgen.covertest.JNINative.SequenceRows_Long_Double_2_c85c80a4c95e62b5()
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_default_bulk_optional_fold_98317e3c22588d99 { v0, v1 -> __pb_rows.add(v0, v1); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -418,11 +417,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failur
     var __pb_accumulator: A? = null
 if (nativeResult != null) {
 var current = initial
-for (rawRow in __pb_rows) {
-val __pb_fold_row = rawRow as kotlin.Array<*>
+for (__pb_rowIndex in 0 until __pb_rows.size) {
 
 
-current = fold(current, io.prebindgen.covertest.defaults.DefaultBulkRow(__pb_fold_row[0] as Long, __pb_fold_row[1] as Double))
+current = fold(current, io.prebindgen.covertest.defaults.DefaultBulkRow(__pb_rows.c0[__pb_rowIndex], __pb_rows.c1[__pb_rowIndex]))
 }
 __pb_accumulator = current
 }

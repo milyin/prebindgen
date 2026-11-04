@@ -84,6 +84,68 @@ pub(crate) fn transport(
     })
 }
 
+/// Capture only raw wire values while JNI and handle locks are active. Columns
+/// use the physical JVM types, so neither primitive boxes nor row arrays are
+/// needed. The same storage shape can serve different logical projections.
+pub(crate) fn capture(
+    element: &kotlin::JniNode,
+    names: &mut names::Names,
+) -> Result<(String, String)> {
+    let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
+    let signature = fields
+        .iter()
+        .map(|w| w.kind.jvm_descriptor())
+        .collect::<String>();
+    let label = fields
+        .iter()
+        .take(3)
+        .map(|w| w.kind.kotlin_type().trim_end_matches('?'))
+        .collect::<Vec<_>>()
+        .join("_");
+    let label = if fields.is_empty() {
+        "Empty".into()
+    } else {
+        format!("{label}_{}", fields.len())
+    };
+    let name = names.name("SequenceRows", &label, &[&signature])?;
+    let mut columns = String::new();
+    let mut allocate = String::new();
+    let mut store = String::new();
+    let mut empty = BTreeMap::new();
+    let mut parameters = Vec::new();
+    for (i, field) in fields.iter().enumerate() {
+        let ty = field.kind.kotlin_type();
+        let (array, initializer) = field.kind.kotlin_column();
+        let empty_name = format!("empty{}", empty.len());
+        let empty_name = empty
+            .entry(array.clone())
+            .or_insert((empty_name, initializer));
+        columns.push_str(&format!(
+            "    var c{i}: {array} = {}\n        private set\n",
+            empty_name.0
+        ));
+        parameters.push(format!("v{i}: {ty}"));
+        allocate.push_str(&format!("        c{i} = c{i}.copyOf(next)\n"));
+        store.push_str(&format!("        c{i}[size] = v{i}\n"));
+    }
+    let empty = if empty.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "    companion object {{\n{}    }}\n",
+            empty
+                .values()
+                .map(|(name, initializer)| format!("        private val {name} = {initializer}\n"))
+                .collect::<String>()
+        )
+    };
+    // Replacing a column preserves its accepted prefix, even if a later
+    // allocation fails. Publish capacity only after every column has grown,
+    // and size only after all fields are stored. Rust owns any rejected row.
+    let declaration = format!("    internal class {name} {{\n    var size: Int = 0\n        private set\n    private var capacity: Int = 0\n{columns}    fun add({}) {{\n        if (size == capacity) grow()\n{store}        size++\n    }}\n    private fun grow() {{\n        if (size == Int.MAX_VALUE) throw OutOfMemoryError(\"too many callback rows\")\n        val next = if (capacity == 0) 1 else minOf(capacity.toLong() * 2, Int.MAX_VALUE.toLong()).toInt()\n{allocate}        capacity = next\n    }}\n{empty}}}\n", parameters.join(", "));
+    Ok((name, declaration))
+}
+
 pub(crate) struct Fold {
     pub output: KotlinOutput,
     pub parameter: String,
@@ -139,11 +201,18 @@ pub(crate) fn fold(
             _ => false,
         }
     }
-    let unread = kotlin::output_kotlin(element, &ctx)?;
+    let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
+    let columns = (0..fields.len())
+        .map(|i| format!("__pb_rows.c{i}[__pb_rowIndex]"))
+        .collect::<Vec<_>>();
+    let mut unread = kotlin::output_kotlin(element, &ctx)?;
+    returns::remap(&mut unread, row, &fields, 0, &columns);
     let shared = nested_owners(element);
     let owners = "__pb_foldOwners";
     let child = if shared {
-        kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?
+        let mut child = kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?;
+        returns::remap(&mut child, row, &fields, 0, &columns);
+        child
     } else {
         unread.clone()
     };
@@ -166,7 +235,7 @@ pub(crate) fn fold(
                 context.package
             ));
             initialize = format!(
-                "if ({raw}.isNotEmpty()) {owners} = {}.CollectionOwners()\n",
+                "if ({raw}.size != 0) {owners} = {}.CollectionOwners()\n",
                 context.package
             );
             row = format!(
@@ -188,7 +257,7 @@ pub(crate) fn fold(
         // Account for the current row before cleanup, so a secondary cleanup
         // failure cannot make the outer failure scan destroy it a second time.
         row = format!("try {{\n{row}}} catch ({failure}: Throwable) {{\n__pb_processed++\ntry {{\n{release}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\nthrow {failure}\n}}\n__pb_processed++\n{delivered}");
-        discard = format!("fun __pb_discard({failure}: Throwable, start: Int = 0) {{\nfor (index in start until {raw}.size) {{\ntry {{\nval __pb_fold_row = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\n}}\n}}\n", unread.output_locals, unread.cleanup);
+        discard = format!("fun __pb_discard({failure}: Throwable, start: Int = 0) {{\nfor (__pb_rowIndex in start until {raw}.size) {{\ntry {{\n{}\n{}\n}} catch (cleanup: Throwable) {{ if ({failure} !== cleanup) {failure}.addSuppressed(cleanup) }}\n}}\n}}\n", unread.output_locals, unread.cleanup);
         cleanup = format!("if ({present}) __pb_discard({failure}, __pb_processed)\n");
     }
     Ok(Fold {
@@ -199,7 +268,7 @@ pub(crate) fn fold(
             delivered: vec![if optional { "__pb_accumulator".into() } else { "__pb_accumulator as A".into() }],
             result_types: vec![if optional { "A?".into() } else { "A".into() }],
             output_locals: locals,
-            materialize: format!("if ({present}) {{\n{initialize}var current = initial\nfor (rawRow in {raw}) {{\nval __pb_fold_row = rawRow as kotlin.Array<*>\n{}\n{row}}}\n__pb_accumulator = current\n}}\n", child.output_locals),
+            materialize: format!("if ({present}) {{\n{initialize}var current = initial\nfor (__pb_rowIndex in 0 until {raw}.size) {{\n{}\n{row}}}\n__pb_accumulator = current\n}}\n", child.output_locals),
             cleanup,
         },
     })

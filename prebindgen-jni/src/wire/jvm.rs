@@ -176,6 +176,18 @@ impl JvmType {
     pub(super) fn is_reference(self) -> bool {
         matches!(self.info().carrier, Carrier::Reference { .. })
     }
+    pub(super) fn kotlin_column(self) -> (String, String) {
+        if self.is_reference() {
+            let element = self.kotlin_type();
+            (
+                format!("kotlin.Array<{element}>"),
+                format!("arrayOfNulls<{}>(0)", element.trim_end_matches('?')),
+            )
+        } else {
+            let array = format!("{}Array", self.kotlin_type());
+            (array.clone(), format!("{array}(0)"))
+        }
+    }
     pub(super) fn parameter_slots(self) -> usize {
         match self.info().carrier {
             Carrier::Primitive { slots, .. } => slots,

@@ -1318,6 +1318,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         native_handle(prefix),
     );
     let mut names = names::Names::default();
+    let mut row_captures = BTreeSet::new();
     for (ty, c) in classes.values() {
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
@@ -1576,7 +1577,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             let (_, element, _) =
                 sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
                     .ok_or("missing callback sequence")?;
-            let fields = crate::group::row_fields(element)
+            let fields = crate::group::callback_parameters(element)
                 .enumerate()
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
@@ -1588,11 +1589,15 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 quote!(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>),
             );
             raw_params.push(format!("callback: {sink}"));
-            let names = (0..fields.len())
+            let arguments = (0..fields.len())
                 .map(|i| format!("v{i}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            setup.push_str(&format!("val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {names} -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>({names})); kotlin.Unit }}\n"));
+            let (storage, declaration) = sequence_callback::capture(element, &mut names)?;
+            if row_captures.insert(storage.clone()) {
+                native.push_str(&declaration);
+            }
+            setup.push_str(&format!("val __pb_rows = {prefix}.JNINative.{storage}()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {arguments} -> __pb_rows.add({arguments}); kotlin.Unit }}\n"));
             kt_args.push("__pb_sink".into());
             params.push(quote!(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>));
             raw_params.push("outputAccepted: BooleanArray".into());
