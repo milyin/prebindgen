@@ -69,7 +69,7 @@ def build(args):
     assert not list(output.iterdir()), 'Use an empty output directory'
     revisions={str(p):revision(p) for p in {checkout,ROOT}}
     project=prepare(checkout,output)
-    env=dict(os.environ,CARGO_TARGET_DIR=str(output/'target'))
+    env=dict(os.environ,CARGO_TARGET_DIR=str(args.target_dir.resolve() if args.target_dir else output/'target'))
     rustc=subprocess.check_output(['rustc','-vV'],text=True)
     host=next(line.split(': ',1)[1] for line in rustc.splitlines() if line.startswith('host: '))
     if args.fetch:subprocess.run(['cargo','fetch','--locked'],cwd=project,env=env,check=True)
@@ -82,8 +82,11 @@ def build(args):
     out=next(Path(m['out_dir']) for m in messages if m.get('reason')=='build-script-executed' and m['package_id']==package)
     artifact=next(m for m in messages if m.get('reason')=='compiler-artifact' and m['package_id']==package and 'cdylib' in m['target']['kind'])
     assert artifact['profile']['opt_level']=='3' and not artifact['profile']['debug_assertions']
-    library=output/'target/release/libc_collection_bench.so'
-    assert library.is_file(), 'This benchmark currently targets Linux'
+    built_library=next((Path(name) for name in artifact['filenames'] if name.endswith('/libc_collection_bench.so')),None)
+    assert built_library is not None and built_library.is_file(), 'This benchmark currently targets Linux'
+    (output/'frozen').mkdir()
+    library=output/'frozen/libc_collection_bench.so'
+    shutil.copyfile(built_library,library)
     driver=output/'driver'
     cc=shlex.split(os.environ.get('CC','cc'))
     compile_command=[*cc,'-std=gnu11','-O3','-fno-plt','-Wall','-Wextra','-Werror',str(FIXTURE/'driver.c'),'-I'+str(out),'-L'+str(library.parent),'-lc_collection_bench','-Wl,-rpath,'+str(library.parent),'-ldl','-o',str(driver)]
@@ -124,6 +127,7 @@ if __name__=='__main__':
     p.add_argument('--checkout',type=Path,default=ROOT)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--count-allocations',action='store_true')
+    p.add_argument('--target-dir',type=Path,help='optional shared Cargo cache; libraries are copied into frozen output storage')
     p.add_argument('--fetch',action='store_true')
     p.add_argument('--record-generated',action='store_true')
     p.add_argument('--check-generated',action='store_true')
