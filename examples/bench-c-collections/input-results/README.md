@@ -94,7 +94,7 @@ The A/A run shows up to 4.0% median variation for the selected cases. Treat smal
 
 ## Experiment retained for comparison
 
-The first raw-pointer reread variant removed the same preparation allocation but slowed the 4,096-handle median by 6.3%. The final variant uses a validated shared row slice. A focused four-process confirmation improved the handle medians at 1/64/512/4,096 rows and retained the wide-record improvement. Diagnostics JSON/CSV preserve both experiments; final latency/AA raw logs are committed separately.
+The first raw-pointer reread variant removed the same preparation allocation but slowed the 4,096-handle median by 6.3%. The final variant uses a validated shared row slice. A focused four-process confirmation improved the handle medians at 1/64/512/4,096 rows and retained the wide-record improvement. Diagnostics JSON/CSV preserve both experiments. Per-run stdout logs remain local and are excluded from Git; the committed JSON results and CSV samples retain the measurements.
 
 ## Reproduce
 
