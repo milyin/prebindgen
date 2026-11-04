@@ -6085,11 +6085,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
     __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
     __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
     __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+) -> i32 {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let mut direct_output: i32 = Default::default();
     let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
@@ -6284,18 +6284,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                     let _ = Box::into_raw(ret_w4).expose_provenance();
                 })();
             }
-            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
-            let __pb_direct_object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    l: __pb_direct_object.as_raw(),
+                    i: ret_w0,
                 })
-                    .l
+                    .i
             };
             let _: () = {
                 direct_output = __pb_direct_result;
@@ -6370,11 +6364,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
     __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
     __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
     __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+) -> i32 {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let mut direct_output: i32 = Default::default();
     let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
@@ -6683,18 +6677,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                 })();
                 drop(ret_w0_callback_frame);
             }
-            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
-            let __pb_direct_object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    l: __pb_direct_object.as_raw(),
+                    i: ret_w0,
                 })
-                    .l
+                    .i
             };
             let _: () = {
                 direct_output = __pb_direct_result;
@@ -6769,11 +6757,11 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
     __pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
     __pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>,
     __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+) -> i32 {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let mut direct_output: i32 = Default::default();
     let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
@@ -6912,18 +6900,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
                 )]
                 let _: () = (|| -> () {})();
             }
-            let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
-            let __pb_direct_object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    l: __pb_direct_object.as_raw(),
+                    i: ret_w0,
                 })
-                    .l
+                    .i
             };
             let _: () = {
                 direct_output = __pb_direct_result;

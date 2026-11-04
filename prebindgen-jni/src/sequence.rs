@@ -14,7 +14,8 @@ pub enum JniSequence {
     TypedBuffered,
     /// Native row ranges inside an enclosing bulk frame.
     Bulk,
-    /// Each row is delivered through the function's sequence callback.
+    /// Each row is delivered through the function's sequence callback; the
+    /// collection's scalar status distinguishes present (zero) from absent.
     Callback,
 }
 
@@ -384,11 +385,45 @@ pub(crate) fn callback_delivery(
     {
         return Ok(false);
     }
+    callback_optional(node)?;
     callback_target(node)?;
     if crate::group::result_packet_fields(node).len() != 1 {
         return Err("callback_return cannot discard additional return values".into());
     }
     Ok(true)
+}
+
+/// A fold's nullable accumulator can represent one absent collection, not
+/// distinguish None from Some(None). Integer niches must not silently enable
+/// that previously unsupported shape. Options inside rows are independent.
+pub(crate) fn callback_optional(
+    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+) -> Result<bool> {
+    use prebindgen_flat::WireNode;
+    match node {
+        WireNode::Chain {
+            meta: JniChain::Optional(_),
+            child,
+            ..
+        } => {
+            if callback_optional(child)? {
+                return Err("callback_return cannot discard additional return values from nested optional collections".into());
+            }
+            Ok(true)
+        }
+        WireNode::Branch {
+            meta: JniBranch::Group(_),
+            children,
+            ..
+        } => {
+            let mut optional = false;
+            for child in children {
+                optional |= callback_optional(child)?;
+            }
+            Ok(optional)
+        }
+        _ => Ok(false),
+    }
 }
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
@@ -490,12 +525,11 @@ mod delivery_tests {
             JniSequence::Bulk => JniWire::NativeRows {
                 condition: "true".into(),
             },
-            JniSequence::Buffered | JniSequence::TypedBuffered | JniSequence::Callback => {
-                JniWire::Rows {
-                    condition: "true".into(),
-                    null_niche_available: true,
-                }
-            }
+            JniSequence::Callback => JniWire::selector(),
+            JniSequence::Buffered | JniSequence::TypedBuffered => JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
         };
         WireNode::Chain {
             controls: vec![prebindgen_flat::Wire {

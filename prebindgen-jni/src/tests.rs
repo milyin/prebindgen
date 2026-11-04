@@ -1022,6 +1022,48 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
 }
 
 #[test]
+fn callback_collection_presence_is_a_direct_integer_without_a_jvm_marker() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn rows()->Vec<i64>{} pub fn optional()->Option<Vec<i64>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(optional).callback_return_only()),
+        )
+        .build()
+        .unwrap();
+    let mut checked = 0;
+    for item in syn::parse_file(&generated.rust).unwrap().items {
+        if let syn::Item::Fn(function) = item {
+            if function.sig.ident.to_string().contains("call_1") {
+                assert_eq!(function.sig.output, syn::parse_quote!(-> i32));
+                let block = &function.block;
+                let body = quote!(#block).to_string();
+                assert!(!body.contains("prebindgen_jni_runtime :: array"));
+                assert!(!body.contains("new_local_ref"));
+                checked += 1;
+            }
+        }
+    }
+    assert_eq!(checked, 2);
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("if (nativeResult == 0)"));
+    assert!(!kotlin.contains("if (nativeResult != null)"));
+    // Keep the pre-existing diagnostic instead of collapsing two absent states
+    // into the fold's one nullable accumulator.
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat("pub fn nested()->Option<Option<Vec<i64>>>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(nested).callback_return_only()))
+    )
+    .contains("additional return"));
+}
+
+#[test]
 fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     use prebindgen_declarations::{expand_return, fields, fun, Declarations};
 
@@ -1116,18 +1158,25 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         .callback_variant(&mut flat, &codec, &decl, "f_fold", &())
         .unwrap();
     defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
-    assert_eq!(
-        shape(
-            &(flat
-                .function("f_fold")
-                .unwrap()
-                .output_conversion()
-                .unwrap())
+    let callback_shape = shape(
+        &flat
+            .function("f_fold")
+            .unwrap()
+            .output_conversion()
+            .unwrap()
             .output_outcomes()
-            .success
-        ),
-        expected
+            .success,
     );
+    // Both deliveries retain the logical scopes and row fields. Only the
+    // collection carrier changes from an array to scalar presence status.
+    assert_eq!(callback_shape.len(), expected.len());
+    assert_eq!(callback_shape[0].0, expected[0].0);
+    assert_eq!(
+        callback_shape[0].1,
+        prebindgen_flat::type_key(&syn::parse_quote!(i32))
+    );
+    assert_ne!(callback_shape[0].1, expected[0].1);
+    assert_eq!(callback_shape[1..], expected[1..]);
 }
 
 #[test]

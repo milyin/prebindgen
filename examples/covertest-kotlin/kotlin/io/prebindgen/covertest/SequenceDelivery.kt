@@ -168,6 +168,7 @@ fun checkSequenceDelivery() {
         p.size == 3 && p[1].simpleName.startsWith("SequenceSink_collection_i64_fold_")
     }.also { it.isAccessible = true }
     val i64SinkType = nativeI64.parameterTypes[1]
+    check(nativeI64.returnType == Int::class.javaPrimitiveType)
     var reserved = 0
     var received = 0
     var sum = 0L
@@ -181,7 +182,22 @@ fun checkSequenceDelivery() {
     }
     val i64Ack = BooleanArray(1)
     val rawRows = Array<Any?>(65) { arrayOf<Any?>(1000000L + it) }
-    check(nativeI64.invokePacket(rawRows, i64Sink, i64Ack)[0] == null)
+    val i64Result = nativeI64.invokePacket(rawRows, i64Sink, i64Ack)
+    check(i64Result[0] == null && i64Result[1] == 0)
     check(i64Ack[0] && reserved == 1 && received == 65 && sum == 65002080L)
+    val nativeOptional = native.declaredMethods.single { method ->
+        method.parameterTypes.any { it.simpleName.startsWith("SequenceSink_collection_optional_fold_") }
+    }.also { it.isAccessible = true }
+    check(nativeOptional.returnType == Int::class.javaPrimitiveType)
+    val optionalSinkType = nativeOptional.parameterTypes[1]
+    val optionalSink = java.lang.reflect.Proxy.newProxyInstance(optionalSinkType.classLoader, arrayOf(optionalSinkType)) { _, _, _ ->
+        error("no rows expected for None or Some(empty)")
+    }
+    val absentAck = BooleanArray(1)
+    val absent = nativeOptional.invokePacket(null, optionalSink, absentAck)
+    check(absent[0] == null && absent[1] == -1 && !absentAck[0])
+    val emptyAck = BooleanArray(1)
+    val empty = nativeOptional.invokePacket(emptyArray<Any?>(), optionalSink, emptyAck)
+    check(empty[0] == null && empty[1] == 0 && emptyAck[0])
     check(collectionI64Fold(List(20000) { it.toLong() }, 0L) { a, v -> a + v } == 199990000L)
 }

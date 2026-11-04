@@ -235,7 +235,7 @@ pub(crate) fn validate_layout(
                     }
                     JniSequence::Bulk => matches!(carrier.kind, JniWire::NativeRows { .. }),
                     JniSequence::Callback => {
-                        matches!(&carrier.kind, JniWire::Rows { condition,.. } if condition=="true")
+                        matches!(&carrier.kind, JniWire::Selector { .. })
                     }
                 };
                 if !valid {
@@ -630,7 +630,7 @@ mod tests {
             .contains("does not match"));
     }
     #[test]
-    fn callback_control_condition_is_unconditional() {
+    fn callback_control_requires_a_scalar_status() {
         let mut node: WireNode<JniWire, JniChain, JniBranch> = WireNode::Chain {
             controls: vec![Wire {
                 name: syn::parse_quote!(rows),
@@ -645,6 +645,11 @@ mod tests {
         assert!(validate_layout(&node)
             .unwrap_err()
             .contains("incompatible with its delivery"));
+        let WireNode::Chain { controls, .. } = &mut node else {
+            panic!()
+        };
+        controls[0].kind = JniWire::selector();
+        validate_layout(&node).unwrap();
         let WireNode::Chain {
             meta: JniChain::Sequence(metadata),
             ..
@@ -653,7 +658,9 @@ mod tests {
             panic!()
         };
         *metadata = JniSequence::Buffered;
-        validate_layout(&node).unwrap();
+        assert!(validate_layout(&node)
+            .unwrap_err()
+            .contains("incompatible with its delivery"));
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {

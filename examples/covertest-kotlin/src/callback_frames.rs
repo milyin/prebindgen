@@ -14,9 +14,24 @@ struct Trace {
     frames: Vec<usize>,
     reject: jint,
     reserve_method: jmethodID,
-    counts: [jlong; 6],
+    counts: [jlong; 7],
 }
 thread_local! { static TRACE: RefCell<Option<Trace>> = const { RefCell::new(None) }; }
+
+unsafe extern "system" fn new_object_array(
+    env: *mut JNIEnv,
+    length: jsize,
+    class: jclass,
+    initial: jobject,
+) -> jobjectArray {
+    let original = TRACE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let trace = slot.as_mut().expect("installed frame trace");
+        trace.counts[6] += 1;
+        trace.original
+    });
+    ((*original).NewObjectArray.unwrap())(env, length, class, initial)
+}
 
 unsafe extern "system" fn push(env: *mut JNIEnv, capacity: jint) -> jint {
     let original = TRACE.with(|slot| {
@@ -135,6 +150,7 @@ impl Hook {
         table.PushLocalFrame = Some(push);
         table.PopLocalFrame = Some(pop);
         table.CallVoidMethodA = Some(upcall);
+        table.NewObjectArray = Some(new_object_array);
         TRACE.with(|slot| {
             assert!(slot.borrow().is_none(), "nested frame tracing");
             *slot.borrow_mut() = Some(Trace {
@@ -144,7 +160,7 @@ impl Hook {
                 frames: Vec::new(),
                 reject,
                 reserve_method,
-                counts: [0; 6],
+                counts: [0; 7],
             });
         });
         *raw = &*table;
@@ -156,7 +172,7 @@ impl Hook {
             _sink_class: sink_class,
         }
     }
-    fn counts(&self) -> [jlong; 6] {
+    fn counts(&self) -> [jlong; 7] {
         TRACE.with(|slot| {
             let slot = slot.borrow();
             let trace = slot.as_ref().expect("installed frame trace");

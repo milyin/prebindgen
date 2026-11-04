@@ -96,11 +96,12 @@ fun checkCallbackLocalFrames() {
             check(counts[3] == 0L)
             check(counts[4] == if (size >= 64) 1L else 0L)
             check(counts[5] == if (size >= 64) size.toLong() else 0L)
+            check(counts[6] == 0L) { "callback return allocated a JNI object array: mode=$mode size=$size" }
         }
     }
-    for (mode in listOf(8, 9)) check(CallbackFrameProbe.measure(mode, 65).contentEquals(LongArray(6)))
+    for (mode in listOf(8, 9)) check(CallbackFrameProbe.measure(mode, 65).contentEquals(LongArray(7)))
     val rejected = CallbackFrameProbe.measure(5, 3)
-    check(rejected.contentEquals(longArrayOf(0, 0, 2, 1, 0, 0)))
+    check(rejected.contentEquals(longArrayOf(0, 0, 2, 1, 0, 0, 0)))
     val reserveRejected = CallbackFrameProbe.measure(7, 65)
-    check(reserveRejected.contentEquals(longArrayOf(0, 0, 0, 1, 1, 0)))
+    check(reserveRejected.contentEquals(longArrayOf(0, 0, 0, 1, 1, 0, 0)))
 }
