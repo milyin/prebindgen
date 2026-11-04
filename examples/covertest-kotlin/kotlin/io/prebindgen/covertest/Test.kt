@@ -31,6 +31,7 @@ fun main() {
     checkNativeOutputOwnership()
     checkJniOutputOwnership()
     checkSequenceDelivery()
+    checkCallbackLocalFrames()
     checkResults()
     checkOptions()
     checkEnums()

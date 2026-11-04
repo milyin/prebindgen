@@ -14,6 +14,7 @@ pub(crate) fn transport(
     let mut descriptor = String::from("(");
     let mut encode = TokenStream::new();
     let mut args = Vec::new();
+    let mut needs_frame = false;
     let slots: usize = crate::group::callback_parameters(element)
         .map(|w| w.kind.parameter_slots())
         .sum();
@@ -30,12 +31,23 @@ pub(crate) fn transport(
         descriptor.push_str(field.kind.jvm_descriptor());
         let local = format_ident!("{wire}_callback_object_{i}");
         let argument = field.kind.output_argument(value, &local);
+        // This is the same classification used by output_argument to allocate
+        // a JVM object. Primitive wire values, including handles, create none.
+        needs_frame |= field.kind.is_reference();
         encode.extend(argument.statements);
         args.push(argument.value);
     }
     descriptor.push_str(")V");
-    let capacity = i32::try_from(crate::group::callback_parameters(element).len() + 8)
-        .map_err(|_| "too many callback fields")?;
+    let (enter, leave) = if needs_frame {
+        let capacity = i32::try_from(crate::group::callback_parameters(element).len() + 8)
+            .map_err(|_| "too many callback fields")?;
+        (
+            quote!(let #frame=unsafe{::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+            quote!(drop(#frame);),
+        )
+    } else {
+        (TokenStream::new(), TokenStream::new())
+    };
     let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
@@ -56,14 +68,14 @@ pub(crate) fn transport(
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
             #env.delete_local_ref(#class).map_err(|e|e.to_string())?;
         },
-        enter: quote!(let #frame=unsafe{::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+        enter,
         store: quote! {
             #encode
             // The method was resolved on this callback object with exactly these
             // JVM wire types. The generated bridge only retains raw fields.
             unsafe {#env.call_method_unchecked(&__pb_callback,#method,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[#(#args),*])}.map_err(|e|e.to_string())?;
             #commit_element
-            drop(#frame);
+            #leave
         },
         // Only a presence marker crosses back; row payloads crossed through run.
         finish: quote!(let #wire=Some(::prebindgen_jni_runtime::array(&mut #env,0)?);),
