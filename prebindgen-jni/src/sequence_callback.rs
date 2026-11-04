@@ -67,10 +67,10 @@ pub(crate) fn transport(
             #env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
-            // The JVM ArrayList default capacity holds ten rows without growth.
-            // Short/empty collections keep the existing JNI setup path. Reserve
-            // once for larger collections, never inside the row loop.
-            if #length > 10 {
+            // An extra upcall costs more than small-list growth. Keep short
+            // captures on the existing JNI path and reserve only larger lists,
+            // once before delivery and never inside the row loop.
+            if #length >= 64 {
                 let capacity=<i32 as ::core::convert::TryFrom<_>>::try_from(#length).map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve)=__PB_SEQUENCE_CAPACITY.get().ok_or_else(|| "collection capacity hint is not initialized".to_string())?;
                 unsafe {#env.call_method_unchecked(&__pb_callback,*reserve,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[::prebindgen_jni_runtime::jni::sys::jvalue{i:capacity}])}.map_err(|e|e.to_string())?;

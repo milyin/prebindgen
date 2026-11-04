@@ -85,7 +85,7 @@ object CallbackFrameEntryPoint {
 }
 
 fun checkCallbackLocalFrames() {
-    for (size in listOf(0, 1, 10, 11, 4096)) {
+    for (size in listOf(0, 1, 10, 11, 63, 64, 65, 4096)) {
         for (mode in listOf(0, 1, 2, 3, 4, 6, 10)) {
             val counts = CallbackFrameProbe.measure(mode, size)
             val expected = if (mode in 2..4 || mode == 10) size.toLong() else 0L
@@ -94,8 +94,8 @@ fun checkCallbackLocalFrames() {
             }
             check(counts[2] == size.toLong())
             check(counts[3] == 0L)
-            check(counts[4] == if (size > 10) 1L else 0L)
-            check(counts[5] == if (size > 10) size.toLong() else 0L)
+            check(counts[4] == if (size >= 64) 1L else 0L)
+            check(counts[5] == if (size >= 64) size.toLong() else 0L)
         }
     }
     for (mode in listOf(8, 9)) check(CallbackFrameProbe.measure(mode, 65).contentEquals(LongArray(6)))

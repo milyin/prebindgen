@@ -90648,7 +90648,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(JD)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -90829,7 +90829,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                 let ret_w2_callback_method = jni_environment
                     .get_method_id(&ret_w2_callback_class, "run", "(JD)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w4 > 10 {
+                if ret_w4 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -91021,7 +91021,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -91259,7 +91259,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -91509,7 +91509,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let ret_w2_callback_method = jni_environment
                 .get_method_id(&ret_w2_callback_class, "run", "(JLjava/lang/String;J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 > 10 {
+            if ret_w4 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -91758,7 +91758,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -91917,7 +91917,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(JJJ)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -92136,7 +92136,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -92380,7 +92380,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -92679,7 +92679,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -93253,7 +93253,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     "(ZBSIJFD[BLjava/lang/String;)V",
                 )
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -93543,7 +93543,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -93836,7 +93836,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w2_callback_method = jni_environment
                     .get_method_id(&ret_w2_callback_class, "run", "(J)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w4 > 10 {
+                if ret_w4 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -94189,7 +94189,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -94477,7 +94477,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -94700,7 +94700,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(Ljava/lang/String;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -94934,7 +94934,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -95219,7 +95219,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([Ljava/lang/Object;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -95523,7 +95523,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(IJ)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -95768,7 +95768,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w2_callback_method = jni_environment
                     .get_method_id(&ret_w2_callback_class, "run", "(J)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w4 > 10 {
+                if ret_w4 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -96038,7 +96038,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w2_callback_method = jni_environment
                     .get_method_id(&ret_w2_callback_class, "run", "(IJ)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w4 > 10 {
+                if ret_w4 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -96290,7 +96290,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(I)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -96515,7 +96515,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -96751,7 +96751,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -97074,7 +97074,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w2_callback_method = jni_environment
                 .get_method_id(&ret_w2_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 > 10 {
+            if ret_w4 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -97337,7 +97337,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             let ret_w2_callback_method = jni_environment
                 .get_method_id(&ret_w2_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 > 10 {
+            if ret_w4 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -97637,7 +97637,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w4_callback_method = jni_environment
                     .get_method_id(&ret_w4_callback_class, "run", "([B)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w6 > 10 {
+                if ret_w6 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w6)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -97857,7 +97857,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             let ret_w3_callback_method = jni_environment
                 .get_method_id(&ret_w3_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w5 > 10 {
+            if ret_w5 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w5)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -98023,7 +98023,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "([B)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -98300,7 +98300,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             let ret_w2_callback_method = jni_environment
                 .get_method_id(&ret_w2_callback_class, "run", "(JLjava/lang/String;J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 > 10 {
+            if ret_w4 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -98517,7 +98517,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 let ret_w2_callback_method = jni_environment
                     .get_method_id(&ret_w2_callback_class, "run", "(JIDZ)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w4 > 10 {
+                if ret_w4 >= 64 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
@@ -98699,7 +98699,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
             let ret_w0_callback_method = jni_environment
                 .get_method_id(&ret_w0_callback_class, "run", "(JLjava/lang/String;)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w2 > 10 {
+            if ret_w2 >= 64 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY

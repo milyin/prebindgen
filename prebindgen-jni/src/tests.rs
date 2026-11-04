@@ -3491,7 +3491,7 @@ fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures(
         &[(syn::parse_quote!(value), quote!(value))],
     )
     .unwrap();
-    assert!(transport.begin.to_string().contains("if length > 10"));
+    assert!(transport.begin.to_string().contains("if length >= 64"));
     assert!(transport.begin.to_string().contains("reserve"));
     assert!(!transport.store.to_string().contains("reserve"));
     assert!(!transport.store.to_string().contains("length"));
@@ -3514,4 +3514,46 @@ fn bulk_only_collections_need_no_collector_keep_rules() {
         .unwrap();
     assert!(!generated.proguard_rules().contains("SequenceSink_"));
     assert!(!generated.proguard_rules().contains("SequenceCollector_"));
+    assert!(!generated.proguard_rules().contains("SequenceCapacity"));
+    assert!(!generated.rust.contains("__PB_SEQUENCE_CAPACITY"));
+    assert!(!generated.kotlin["test/JNINative.kt"].contains("SequenceCapacity"));
+}
+
+#[test]
+fn collector_capacity_registration_is_shared_and_follows_the_library_loader() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn rows()->Vec<i64>{}pub fn text()->Vec<String>{}",
+        ))
+        .set_package_prefix("test")
+        .set_jni_native_init("System.loadLibrary(\"example\")")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(text).callback_return_only()),
+        )
+        .build()
+        .unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(
+        native
+            .matches("internal interface SequenceCapacity ")
+            .count(),
+        1
+    );
+    assert_eq!(native.matches("init { init_SequenceCapacity_").count(), 1);
+    assert_eq!(
+        generated
+            .rust
+            .matches("static __PB_SEQUENCE_CAPACITY")
+            .count(),
+        1
+    );
+    assert!(
+        native.find("System.loadLibrary").unwrap()
+            < native.find("init { init_SequenceCapacity_").unwrap()
+    );
+    assert!(generated
+        .proguard_rules()
+        .contains("JNINative$SequenceCapacity"));
 }

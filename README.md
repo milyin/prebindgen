@@ -1142,9 +1142,9 @@ This prevents user re-entry while Rust borrows are live. It deliberately buffers
 the result before running user code; it does not provide constant-memory streaming
 or early termination. The existing list-return variant remains available.
 
-For larger collections, Rust sends the known length to the internal Kotlin
+For collections of at least 64 rows, Rust sends the known length to the internal Kotlin
 collector before delivering rows. The collector reserves backing-array capacity
-once, avoiding growth and repeated reference-array copies. Short collections skip
+once, avoiding growth and repeated reference-array copies. Smaller collections skip
 this hint to avoid additional JNI setup calls. Reservation failure transfers no
 rows; Rust releases the still-owned output values. Public fold signatures and
 per-row delivery remain unchanged.
