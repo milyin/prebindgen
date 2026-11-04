@@ -112,12 +112,17 @@ impl Declarations {
     {
         let source = flat.function(&decl.name)?;
         let ty = result_parts(&source.ret.ty).map_or(&source.ret.ty, |(ok, _)| ok);
-        let mut output = self.resolve_output(
+        // Choose the delivery while expansion scopes are still intact. Bulk
+        // promotion for an ordinary return must not erase the element boundary
+        // before the callback variant selects that boundary.
+        let mut output = self.output(
             flat,
             codec,
             ty,
             decl.ret.as_ref().unwrap_or(&Output::auto()),
             extra,
+            &mut vec![],
+            false,
         )?;
         fn select(output: &mut Output) -> usize {
             match output {
@@ -158,7 +163,7 @@ impl Declarations {
             }
             if decl.ret.is_none() {
                 if let Some(tree) = structural(ty, &output) {
-                    output = self.resolve_output(flat, codec, ty, &tree, extra)?;
+                    output = self.output(flat, codec, ty, &tree, extra, &mut vec![], false)?;
                 } else {
                     return Err("callback_return requires exactly one outer sequence".into());
                 }
@@ -961,6 +966,32 @@ impl FunctionDecl {
     /// Supports one projected sequence, optionally inside Option and an outer Result.
     /// Existing buffer/list returns are preserved. Adapter builders validate the
     /// return shape and generated-name collisions.
+    ///
+    /// On adapters supporting bulk, expansions stay within each callback element.
+    /// The ordinary variant
+    /// and callback variant are prepared separately from the same declaration.
+    /// For a source returning `Vec<Row>`, this selects a frame per row for the
+    /// callback variant; its ordinary return keeps a frame for the collection:
+    /// ```
+    /// use prebindgen_declarations::{fun, expand_return};
+    /// let _ = fun!(rows)
+    ///     .expand_return(expand_return!(Row).field_self_into().bulk())
+    ///     .callback_return();
+    /// ```
+    /// For a source returning `Vec<Vec<Row>>`, target the inner collection to
+    /// select one bulk frame per batch:
+    /// ```
+    /// use prebindgen_declarations::{fun, expand_return};
+    /// let _ = fun!(batches)
+    ///     .callback_return_only()
+    ///     .expand_return(expand_return!(Vec<Row>).field_self_into().bulk());
+    /// ```
+    /// An explicit bulk wrapper around the entire callback sequence is invalid;
+    /// apply bulk to its element expansion instead. This also applies to a bulk
+    /// wrapper supplied by a whole-collection type default. Nested automatic
+    /// sequences stay ordinary inside a callback element; explicit bulk opts in
+    /// to packing them. Chain order does not affect these policies, and
+    /// per-function expansions override type-wide defaults.
     pub fn callback_return(mut self) -> Self {
         self.callback_return = Some(CallbackReturn::Additional);
         self
@@ -1185,7 +1216,7 @@ fn lift_output_bulk(tree: Output) -> Output {
             delivery,
         } => {
             let child = lift_output_bulk(*element);
-            if output_has_bulk(&child) {
+            if delivery != SequenceDelivery::Callback && output_has_bulk(&child) {
                 Output::Bulk(Box::new(Output::Sequence {
                     element: Box::new(child),
                     mode,
@@ -1243,6 +1274,12 @@ fn input_has_bulk(tree: &Input) -> bool {
 }
 fn output_has_bulk(tree: &Output) -> bool {
     match tree {
+        // Frames inside callback elements belong to those elements, including
+        // when the callback sequence is nested in another structural node.
+        Output::Sequence {
+            delivery: SequenceDelivery::Callback,
+            ..
+        } => false,
         Output::Bulk(_) => true,
         Output::Optional(c)
         | Output::Named { output: c, .. }

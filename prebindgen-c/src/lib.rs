@@ -3496,4 +3496,30 @@ mod abort_policy_tests {
             .build()
             .unwrap();
     }
+    #[test]
+    fn bulk_callback_elements_are_explicitly_unsupported_by_the_c_codec() {
+        use prebindgen_declarations::{expand_return, fun};
+        let source = syn::parse_file("pub fn rows()->Vec<i64>{}").unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let error = Cbindgen::new(flat)
+            .function(
+                fun!(rows)
+                    .callback_return_only()
+                    .expand_return(expand_return!(i64).field_self().bulk()),
+            )
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("bulk outputs are unsupported by this codec"),
+            "{error}"
+        );
+    }
 }

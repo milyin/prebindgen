@@ -95,9 +95,20 @@ fun checkOutputCleanup() {
 private fun checkCallbackFoldCleanup() {
     val folds: List<((List<OutputCleanupRow>) -> Unit) -> Unit> = listOf(
         { visit -> outputCleanupRowsFold(Unit) { _, row -> visit(listOf(row)) } },
+        { visit -> outputCleanupRowsBulkFold(Unit) { _, row -> visit(listOf(row)) } },
         { visit -> outputCleanupNestedFold(Unit) { _, rows -> visit(rows.orEmpty()) } },
+        { visit -> outputCleanupNestedBulkFold(Unit) { _, rows -> visit(rows.orEmpty()) } },
     )
     fun handles(rows: List<OutputCleanupRow>) = rows.flatMap { listOfNotNull(it.first, it.second) }
+    // None and an empty inner batch are distinct callback elements. Each bulk
+    // frame must reconstruct the same nullable list as ordinary row transport.
+    OutputCleanupProbe.reset(-1)
+    val shapes = mutableListOf<Int?>()
+    outputCleanupNestedBulkFold(Unit) { _, rows ->
+        shapes.add(rows?.size)
+        rows.orEmpty().forEach { it.first?.close(); it.second?.close() }
+    }
+    check(shapes == listOf(null, 0, 2, null, 1))
     for ((mode, decode) in folds.withIndex()) {
         // Constructor failures clean only the failing and unread rows. Earlier
         // rows have already been delivered to the fold and remain user-owned.

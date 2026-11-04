@@ -980,12 +980,12 @@ val nativeResult = try { run { val handles = try { (p0_w1_elements?.handles.orEm
 var outputowners: io.prebindgen.covertest.CollectionOwners? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-             if (nativeResult != null) {
-if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
  }
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners?.close(failure)
 if (outputowners?.complete != true) {
-try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
 var outputbulkFailure: Throwable? = failure
@@ -1007,10 +1007,10 @@ var outputowners: io.prebindgen.covertest.CollectionOwners? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
         try {
-            if (nativeResult != null) {
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners = io.prebindgen.covertest.CollectionOwners()
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
@@ -1023,14 +1023,14 @@ outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 
 outputowners!!.complete = true
             }
-            if (nativeResult != null) requireNotNull(outputbulkList) else null
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
-            if (nativeResult != null) {
 if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
  }
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners?.close(failure)
 if (outputowners?.complete != true) {
-try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
 var outputbulkFailure: Throwable? = failure
@@ -1566,9 +1566,11 @@ if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
 
-current = fold(current, __pb_fold_row[0] as Long)
+current = fold(current, (requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
 __pb_accumulator = current
 }
@@ -1704,9 +1706,12 @@ fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (index in start until __pb_rows.size) {
 try {
 val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+ }
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
 } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 }
@@ -1728,16 +1733,20 @@ if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
 try {
-            foldElement0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[0] as Long)
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+            foldElement0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
 current = fold(current, requireNotNull(foldElement0))
 } catch (failure: Throwable) {
 __pb_processed++
 try {
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+ }
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
 } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 throw failure
@@ -1811,7 +1820,7 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 
 public fun <A> `sequenceScalarsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Boolean, Byte, Short, Int, Long, Float, Double, java.math.BigInteger, String?) -> A): A = run {
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { v0, v1, v2, v3, v4, v5, v6, v7, v8 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2, v3, v4, v5, v6, v7, v8)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1824,11 +1833,13 @@ if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 
-            if (__pb_fold_row[8] != null) {
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+            if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[8])) == 1) {
             }
 
-current = fold(current, __pb_fold_row[0] as Boolean, __pb_fold_row[1] as Byte, __pb_fold_row[2] as Short, __pb_fold_row[3] as Int, __pb_fold_row[4] as Long, __pb_fold_row[5] as Float, __pb_fold_row[6] as Double, java.math.BigInteger(__pb_fold_row[7] as ByteArray), if (__pb_fold_row[8] != null) __pb_fold_row[8] as String else null)
+current = fold(current, ((requireNotNull(foldElementbulkReader).byte((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[0]).toInt() != 0)) as Boolean, (requireNotNull(foldElementbulkReader).byte((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[1])) as Byte, (requireNotNull(foldElementbulkReader).short((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[2])) as Short, (requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[3])) as Int, (requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[4])) as Long, (requireNotNull(foldElementbulkReader).float((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[5])) as Float, (requireNotNull(foldElementbulkReader).double((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[6])) as Double, java.math.BigInteger((requireNotNull(foldElementbulkReader).wide((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[7])) as ByteArray), if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[8])) == 1) (requireNotNull(foldElementbulkReader).text((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[9])) as String else null)
 }
 __pb_accumulator = current
 }
