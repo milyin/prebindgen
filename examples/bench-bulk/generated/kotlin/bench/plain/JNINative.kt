@@ -6,6 +6,12 @@ internal object JNINative {
     @JvmStatic external fun drop_InputHandle_7cc67535bbd4a8ee(id: Long)
     @JvmStatic external fun drop_RowReturnHandler_0972ff7cb1556afa(id: Long)
     @JvmStatic external fun drop_WideRowReturnHandler_ed750f04931eb9ca(id: Long)
+    internal class SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long, @JvmField val c3: Long, @JvmField val c4: Long, @JvmField val c5: Long, @JvmField val c6: Long, @JvmField val c7: Long)
+    internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
+    internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
+    internal class SequenceRow_Long_Long_2_c3e8677e51c52ca2(@JvmField val c0: Long, @JvmField val c1: Long)
+    @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
+    init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java)) }
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_input_handle_value_9dacbaa67102b1db(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_handle_values_sum_cc53b2df8a803a98(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -31,12 +37,9 @@ internal object JNINative {
     @JvmStatic external fun call_handler_new_916a49ec8343b596(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_fire_6fdab6ebdaeffb11(p0_w1: Long, p1_w1: Long, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     internal fun interface SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626 { fun run(v0: Long) }
-    internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
     @JvmStatic external fun call_owned_handles_echo_fold_769ead1c15ceb95c(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a { fun run(v0: Array<Any?>?) }
-    internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
     @JvmStatic external fun call_nested_owned_handles_echo_fold_55ebe6c8ba226f50(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b { fun run(v0: Long, v1: Long, v2: Long, v3: Long, v4: Long, v5: Long, v6: Long, v7: Long) }
-    internal class SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long, @JvmField val c3: Long, @JvmField val c4: Long, @JvmField val c5: Long, @JvmField val c6: Long, @JvmField val c7: Long)
     @JvmStatic external fun call_rows_for_reduce_fold_587a8aef1d9a0485(p0_w1: Long, p1_w1: Long, callback: SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
 }

@@ -171,6 +171,9 @@ fun checkCallbackHandleCollections() {
 
     // A native probe enters the real generated bridge with a malformed middle
     // row: completed rows, the failed row and unread rows must all be reclaimed.
+    val longType = Long::class.javaPrimitiveType!!
+    val intType = Int::class.javaPrimitiveType!!
+    val resourceRowClass = rawRowClass(longType, String::class.java, longType)
     var malformedCalls = 0
     val scopedBridge = rowBridge("callbackRowsOwnedProbe", OrdinaryCallbackRowVecCallback { malformedCalls++ })
     val transferredBridge = rowBridge("callbackRowsTransferredProbe", OrdinaryCallbackTransferredRowVecCallback { malformedCalls++ })
@@ -183,7 +186,7 @@ fun checkCallbackHandleCollections() {
         Triple(pairBridge, 3, 6L), Triple(mixedBridge, 3, 6L),
     )) {
         val before = callbackRowResourceDrops()
-        check(CallbackRowsRuntimeProbe.malformed(bridge, mode) == 0L)
+        check(CallbackRowsRuntimeProbe.malformed(bridge, mode, resourceRowClass) == 0L)
         check(callbackRowResourceDrops() - before == drops)
     }
     check(malformedCalls == 0)
@@ -191,13 +194,13 @@ fun checkCallbackHandleCollections() {
     // containment cannot hide a spurious successful-delivery cleanup error.
     var validCalls = 0
     val validBridge = rowBridge("callbackRowsOwnedProbe", OrdinaryCallbackRowVecCallback { rows -> validCalls++; rowHandles(rows).forEach { it.close() } })
-    check(CallbackRowsRuntimeProbe.malformed(validBridge, 4) == 0L && validCalls == 1)
+    check(CallbackRowsRuntimeProbe.malformed(validBridge, 4, resourceRowClass) == 0L && validCalls == 1)
     var absentCalls = 0
     val absentBridge = rowBridge("callbackRowsOptionalProbe", OrdinaryOptionalOptionalCallbackRowVecCallback { rows ->
         check(rows == null)
         absentCalls++
     })
-    check(CallbackRowsRuntimeProbe.malformed(absentBridge, 5) == 0L && absentCalls == 1)
+    check(CallbackRowsRuntimeProbe.malformed(absentBridge, 5, resourceRowClass) == 0L && absentCalls == 1)
     // Reflection propagates any exception from the generated nested bridge,
     // including cleanup of absent optional rows and empty inner collections.
     var emptyCalls = 0
@@ -207,9 +210,13 @@ fun checkCallbackHandleCollections() {
     })
     val runEmpty = emptyBridge.javaClass.getDeclaredMethod("run", Array<Any?>::class.java)
     runEmpty.isAccessible = true
+    val nestedRow = rawRowClass(intType, longType, String::class.java, longType, intType, longType, String::class.java)
+        .declaredConstructors.single()
+    val arrayRow = rawRowClass(Array<Any?>::class.java).declaredConstructors.single()
+    val absentNestedRow = nestedRow.newInstance(0, 0L, null, 0L, 0, 0L, null)
     runEmpty.invoke(emptyBridge, arrayOf<Any?>(
-        arrayOf<Any?>(arrayOf<Any?>(arrayOf<Any?>(0))),
-        arrayOf<Any?>(emptyArray<Any?>()),
+        arrayRow.newInstance(arrayOf<Any?>(absentNestedRow) as Any),
+        arrayRow.newInstance(emptyArray<Any?>() as Any),
     ) as Any)
     check(emptyCalls == 1)
     val workers = AtomicInteger()
@@ -250,5 +257,12 @@ fun checkCallbackHandleCollections() {
 }
 
 private object CallbackRowsRuntimeProbe {
-    @JvmStatic external fun malformed(bridge: Any, mode: Int): Long
+    @JvmStatic external fun malformed(bridge: Any, mode: Int, rowClass: Class<*>): Long
 }
+
+// Identify physical schemas without hard-coding generated hashes.
+private fun rawRowClass(vararg fields: Class<*>): Class<*> =
+    JNINative::class.java.declaredClasses.single { type ->
+        type.simpleName.startsWith("SequenceRow_") &&
+            type.declaredConstructors.single().parameterTypes.contentEquals(fields)
+    }

@@ -603,7 +603,12 @@ pub(crate) fn output_kotlin_scoped(
             let root = owners.is_none() && input_handles(element, false);
             let scope = if root { Some(name.as_str()) } else { owners };
             let mut output = match metadata {
-                JniSequence::Buffered => crate::sequence::output_list(element, context, scope)?,
+                JniSequence::Buffered => {
+                    crate::sequence::output_list(element, context, scope, false)?
+                }
+                JniSequence::TypedBuffered => {
+                    crate::sequence::output_list(element, context, scope, true)?
+                }
                 JniSequence::Bulk => crate::bulk::output_list(element, context, scope)?,
                 JniSequence::Callback => {
                     return Err(

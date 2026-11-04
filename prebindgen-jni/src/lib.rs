@@ -21,6 +21,7 @@ mod cleanup;
 mod optional;
 mod sequence;
 mod sequence_callback;
+mod typed_rows;
 pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
@@ -1113,6 +1114,20 @@ impl JniGen {
         std::fs::write(&path, &self.rust).map_err(|e| e.to_string())?;
         Ok(path)
     }
+    /// R8/ProGuard rules preserving row constructors and fields used from JNI.
+    ///
+    /// Save this text as a `.pro` file and include it in the Android library's
+    /// `consumerProguardFiles` (or the application's `proguardFiles`). These rules
+    /// cover generated raw row storage and its native registration entry point;
+    /// retain the project's other JNI rules as well.
+    pub fn proguard_rules(&self) -> String {
+        self.kotlin.iter().filter_map(|(path, text)| {
+            let package=path.strip_suffix("/JNINative.kt")?.replace('/', ".");
+            text.contains("internal class SequenceRow_").then(|| format!(
+                "-keep class {package}.JNINative {{ *; }}\n-keep class {package}.JNINative$SequenceRow_* {{ *; }}\n"
+            ))
+        }).collect()
+    }
     /// Write all Kotlin files beneath `root`, creating package directories.
     ///
     /// Relative roots use the current directory, not `OUT_DIR`. Existing generated
@@ -1347,6 +1362,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             ))
         })
         .collect::<Result<_>>()?;
+    typed_rows::emit(flat, &mut rust, &mut native, &mut names, &mut row_captures)?;
     bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     rust.extend(cleanup::emit(flat)?);
     callback::files(flat, &kotlin_classes, &mut files)?;

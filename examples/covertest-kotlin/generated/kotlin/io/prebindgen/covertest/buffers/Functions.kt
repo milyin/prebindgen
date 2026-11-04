@@ -55,10 +55,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
@@ -75,12 +75,12 @@ var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.buffers.J
 outputowners = io.prebindgen.covertest.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-            outputitem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackOwned(output_row[0] as Long))
+            outputitem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbacks.CallbackOwned(output_row.c0))
 
-outputlist.add(io.prebindgen.covertest.buffers.JniBufferResourceRow(requireNotNull(outputitem_g0_0), output_row[1] as String, output_row[2] as ByteArray))
+outputlist.add(io.prebindgen.covertest.buffers.JniBufferResourceRow(requireNotNull(outputitem_g0_0), output_row.c1 as String, output_row.c2 as ByteArray))
 }
 
 outputowners!!.complete = true
@@ -91,10 +91,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
         var outputitem_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
 
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackOwned_d936a95539d532a5(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
