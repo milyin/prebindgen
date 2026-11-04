@@ -238,6 +238,7 @@ pub(crate) fn sequence_input(
         values.push((name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
+        reread_rows: false,
         controls: vec![Wire {
             name: wire.clone(),
             kind: JniWire::NativeRows {

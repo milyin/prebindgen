@@ -23,6 +23,15 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     /// JNI local references, which must be decoded during validation. Any locals
     /// retained by construction must also remain valid after `release`.
     pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
+    /// Permit two traversals instead of retaining prepared row closures for a
+    /// grouped resource check. The transport must guarantee stable wire values
+    /// for the whole call, including source constructor invocations. Binding and
+    /// validation must be repeatable without ownership transfer, user code,
+    /// owned temporaries or other observable effects; `release` must also be
+    /// repeatable. The compiler also requires
+    /// every child resource to remain unacquired. JNI object rows should retain
+    /// the single-decode path by leaving this false.
+    pub reread_rows: bool,
     /// Per-row cleanup after construction. Generated code runs this before
     /// propagating an ordinary conversion error from the row.
     pub release: TokenStream,
@@ -152,6 +161,7 @@ pub(crate) fn input<C: Codec>(
     active: &Condition,
     child: CodecInput<C>,
     bulk: bool,
+    deferred_construction: bool,
 ) -> Result<CodecInput<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
@@ -217,6 +227,9 @@ pub(crate) fn input<C: Codec>(
         return Err("collection prepared input names differ from validation bindings".into());
     }
     let grouped = child.resources.iter().any(|r| !r.registered);
+    let reread = transport.reread_rows
+        && deferred_construction
+        && child.resources.iter().all(|r| !r.registered);
     let shared_only = child
         .resources
         .iter()
@@ -319,37 +332,70 @@ pub(crate) fn input<C: Codec>(
             }
     };
     let decode = if grouped {
-        let batch = quote! {
-            let mut #var: Vec<#element> = Vec::new();
-            if #condition { #open #length_check
-                let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
-                let mut #staged = Vec::with_capacity(#length);
-                for #index in 0..#length {
-                    #bind
-                    #[allow(clippy::redundant_closure_call)]
-                    let prepared = (|| {
-                        #validation #collect
-                        Ok::<_,String>(move || -> ::core::result::Result<#element,String> {
-                            #count #acquire #statements #argument Ok(#var)
-                        })
-                    })();
-                    #release
-                    #staged.push(prepared?);
-                }
-                __prebindgen_input_aliases.accept_group(#group)?;
-                #var.reserve_exact(#length);
-                for build in #staged {
-                    let element = build()?;
-                    // Pointer addition is also valid (and a no-op) for ZSTs.
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = #var.len();
-                        #var.as_mut_ptr().add(initialized).write(element);
-                        #var.set_len(initialized + 1);
+        let batch = if reread {
+            quote! {
+                let mut #var: Vec<#element> = Vec::new();
+                if #condition { #open #length_check
+                    let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
+                    for #index in 0..#length {
+                        #bind
+                        #[allow(clippy::redundant_closure_call)]
+                        let checked = (|| { #validation #collect Ok::<_,String>(()) })();
+                        #release
+                        checked?;
+                    }
+                    __prebindgen_input_aliases.accept_group(#group)?;
+                    #var.reserve_exact(#length);
+                    for #index in 0..#length {
+                        #bind
+                        #[allow(clippy::redundant_closure_call)]
+                        let #element_value=(|| -> ::core::result::Result<#element,String> {
+                            #validation #count #acquire #statements #argument Ok(#var)
+                        })();
+                        #release
+                        let element = #element_value?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = #var.len();
+                            #var.as_mut_ptr().add(initialized).write(element);
+                            #var.set_len(initialized + 1);
+                        }
                     }
                 }
             }
+        } else {
+            quote! {
+                let mut #var: Vec<#element> = Vec::new();
+                if #condition { #open #length_check
+                    let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
+                    let mut #staged = Vec::with_capacity(#length);
+                    for #index in 0..#length {
+                        #bind
+                        #[allow(clippy::redundant_closure_call)]
+                        let prepared = (|| {
+                            #validation #collect
+                            Ok::<_,String>(move || -> ::core::result::Result<#element,String> {
+                                #count #acquire #statements #argument Ok(#var)
+                            })
+                        })();
+                        #release
+                        #staged.push(prepared?);
+                    }
+                    __prebindgen_input_aliases.accept_group(#group)?;
+                    #var.reserve_exact(#length);
+                    for build in #staged {
+                        let element = build()?;
+                        // Pointer addition is also valid (and a no-op) for ZSTs.
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = #var.len();
+                            #var.as_mut_ptr().add(initialized).write(element);
+                            #var.set_len(initialized + 1);
+                        }
+                    }
+                }
 
+            }
         };
         if shared_only {
             quote! {

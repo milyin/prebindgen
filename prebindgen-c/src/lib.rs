@@ -2135,7 +2135,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
         tokens.extend(quote! {
          #definition
-         #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
+         #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
          #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
          #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {
             #[allow(unused_mut)] let #accepted=::core::cell::Cell::new(0usize);
@@ -2581,6 +2581,49 @@ mod generation_tests {
             error.contains("mutable-reference outputs are unsupported"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn simple_handle_rows_reread_but_decode_once_rows_keep_preparation() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type Handle=String; pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
+        let model =
+            || Cbindgen::new(error_model(source)).opaque_ptr("handle", syn::parse_quote!(Handle));
+        for constructor in ["row", "text"] {
+            let expansion = if constructor == "row" {
+                expand_param!(Row).variant(fun!(row))
+            } else {
+                expand_param!(Row).variant(fun!(text))
+            };
+            let flat = model()
+                .expand(expansion)
+                .function(fun!(rows))
+                .panic()
+                .prepare()
+                .unwrap();
+            let code = flat.function("rows").unwrap().params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .validation
+                .to_string();
+            assert_eq!(code.contains("_prepared"), constructor == "text", "{code}");
+            assert!(code.contains("accept_group"));
+            if constructor == "row" {
+                assert_eq!(code.matches(":: row (").count(), 1, "{code}");
+                assert!(code.find("accept_group").unwrap() < code.find(":: row (").unwrap());
+            }
+        }
+        let flat = model().function(fun!(options)).panic().prepare().unwrap();
+        let code = flat.function("options").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap()
+            .validation
+            .to_string();
+        assert!(!code.contains("_prepared"));
     }
 
     #[test]

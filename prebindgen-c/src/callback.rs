@@ -808,7 +808,7 @@ pub(crate) fn emit(
             )
             .expect("writing to a String");
         }
-        header.push_str(&format!("/* Rust signature: {}. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
+        header.push_str(&format!("/* Rust signature: {}. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
     }
     Ok(())
 }

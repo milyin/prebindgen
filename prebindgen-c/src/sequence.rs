@@ -30,7 +30,13 @@ pub(crate) fn input(
         );
         values.push((field.name.clone(), quote!(#name)));
     }
+    // Only these leaves validate into Copy scalars and raw pointers. Buffer,
+    // enum, inline-owner, callback and nested-row conversions keep their prepared
+    // state: validation can decode owned values or execute nested construction.
+    let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element))
+        .all(|wire| matches!(wire.kind, CWire::Scalar { .. } | CWire::Pointer { .. }));
     Ok(SequenceInput {
+        reread_rows,
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
             kind: CWire::Rows,
@@ -199,6 +205,9 @@ pub(crate) fn emit_schemas(
         header.push_str(&format!(
             "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
         ));
+        if !is_output {
+            header.push_str("/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */\n");
+        }
         if is_output {
             header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));
             tokens.extend(quote! {

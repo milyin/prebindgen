@@ -420,7 +420,7 @@ pub(crate) fn result_function(
         true,
     );
     tokens.extend(quote! {
-        #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."]
+        #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."]
         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
         #[no_mangle]pub unsafe extern "C" fn #name(#(#params),*)->#rust_return {
             #[allow(unused_mut)]let #accepted=::core::cell::Cell::new(0usize);

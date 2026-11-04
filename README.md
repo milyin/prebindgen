@@ -895,9 +895,16 @@ Byte inputs and JNI byte collections retain their byte-buffer transport.
 
 Collection inputs without handle conflicts reserve their row count and fill
 final native storage directly, including custom constructors. Resource-bearing
-rows are decoded once into prepared native rows. One grouped address check
-precedes acquisition and construction; no intermediate acquired-row vector is
-created. This applies to ordinary and bulk input. JNI local references are
+rows retain decoded state when decoding cannot safely be repeated. Flat C input
+rows made only of scalar fields and opaque handles instead use two traversals:
+validate and check the complete address group, then reread the rows and construct
+the final Rust vector directly. This omits the prepared-row closure buffer.
+Constructors still run once, after the grouped check. String/buffer, enum,
+inline-owner, callback and nested collection conversions retain their existing
+preparation strategy. C input rows and descriptors must stay alive and unchanged
+throughout the call, including source constructor invocations. No runtime locks or
+mutation checks are added. One grouped address check precedes acquisition and
+construction; no intermediate acquired-row vector is created. This applies to ordinary and bulk input. JNI local references are
 released after decoding each row, and are never retained for construction.
 Shared-only calls need no alias history. Other calls keep checked addresses so
 later parameters and collections can reject conflicts with earlier inputs.

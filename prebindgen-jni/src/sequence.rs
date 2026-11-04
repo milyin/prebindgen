@@ -56,6 +56,7 @@ pub(crate) fn input(
         ));
     }
     Ok(SequenceInput {
+        reread_rows: false,
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
             kind: JniWire::Rows {

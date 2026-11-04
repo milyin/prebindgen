@@ -334,8 +334,8 @@ fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
         });
         assert_eq!(
             cost,
-            3 * usize::from(size != 0),
-            "size={size}: prepared rows, grouped addresses and final values"
+            2 * usize::from(size != 0),
+            "size={size}: grouped addresses and final values; no prepared-row buffer"
         );
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
         assert_eq!(consumed, size);

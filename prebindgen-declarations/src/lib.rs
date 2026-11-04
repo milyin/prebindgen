@@ -1736,6 +1736,20 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let child = self.input(element, element_recipe, extra, &Condition::default());
                 self.grouped_input.set(previous);
                 let child = child?;
+                // An exhaustive recipe check keeps future validation-time
+                // operations out of row replay until their effects are audited.
+                fn deferred_construction(recipe: &Input) -> bool {
+                    match recipe {
+                        Input::Leaf => true,
+                        Input::Optional(inner) => deferred_construction(inner),
+                        Input::Fields(fields) | Input::Record(fields) | Input::Selector(fields) => {
+                            fields.iter().all(deferred_construction)
+                        }
+                        Input::Constructor { args, .. } => args.iter().all(deferred_construction),
+                        Input::Bulk(_) | Input::Sequence(_) | Input::Callback(_) => false,
+                        Input::Request(never) => match *never {},
+                    }
+                }
                 return sequence::input(
                     self.codec,
                     ty,
@@ -1747,6 +1761,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
+                    deferred_construction(element_recipe),
                 );
             }
             Input::Optional(inner) => {

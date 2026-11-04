@@ -257,6 +257,7 @@ impl Codec for CodecImpl {
             .name
             .clone();
         Ok(SequenceInput {
+            reread_rows: false,
             controls: vec![
                 Wire {
                     name: wire.clone(),
