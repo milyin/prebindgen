@@ -3212,6 +3212,7 @@ fn primitive_callback_rows_omit_local_frames_including_handle_and_enum_wires() {
     let generated=JniGen::builder()
         .flat(flat("pub enum Code {Zero,Seven} pub struct Row {pub flag:bool,pub byte:i8,pub unsigned_byte:u8,pub short:i16,pub unsigned_short:u16,pub number:i32,pub unsigned_number:u32,pub long:i64,pub unsigned_long:u64,pub signed_size:isize,pub size:usize,pub float:f32,pub double:f64,pub character:char,pub code:Code}pub fn rows()->Vec<Row>{}"))
         .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
         .package(package!().class(data_class!(Row)).class(enum_class!(Code)).fun(fun!(rows).callback_return_only()))
         .build().unwrap();
     assert!(!generated.rust.contains("LocalFrame::new"));
@@ -3221,6 +3222,7 @@ fn primitive_callback_rows_omit_local_frames_including_handle_and_enum_wires() {
     let generated=JniGen::builder()
         .flat(flat("pub type Owner=String;pub struct Row {pub first:Option<Owner>,pub second:Owner}pub fn rows()->Vec<Row>{}"))
         .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
         .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(rows).callback_return_only()))
         .build().unwrap();
     assert!(!generated.rust.contains("LocalFrame::new"));
@@ -3245,6 +3247,7 @@ fn callback_rows_keep_local_frames_for_every_reference_encoding() {
             )
             .build()
             .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
         assert!(generated.rust.contains("let ret_w0_callback_frame"), "{ty}");
         assert!(
             generated.rust.contains("drop(ret_w0_callback_frame)"),
@@ -3264,6 +3267,7 @@ fn callback_rows_keep_local_frames_for_every_reference_encoding() {
         )
         .build()
         .unwrap();
+    syn::parse_file(&generated.rust).unwrap();
     assert!(generated.rust.contains("let ret_w0_callback_frame"));
     assert!(generated.rust.contains("drop(ret_w0_callback_frame)"));
 }

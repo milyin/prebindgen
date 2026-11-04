@@ -6538,9 +6538,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let mut ret_w4 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w1,
                 });
@@ -6571,7 +6568,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                 let _: () = (|| -> () {
                     let _ = Box::into_raw(ret_w4).expose_provenance();
                 })();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -7109,9 +7105,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let ret_w4_f0 = ret_w4_record.a;
                 let ret_w4_f1 = ret_w4_record.b;
@@ -7164,7 +7157,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {

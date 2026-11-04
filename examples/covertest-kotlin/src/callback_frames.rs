@@ -120,10 +120,10 @@ impl Hook {
     }
     fn counts(&self) -> [jlong; 4] {
         TRACE.with(|slot| {
-            slot.borrow()
-                .as_ref()
-                .expect("installed frame trace")
-                .counts
+            let slot = slot.borrow();
+            let trace = slot.as_ref().expect("installed frame trace");
+            assert!(trace.frames.is_empty(), "unbalanced JNI frames");
+            trace.counts
         })
     }
 }
