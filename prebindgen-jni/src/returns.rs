@@ -356,4 +356,51 @@ mod tests {
         assert!(!code.contains("__pb_return :"));
         assert!(code.contains("binding_packet"));
     }
+
+    #[test]
+    fn packet_fallback_keeps_callback_collection_presence_scalar() {
+        let source = syn::parse_file("pub type Failure=String; pub fn rows()->Result<Option<Vec<i64>>,Failure>{} pub fn message(x:Failure)->String{}").unwrap();
+        let mut flat = JniGen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .set_package_prefix("test")
+            .error_mapper(syn::parse_quote!(Failure), fun!(message))
+            .package(package!().fun(fun!(rows).callback_return_only()))
+            .prepare()
+            .unwrap();
+        let error = flat
+            .function_mut("rows_fold")
+            .unwrap()
+            .metadata
+            .as_mut()
+            .unwrap()
+            .error
+            .as_mut()
+            .unwrap();
+        std::rc::Rc::make_mut(error)
+            .output
+            .rust
+            .delivery
+            .statements
+            .extend(quote!(let custom_error_protocol = ();));
+        let generation = generate(&flat).unwrap();
+        let functions = externs(&generation);
+        let function = functions
+            .iter()
+            .find(|(name, _)| name.contains("call_1rows_1fold_1"))
+            .unwrap()
+            .1;
+        let code = quote!(#function).to_string();
+        // The fallback still allocates its required outer packet, but no
+        // separate marker array or local reference for the collection.
+        assert_eq!(code.matches("prebindgen_jni_runtime :: array").count(), 1);
+        assert!(code.contains("valueOf"));
+        assert!(!code.contains("new_local_ref"));
+        assert!(generation.kotlin["test/Functions.kt"].contains("if (result[1] as Int == 0)"));
+        assert!(generation.kotlin["test/JNINative.kt"].contains("): Array<Any?>"));
+    }
 }

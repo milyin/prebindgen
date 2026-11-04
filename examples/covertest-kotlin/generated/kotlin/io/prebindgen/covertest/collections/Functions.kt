@@ -1104,7 +1104,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1134,7 +1134,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1178,7 +1178,7 @@ val nativeResult = try { try { run { val handles = try { (if (p0_w3 != null) (p0
     var __pb_accumulator: A? = null
 var __pb_processed = 0
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1202,7 +1202,7 @@ __pb_accumulator = current
 }
             __pb_accumulator
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1256,7 +1256,7 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 var __pb_processed = 0
 var __pb_foldOwners: io.prebindgen.covertest.CollectionOwners? = null
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 if (__pb_rows.size != 0) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
@@ -1305,7 +1305,7 @@ __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1324,7 +1324,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1352,7 +1352,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1380,7 +1380,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1410,7 +1410,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1446,7 +1446,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1476,7 +1476,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) re
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1504,7 +1504,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) re
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1534,7 +1534,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1562,7 +1562,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1592,7 +1592,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1637,7 +1637,7 @@ onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1661,7 +1661,7 @@ __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1681,7 +1681,7 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1729,7 +1729,7 @@ onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1757,7 +1757,7 @@ __pb_accumulator = current
 }
             __pb_accumulator
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1788,7 +1788,7 @@ onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1812,7 +1812,7 @@ __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1829,7 +1829,7 @@ val nativeResult = try { run { val nativeArgument0 = try { __pb_sink } catch (fa
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1873,7 +1873,7 @@ onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
         try {
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]
@@ -1897,7 +1897,7 @@ __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-if (nativeResult != null) __pb_discard(failure, __pb_processed)
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1916,7 +1916,7 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]

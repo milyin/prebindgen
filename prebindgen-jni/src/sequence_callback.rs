@@ -53,10 +53,9 @@ pub(crate) fn transport(
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
-            kind: JniWire::Rows {
-                condition: ("true").into(),
-                null_niche_available: true,
-            },
+            // Zero means present, even when no rows arrived. The enclosing
+            // option reserves -1; both values use cached boxes in packet mode.
+            kind: JniWire::selector(),
         }],
         commit_each: true,
         fallible: true,
@@ -86,8 +85,8 @@ pub(crate) fn transport(
             #commit_element
             #leave
         },
-        // Only a presence marker crosses back; row payloads crossed through run.
-        finish: quote!(let #wire=Some(::prebindgen_jni_runtime::array(&mut #env,0)?);),
+        // Row payloads crossed through run; only scalar presence crosses back.
+        finish: quote!(let #wire=0i32;),
         values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     })
@@ -144,23 +143,7 @@ pub(crate) fn fold(
     layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
-    fn optional(
-        node: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-    ) -> bool {
-        match node {
-            prebindgen_flat::WireNode::Chain {
-                meta: JniChain::Optional(_),
-                ..
-            } => true,
-            prebindgen_flat::WireNode::Branch {
-                meta: JniBranch::Group(_),
-                children: elements,
-                ..
-            } => elements.iter().any(optional),
-            _ => false,
-        }
-    }
-    let optional = optional(layout);
+    let optional = crate::sequence::callback_optional(layout)?;
     let (carrier, element, _) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
     let position = crate::group::result_packet_fields(layout)
@@ -205,7 +188,7 @@ pub(crate) fn fold(
     } else {
         unread.clone()
     };
-    let present = format!("{}[{position}] != null", context.result);
+    let present = format!("{}[{position}] as Int == 0", context.result);
     let raw = "__pb_rows";
     let types = child.callback_type_parameters()?;
     let args = child.delivered.join(", ");

@@ -334,7 +334,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-if (nativeResult != null) {
+if (nativeResult == 0) {
 var current = initial
 for (__pb_rowIndex in 0 until __pb_rows.size) {
 val __pb_fold_row = __pb_rows[__pb_rowIndex]

@@ -41,9 +41,8 @@ pub enum JniWire {
         /// Signature and output conversions used when Rust invokes this callback.
         callback: std::rc::Rc<crate::JniCallback>,
     },
-    /// One JNI object-array carrier. Buffered sequences store raw rows here;
-    /// callback delivery uses an empty array as its present marker. The
-    /// sequence container owns the element layout in both cases.
+    /// One JNI object-array carrier for buffered sequence rows. The sequence
+    /// container owns the element layout.
     Rows {
         /// Kotlin expression selecting this array's active input alternative.
         condition: String,
