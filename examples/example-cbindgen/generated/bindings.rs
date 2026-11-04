@@ -142,6 +142,7 @@ pub struct example_calculator_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -182,6 +183,7 @@ pub struct example_caption_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -275,6 +277,7 @@ pub struct example_foo_get_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -345,6 +348,7 @@ pub struct example_foo_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -396,6 +400,7 @@ pub struct example_local_counter_label_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -499,6 +504,7 @@ pub struct example_local_counter_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -556,6 +562,7 @@ pub struct example_local_counter_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,

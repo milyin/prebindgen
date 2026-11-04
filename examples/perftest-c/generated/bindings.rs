@@ -1160,6 +1160,7 @@ pub struct __PbError_result_error {
     pub v1: __PbOwned_owned_string,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1209,6 +1210,7 @@ pub struct __PbError_panic_error {
     pub v0: __PbOwned_owned_string,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1258,6 +1260,7 @@ pub struct __PbError_rich_error {
     pub v2: __PbOwned_owned_string,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1332,6 +1335,7 @@ pub struct __PbError_drop_error {
     pub v0: *mut perftest_flat::OwnedResource,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1379,6 +1383,7 @@ pub struct __PbError_resource_error {
     pub v1: __PbOwned_owned_string,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1505,6 +1510,7 @@ pub struct __PbError_collection_error {
     pub v1: __PbRows,
 }
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1730,6 +1736,7 @@ pub struct perftest_api_record_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1767,6 +1774,7 @@ pub struct perftest_archive_latest_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1840,6 +1848,7 @@ pub struct perftest_archive_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1880,6 +1889,7 @@ pub struct perftest_archive_store_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2036,6 +2046,7 @@ pub struct perftest_blob_value_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2114,6 +2125,7 @@ pub struct perftest_blob_value_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2186,6 +2198,7 @@ pub struct perftest_borrow_no_clone_emit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2308,6 +2321,7 @@ pub struct perftest_borrow_no_clone_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2350,6 +2364,7 @@ pub struct perftest_borrow_no_clone_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2418,6 +2433,7 @@ pub struct perftest_borrow_packet_counter_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2470,6 +2486,7 @@ pub struct perftest_borrow_packet_emit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2607,6 +2624,7 @@ pub struct perftest_borrow_packet_emit_copy_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2750,6 +2768,7 @@ pub struct perftest_borrow_packet_emit_expanded_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -2889,6 +2908,7 @@ pub struct perftest_borrow_packet_emit_expanded_other_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3028,6 +3048,7 @@ pub struct perftest_borrow_packet_emit_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3179,6 +3200,7 @@ pub struct perftest_borrow_packet_emit_worker_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3301,6 +3323,7 @@ pub struct perftest_borrow_packet_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3367,6 +3390,7 @@ pub struct perftest_borrow_packet_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3424,6 +3448,7 @@ pub struct perftest_borrow_packet_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3518,6 +3543,7 @@ pub struct perftest_borrow_packet_ref_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3585,6 +3611,7 @@ pub struct perftest_buffer_views_address_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3623,6 +3650,7 @@ pub struct perftest_buffer_views_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3677,6 +3705,7 @@ pub struct perftest_buffer_views_optional_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3763,6 +3792,7 @@ pub struct perftest_buffer_views_optional_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3848,6 +3878,7 @@ pub struct perftest_buffer_views_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -3898,6 +3929,7 @@ pub struct perftest_c_output_callback_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -4225,6 +4257,7 @@ pub struct perftest_c_output_nested_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -4551,6 +4584,7 @@ pub struct perftest_c_output_pair_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -4894,6 +4928,7 @@ pub struct perftest_c_output_rows_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5094,6 +5129,7 @@ pub struct perftest_c_panic_output_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5136,6 +5172,7 @@ pub struct perftest_c_plain_panic_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5171,6 +5208,7 @@ pub struct perftest_c_result_bool_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5272,6 +5310,7 @@ pub struct perftest_c_result_drop_panic_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5371,6 +5410,7 @@ pub struct perftest_c_result_error_drop_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5454,6 +5494,7 @@ pub struct perftest_c_result_late_niche_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5563,6 +5604,7 @@ pub struct perftest_c_result_optional_handle_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5696,6 +5738,7 @@ pub struct perftest_c_result_panic_error_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5778,6 +5821,7 @@ pub struct perftest_c_result_resource_error_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5883,6 +5927,7 @@ pub struct perftest_c_result_rich_error_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -5983,6 +6028,7 @@ pub struct perftest_c_result_structured_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6109,6 +6155,7 @@ pub struct perftest_callback_return_bool_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6223,6 +6270,7 @@ pub struct perftest_callback_return_borrowed_pair_catch_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6379,6 +6427,7 @@ pub struct perftest_callback_return_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6506,6 +6555,7 @@ pub struct perftest_callback_return_c_result_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6664,6 +6714,7 @@ pub struct perftest_callback_return_catch_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6778,6 +6829,7 @@ pub struct perftest_callback_return_char_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -6895,6 +6947,7 @@ pub struct perftest_callback_return_char_catch_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7008,6 +7061,7 @@ pub struct perftest_callback_return_enum_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7132,6 +7186,7 @@ pub struct perftest_callback_return_f32_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7246,6 +7301,7 @@ pub struct perftest_callback_return_float_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7360,6 +7416,7 @@ pub struct perftest_callback_return_handler_call_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7448,6 +7505,7 @@ pub struct perftest_callback_return_handler_many_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7603,6 +7661,7 @@ pub struct perftest_callback_return_handler_new_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7787,6 +7846,7 @@ pub struct perftest_callback_return_handler_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -7905,6 +7965,7 @@ pub struct perftest_callback_return_i16_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8019,6 +8080,7 @@ pub struct perftest_callback_return_i64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8133,6 +8195,7 @@ pub struct perftest_callback_return_i8_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8247,6 +8310,7 @@ pub struct perftest_callback_return_join_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8325,6 +8389,7 @@ pub struct perftest_callback_return_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8504,6 +8569,7 @@ pub struct perftest_callback_return_owned_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8645,6 +8711,7 @@ pub struct perftest_callback_return_owned_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8820,6 +8887,7 @@ pub struct perftest_callback_return_owned_vector_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -8910,15 +8978,24 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                             as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                         callback_return_w2,
                                     )?;
+                                    let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
+                                        == 0
+                                    {
+                                        &[]
+                                    } else {
+                                        unsafe {
+                                            ::core::slice::from_raw_parts(
+                                                callback_return_w1.data
+                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                                callback_return_w2,
+                                            )
+                                        }
+                                    };
                                     let mut callback_return_w1_accesses = __prebindgen_input_aliases
                                         .begin_group(callback_return_w2.saturating_mul(1usize));
                                     for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = unsafe {
-                                            (*((callback_return_w1.data
-                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                .add(callback_return_w3)))
-                                                .v0
-                                        };
+                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                            .v0;
                                         #[allow(unused_variables, clippy::redundant_closure_call)]
                                         let checked = (|| {
                                             let callback_return_w5_pointer = if true {
@@ -8947,12 +9024,8 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                         .accept_group(callback_return_w1_accesses)?;
                                     callback_return_w0.reserve_exact(callback_return_w2);
                                     for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = unsafe {
-                                            (*((callback_return_w1.data
-                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                .add(callback_return_w3)))
-                                                .v0
-                                        };
+                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                            .v0;
                                         #[allow(clippy::redundant_closure_call)]
                                         let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                             perftest_flat::CallbackReturnResource,
@@ -9053,6 +9126,7 @@ pub struct perftest_callback_return_owned_vector_catch_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9143,15 +9217,24 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                             as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
                                         callback_return_w2,
                                     )?;
+                                    let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
+                                        == 0
+                                    {
+                                        &[]
+                                    } else {
+                                        unsafe {
+                                            ::core::slice::from_raw_parts(
+                                                callback_return_w1.data
+                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                                callback_return_w2,
+                                            )
+                                        }
+                                    };
                                     let mut callback_return_w1_accesses = __prebindgen_input_aliases
                                         .begin_group(callback_return_w2.saturating_mul(1usize));
                                     for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = unsafe {
-                                            (*((callback_return_w1.data
-                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                .add(callback_return_w3)))
-                                                .v0
-                                        };
+                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                            .v0;
                                         #[allow(unused_variables, clippy::redundant_closure_call)]
                                         let checked = (|| {
                                             let callback_return_w5_pointer = if true {
@@ -9180,12 +9263,8 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                         .accept_group(callback_return_w1_accesses)?;
                                     callback_return_w0.reserve_exact(callback_return_w2);
                                     for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = unsafe {
-                                            (*((callback_return_w1.data
-                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                .add(callback_return_w3)))
-                                                .v0
-                                        };
+                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                            .v0;
                                         #[allow(clippy::redundant_closure_call)]
                                         let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                             perftest_flat::CallbackReturnResource,
@@ -9286,6 +9365,7 @@ pub struct perftest_callback_return_pair_catch_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9464,6 +9544,7 @@ pub struct perftest_callback_return_record_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9632,6 +9713,7 @@ pub struct perftest_callback_return_resource_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9700,6 +9782,7 @@ pub struct perftest_callback_return_resource_live_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9737,6 +9820,7 @@ pub struct perftest_callback_return_resource_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9796,6 +9880,7 @@ pub struct perftest_callback_return_spawn_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -9915,6 +10000,7 @@ pub struct perftest_callback_return_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10047,6 +10133,7 @@ pub struct perftest_callback_return_u128_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10176,6 +10263,7 @@ pub struct perftest_callback_return_unit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10266,6 +10354,7 @@ pub struct perftest_callback_return_unsigned_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10402,6 +10491,7 @@ pub struct perftest_callback_return_vector_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10512,14 +10602,23 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                         as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1,
                                     callback_return_w2,
                                 )?;
+                                let callback_return_w1_rows: &[__PbRow_callback_aaca2bf4492ad16a_callback_return_w1] = if callback_return_w2
+                                    == 0
+                                {
+                                    &[]
+                                } else {
+                                    unsafe {
+                                        ::core::slice::from_raw_parts(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1,
+                                            callback_return_w2,
+                                        )
+                                    }
+                                };
                                 callback_return_w0.reserve_exact(callback_return_w2);
                                 for callback_return_w3 in 0..callback_return_w2 {
-                                    let callback_return_w5 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1)
-                                            .add(callback_return_w3)))
-                                            .v0
-                                    };
+                                    let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                        .v0;
                                     #[allow(clippy::redundant_closure_call)]
                                     let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                         i64,
@@ -10635,6 +10734,7 @@ pub struct perftest_callback_return_wide_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10764,6 +10864,7 @@ pub struct perftest_callback_return_zero_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10874,6 +10975,7 @@ pub struct perftest_callback_row_resource_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10942,6 +11044,7 @@ pub struct perftest_callback_row_resource_live_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -10984,6 +11087,7 @@ pub struct perftest_collection_alias_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11012,14 +11116,20 @@ pub unsafe extern "C" fn perftest_collection_alias(
                     p0_w1.data as *const __PbRow_collection_alias_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_alias_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_alias_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_alias_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -11044,11 +11154,7 @@ pub unsafe extern "C" fn perftest_collection_alias(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_alias_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -11167,6 +11273,7 @@ pub struct perftest_collection_borrow_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11189,13 +11296,19 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
                     p0_w1.data as *const __PbRow_collection_borrow_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_borrow_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_borrow_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_borrow_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -11283,6 +11396,7 @@ pub struct perftest_collection_borrow_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11312,13 +11426,19 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
                     p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_borrow_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -11405,6 +11525,7 @@ pub struct perftest_collection_bundle_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11526,6 +11647,7 @@ pub struct perftest_collection_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11653,6 +11775,7 @@ pub struct perftest_collection_bytes_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11770,6 +11893,7 @@ pub struct perftest_collection_construct_all_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -11795,14 +11919,21 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                     p0_w1.data as *const __PbRow_collection_construct_all_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_construct_all_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_construct_all_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -11827,11 +11958,7 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::CollectionItem,
@@ -11927,6 +12054,7 @@ pub struct perftest_collection_enum_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12062,6 +12190,7 @@ pub struct perftest_collection_enum_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12184,6 +12313,7 @@ pub struct perftest_collection_fail_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12302,6 +12432,7 @@ pub struct perftest_collection_handles_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12343,14 +12474,20 @@ pub unsafe extern "C" fn perftest_collection_handles(
                     p0_w1.data as *const __PbRow_collection_handles_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_handles_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_handles_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -12375,11 +12512,7 @@ pub unsafe extern "C" fn perftest_collection_handles(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -12585,6 +12718,7 @@ pub struct perftest_collection_handles_each_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12633,14 +12767,21 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                     p0_w1.data as *const __PbRow_collection_handles_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_handles_each_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_handles_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -12665,11 +12806,7 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -12852,6 +12989,7 @@ pub struct perftest_collection_i64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12872,13 +13010,19 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
                     p0_w1.data as *const __PbRow_collection_i64_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_i64_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_i64_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_i64_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -12963,6 +13107,7 @@ pub struct perftest_collection_i64_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -12992,13 +13137,19 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
                     p0_w1.data as *const __PbRow_collection_i64_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_i64_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_i64_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_i64_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -13066,6 +13217,7 @@ pub struct perftest_collection_input_array_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13088,16 +13240,22 @@ pub unsafe extern "C" fn perftest_collection_input_array(p0_w1: __PbRows) -> i64
                     p0_w1.data as *const __PbRow_collection_input_array_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_input_array_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_input_array_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 if p0_w2 != 4 {
                     return Err("wrong fixed array length".into());
                 }
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_array_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -13157,6 +13315,7 @@ pub struct perftest_collection_input_custom_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13182,13 +13341,20 @@ pub unsafe extern "C" fn perftest_collection_input_custom(
                     p0_w1.data as *const __PbRow_collection_input_custom_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_input_custom_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_input_custom_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_custom_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -13254,6 +13420,7 @@ pub struct perftest_collection_input_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13282,13 +13449,21 @@ pub unsafe extern "C" fn perftest_collection_input_optional(
                     p0_w3.data as *const __PbRow_collection_input_optional_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_input_optional_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data as *const __PbRow_collection_input_optional_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_input_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -13352,6 +13527,7 @@ pub struct perftest_collection_input_optional_array_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13380,17 +13556,25 @@ pub unsafe extern "C" fn perftest_collection_input_optional_array(
                     p0_w3.data as *const __PbRow_collection_input_optional_array_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_input_optional_array_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data
+                                as *const __PbRow_collection_input_optional_array_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 if p0_w4 != 4 {
                     return Err("wrong fixed array length".into());
                 }
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_input_optional_array_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -13463,6 +13647,7 @@ pub struct perftest_collection_input_plain_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13488,13 +13673,19 @@ pub unsafe extern "C" fn perftest_collection_input_plain(
                     p0_w1.data as *const __PbRow_collection_input_plain_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_input_plain_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_input_plain_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_plain_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -13559,6 +13750,7 @@ pub struct perftest_collection_input_slice_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13581,13 +13773,19 @@ pub unsafe extern "C" fn perftest_collection_input_slice(p0_w1: __PbRows) -> i64
                     p0_w1.data as *const __PbRow_collection_input_slice_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_input_slice_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_input_slice_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_slice_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -13673,6 +13871,7 @@ pub struct perftest_collection_late_drop_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -13917,6 +14116,7 @@ pub struct perftest_collection_make_items_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -14056,6 +14256,7 @@ pub struct perftest_collection_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -14097,13 +14298,21 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
                                 (p0_w5).data as *const __PbRow_collection_nested_p0_w5,
                                 p0_w6,
                             )?;
+                            let p0_w5_rows: &[__PbRow_collection_nested_p0_w5] = if p0_w6
+                                == 0
+                            {
+                                &[]
+                            } else {
+                                unsafe {
+                                    ::core::slice::from_raw_parts(
+                                        (p0_w5).data as *const __PbRow_collection_nested_p0_w5,
+                                        p0_w6,
+                                    )
+                                }
+                            };
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data as *const __PbRow_collection_nested_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     i64,
@@ -14278,6 +14487,7 @@ pub struct perftest_collection_nested_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -14326,14 +14536,21 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                                 (p0_w5).data as *const __PbRow_collection_nested_each_p0_w5,
                                 p0_w6,
                             )?;
+                            let p0_w5_rows: &[__PbRow_collection_nested_each_p0_w5] = if p0_w6
+                                == 0
+                            {
+                                &[]
+                            } else {
+                                unsafe {
+                                    ::core::slice::from_raw_parts(
+                                        (p0_w5).data as *const __PbRow_collection_nested_each_p0_w5,
+                                        p0_w6,
+                                    )
+                                }
+                            };
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_each_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     i64,
@@ -14505,6 +14722,7 @@ pub struct perftest_collection_nested_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -14552,15 +14770,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                                     as *const __PbRow_collection_nested_handles_p0_w5,
                                 p0_w6,
                             )?;
+                            let p0_w5_rows: &[__PbRow_collection_nested_handles_p0_w5] = if p0_w6
+                                == 0
+                            {
+                                &[]
+                            } else {
+                                unsafe {
+                                    ::core::slice::from_raw_parts(
+                                        (p0_w5).data
+                                            as *const __PbRow_collection_nested_handles_p0_w5,
+                                        p0_w6,
+                                    )
+                                }
+                            };
                             let mut p0_w5_accesses = __prebindgen_input_aliases
                                 .begin_group(p0_w6.saturating_mul(1usize));
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(unused_variables, clippy::redundant_closure_call)]
                                 let checked = (|| {
                                     let p0_w9_pointer = if true {
@@ -14585,12 +14811,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                             __prebindgen_input_aliases.accept_group(p0_w5_accesses)?;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     perftest_flat::OwnedResource,
@@ -14814,6 +15035,7 @@ pub struct perftest_collection_nested_handles_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -14867,15 +15089,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                                     as *const __PbRow_collection_nested_handles_each_p0_w5,
                                 p0_w6,
                             )?;
+                            let p0_w5_rows: &[__PbRow_collection_nested_handles_each_p0_w5] = if p0_w6
+                                == 0
+                            {
+                                &[]
+                            } else {
+                                unsafe {
+                                    ::core::slice::from_raw_parts(
+                                        (p0_w5).data
+                                            as *const __PbRow_collection_nested_handles_each_p0_w5,
+                                        p0_w6,
+                                    )
+                                }
+                            };
                             let mut p0_w5_accesses = __prebindgen_input_aliases
                                 .begin_group(p0_w6.saturating_mul(1usize));
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_each_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(unused_variables, clippy::redundant_closure_call)]
                                 let checked = (|| {
                                     let p0_w9_pointer = if true {
@@ -14900,12 +15130,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                             __prebindgen_input_aliases.accept_group(p0_w5_accesses)?;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_each_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = p0_w5_rows[p0_w7].v0;
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     perftest_flat::OwnedResource,
@@ -15079,6 +15304,7 @@ pub struct perftest_collection_numbers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -15190,6 +15416,7 @@ pub struct perftest_collection_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -15222,13 +15449,19 @@ pub unsafe extern "C" fn perftest_collection_optional(
                     p0_w3.data as *const __PbRow_collection_optional_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_p0_w3] = if p0_w4 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data as *const __PbRow_collection_optional_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -15356,6 +15589,7 @@ pub struct perftest_collection_optional_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -15393,13 +15627,20 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
                     p0_w3.data as *const __PbRow_collection_optional_each_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_each_p0_w3] = if p0_w4 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data as *const __PbRow_collection_optional_each_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -15517,6 +15758,7 @@ pub struct perftest_collection_optional_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -15552,15 +15794,23 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                     p0_w3.data as *const __PbRow_collection_optional_handles_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_handles_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data
+                                as *const __PbRow_collection_optional_handles_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 let mut p0_w3_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w4.saturating_mul(1usize));
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w7_pointer = if true {
@@ -15585,12 +15835,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                 __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -15756,6 +16001,7 @@ pub struct perftest_collection_optional_handles_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -15798,15 +16044,23 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                     p0_w3.data as *const __PbRow_collection_optional_handles_each_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_handles_each_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data
+                                as *const __PbRow_collection_optional_handles_each_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 let mut p0_w3_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w4.saturating_mul(1usize));
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w7_pointer = if true {
@@ -15831,12 +16085,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                 __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -15983,6 +16232,7 @@ pub struct perftest_collection_optional_items_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16015,18 +16265,22 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                     p0_w3.data as *const __PbRow_collection_optional_items_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_items_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data as *const __PbRow_collection_optional_items_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_items_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w9 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_items_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
+                    let p0_w9 = p0_w3_rows[p0_w5].v1;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -16181,6 +16435,7 @@ pub struct perftest_collection_optional_items_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16218,20 +16473,23 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
                     p0_w3.data as *const __PbRow_collection_optional_items_each_p0_w3,
                     p0_w4,
                 )?;
+                let p0_w3_rows: &[__PbRow_collection_optional_items_each_p0_w3] = if p0_w4
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data
+                                as *const __PbRow_collection_optional_items_each_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_items_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w9 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_items_each_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
+                    let p0_w7 = p0_w3_rows[p0_w5].v0;
+                    let p0_w9 = p0_w3_rows[p0_w5].v1;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -16376,6 +16634,7 @@ pub struct perftest_collection_options_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16401,18 +16660,20 @@ pub unsafe extern "C" fn perftest_collection_options(
                     p0_w1.data as *const __PbRow_collection_options_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_options_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_options_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w7 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w7 = p0_w1_rows[p0_w3].v1;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -16536,6 +16797,7 @@ pub struct perftest_collection_options_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16566,18 +16828,21 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                     p0_w1.data as *const __PbRow_collection_options_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_options_each_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_options_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w7 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_each_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w7 = p0_w1_rows[p0_w3].v1;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -16707,6 +16972,7 @@ pub struct perftest_collection_probe_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16732,13 +16998,19 @@ pub unsafe extern "C" fn perftest_collection_probe(
                     p0_w1.data as *const __PbRow_collection_probe_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_probe_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_probe_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_probe_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         char,
@@ -16874,6 +17146,7 @@ pub struct perftest_collection_resource_ids_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -16899,15 +17172,22 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                         p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
                         p0_w2,
                     )?;
+                    let p0_w1_rows: &[__PbRow_collection_resource_ids_p0_w1] = if p0_w2
+                        == 0
+                    {
+                        &[]
+                    } else {
+                        unsafe {
+                            ::core::slice::from_raw_parts(
+                                p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
+                                p0_w2,
+                            )
+                        }
+                    };
                     let mut p0_w1_accesses = __prebindgen_input_aliases
                         .begin_group(p0_w2.saturating_mul(1usize));
                     for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = unsafe {
-                            (*((p0_w1.data
-                                as *const __PbRow_collection_resource_ids_p0_w1)
-                                .add(p0_w3)))
-                                .v0
-                        };
+                        let p0_w6 = p0_w1_rows[p0_w3].v0;
                         #[allow(unused_variables, clippy::redundant_closure_call)]
                         let checked = (|| {
                             let p0_w6_pointer = if true {
@@ -16932,12 +17212,7 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                     __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                     p0_w0.reserve_exact(p0_w2);
                     for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = unsafe {
-                            (*((p0_w1.data
-                                as *const __PbRow_collection_resource_ids_p0_w1)
-                                .add(p0_w3)))
-                                .v0
-                        };
+                        let p0_w6 = p0_w1_rows[p0_w3].v0;
                         #[allow(clippy::redundant_closure_call)]
                         let p0_w1_element_built = (|| -> ::core::result::Result<
                             perftest_flat::OwnedResource,
@@ -16978,14 +17253,21 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                         p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
                         p0_w2,
                     )?;
+                    let p0_w1_rows: &[__PbRow_collection_resource_ids_p0_w1] = if p0_w2
+                        == 0
+                    {
+                        &[]
+                    } else {
+                        unsafe {
+                            ::core::slice::from_raw_parts(
+                                p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
+                                p0_w2,
+                            )
+                        }
+                    };
                     p0_w0.reserve_exact(p0_w2);
                     for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = unsafe {
-                            (*((p0_w1.data
-                                as *const __PbRow_collection_resource_ids_p0_w1)
-                                .add(p0_w3)))
-                                .v0
-                        };
+                        let p0_w6 = p0_w1_rows[p0_w3].v0;
                         #[allow(clippy::redundant_closure_call)]
                         let p0_w1_element_built = (|| -> ::core::result::Result<
                             perftest_flat::OwnedResource,
@@ -17082,6 +17364,7 @@ pub struct perftest_collection_resource_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -17166,6 +17449,7 @@ pub struct perftest_collection_result_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -17199,13 +17483,19 @@ pub unsafe extern "C" fn perftest_collection_result(
                     p0_w1.data as *const __PbRow_collection_result_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_result_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_result_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_result_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -17345,6 +17635,7 @@ pub struct perftest_collection_result_each_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -17383,13 +17674,19 @@ pub unsafe extern "C" fn perftest_collection_result_each(
                     p0_w1.data as *const __PbRow_collection_result_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_result_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_result_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_result_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -17527,6 +17824,7 @@ pub struct perftest_collection_result_optional_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -17571,15 +17869,23 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                     p0_w1.data as *const __PbRow_collection_result_optional_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_result_optional_p0_w1] = if p0_w2
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data
+                                as *const __PbRow_collection_result_optional_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -17604,12 +17910,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -17828,6 +18129,7 @@ pub struct perftest_collection_result_optional_each_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -17879,15 +18181,23 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                     p0_w1.data as *const __PbRow_collection_result_optional_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_result_optional_each_p0_w1] = if p0_w2
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data
+                                as *const __PbRow_collection_result_optional_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -17912,12 +18222,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -18093,6 +18398,7 @@ pub struct perftest_collection_slice_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18115,13 +18421,19 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
                     p0_w1.data as *const __PbRow_collection_slice_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_slice_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_slice_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_slice_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -18206,6 +18518,7 @@ pub struct perftest_collection_slice_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18235,13 +18548,19 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
                     p0_w1.data as *const __PbRow_collection_slice_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_slice_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_slice_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_slice_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -18329,6 +18648,7 @@ pub struct perftest_collection_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18457,6 +18777,7 @@ pub struct perftest_collection_text_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18574,6 +18895,7 @@ pub struct perftest_collection_try_construct_all_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18613,15 +18935,23 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                     p0_w1.data as *const __PbRow_collection_try_construct_all_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_try_construct_all_p0_w1] = if p0_w2
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data
+                                as *const __PbRow_collection_try_construct_all_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_try_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -18646,12 +18976,7 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_try_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::CollectionItem,
@@ -18778,6 +19103,7 @@ pub struct perftest_collection_try_make_items_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -18927,6 +19253,7 @@ pub struct perftest_enum_names_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19002,6 +19329,7 @@ pub struct perftest_enum_payload_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19060,6 +19388,7 @@ pub struct perftest_enum_record_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19205,6 +19534,7 @@ pub struct perftest_getter_child_name_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19275,6 +19605,7 @@ pub struct perftest_getter_child_number_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19344,6 +19675,7 @@ pub struct perftest_getter_child_set_number_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19444,6 +19776,7 @@ pub struct perftest_getter_counts_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19517,6 +19850,7 @@ pub struct perftest_getter_fields_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19580,6 +19914,7 @@ pub struct perftest_getter_leaf_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19642,6 +19977,7 @@ pub struct perftest_getter_owner_child_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19711,6 +20047,7 @@ pub struct perftest_getter_owner_child_matches_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19806,6 +20143,7 @@ pub struct perftest_getter_owner_child_mut_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19875,6 +20213,7 @@ pub struct perftest_getter_owner_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -19942,6 +20281,7 @@ pub struct perftest_getter_owner_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20035,6 +20375,7 @@ pub struct perftest_getter_owner_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20145,6 +20486,7 @@ pub struct perftest_getter_owner_optional_mut_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20224,6 +20566,7 @@ pub struct perftest_getter_owner_optional_pointer_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20304,6 +20647,7 @@ pub struct perftest_getter_owner_read_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20384,6 +20728,7 @@ pub struct perftest_getter_owner_try_child_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20502,6 +20847,7 @@ pub struct perftest_getter_owner_try_child_mut_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20620,6 +20966,7 @@ pub struct perftest_getter_owner_try_optional_child_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20752,6 +21099,7 @@ pub struct perftest_getter_owner_try_optional_mut_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20884,6 +21232,7 @@ pub struct perftest_getter_static_child_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -20946,6 +21295,7 @@ pub struct perftest_getter_two_clones_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21001,6 +21351,7 @@ pub struct perftest_mutable_bytes_address_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21069,6 +21420,7 @@ pub struct perftest_mutable_bytes_capacity_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21137,6 +21489,7 @@ pub struct perftest_mutable_bytes_drops_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21174,6 +21527,7 @@ pub struct perftest_mutable_bytes_mut_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21246,6 +21600,7 @@ pub struct perftest_mutable_bytes_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21390,6 +21745,7 @@ pub struct perftest_mutable_bytes_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21448,6 +21804,7 @@ pub struct perftest_mutable_bytes_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21560,6 +21917,7 @@ pub struct perftest_mutable_bytes_result_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21687,6 +22045,7 @@ pub struct perftest_mutable_bytes_result_optional_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21852,6 +22211,7 @@ pub struct perftest_mutable_bytes_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21935,6 +22295,7 @@ pub struct perftest_mutable_bytes_vector_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -21991,6 +22352,7 @@ pub struct perftest_niche_choice_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22143,6 +22505,7 @@ pub struct perftest_niche_choice_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22219,6 +22582,7 @@ pub struct perftest_option_bool_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22303,6 +22667,7 @@ pub struct perftest_option_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22396,6 +22761,7 @@ pub struct perftest_option_char_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22472,6 +22838,7 @@ pub struct perftest_option_choice_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22609,6 +22976,7 @@ pub struct perftest_option_ctor_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22744,6 +23112,7 @@ pub struct perftest_option_ctor_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22817,6 +23186,7 @@ pub struct perftest_option_i64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22901,6 +23271,7 @@ pub struct perftest_option_i64_ref_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -22985,6 +23356,7 @@ pub struct perftest_option_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23111,6 +23483,7 @@ pub struct perftest_option_nested_char_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23220,6 +23593,7 @@ pub struct perftest_option_nested_resource_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23369,6 +23743,7 @@ pub struct perftest_option_nested_u32_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23497,6 +23872,7 @@ pub struct perftest_option_resource_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23626,6 +24002,7 @@ pub struct perftest_option_resource_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23708,6 +24085,7 @@ pub struct perftest_option_resource_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23781,6 +24159,7 @@ pub struct perftest_option_resource_pair_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -23924,6 +24303,7 @@ pub struct perftest_option_slice_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24026,6 +24406,7 @@ pub struct perftest_option_slice_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24115,6 +24496,7 @@ pub struct perftest_option_str_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24218,6 +24600,7 @@ pub struct perftest_option_str_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24308,6 +24691,7 @@ pub struct perftest_option_string_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24400,6 +24784,7 @@ pub struct perftest_option_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24497,6 +24882,7 @@ pub struct perftest_option_u8_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24580,6 +24966,7 @@ pub struct perftest_option_unit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24647,6 +25034,7 @@ pub struct perftest_optional_fields_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24915,6 +25303,7 @@ pub struct perftest_owned_resource_drops_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -24954,6 +25343,7 @@ pub struct perftest_owner_view_checked_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25072,6 +25462,7 @@ pub struct perftest_owner_view_from_temporary_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25147,6 +25538,7 @@ pub struct perftest_owner_view_maybe_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25230,6 +25622,7 @@ pub struct perftest_owner_view_mutable_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25301,6 +25694,7 @@ pub struct perftest_owner_view_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25379,6 +25773,7 @@ pub struct perftest_owner_view_optional_mut_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25459,6 +25854,7 @@ pub struct perftest_owner_view_reordered_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25529,6 +25925,7 @@ pub struct perftest_owner_view_rollback_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25646,6 +26043,7 @@ pub struct perftest_owner_view_shared_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25715,6 +26113,7 @@ pub struct perftest_payload_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25839,6 +26238,7 @@ pub struct perftest_payload_priority_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -25910,6 +26310,7 @@ pub struct perftest_plain_note_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26006,6 +26407,7 @@ pub struct perftest_primitive_bool_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26054,6 +26456,7 @@ pub struct perftest_primitive_char_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26106,6 +26509,7 @@ pub struct perftest_primitive_f32_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26154,6 +26558,7 @@ pub struct perftest_primitive_f64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26202,6 +26607,7 @@ pub struct perftest_primitive_i128_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26260,6 +26666,7 @@ pub struct perftest_primitive_i16_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26308,6 +26715,7 @@ pub struct perftest_primitive_i32_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26356,6 +26764,7 @@ pub struct perftest_primitive_i64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26404,6 +26813,7 @@ pub struct perftest_primitive_i8_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26452,6 +26862,7 @@ pub struct perftest_primitive_isize_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26500,6 +26911,7 @@ pub struct perftest_primitive_u128_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26558,6 +26970,7 @@ pub struct perftest_primitive_u16_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26606,6 +27019,7 @@ pub struct perftest_primitive_u32_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26654,6 +27068,7 @@ pub struct perftest_primitive_u64_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26702,6 +27117,7 @@ pub struct perftest_primitive_u8_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26750,6 +27166,7 @@ pub struct perftest_primitive_unit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26782,6 +27199,7 @@ pub struct perftest_primitive_usize_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26830,6 +27248,7 @@ pub struct perftest_priority_or_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26930,6 +27349,7 @@ pub struct perftest_priority_weight_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -26987,6 +27407,7 @@ pub struct perftest_report_into_struct_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27145,6 +27566,7 @@ pub struct perftest_report_label_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27311,6 +27733,7 @@ pub struct perftest_report_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27447,6 +27870,7 @@ pub struct perftest_resource_choice_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27563,6 +27987,7 @@ pub struct perftest_result_error_drops_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27600,6 +28025,7 @@ pub struct perftest_result_optional_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27701,6 +28127,7 @@ pub struct perftest_result_other_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27790,6 +28217,7 @@ pub struct perftest_result_owned_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -27955,6 +28383,7 @@ pub struct perftest_result_record_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28070,6 +28499,7 @@ pub struct perftest_result_scalar_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28159,6 +28589,7 @@ pub struct perftest_result_text_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28253,6 +28684,7 @@ pub struct perftest_result_unit_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28336,6 +28768,7 @@ pub struct perftest_sequence_late_drop_each_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28445,6 +28878,7 @@ pub struct perftest_sequence_parts_each_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28584,6 +29018,7 @@ pub struct perftest_sequence_scalars_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28716,6 +29151,7 @@ pub struct perftest_sparse_borrowed_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28782,6 +29218,7 @@ pub struct perftest_sparse_echo_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28851,6 +29288,7 @@ pub struct perftest_sparse_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -28972,6 +29410,7 @@ pub struct perftest_sparse_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29065,6 +29504,7 @@ pub struct perftest_sparse_ref_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29124,6 +29564,7 @@ pub struct perftest_stamp_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29200,6 +29641,7 @@ pub struct perftest_storage_accumulate_lengths_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29484,6 +29926,7 @@ pub struct perftest_storage_contains_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29569,6 +30012,7 @@ pub struct perftest_storage_get_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29702,6 +30146,7 @@ pub struct perftest_storage_get_vec_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29844,6 +30289,7 @@ pub struct perftest_storage_get_vec_each_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -29968,6 +30414,7 @@ pub struct perftest_storage_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30030,6 +30477,7 @@ pub struct perftest_storage_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30070,6 +30518,7 @@ pub struct perftest_storage_put_by_take_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30203,6 +30652,7 @@ pub struct perftest_storage_put_opt_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30362,6 +30812,7 @@ pub struct perftest_storage_put_slice_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30413,28 +30864,22 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
                     p1_w1.data as *const __PbRow_storage_put_slice_p1_w1,
                     p1_w2,
                 )?;
+                let p1_w1_rows: &[__PbRow_storage_put_slice_p1_w1] = if p1_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p1_w1.data as *const __PbRow_storage_put_slice_p1_w1,
+                            p1_w2,
+                        )
+                    }
+                };
                 p1_w0.reserve_exact(p1_w2);
                 for p1_w3 in 0..p1_w2 {
-                    let p1_w6 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_storage_put_slice_p1_w1)
-                            .add(p1_w3)))
-                            .v0
-                    };
-                    let p1_w8 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_storage_put_slice_p1_w1)
-                            .add(p1_w3)))
-                            .v1
-                    };
-                    let p1_w10 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_storage_put_slice_p1_w1)
-                            .add(p1_w3)))
-                            .v2
-                    };
-                    let p1_w12 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_storage_put_slice_p1_w1)
-                            .add(p1_w3)))
-                            .v3
-                    };
+                    let p1_w6 = p1_w1_rows[p1_w3].v0;
+                    let p1_w8 = p1_w1_rows[p1_w3].v1;
+                    let p1_w10 = p1_w1_rows[p1_w3].v2;
+                    let p1_w12 = p1_w1_rows[p1_w3].v3;
                     #[allow(clippy::redundant_closure_call)]
                     let p1_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::Payload,
@@ -30500,6 +30945,7 @@ pub struct perftest_storage_summary_handle_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30571,6 +31017,7 @@ pub struct perftest_storage_total_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30687,6 +31134,7 @@ pub struct perftest_storage_try_with_label_result {
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30789,6 +31237,7 @@ pub struct perftest_storage_with_payload_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30901,6 +31350,7 @@ pub struct perftest_string_len_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -30955,6 +31405,7 @@ pub struct perftest_string_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31014,6 +31465,7 @@ pub struct perftest_summary_merge_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31246,6 +31698,7 @@ pub struct perftest_summary_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31322,6 +31775,7 @@ pub struct perftest_summary_total_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31384,6 +31838,7 @@ pub struct perftest_summary_total_raw_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31515,6 +31970,7 @@ pub struct perftest_unsigned_data_maybe_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31598,6 +32054,7 @@ pub struct perftest_unsigned_optional_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -31683,6 +32140,7 @@ pub struct perftest_unsigned_round_trip_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,

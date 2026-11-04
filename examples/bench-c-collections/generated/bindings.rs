@@ -135,6 +135,7 @@ pub struct bench_control_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -201,6 +202,7 @@ pub struct bench_make_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -339,6 +341,7 @@ pub struct bench_make_many_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -532,6 +535,7 @@ pub struct bench_make_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -705,6 +709,7 @@ pub struct bench_make_numbers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -811,6 +816,7 @@ pub struct bench_make_records_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -927,6 +933,7 @@ pub struct bench_resource_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -982,6 +989,7 @@ pub struct bench_resource_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1053,6 +1061,7 @@ pub struct bench_take_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1076,13 +1085,20 @@ pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
                     p0_w1.data as *const __PbRow_take_handles_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_take_handles_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_handles_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_handles_p0_w1).add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w5_pointer = if true {
@@ -1107,10 +1123,7 @@ pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_handles_p0_w1).add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         c_collection_flat::Resource,
@@ -1181,6 +1194,7 @@ pub struct bench_take_numbers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1201,12 +1215,19 @@ pub unsafe extern "C" fn bench_take_numbers(p0_w1: __PbRows) -> u64 {
                     p0_w1.data as *const __PbRow_take_numbers_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_take_numbers_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_numbers_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_numbers_p0_w1).add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<u64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -1257,6 +1278,7 @@ pub struct bench_take_records_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1280,21 +1302,22 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
                     p0_w1.data as *const __PbRow_take_records_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_take_records_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_records_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(2usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v2
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -1335,18 +1358,9 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_records_p0_w1).add(p0_w3)))
-                            .v2
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         c_collection_flat::Record,
@@ -1450,6 +1464,7 @@ pub struct bench_take_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1592,6 +1607,7 @@ pub struct bench_take_wide_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
     clippy::unnecessary_cast,
@@ -1615,33 +1631,27 @@ pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
                     p0_w1.data as *const __PbRow_take_wide_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_take_wide_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_wide_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 let mut p0_w1_accesses = __prebindgen_input_aliases
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v2
-                    };
-                    let p0_w12 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v3
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v4
-                    };
-                    let p0_w16 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v5
-                    };
-                    let p0_w18 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v6
-                    };
-                    let p0_w20 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v7
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w18 = p0_w1_rows[p0_w3].v6;
+                    let p0_w20 = p0_w1_rows[p0_w3].v7;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -1673,30 +1683,14 @@ pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
                 __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v2
-                    };
-                    let p0_w12 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v3
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v4
-                    };
-                    let p0_w16 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v5
-                    };
-                    let p0_w18 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v6
-                    };
-                    let p0_w20 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_take_wide_p0_w1).add(p0_w3))).v7
-                    };
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w18 = p0_w1_rows[p0_w3].v6;
+                    let p0_w20 = p0_w1_rows[p0_w3].v7;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         c_collection_flat::WideInput,
