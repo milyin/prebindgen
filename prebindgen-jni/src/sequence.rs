@@ -6,8 +6,12 @@ use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 /// Selected delivery of a logical sequence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JniSequence {
-    /// All rows travel in one collection carrier.
+    /// Array of legacy `Object[]` rows, also used for inputs and custom schemas.
     Buffered,
+    /// JVM array of generated immutable typed rows, with cached constructors.
+    /// Custom writers must create this exact schema's row objects through the
+    /// registered `prebindgen_jni_runtime::OutputRowType`, never `Object[]` rows.
+    TypedBuffered,
     /// Native row ranges inside an enclosing bulk frame.
     Bulk,
     /// Each row is delivered through the function's sequence callback.
@@ -77,14 +81,68 @@ pub(crate) fn output(
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
-    let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
+    let typed = typed_rows::supported(element);
+    let needs_frame = !typed || group::row_fields(element).any(|w| w.kind.is_reference());
+    let constructor = format_ident!("{wire}_row_constructor");
+    let (prepare, encode) = if typed {
+        let cache = typed_rows::cache(element)?;
+        let mut statements = TokenStream::new();
+        let mut arguments = Vec::new();
+        for (i, (field, value)) in crate::group::row_values(element, values)?
+            .into_iter()
+            .enumerate()
+        {
+            let argument = field
+                .kind
+                .output_argument(value, &format_ident!("{wire}_row_argument_{i}"));
+            statements.extend(argument.statements);
+            arguments.push(argument.value);
+        }
+        (
+            quote!(let #constructor=#cache.get()?;),
+            quote!(#statements let #row=unsafe {#constructor.construct(&mut #env,&[#(#arguments),*])}?;),
+        )
+    } else {
+        (
+            quote!(),
+            quote!(let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;),
+        )
+    };
+    let encode = if typed {
+        encode
+    } else {
+        let fields = encode_array(crate::group::row_values(element, values)?, &row, 0);
+        quote!(#encode #fields)
+    };
     let frame = format_ident!("{wire}_frame");
+    let (enter, leave) = if needs_frame {
+        (
+            quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+            quote!(drop(#frame);),
+        )
+    } else {
+        (quote!(), quote!())
+    };
+    let retain_row = if needs_frame {
+        quote!()
+    } else {
+        quote!(let #row=#env.auto_local(#row);)
+    };
     let owner = format_ident!("{wire}_owner");
-    let release = crate::cleanup::helper(element, crate::cleanup::Carrier::Objects)?;
+    let release = crate::cleanup::helper(
+        element,
+        if typed {
+            crate::cleanup::Carrier::TypedObjects
+        } else {
+            crate::cleanup::Carrier::Objects
+        },
+    )?;
     let (own, complete, commit) = if let Some(release) = release {
         (
-            quote! {
-                let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new(&mut #env, &#wire, #release)}?;
+            if typed {
+                quote!(let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new_objects(&mut #env, &#wire, #release)};)
+            } else {
+                quote!(let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new(&mut #env, &#wire, #release)}?;)
             },
             quote!(unsafe {#owner.complete_row();}),
             quote!(#owner.commit();),
@@ -103,15 +161,20 @@ pub(crate) fn output(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniChain::Sequence(JniSequence::Buffered),
-        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
-        enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+        metadata: JniChain::Sequence(if typed {
+            JniSequence::TypedBuffered
+        } else {
+            JniSequence::Buffered
+        }),
+        begin: quote!(#prepare let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
+        enter,
         store: quote! {
-            let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;#encode
+            #encode
+            #retain_row
             #env.set_object_array_element(&#wire,#index as i32,&#row).map_err(|e|e.to_string())?;
             #commit_element
             #complete
-            drop(#frame);
+            #leave
         },
         finish: quote!(let #wire=Some(#wire);),
         values: vec![(wire.clone(), quote!(#wire))],
@@ -129,9 +192,7 @@ pub(crate) fn input_list(
         return crate::bulk::input_list(carrier, element, context);
     }
     if *sequence != JniSequence::Buffered {
-        return Err(
-            "callback sequence is only supported as the function's successful return".into(),
-        );
+        return Err("collection input requires a buffered array or bulk sequence".into());
     }
     let mut child = input_kotlin(element, context)?;
     child.prepare_arguments(crate::kotlin::input_handles(element, false))?;
@@ -222,6 +283,7 @@ pub(crate) fn output_list(
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
+    typed: bool,
 ) -> Result<KotlinOutput> {
     if owners.is_none() && crate::kotlin::input_handles(element, false) {
         return Err("handle collection output requires an ownership scope".into());
@@ -235,13 +297,26 @@ pub(crate) fn output_list(
         output_prefix: &format!("{}item_", context.output_prefix),
         ..*context
     };
-    let child = crate::kotlin::output_kotlin_scoped(element, &ctx, owners)?;
+    let mut child = crate::kotlin::output_kotlin_scoped(element, &ctx, owners)?;
+    if typed {
+        let fields = group::row_fields(element).collect::<Vec<_>>();
+        let values = (0..fields.len())
+            .map(|i| format!("{row}.c{i}"))
+            .collect::<Vec<_>>();
+        returns::remap(&mut child, &row, &fields, 0, &values);
+    }
     if child.delivered.len() != 1 {
         return Err("Kotlin collection elements must deliver exactly one value; declare a data class for expanded outputs".into());
     }
     let ty = &child.result_types[0];
     let value = &child.delivered[0];
     let raw = format!("({}[0] as kotlin.Array<*>)", context.result);
+    let row_type = if typed {
+        let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
+        format!("{}.JNINative.{name}", context.package)
+    } else {
+        "kotlin.Array<*>".into()
+    };
     let output = format!("{}list", context.output_prefix);
     let index = format!("{}index", context.output_prefix);
     let cleanup = format!("{}cleanupError", context.output_prefix);
@@ -258,11 +333,11 @@ pub(crate) fn output_list(
         result_types: vec![format!("kotlin.collections.List<{ty}>")],
         output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\n"),
         materialize: format!(
-            "{output} = kotlin.collections.ArrayList({raw}.size)\nfor ({index} in {raw}.indices) {{\nval {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n{output}.add({value})\n}}\n",
+            "{output} = kotlin.collections.ArrayList({raw}.size)\nfor ({index} in {raw}.indices) {{\nval {row} = {raw}[{index}] as {row_type}\n{}\n{}\n{output}.add({value})\n}}\n",
             child.output_locals, child.materialize
         ),
         cleanup: if child.cleanup.is_empty() { String::new() } else { format!(
-            "try {{\nfor ({index} in {raw}.indices) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
+            "try {{\nfor ({index} in {raw}.indices) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as {row_type}\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
             child.output_locals, child.cleanup
         ) },
     })
@@ -415,10 +490,12 @@ mod delivery_tests {
             JniSequence::Bulk => JniWire::NativeRows {
                 condition: "true".into(),
             },
-            JniSequence::Buffered | JniSequence::Callback => JniWire::Rows {
-                condition: "true".into(),
-                null_niche_available: true,
-            },
+            JniSequence::Buffered | JniSequence::TypedBuffered | JniSequence::Callback => {
+                JniWire::Rows {
+                    condition: "true".into(),
+                    null_niche_available: true,
+                }
+            }
         };
         WireNode::Chain {
             controls: vec![prebindgen_flat::Wire {

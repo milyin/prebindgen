@@ -267,10 +267,10 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.defaults.DefaultBulkRow>? = null
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Double_2_012db11776ed72c5
 
 
-outputlist.add(io.prebindgen.covertest.defaults.DefaultBulkRow(output_row[0] as Long, output_row[1] as Double))
+outputlist.add(io.prebindgen.covertest.defaults.DefaultBulkRow(output_row.c0, output_row.c1))
 }
 
 requireNotNull(outputlist)
@@ -330,15 +330,15 @@ var callbackOutput1_bulkList: kotlin.collections.MutableList<kotlin.collections.
         try {
 callbackOutput0_list = kotlin.collections.ArrayList((raw0 as kotlin.Array<*>).size)
 for (callbackOutput0_index in (raw0 as kotlin.Array<*>).indices) {
-val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var callbackOutput0_item_list: kotlin.collections.MutableList<Long>? = null
 
-callbackOutput0_item_list = kotlin.collections.ArrayList((callbackOutput0__row[0] as kotlin.Array<*>).size)
-for (callbackOutput0_item_index in (callbackOutput0__row[0] as kotlin.Array<*>).indices) {
-val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+callbackOutput0_item_list = kotlin.collections.ArrayList((callbackOutput0__row.c0 as kotlin.Array<*>).size)
+for (callbackOutput0_item_index in (callbackOutput0__row.c0 as kotlin.Array<*>).indices) {
+val callbackOutput0_item__row = (callbackOutput0__row.c0 as kotlin.Array<*>)[callbackOutput0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
 
 
-callbackOutput0_item_list.add(callbackOutput0_item__row[0] as Long)
+callbackOutput0_item_list.add(callbackOutput0_item__row.c0)
 }
 
 callbackOutput0_list.add(requireNotNull(callbackOutput0_item_list))

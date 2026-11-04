@@ -7,6 +7,7 @@ use std::rc::Rc;
 #[derive(Clone, Copy)]
 pub(crate) enum Carrier {
     Objects,
+    TypedObjects,
     Native,
     NativeJni,
 }
@@ -14,6 +15,7 @@ impl Carrier {
     fn role(self) -> &'static str {
         match self {
             Self::Objects => "__pb_cleanup_objects",
+            Self::TypedObjects => "__pb_cleanup_typed",
             Self::Native => "__pb_cleanup_native",
             Self::NativeJni => "__pb_cleanup_frame",
         }
@@ -34,15 +36,24 @@ struct Row {
     fields: Vec<(usize, Field)>,
     parts: Vec<String>,
     label: String,
+    constructor: Option<syn::Ident>,
 }
 
-fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNode> {
+fn carrier_child<'a>(
+    node: &'a JniNode,
+    name: &syn::Ident,
+) -> Option<(&'a JniNode, Option<&'a JniSequence>)> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+            meta: JniChain::Sequence(sequence),
             controls,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(child),
+        } if controls.iter().any(|w| &w.name == name) => Some((child, Some(sequence))),
+        WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            controls,
+            child,
+        } if controls.iter().any(|w| &w.name == name) => Some((child, None)),
         WireNode::Chain { child, .. } => carrier_child(child, name),
         WireNode::Branch { children, .. } => {
             children.iter().find_map(|child| carrier_child(child, name))
@@ -53,14 +64,26 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNode
 
 impl Row {
     fn new(node: &JniNode, carrier: Carrier) -> Result<Self> {
-        let layout = if matches!(carrier, Carrier::Objects) {
+        let layout = if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
             None
         } else {
             Some(bulk::record(node)?)
         };
-        let mut parts = vec![layout
-            .as_ref()
-            .map_or_else(|| "Object[]".into(), |r| r.key.clone())];
+        let mut parts = vec![layout.as_ref().map_or_else(
+            || {
+                if matches!(carrier, Carrier::TypedObjects) {
+                    "TypedObject".into()
+                } else {
+                    "Object[]".into()
+                }
+            },
+            |r| r.key.clone(),
+        )];
+        // Field IDs belong to one exact class, even if another physical JVM
+        // descriptor shape could acquire a different Kotlin spelling later.
+        if matches!(carrier, Carrier::TypedObjects) {
+            parts.push(typed_rows::cache(node)?.to_string());
+        }
         let mut fields = Vec::new();
         let mut labels = Vec::new();
         for (index, wire) in group::row_fields(node).enumerate() {
@@ -80,13 +103,26 @@ impl Row {
                     if matches!(
                         (&wire.kind, carrier),
                         (JniWire::Rows { .. }, Carrier::Native | Carrier::NativeJni)
-                            | (JniWire::NativeRows { .. }, Carrier::Objects)
+                            | (
+                                JniWire::NativeRows { .. },
+                                Carrier::Objects | Carrier::TypedObjects
+                            )
                     ) {
                         return Err("collection cleanup carrier differs from its row layout".into());
                     }
-                    let child = carrier_child(node, &wire.name)
+                    let (child, sequence) = carrier_child(node, &wire.name)
                         .ok_or("missing collection cleanup element")?;
-                    let row = Self::new(child, carrier)?;
+                    let child_carrier =
+                        if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
+                            if matches!(sequence, Some(JniSequence::TypedBuffered)) {
+                                Carrier::TypedObjects
+                            } else {
+                                Carrier::Objects
+                            }
+                        } else {
+                            carrier
+                        };
+                    let row = Self::new(child, child_carrier)?;
                     if row.fields.is_empty() {
                         continue;
                     }
@@ -95,10 +131,10 @@ impl Row {
                     Field::Rows(Box::new(row))
                 }
                 JniWire::BulkBuffer { .. } => {
-                    if !matches!(carrier, Carrier::Objects) {
+                    if !matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
                         return Err("a JVM bulk frame cannot be a native row field".into());
                     }
-                    let child =
+                    let (child, _) =
                         carrier_child(node, &wire.name).ok_or("missing frame cleanup layout")?;
                     let row = Self::new(child, Carrier::NativeJni)?;
                     if row.fields.is_empty() {
@@ -127,6 +163,11 @@ impl Row {
             fields,
             parts,
             label: labels.into_iter().take(2).collect::<Vec<_>>().join("_"),
+            constructor: if matches!(carrier, Carrier::TypedObjects) {
+                Some(typed_rows::cache(node)?)
+            } else {
+                None
+            },
         })
     }
 
@@ -183,10 +224,15 @@ impl Helpers {
                 let record = &layout.name;
                 quote!(base + ::core::mem::offset_of!(#record, #member))
             });
+            let typed_object = row.constructor.as_ref().map(|cache| quote! {
+                env.get_field_unchecked(row,#cache.get()?.field(#index),::prebindgen_jni_runtime::jni::signature::ReturnType::Object).and_then(|v|v.l()).map_err(|e|e.to_string())?
+            });
             let release = match field {
                 Field::Handle(ty) => {
                     let read = if let Some(at) = at {
                         quote!(reader.read::<i64>(#at)?)
+                    } else if let Some(cache) = &row.constructor {
+                        quote!(env.get_field_unchecked(row,#cache.get()?.field(#index),::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Long)).and_then(|v|v.j()).map_err(|e|e.to_string())?)
                     } else {
                         quote!(unsafe {::prebindgen_jni_runtime::output_handle(env,row,#index)}?)
                     };
@@ -201,6 +247,11 @@ impl Helpers {
                         quote!(::core::mem::size_of::<#record>())
                     });
                     let has_env = child.carrier.has_env();
+                    let reclaim = if matches!(child.carrier, Carrier::TypedObjects) {
+                        quote!(::prebindgen_jni_runtime::reclaim_objects)
+                    } else {
+                        quote!(::prebindgen_jni_runtime::reclaim_rows)
+                    };
                     let child = child.name()?;
                     if let Some(at) = at {
                         let env = if has_env { quote!(env,) } else { quote!() };
@@ -211,20 +262,22 @@ impl Helpers {
                             }
                         }
                     } else {
+                        let read=typed_object.clone().unwrap_or_else(||quote!(env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?));
                         quote! {
-                            let rows=env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?;
+                            let rows=#read;
                             let rows=env.auto_local(::prebindgen_jni_runtime::jni::objects::JObjectArray::from(rows));
                             if !rows.is_null() {
                                 let length=env.get_array_length(&*rows).map_err(|e|e.to_string())? as usize;
-                                unsafe {::prebindgen_jni_runtime::reclaim_rows(env,rows.as_raw(),length,#child);}
+                                unsafe {#reclaim(env,rows.as_raw(),length,#child);}
                             }
                         }
                     }
                 }
                 Field::Frame(child) => {
                     let child = child.name()?;
+                    let read=typed_object.unwrap_or_else(||quote!(env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?));
                     quote! {
-                        let bytes=env.get_object_array_element(row,#index as i32).map_err(|e|e.to_string())?;
+                        let bytes=#read;
                         let bytes=env.auto_local(::prebindgen_jni_runtime::jni::objects::JByteArray::from(bytes));
                         if !bytes.is_null() {
                             let bytes=env.convert_byte_array(&*bytes).map_err(|e|e.to_string())?;
@@ -235,7 +288,7 @@ impl Helpers {
                 }
             };
             body.extend(match row.carrier {
-                Carrier::Objects => quote!(::prebindgen_jni_runtime::reclaim_output(env, |env| {#release Ok(())});),
+                Carrier::Objects | Carrier::TypedObjects => quote!(::prebindgen_jni_runtime::reclaim_output(env, |env| {#release Ok(())});),
                 Carrier::Native => quote!(let _=::prebindgen_runtime::boundary(|| {#release Ok(())});),
                 Carrier::NativeJni => quote!(::prebindgen_jni_runtime::reclaim_output(env, |#environment| {let _=::prebindgen_runtime::boundary(|| {#release Ok(())}); Ok(())});),
             });
@@ -244,6 +297,10 @@ impl Helpers {
             Carrier::Objects => quote! {
                 #[allow(dead_code,non_snake_case)]
                 fn #name<'local>(env:&mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,row:&::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>) {#body}
+            },
+            Carrier::TypedObjects => quote! {
+                #[allow(dead_code,non_snake_case)]
+                fn #name<'local>(env:&mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,row:&::prebindgen_jni_runtime::jni::objects::JObject<'local>) {#body}
             },
             Carrier::Native => quote! {
                 #[allow(dead_code,non_snake_case)]
@@ -268,6 +325,7 @@ impl Helpers {
                 if !input {
                     let carrier = match sequence {
                         JniSequence::Buffered => Some(Carrier::Objects),
+                        JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
                         JniSequence::Bulk => Some(Carrier::Native),
                         JniSequence::Callback => None,
                     };

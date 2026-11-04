@@ -232,6 +232,43 @@ pub unsafe fn reclaim_rows<'local>(
     });
 }
 
+/// Reclaim a completed prefix of generated typed output objects.
+///
+/// # Safety
+/// Every completed object must match `release` and own its native resources.
+/// References must remain live until cleanup finishes.
+pub unsafe fn reclaim_objects<'local>(
+    env: &mut JNIEnv<'local>,
+    rows: jni::sys::jobjectArray,
+    completed: usize,
+    release: for<'a> fn(&mut JNIEnv<'a>, &JObject<'a>),
+) {
+    reclaim_output(env, |env| {
+        for index in 0..completed {
+            reclaim_output(env, |env| {
+                let table = env.get_native_interface();
+                let raw = ((**table).GetObjectArrayElement.expect("JNI array access"))(
+                    table,
+                    rows,
+                    index as i32,
+                );
+                if env.exception_check().map_err(|e| e.to_string())? || raw.is_null() {
+                    return Err("cannot read completed typed output row".into());
+                }
+                let row = env.auto_local(JObject::from_raw(raw));
+                release(env, &row);
+                Ok(())
+            });
+        }
+        Ok(())
+    });
+}
+
+enum RowRelease {
+    Arrays(for<'a> fn(&mut JNIEnv<'a>, &JObjectArray<'a>)),
+    Objects(for<'a> fn(&mut JNIEnv<'a>, &JObject<'a>)),
+}
+
 /// Owns the completed prefix of a generated JNI collection until final transfer.
 ///
 /// The final JVM array is also the ownership journal: successful row insertion
@@ -240,7 +277,7 @@ pub struct OutputRows<'local> {
     env: JNIEnv<'local>,
     rows: jni::sys::jobjectArray,
     completed: usize,
-    release: for<'a> fn(&mut JNIEnv<'a>, &JObjectArray<'a>),
+    release: RowRelease,
 }
 impl<'local> OutputRows<'local> {
     /// Start owning a newly allocated collection's completed rows.
@@ -268,8 +305,26 @@ impl<'local> OutputRows<'local> {
             env: env.unsafe_clone(),
             rows: rows.as_raw(),
             completed: 0,
-            release,
+            release: RowRelease::Arrays(release),
         })
+    }
+    /// Own completed typed objects instead of legacy boxed array rows.
+    ///
+    /// # Safety
+    /// The array reference must outlive the guard; each completed object must
+    /// match `release` and transfer all of its native owners exactly once.
+    #[inline]
+    pub unsafe fn new_objects(
+        env: &mut JNIEnv<'local>,
+        rows: &JObjectArray<'local>,
+        release: for<'a> fn(&mut JNIEnv<'a>, &JObject<'a>),
+    ) -> Self {
+        Self {
+            env: env.unsafe_clone(),
+            rows: rows.as_raw(),
+            completed: 0,
+            release: RowRelease::Objects(release),
+        }
     }
     /// Record a row after insertion and infallible transfer of its native owners.
     ///
@@ -293,7 +348,14 @@ impl Drop for OutputRows<'_> {
             return;
         }
         unsafe {
-            reclaim_rows(&mut self.env, self.rows, self.completed, self.release);
+            match self.release {
+                RowRelease::Arrays(release) => {
+                    reclaim_rows(&mut self.env, self.rows, self.completed, release)
+                }
+                RowRelease::Objects(release) => {
+                    reclaim_objects(&mut self.env, self.rows, self.completed, release)
+                }
+            }
         }
     }
 }

@@ -453,22 +453,22 @@ if (outputg1_g0_owners?.complete != true) {
 try {
 for (outputg1_g0_index in (returnCapture.s1 as kotlin.Array<*>).indices) {
 var outputg1_g0_failure: kotlin.Throwable? = failure
-try { val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as kotlin.Array<*>
+try { val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputg1_g0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (outputg1_g0__row[0] != null) {
+            if (outputg1_g0__row.c0 != null) {
 try {
-for (outputg1_g0_item_index in (outputg1_g0__row[0] as kotlin.Array<*>).indices) {
+for (outputg1_g0_item_index in (outputg1_g0__row.c0 as kotlin.Array<*>).indices) {
 var outputg1_g0_item_failure: kotlin.Throwable? = outputg1_g0_failure
-try { val outputg1_g0_item__row = (outputg1_g0__row[0] as kotlin.Array<*>)[outputg1_g0_item_index] as kotlin.Array<*>
+try { val outputg1_g0_item__row = (outputg1_g0__row.c0 as kotlin.Array<*>)[outputg1_g0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputg1_g0_item_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputg1_g0_item_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputg1_g0_item__row[1] != 0L) {
-            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row[1] as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
+            if (outputg1_g0_item__row.c1 != 0L) {
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row.c1) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
             }
-            if (outputg1_g0_item__row[2] != 0L) {
-            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row[2] as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
+            if (outputg1_g0_item__row.c2 != 0L) {
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row.c2) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputg1_g0_item_cleanupError: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = outputg1_g0_item_cleanupError else if (outputg1_g0_item_failure !== outputg1_g0_item_cleanupError) outputg1_g0_item_failure!!.addSuppressed(outputg1_g0_item_cleanupError) }
@@ -496,28 +496,28 @@ var outputg1_g0_list: kotlin.collections.MutableList<kotlin.collections.List<io.
 outputg1_g0_owners = io.prebindgen.covertest.CollectionOwners()
 outputg1_g0_list = kotlin.collections.ArrayList((returnCapture.s1 as kotlin.Array<*>).size)
 for (outputg1_g0_index in (returnCapture.s1 as kotlin.Array<*>).indices) {
-val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as kotlin.Array<*>
+val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputg1_g0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (outputg1_g0__row[0] != null) {
-outputg1_g0_item_list = kotlin.collections.ArrayList((outputg1_g0__row[0] as kotlin.Array<*>).size)
-for (outputg1_g0_item_index in (outputg1_g0__row[0] as kotlin.Array<*>).indices) {
-val outputg1_g0_item__row = (outputg1_g0__row[0] as kotlin.Array<*>)[outputg1_g0_item_index] as kotlin.Array<*>
+            if (outputg1_g0__row.c0 != null) {
+outputg1_g0_item_list = kotlin.collections.ArrayList((outputg1_g0__row.c0 as kotlin.Array<*>).size)
+for (outputg1_g0_item_index in (outputg1_g0__row.c0 as kotlin.Array<*>).indices) {
+val outputg1_g0_item__row = (outputg1_g0__row.c0 as kotlin.Array<*>)[outputg1_g0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputg1_g0_item_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputg1_g0_item_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputg1_g0_item__row[1] != 0L) {
-            outputg1_g0_item_item_g1_g0_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.resources.OwnedResource(outputg1_g0_item__row[1] as Long))
+            if (outputg1_g0_item__row.c1 != 0L) {
+            outputg1_g0_item_item_g1_g0_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.resources.OwnedResource(outputg1_g0_item__row.c1))
             }
-            if (outputg1_g0_item__row[2] != 0L) {
-            outputg1_g0_item_item_g2_g0_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.resources.OwnedResource(outputg1_g0_item__row[2] as Long))
+            if (outputg1_g0_item__row.c2 != 0L) {
+            outputg1_g0_item_item_g2_g0_0 = requireNotNull(outputg1_g0_owners).own(io.prebindgen.covertest.resources.OwnedResource(outputg1_g0_item__row.c2))
             }
 
-outputg1_g0_item_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(outputg1_g0_item__row[0] as Long, if (outputg1_g0_item__row[1] != 0L) requireNotNull(outputg1_g0_item_item_g1_g0_0) else null, if (outputg1_g0_item__row[2] != 0L) requireNotNull(outputg1_g0_item_item_g2_g0_0) else null))
+outputg1_g0_item_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(outputg1_g0_item__row.c0, if (outputg1_g0_item__row.c1 != 0L) requireNotNull(outputg1_g0_item_item_g1_g0_0) else null, if (outputg1_g0_item__row.c2 != 0L) requireNotNull(outputg1_g0_item_item_g2_g0_0) else null))
 }
             }
 
-outputg1_g0_list.add(if (outputg1_g0__row[0] != null) requireNotNull(outputg1_g0_item_list) else null)
+outputg1_g0_list.add(if (outputg1_g0__row.c0 != null) requireNotNull(outputg1_g0_item_list) else null)
 }
 
 outputg1_g0_owners!!.complete = true
@@ -530,22 +530,22 @@ if (outputg1_g0_owners?.complete != true) {
 try {
 for (outputg1_g0_index in (returnCapture.s1 as kotlin.Array<*>).indices) {
 var outputg1_g0_failure: kotlin.Throwable? = failure
-try { val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as kotlin.Array<*>
+try { val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputg1_g0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (outputg1_g0__row[0] != null) {
+            if (outputg1_g0__row.c0 != null) {
 try {
-for (outputg1_g0_item_index in (outputg1_g0__row[0] as kotlin.Array<*>).indices) {
+for (outputg1_g0_item_index in (outputg1_g0__row.c0 as kotlin.Array<*>).indices) {
 var outputg1_g0_item_failure: kotlin.Throwable? = outputg1_g0_failure
-try { val outputg1_g0_item__row = (outputg1_g0__row[0] as kotlin.Array<*>)[outputg1_g0_item_index] as kotlin.Array<*>
+try { val outputg1_g0_item__row = (outputg1_g0__row.c0 as kotlin.Array<*>)[outputg1_g0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputg1_g0_item_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputg1_g0_item_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputg1_g0_item__row[1] != 0L) {
-            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row[1] as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
+            if (outputg1_g0_item__row.c1 != 0L) {
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row.c1) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
             }
-            if (outputg1_g0_item__row[2] != 0L) {
-            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row[2] as Long) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
+            if (outputg1_g0_item__row.c2 != 0L) {
+            try { if (outputg1_g0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputg1_g0_item__row.c2) } } catch (cleanup: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = cleanup else if (outputg1_g0_item_failure !== cleanup) outputg1_g0_item_failure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputg1_g0_item_cleanupError: Throwable) { if (outputg1_g0_item_failure == null) outputg1_g0_item_failure = outputg1_g0_item_cleanupError else if (outputg1_g0_item_failure !== outputg1_g0_item_cleanupError) outputg1_g0_item_failure!!.addSuppressed(outputg1_g0_item_cleanupError) }
@@ -710,15 +710,15 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (output_row[1] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[1] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            if (output_row.c1 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row.c1) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
             }
-            if (output_row[2] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[2] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            if (output_row.c2 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row.c2) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
@@ -736,18 +736,18 @@ var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.O
 outputowners = io.prebindgen.covertest.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (output_row[1] != 0L) {
-            outputitem_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(output_row[1] as Long))
+            if (output_row.c1 != 0L) {
+            outputitem_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(output_row.c1))
             }
-            if (output_row[2] != 0L) {
-            outputitem_g2_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(output_row[2] as Long))
+            if (output_row.c2 != 0L) {
+            outputitem_g2_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(output_row.c2))
             }
 
-outputlist.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(output_row[0] as Long, if (output_row[1] != 0L) requireNotNull(outputitem_g1_g0_0) else null, if (output_row[2] != 0L) requireNotNull(outputitem_g2_g0_0) else null))
+outputlist.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(output_row.c0, if (output_row.c1 != 0L) requireNotNull(outputitem_g1_g0_0) else null, if (output_row.c2 != 0L) requireNotNull(outputitem_g2_g0_0) else null))
 }
 
 outputowners!!.complete = true
@@ -758,15 +758,15 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (output_row[1] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[1] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            if (output_row.c1 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row.c1) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
             }
-            if (output_row[2] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row[2] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            if (output_row.c2 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(output_row.c2) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
@@ -878,22 +878,22 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (output_row[0] != null) {
+            if (output_row.c0 != null) {
 try {
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
 var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputitem__row[1] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[1] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            if (outputitem__row.c1 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row.c1) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
             }
-            if (outputitem__row[2] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[2] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            if (outputitem__row.c2 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row.c2) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
@@ -917,28 +917,28 @@ var outputlist: kotlin.collections.MutableList<kotlin.collections.List<io.prebin
 outputowners = io.prebindgen.covertest.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (output_row[0] != null) {
-outputitem_list = kotlin.collections.ArrayList((output_row[0] as kotlin.Array<*>).size)
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
-val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+            if (output_row.c0 != null) {
+outputitem_list = kotlin.collections.ArrayList((output_row.c0 as kotlin.Array<*>).size)
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
+val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputitem__row[1] != 0L) {
-            outputitem_item_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(outputitem__row[1] as Long))
+            if (outputitem__row.c1 != 0L) {
+            outputitem_item_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(outputitem__row.c1))
             }
-            if (outputitem__row[2] != 0L) {
-            outputitem_item_g2_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(outputitem__row[2] as Long))
+            if (outputitem__row.c2 != 0L) {
+            outputitem_item_g2_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.resources.OwnedResource(outputitem__row.c2))
             }
 
-outputitem_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(outputitem__row[0] as Long, if (outputitem__row[1] != 0L) requireNotNull(outputitem_item_g1_g0_0) else null, if (outputitem__row[2] != 0L) requireNotNull(outputitem_item_g2_g0_0) else null))
+outputitem_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(outputitem__row.c0, if (outputitem__row.c1 != 0L) requireNotNull(outputitem_item_g1_g0_0) else null, if (outputitem__row.c2 != 0L) requireNotNull(outputitem_item_g2_g0_0) else null))
 }
             }
 
-outputlist.add(if (output_row[0] != null) requireNotNull(outputitem_list) else null)
+outputlist.add(if (output_row.c0 != null) requireNotNull(outputitem_list) else null)
 }
 
 outputowners!!.complete = true
@@ -949,22 +949,22 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (output_row[0] != null) {
+            if (output_row.c0 != null) {
 try {
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
 var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var outputitem_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputitem_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (outputitem__row[1] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[1] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            if (outputitem__row.c1 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row.c1) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
             }
-            if (outputitem__row[2] != 0L) {
-            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row[2] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            if (outputitem__row.c2 != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(outputitem__row.c2) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
             }
 
 } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
@@ -1121,28 +1121,28 @@ var callbackOutput0_list: kotlin.collections.MutableList<kotlin.collections.List
 callbackOutput0_owners = io.prebindgen.covertest.CollectionOwners()
 callbackOutput0_list = kotlin.collections.ArrayList((raw0 as kotlin.Array<*>).size)
 for (callbackOutput0_index in (raw0 as kotlin.Array<*>).indices) {
-val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var callbackOutput0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (callbackOutput0__row[0] != null) {
-callbackOutput0_item_list = kotlin.collections.ArrayList((callbackOutput0__row[0] as kotlin.Array<*>).size)
-for (callbackOutput0_item_index in (callbackOutput0__row[0] as kotlin.Array<*>).indices) {
-val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+            if (callbackOutput0__row.c0 != null) {
+callbackOutput0_item_list = kotlin.collections.ArrayList((callbackOutput0__row.c0 as kotlin.Array<*>).size)
+for (callbackOutput0_item_index in (callbackOutput0__row.c0 as kotlin.Array<*>).indices) {
+val callbackOutput0_item__row = (callbackOutput0__row.c0 as kotlin.Array<*>)[callbackOutput0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var callbackOutput0_item_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var callbackOutput0_item_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (callbackOutput0_item__row[1] != 0L) {
-            callbackOutput0_item_item_g1_g0_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.resources.OwnedResource(callbackOutput0_item__row[1] as Long))
+            if (callbackOutput0_item__row.c1 != 0L) {
+            callbackOutput0_item_item_g1_g0_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.resources.OwnedResource(callbackOutput0_item__row.c1))
             }
-            if (callbackOutput0_item__row[2] != 0L) {
-            callbackOutput0_item_item_g2_g0_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.resources.OwnedResource(callbackOutput0_item__row[2] as Long))
+            if (callbackOutput0_item__row.c2 != 0L) {
+            callbackOutput0_item_item_g2_g0_0 = requireNotNull(callbackOutput0_owners).own(io.prebindgen.covertest.resources.OwnedResource(callbackOutput0_item__row.c2))
             }
 
-callbackOutput0_item_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(callbackOutput0_item__row[0] as Long, if (callbackOutput0_item__row[1] != 0L) requireNotNull(callbackOutput0_item_item_g1_g0_0) else null, if (callbackOutput0_item__row[2] != 0L) requireNotNull(callbackOutput0_item_item_g2_g0_0) else null))
+callbackOutput0_item_list.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(callbackOutput0_item__row.c0, if (callbackOutput0_item__row.c1 != 0L) requireNotNull(callbackOutput0_item_item_g1_g0_0) else null, if (callbackOutput0_item__row.c2 != 0L) requireNotNull(callbackOutput0_item_item_g2_g0_0) else null))
 }
             }
 
-callbackOutput0_list.add(if (callbackOutput0__row[0] != null) requireNotNull(callbackOutput0_item_list) else null)
+callbackOutput0_list.add(if (callbackOutput0__row.c0 != null) requireNotNull(callbackOutput0_item_list) else null)
 }
 
 callbackOutput0_owners!!.complete = true
@@ -1153,22 +1153,22 @@ if (callbackOutput0_owners?.complete != true) {
 try {
 for (callbackOutput0_index in (raw0 as kotlin.Array<*>).indices) {
 var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
-try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var callbackOutput0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.cleanup.OutputCleanupRow>? = null
 
-            if (callbackOutput0__row[0] != null) {
+            if (callbackOutput0__row.c0 != null) {
 try {
-for (callbackOutput0_item_index in (callbackOutput0__row[0] as kotlin.Array<*>).indices) {
+for (callbackOutput0_item_index in (callbackOutput0__row.c0 as kotlin.Array<*>).indices) {
 var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
-try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+try { val callbackOutput0_item__row = (callbackOutput0__row.c0 as kotlin.Array<*>)[callbackOutput0_item_index] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var callbackOutput0_item_item_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var callbackOutput0_item_item_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (callbackOutput0_item__row[1] != 0L) {
-            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(callbackOutput0_item__row[1] as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row.c1 != 0L) {
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(callbackOutput0_item__row.c1) } } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
             }
-            if (callbackOutput0_item__row[2] != 0L) {
-            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(callbackOutput0_item__row[2] as Long) } } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row.c2 != 0L) {
+            try { if (callbackOutput0_owners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(callbackOutput0_item__row.c2) } } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
             }
 
 } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
@@ -1458,15 +1458,15 @@ if (foldElementowners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (foldElement_row[1] != 0L) {
-            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[1] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            if (foldElement_row.c1 != 0L) {
+            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c1) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
             }
-            if (foldElement_row[2] != 0L) {
-            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[2] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            if (foldElement_row.c2 != 0L) {
+            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c2) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
             }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
@@ -1501,18 +1501,18 @@ try {
             if (__pb_fold_row.c0 != null) {
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
-val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (foldElement_row[1] != 0L) {
-            foldElementitem_g1_g0_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row[1] as Long))
+            if (foldElement_row.c1 != 0L) {
+            foldElementitem_g1_g0_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row.c1))
             }
-            if (foldElement_row[2] != 0L) {
-            foldElementitem_g2_g0_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row[2] as Long))
+            if (foldElement_row.c2 != 0L) {
+            foldElementitem_g2_g0_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row.c2))
             }
 
-foldElementlist.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(foldElement_row[0] as Long, if (foldElement_row[1] != 0L) requireNotNull(foldElementitem_g1_g0_0) else null, if (foldElement_row[2] != 0L) requireNotNull(foldElementitem_g2_g0_0) else null))
+foldElementlist.add(io.prebindgen.covertest.cleanup.OutputCleanupRow(foldElement_row.c0, if (foldElement_row.c1 != 0L) requireNotNull(foldElementitem_g1_g0_0) else null, if (foldElement_row.c2 != 0L) requireNotNull(foldElementitem_g2_g0_0) else null))
 }
             }
 
@@ -1527,15 +1527,15 @@ if (__pb_foldOwners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4
         var foldElementitem_g1_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var foldElementitem_g2_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            if (foldElement_row[1] != 0L) {
-            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[1] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            if (foldElement_row.c1 != 0L) {
+            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c1) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
             }
-            if (foldElement_row[2] != 0L) {
-            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[2] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            if (foldElement_row.c2 != 0L) {
+            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c2) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
             }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }

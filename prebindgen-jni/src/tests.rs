@@ -2962,7 +2962,7 @@ fn cleanup_helpers_share_resolved_shapes_across_functions_callbacks_and_nested_r
     assert_eq!(
         definitions
             .keys()
-            .filter(|name| name.starts_with("__pb_cleanup_objects_"))
+            .filter(|name| name.starts_with("__pb_cleanup_typed_"))
             .count(),
         4
     );
@@ -3316,7 +3316,7 @@ fn callback_capture_rows_use_all_jvm_carriers_and_keep_nested_cleanup() {
     ] {
         assert!(records.contains(&format!(": {ty}")), "{ty}: {records}");
     }
-    assert_eq!(native.matches("internal class SequenceRow_").count(), 3);
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 4);
     let text = &generated.kotlin["test/Functions.kt"];
     assert!(!text.contains("__pb_fold_row["));
     assert!(text.contains("__pb_discard(failure, __pb_processed)"));
@@ -3353,4 +3353,111 @@ fn typed_output_remapping_preserves_nullable_and_longer_cast_types() {
             "column[index]\nval other = 0"
         ]
     );
+}
+
+#[test]
+fn ordinary_output_rows_share_capture_classes_and_use_unboxed_constructors() {
+    let generated=JniGen::builder()
+        .flat(flat("pub type Owner=String;pub fn signed()->Vec<i64>{}pub fn unsigned()->Vec<u64>{}pub fn owners()->Vec<Owner>{}pub fn fold()->Vec<i64>{}pub fn callback(cb:impl Fn(Vec<i64>)){}"))
+        .set_package_prefix("test").set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(signed)).fun(fun!(unsigned)).fun(fun!(owners)).fun(fun!(fold).callback_return_only()).fun(fun!(callback)))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
+    assert_eq!(
+        generated.proguard_rules(),
+        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n"
+    );
+    assert_eq!(generated.rust.matches("static __pb_row_type_").count(), 1);
+    assert!(native.contains("::class.java"));
+    assert!(generated.rust.contains(".construct("));
+    assert!(!generated.rust.contains("handle_object"));
+    assert!(!generated.rust.contains("valueOf"));
+    assert!(!generated.rust.contains("LocalFrame::new"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains(".c0).toULong()"));
+    assert!(generated.rust.contains("OutputRows::new_objects"));
+    assert!(generated.rust.contains("get_field_unchecked"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
+    for (longs, ints, typed) in [
+        (127, 0, true),
+        (127, 1, false),
+        (128, 0, false),
+        (126, 2, true),
+    ] {
+        let fields = (0..longs)
+            .map(|i| (format!("n{i}"), Primitive::I64))
+            .chain((0..ints).map(|i| (format!("x{i}"), Primitive::I32)))
+            .map(|(name, primitive)| prebindgen_flat::Wire {
+                name: syn::parse_str(&name).unwrap(),
+                kind: JniWire::scalar(primitive),
+            })
+            .collect::<Vec<_>>();
+        let values = fields
+            .iter()
+            .map(|w| {
+                let name = &w.name;
+                (name.clone(), quote!(#name))
+            })
+            .collect::<Vec<_>>();
+        let element = prebindgen_flat::WireNode::Leaf(fields);
+        let output = sequence::output(
+            syn::parse_quote!(rows),
+            syn::parse_quote!(length),
+            syn::parse_quote!(index),
+            &element,
+            &values,
+        )
+        .unwrap();
+        assert!(
+            matches!(output.metadata, JniChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
+        );
+        assert_eq!(output.store.to_string().contains("construct"), typed);
+        assert_eq!(output.store.to_string().contains("valueOf"), !typed);
+    }
+}
+
+#[test]
+fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration() {
+    let node = prebindgen_flat::WireNode::Chain {
+        controls: vec![prebindgen_flat::Wire {
+            name: syn::parse_quote!(rows),
+            kind: JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        }],
+        child: Box::new(prebindgen_flat::WireNode::Leaf(vec![
+            prebindgen_flat::Wire {
+                name: syn::parse_quote!(value),
+                kind: JniWire::scalar(Primitive::I64),
+            },
+        ])),
+        meta: JniChain::Sequence(JniSequence::Buffered),
+    };
+    let context = KotlinContext {
+        package: "test",
+        classes: &BTreeMap::new(),
+        result: "packet",
+        failure: "failure",
+        cleanup_failure: None,
+        output_prefix: "result_",
+    };
+    let output = kotlin::output_kotlin_scoped(&node, &context, None).unwrap();
+    assert!(output.materialize.contains("as kotlin.Array<*>"));
+    assert!(output.materialize.contains("_row[0] as Long"));
+    assert!(!output.materialize.contains("SequenceRow_"));
+    let generated = JniGen::builder()
+        .flat(flat("pub fn input(values:Vec<i64>)->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(input)))
+        .build()
+        .unwrap();
+    assert!(generated.proguard_rules().is_empty());
+    assert!(!generated.rust.contains("OutputRowType"));
+    assert!(!generated.kotlin["test/JNINative.kt"].contains("init_OutputRows_"));
 }

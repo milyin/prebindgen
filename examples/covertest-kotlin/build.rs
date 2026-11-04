@@ -384,7 +384,16 @@ fn main() {
             .fun(fun!(callback_return_handler_many).expand_param("handlers",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap))))
             .fun(fun!(callback_return_char_catch)).fun(fun!(callback_return_owned_vector_catch)).fun(fun!(callback_return_unit))
             .fun(fun!(callback_return_handler_value).expand_param("handler",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)))))
-        // Malformed-row probes below deliberately exercise ordinary row-array ABI.
+        .package(package!("typedrows")
+            .class(data_class!(RowLeaf)).class(data_class!(Row2)).class(data_class!(Row4))
+            .class(data_class!(Row8)).class(data_class!(Row16)).class(data_class!(Row32)).class(data_class!(Row64))
+            .class(data_class!(Row127)).class(data_class!(WideRow))
+            .fun(fun!(typed_rows_worker).expand_param("callback", callback!(impl Fn(Vec<CallbackRow>) + Send + Sync + 'static)
+                .name("OrdinaryCallbackRowVecCallback").expand_param(0, expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(typed_rows_limit).expand_return(expand_return!(Vec<Row127>).field_self_into()))
+            .fun(fun!(typed_rows_wide).expand_return(expand_return!(Vec<WideRow>).field_self_into()))
+            .fun(fun!(typed_rows_mixed).expand_return(expand_return!(Vec<Vec<WideRow>>).field_self_into())))
+        // Malformed-row probes below deliberately exercise ordinary array transport.
         .package(package!("callbacks")
             .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
             .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
@@ -1729,6 +1738,7 @@ fn main() {
         .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
         .is_some());
     jni.write_rust("bindings.rs").unwrap();
+    std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();
     let kotlin = out.join("kotlin");
     if kotlin.exists() {
         std::fs::remove_dir_all(&kotlin).unwrap();

@@ -2,6 +2,7 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.callbacks.*
 import io.prebindgen.covertest.nativeoutputs.*
+import io.prebindgen.covertest.typedrows.*
 
 private fun unexpectedOutputError(code: Long): Nothing = error("unexpected source error: $code")
 
@@ -64,7 +65,7 @@ fun checkJniOutputOwnership() {
     check(callbackRowResourceLive() == 2L && callbackRowResourceDrops() == cleanupDrops + 4L)
     accepted.forEach { it.close() }
     check(callbackRowResourceLive() == 0L && callbackRowResourceDrops() == cleanupDrops + 6L)
-    for (mode in 13..18) check(CallbackFailureProbe.exercise(mode) == 1)
+    for (mode in 13..22) check(CallbackFailureProbe.exercise(mode) == 1)
     val drops = callbackRowResourceDrops()
     try { JniOutputRuntimeProbe.rollback(); error("rollback did not preserve exception") }
     catch (failure: java.io.IOException) { check(failure.message == "original output rollback") }
@@ -81,20 +82,22 @@ object JniOutputFailureEntryPoint {
         val drops = callbackRowResourceDrops()
         try {
             when (mode) {
-                13 -> jniOutputRows(-1, onError = ResultFailureHandler(::unexpectedOutputError)).forEach { it.first.close(); it.second.close() }
+                13, 19, 20 -> jniOutputRows(-1, onError = ResultFailureHandler(::unexpectedOutputError)).forEach { it.first.close(); it.second.close() }
                 14 -> jniOutputNested(-1, onError = ResultFailureHandler(::unexpectedOutputError)).flatten().forEach { it.first.close(); it.second.close() }
                 15 -> jniOutputPair(-1, onError = ResultFailureHandler(::unexpectedOutputError)) { first, second -> (first + second).forEach { it.first.close(); it.second.close() } }
                 16 -> jniOutputFold(-1, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> row.first.close(); row.second.close() }
                 17 -> jniOutputOptional(-1).filterNotNull().flatten().forEach { it.first.close(); it.second.close() }
                 18 -> jniOutputMixed(-1).flatten().forEach { it.close() }
+                21, 22 -> typedRowsMixed().flatten().forEach { it.owner.close() }
             }
         } catch (failure: OutOfMemoryError) {
             check(failure.message == "injected callback allocation failure")
-            check(CallbackFailureProbe.progress() > 0) { "fault occurred before any accepted row: mode=$mode" }
+            if (mode == 21) check(CallbackFailureProbe.progress() == 2)
+            check(mode == 19 || mode == 22 || CallbackFailureProbe.progress() > 0) { "fault occurred before any accepted row: mode=$mode" }
             failed = true
         }
         check(failed && callbackRowResourceLive() == 0L) { "mode=$mode failed=$failed live=${callbackRowResourceLive()}" }
-        val expected = when (mode) { 13 -> 12L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; else -> 24L }
+        val expected = when (mode) { 13 -> 12L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; 18 -> 24L; 19 -> 8L; 20 -> 12L; else -> 3L }
         check(callbackRowResourceDrops() == drops + expected) { "mode=$mode drops=${callbackRowResourceDrops()-drops} expected=$expected" }
     }
 }

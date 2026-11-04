@@ -230,7 +230,9 @@ pub(crate) fn validate_layout(
                     return Err("sequence requires one carrier control".into());
                 };
                 let valid = match metadata {
-                    JniSequence::Buffered => matches!(carrier.kind, JniWire::Rows { .. }),
+                    JniSequence::Buffered | JniSequence::TypedBuffered => {
+                        matches!(carrier.kind, JniWire::Rows { .. })
+                    }
                     JniSequence::Bulk => matches!(carrier.kind, JniWire::NativeRows { .. }),
                     JniSequence::Callback => {
                         matches!(&carrier.kind, JniWire::Rows { condition,.. } if condition=="true")
@@ -238,6 +240,11 @@ pub(crate) fn validate_layout(
                 };
                 if !valid {
                     return Err("sequence carrier control is incompatible with its delivery".into());
+                }
+                if *metadata == JniSequence::TypedBuffered && !typed_rows::supported(element) {
+                    return Err(
+                        "typed output row constructor exceeds 254 JVM parameter slots".into(),
+                    );
                 }
                 if values(element).len() == 0 && *metadata != JniSequence::Bulk {
                     return Err("sequence requires a nonempty element layout".into());

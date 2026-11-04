@@ -15,6 +15,8 @@ use prebindgen_runtime::Result;
 mod return_callback;
 pub use return_callback::{invoke_error_callback, ReturnCallback};
 
+mod output_row;
+pub use output_row::{OutputRowConstructor, OutputRowType};
 mod sequence;
 pub use sequence::*;
 mod callback;

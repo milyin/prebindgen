@@ -1228,10 +1228,10 @@ if (foldElementowners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
@@ -1266,10 +1266,10 @@ var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.reso
 try {
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
-val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row[0] as Long))
+            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row.c0))
 
 foldElementlist.add(requireNotNull(foldElementitem_0))
 }
@@ -1284,10 +1284,10 @@ if (__pb_foldOwners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
@@ -1418,10 +1418,10 @@ var foldElementlist: kotlin.collections.MutableList<Long>? = null
 
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
-val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
 
 
-foldElementlist.add(foldElement_row[0] as Long)
+foldElementlist.add(foldElement_row.c0)
 }
 
 current = fold(current, requireNotNull(foldElementlist))

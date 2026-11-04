@@ -81,6 +81,20 @@ The declaration layer also supports `expand_param!` constructor/identity variant
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
 Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
+Non-bulk collection outputs use immutable JVM row holders with primitive fields.
+Rust constructs each row with one cached JNI constructor call; Kotlin reconstructs
+public values after the native call. Rows exceeding the JVM constructor limit
+(254 parameter slots, with `Long`/`Double` counting twice) retain array storage.
+Row classes and field IDs are registered once during `JNINative` initialization,
+after `set_jni_native_init(...)`; load the native library before accessing this
+object when loading it externally. Registration retains classes for the native
+library's lifetime, including calls from native workers.
+
+For Android builds with R8/ProGuard, save `generated.proguard_rules()` as a `.pro`
+file and include it in `consumerProguardFiles` or `proguardFiles`, alongside the
+project's existing JNI rules. These generated rules preserve the raw row
+constructors and fields used by native code.
+
 Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
 Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
 and declared opaque handles. Records without handle fields support owned inputs

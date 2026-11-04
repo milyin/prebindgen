@@ -32,6 +32,19 @@ internal object JNINative {
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
+    internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
+    internal class SequenceRow_Long_String_Long_3_b4558cb7b740d7c6(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: Long)
+    internal class SequenceRow_Int_Long_String_7_e1006826998dc4d4(@JvmField val c0: Int, @JvmField val c1: Long, @JvmField val c2: String?, @JvmField val c3: Long, @JvmField val c4: Int, @JvmField val c5: Long, @JvmField val c6: String?)
+    internal class SequenceRow_Int_Long_String_4_3817dc835fa26831(@JvmField val c0: Int, @JvmField val c1: Long, @JvmField val c2: String?, @JvmField val c3: Long)
+    internal class SequenceRow_Long_String_2_3ea2c8aa47ab7590(@JvmField val c0: Long, @JvmField val c1: String?)
+    internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
+    internal class SequenceRow_Long_Double_2_012db11776ed72c5(@JvmField val c0: Long, @JvmField val c1: Double)
+    internal class SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: ByteArray?)
+    internal class SequenceRow_ByteArray_1_92dc0f7ab995287c(@JvmField val c0: ByteArray?)
+    internal class SequenceRow_Long_Long_Long_3_ad466713697fa9e4(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long)
+    internal class SequenceRow_Long_Long_Long_127_725c521ebd1c733a(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long, @JvmField val c3: Long, @JvmField val c4: Long, @JvmField val c5: Long, @JvmField val c6: Long, @JvmField val c7: Long, @JvmField val c8: Long, @JvmField val c9: Long, @JvmField val c10: Long, @JvmField val c11: Long, @JvmField val c12: Long, @JvmField val c13: Long, @JvmField val c14: Long, @JvmField val c15: Long, @JvmField val c16: Long, @JvmField val c17: Long, @JvmField val c18: Long, @JvmField val c19: Long, @JvmField val c20: Long, @JvmField val c21: Long, @JvmField val c22: Long, @JvmField val c23: Long, @JvmField val c24: Long, @JvmField val c25: Long, @JvmField val c26: Long, @JvmField val c27: Long, @JvmField val c28: Long, @JvmField val c29: Long, @JvmField val c30: Long, @JvmField val c31: Long, @JvmField val c32: Long, @JvmField val c33: Long, @JvmField val c34: Long, @JvmField val c35: Long, @JvmField val c36: Long, @JvmField val c37: Long, @JvmField val c38: Long, @JvmField val c39: Long, @JvmField val c40: Long, @JvmField val c41: Long, @JvmField val c42: Long, @JvmField val c43: Long, @JvmField val c44: Long, @JvmField val c45: Long, @JvmField val c46: Long, @JvmField val c47: Long, @JvmField val c48: Long, @JvmField val c49: Long, @JvmField val c50: Long, @JvmField val c51: Long, @JvmField val c52: Long, @JvmField val c53: Long, @JvmField val c54: Long, @JvmField val c55: Long, @JvmField val c56: Long, @JvmField val c57: Long, @JvmField val c58: Long, @JvmField val c59: Long, @JvmField val c60: Long, @JvmField val c61: Long, @JvmField val c62: Long, @JvmField val c63: Long, @JvmField val c64: Long, @JvmField val c65: Long, @JvmField val c66: Long, @JvmField val c67: Long, @JvmField val c68: Long, @JvmField val c69: Long, @JvmField val c70: Long, @JvmField val c71: Long, @JvmField val c72: Long, @JvmField val c73: Long, @JvmField val c74: Long, @JvmField val c75: Long, @JvmField val c76: Long, @JvmField val c77: Long, @JvmField val c78: Long, @JvmField val c79: Long, @JvmField val c80: Long, @JvmField val c81: Long, @JvmField val c82: Long, @JvmField val c83: Long, @JvmField val c84: Long, @JvmField val c85: Long, @JvmField val c86: Long, @JvmField val c87: Long, @JvmField val c88: Long, @JvmField val c89: Long, @JvmField val c90: Long, @JvmField val c91: Long, @JvmField val c92: Long, @JvmField val c93: Long, @JvmField val c94: Long, @JvmField val c95: Long, @JvmField val c96: Long, @JvmField val c97: Long, @JvmField val c98: Long, @JvmField val c99: Long, @JvmField val c100: Long, @JvmField val c101: Long, @JvmField val c102: Long, @JvmField val c103: Long, @JvmField val c104: Long, @JvmField val c105: Long, @JvmField val c106: Long, @JvmField val c107: Long, @JvmField val c108: Long, @JvmField val c109: Long, @JvmField val c110: Long, @JvmField val c111: Long, @JvmField val c112: Long, @JvmField val c113: Long, @JvmField val c114: Long, @JvmField val c115: Long, @JvmField val c116: Long, @JvmField val c117: Long, @JvmField val c118: Long, @JvmField val c119: Long, @JvmField val c120: Long, @JvmField val c121: Long, @JvmField val c122: Long, @JvmField val c123: Long, @JvmField val c124: Long, @JvmField val c125: Long, @JvmField val c126: Long)
+    @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
+    init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_ByteArray_1_92dc0f7ab995287c::class.java, SequenceRow_Int_Long_String_4_3817dc835fa26831::class.java, SequenceRow_Int_Long_String_7_e1006826998dc4d4::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Double_2_012db11776ed72c5::class.java, SequenceRow_Long_Long_Long_127_725c521ebd1c733a::class.java, SequenceRow_Long_Long_Long_3_ad466713697fa9e4::class.java, SequenceRow_Long_String_2_3ea2c8aa47ab7590::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java, SequenceRow_Long_String_Long_3_b4558cb7b740d7c6::class.java)) }
     @JvmStatic external fun bulkLayouts(): LongArray
     @JvmStatic external fun call_collection_input_plain_49edb34e988dff39(p0_w1: Array<Any?>?, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_collection_input_bulk_7564a92b14e3a524(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -200,6 +213,10 @@ internal object JNINative {
     @JvmStatic external fun call_callback_return_owned_vector_catch_0161633ca648736c(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_unit_dd4499fffb863427(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_return_handler_value_a23aec1750dc3226(p0_w2: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_typed_rows_worker_6b9e6aab9bf9dcf9(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_typed_rows_limit_2e92146cd4dd53c0(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_typed_rows_wide_3a9a88de1b1dce19(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_typed_rows_mixed_f837b40bf5799358(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_callback_rows_ref_e8fc186edb0f16d5(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_row_return_cleanup_failure_f029b8a3edf61e39(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_unique_resource_id_f503b662b364158e(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -455,24 +472,18 @@ internal object JNINative {
     @JvmStatic external fun call_blob_value_selected_bb0c7d8f79d57c4b(p0_w1: Int, p0_w3_f0_f0: Long, p0_w3_f0_f1: Long, p0_w3_f1: ByteArray?, p0_w6: Long, p0_w8: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
     @JvmStatic external fun call_blob_value_views_9983ceb667085a50(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f1: ByteArray?, returns: Return_Long_Long_ByteArray9_ErrorEmpty_3b29111153baa628): Unit
     internal fun interface SequenceSink_default_bulk_array_fold_95a8899ff0517a5d { fun run(v0: Long, v1: Double) }
-    internal class SequenceRow_Long_Double_2_012db11776ed72c5(@JvmField val c0: Long, @JvmField val c1: Double)
     @JvmStatic external fun call_default_bulk_array_fold_8b682a05955403df(callback: SequenceSink_default_bulk_array_fold_95a8899ff0517a5d, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_default_bulk_optional_fold_98317e3c22588d99 { fun run(v0: Long, v1: Double) }
     @JvmStatic external fun call_default_bulk_optional_fold_a9233ea21645798f(p0_w1: Long, callback: SequenceSink_default_bulk_optional_fold_98317e3c22588d99, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 { fun run(v0: ByteArray?) }
-    internal class SequenceRow_ByteArray_1_92dc0f7ab995287c(@JvmField val c0: ByteArray?)
     @JvmStatic external fun call_jni_output_mixed_frames_fold_e9474c6b8b0056cf(p0_w1: Long, callback: SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6 { fun run(v0: Array<Any?>?) }
-    internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
     @JvmStatic external fun call_jni_output_fold_drop_fold_8e0eaffd2786301c(callback: SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_fold_fold_a6fbab1712a6f896 { fun run(v0: Long, v1: String?, v2: Long) }
-    internal class SequenceRow_Long_String_Long_3_b4558cb7b740d7c6(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: Long)
     @JvmStatic external fun call_jni_output_fold_fold_30e359f733b27f80(p0_w1: Long, callback: SequenceSink_jni_output_fold_fold_a6fbab1712a6f896, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac { fun run(v0: Long) }
-    internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
     @JvmStatic external fun call_callback_boundary_fold_fold_f4fcc537824dc196(p0_callback: Any?, p1_w1: Long, callback: SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { fun run(v0: Long, v1: Long, v2: Long) }
-    internal class SequenceRow_Long_Long_Long_3_ad466713697fa9e4(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long)
     @JvmStatic external fun call_output_cleanup_rows_fold_d4a060fc1b46cffe(callback: SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_output_cleanup_rows_bulk_fold_8a047108d9782a30(callback: SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
@@ -528,6 +539,5 @@ internal object JNINative {
     internal class SequenceRow_Long_Int_Double_4_5e82f5e29d89a757(@JvmField val c0: Long, @JvmField val c1: Int, @JvmField val c2: Double, @JvmField val c3: Boolean)
     @JvmStatic external fun call_storage_get_vec_fold_5d94b3f03ff97a04(p0_w1: Long, callback: SequenceSink_storage_get_vec_fold_886389afd9ad2e6a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_api_record_rows_fold_5bd1116027b7610c { fun run(v0: Long, v1: String?) }
-    internal class SequenceRow_Long_String_2_3ea2c8aa47ab7590(@JvmField val c0: Long, @JvmField val c1: String?)
     @JvmStatic external fun call_api_record_rows_fold_847767faa33a5dce(callback: SequenceSink_api_record_rows_fold_5bd1116027b7610c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
 }
