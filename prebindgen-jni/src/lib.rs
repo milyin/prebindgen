@@ -857,7 +857,7 @@ impl Codec for JniCodec {
                 sequence::output(wire, length, index, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {
-                sequence_callback::transport(wire, element, values)
+                sequence_callback::transport(wire, length, element, values)
             }
         }
     }
@@ -1123,9 +1123,12 @@ impl JniGen {
     pub fn proguard_rules(&self) -> String {
         self.kotlin.iter().filter_map(|(path, text)| {
             let package=path.strip_suffix("/JNINative.kt")?.replace('/', ".");
-            text.contains("internal class SequenceRow_").then(|| format!(
-                "-keep class {package}.JNINative {{ *; }}\n-keep class {package}.JNINative$SequenceRow_* {{ *; }}\n"
-            ))
+            if !text.contains("internal class SequenceRow_") { return None; }
+            let mut rules=format!("-keep class {package}.JNINative {{ *; }}\n-keep class {package}.JNINative$SequenceRow_* {{ *; }}\n");
+            if text.contains("internal class SequenceCollector_") {
+                rules.push_str(&format!("-keep class {package}.JNINative$SequenceSink_* {{ *; }}\n-keep class {package}.JNINative$SequenceCollector_* {{ *; }}\n-keep interface {package}.JNINative$SequenceCapacity {{ *; }}\n"));
+            }
+            Some(rules)
         }).collect()
     }
     /// Write all Kotlin files beneath `root`, creating package directories.
@@ -1334,6 +1337,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     );
     let mut names = names::Names::default();
     let mut row_captures = BTreeSet::new();
+    let mut capacity_registered = false;
     for (ty, c) in classes.values() {
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
@@ -1585,6 +1589,10 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             kt_args.push("ownership".into());
         }
         if callback {
+            if !capacity_registered {
+                sequence_callback::emit_capacity(prefix, &mut rust, &mut native, &mut names)?;
+                capacity_registered = true;
+            }
             let sink = names.name(
                 "SequenceSink",
                 &f.name.to_string(),
@@ -1597,10 +1605,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 .enumerate()
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
-            native.push_str(&format!(
-                "    internal fun interface {sink} {{ fun run({}) }}\n",
-                fields.join(", ")
-            ));
             params.push(
                 quote!(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>),
             );
@@ -1613,7 +1617,16 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             if row_captures.insert(storage.clone()) {
                 native.push_str(&declaration);
             }
-            setup.push_str(&format!("val __pb_rows = kotlin.collections.ArrayList<{prefix}.JNINative.{storage}>()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {arguments} -> __pb_rows.add({prefix}.JNINative.{storage}({arguments})); kotlin.Unit }}\n"));
+            let collector = names.name(
+                "SequenceCollector",
+                &f.name.to_string(),
+                &[&names::path_identity(&f.path), &f.name.to_string()],
+            )?;
+            native.push_str(&format!(
+                "    internal interface {sink} : SequenceCapacity {{ fun run({}) }}\n    internal class {collector} : {sink} {{\n        @JvmField val rows = kotlin.collections.ArrayList<{storage}>()\n        override fun reserve(capacity: Int) {{ rows.ensureCapacity(capacity) }}\n        override fun run({}) {{ rows.add({storage}({arguments})) }}\n    }}\n",
+                fields.join(", "), fields.join(", ")
+            ));
+            setup.push_str(&format!("val __pb_sink = {prefix}.JNINative.{collector}()\nval __pb_rows = __pb_sink.rows\n"));
             kt_args.push("__pb_sink".into());
             params.push(quote!(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>));
             raw_params.push("outputAccepted: BooleanArray".into());

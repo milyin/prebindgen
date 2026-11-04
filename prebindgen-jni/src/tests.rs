@@ -2540,7 +2540,7 @@ fn automatic_bulk_collections_preserve_fold_and_callback_local_overrides() {
     assert!(!kotlin.contains("`only`("));
     assert!(kotlin.contains("fun run(raw0: ByteArray?)"));
     assert!(kotlin.contains("fun run(raw0: Array<Any?>?)"), "{kotlin}");
-    assert!(kotlin.contains("SequenceSink_rows_fold_"));
+    assert!(kotlin.contains("SequenceCollector_rows_fold_"));
 }
 
 #[test]
@@ -3366,7 +3366,7 @@ fn ordinary_output_rows_share_capture_classes_and_use_unboxed_constructors() {
     assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
     assert_eq!(
         generated.proguard_rules(),
-        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n"
+        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n-keep class test.JNINative$SequenceSink_* { *; }\n-keep class test.JNINative$SequenceCollector_* { *; }\n-keep interface test.JNINative$SequenceCapacity { *; }\n"
     );
     assert_eq!(generated.rust.matches("static __pb_row_type_").count(), 1);
     assert!(native.contains("::class.java"));
@@ -3460,4 +3460,100 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
     assert!(generated.proguard_rules().is_empty());
     assert!(!generated.rust.contains("OutputRowType"));
     assert!(!generated.kotlin["test/JNINative.kt"].contains("init_OutputRows_"));
+}
+
+#[test]
+fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(rows).callback_return_only()))
+        .build()
+        .unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert!(native.contains("interface SequenceCapacity { fun reserve(capacity: Int) }"));
+    assert!(native.contains(": SequenceCapacity { fun run(v0: Long)"));
+    assert!(native.contains("rows.ensureCapacity(capacity)"));
+    assert!(native.contains("override fun run(v0: Long) { rows.add("));
+    assert!(!native.contains("capacity: Int, v0"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains("val __pb_rows = __pb_sink.rows"));
+    assert!(!text.contains("ArrayList<"));
+    let row = prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+        name: syn::parse_quote!(value),
+        kind: JniWire::scalar(Primitive::I64),
+    }]);
+    let transport = sequence_callback::transport(
+        syn::parse_quote!(rows),
+        syn::parse_quote!(length),
+        &row,
+        &[(syn::parse_quote!(value), quote!(value))],
+    )
+    .unwrap();
+    assert!(transport.begin.to_string().contains("if length >= 64"));
+    assert!(transport.begin.to_string().contains("reserve"));
+    assert!(!transport.store.to_string().contains("reserve"));
+    assert!(!transport.store.to_string().contains("length"));
+    assert!(transport
+        .begin
+        .to_string()
+        .contains("__PB_SEQUENCE_CAPACITY"));
+    assert!(!transport.begin.to_string().contains(r#""reserve""#));
+    assert_eq!(generated.rust.matches(r#""reserve""#).count(), 1);
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn bulk_only_collections_need_no_collector_keep_rules() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(rows)))
+        .build()
+        .unwrap();
+    assert!(!generated.proguard_rules().contains("SequenceSink_"));
+    assert!(!generated.proguard_rules().contains("SequenceCollector_"));
+    assert!(!generated.proguard_rules().contains("SequenceCapacity"));
+    assert!(!generated.rust.contains("__PB_SEQUENCE_CAPACITY"));
+    assert!(!generated.kotlin["test/JNINative.kt"].contains("SequenceCapacity"));
+}
+
+#[test]
+fn collector_capacity_registration_is_shared_and_follows_the_library_loader() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn rows()->Vec<i64>{}pub fn text()->Vec<String>{}",
+        ))
+        .set_package_prefix("test")
+        .set_jni_native_init("System.loadLibrary(\"example\")")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(text).callback_return_only()),
+        )
+        .build()
+        .unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(
+        native
+            .matches("internal interface SequenceCapacity ")
+            .count(),
+        1
+    );
+    assert_eq!(native.matches("init { init_SequenceCapacity_").count(), 1);
+    assert_eq!(
+        generated
+            .rust
+            .matches("static __PB_SEQUENCE_CAPACITY")
+            .count(),
+        1
+    );
+    assert!(
+        native.find("System.loadLibrary").unwrap()
+            < native.find("init { init_SequenceCapacity_").unwrap()
+    );
+    assert!(generated
+        .proguard_rules()
+        .contains("JNINative$SequenceCapacity"));
 }

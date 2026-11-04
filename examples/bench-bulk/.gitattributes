@@ -3,3 +3,6 @@ samples.csv -text whitespace=cr-at-eol
 aa-samples.csv -text whitespace=cr-at-eol
 reference-confirmation.csv -text whitespace=cr-at-eol
 columns-samples.csv -text whitespace=cr-at-eol
+pilot-samples.csv -text whitespace=cr-at-eol
+eager-samples.csv -text whitespace=cr-at-eol
+handle-aa-samples.csv -text whitespace=cr-at-eol

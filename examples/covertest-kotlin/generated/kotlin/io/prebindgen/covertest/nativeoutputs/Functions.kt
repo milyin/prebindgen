@@ -502,8 +502,8 @@ try { val outputg1_g0__row = (returnCapture.s1 as kotlin.Array<*>)[outputg1_g0_i
 }
 
 public fun <A> `jniOutputMixedFramesFold`(p0_w1: Long, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRowResource>) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_jni_output_mixed_frames_fold_a5668456db986db2()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -604,8 +604,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `jniOutputFoldDropFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRowResource>) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_jni_output_fold_drop_fold_a39a891c792a6c19()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -700,8 +700,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `jniOutputFold`(p0_w1: Long, initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A>, fold: (A, io.prebindgen.covertest.callbacks.CallbackRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_String_Long_3_b4558cb7b740d7c6>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_jni_output_fold_fold_a6fbab1712a6f896 { v0, v1, v2 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_String_Long_3_b4558cb7b740d7c6(v0, v1, v2)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_jni_output_fold_fold_da0d511a519a94f5()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
