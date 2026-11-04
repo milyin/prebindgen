@@ -318,42 +318,24 @@ public fun <A> `apiRecordRowsFold`(initial: A, onError: io.prebindgen.covertest.
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_api_record_rows_fold_5bd1116027b7610c { v0, v1 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_api_record_rows_fold_847767faa33a5dce(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_api_record_rows_fold_847767faa33a5dce(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as Long, __pb_fold_row[1] as String)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }

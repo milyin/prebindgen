@@ -458,10 +458,22 @@ internal object JNINative {
     @JvmStatic external fun call_default_bulk_array_fold_8b682a05955403df(callback: SequenceSink_default_bulk_array_fold_95a8899ff0517a5d, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_default_bulk_optional_fold_98317e3c22588d99 { fun run(v0: Long, v1: Double) }
     @JvmStatic external fun call_default_bulk_optional_fold_a9233ea21645798f(p0_w1: Long, callback: SequenceSink_default_bulk_optional_fold_98317e3c22588d99, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 { fun run(v0: ByteArray?) }
+    @JvmStatic external fun call_jni_output_mixed_frames_fold_e9474c6b8b0056cf(p0_w1: Long, callback: SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6 { fun run(v0: Array<Any?>?) }
+    @JvmStatic external fun call_jni_output_fold_drop_fold_8e0eaffd2786301c(callback: SequenceSink_jni_output_fold_drop_fold_b6a0b19ec3a0bfe6, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_jni_output_fold_fold_a6fbab1712a6f896 { fun run(v0: Long, v1: String?, v2: Long) }
     @JvmStatic external fun call_jni_output_fold_fold_30e359f733b27f80(p0_w1: Long, callback: SequenceSink_jni_output_fold_fold_a6fbab1712a6f896, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac { fun run(v0: Long) }
     @JvmStatic external fun call_callback_boundary_fold_fold_f4fcc537824dc196(p0_callback: Any?, p1_w1: Long, callback: SequenceSink_callback_boundary_fold_fold_0165aba4bc8f4bac, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { fun run(v0: Long, v1: Long, v2: Long) }
+    @JvmStatic external fun call_output_cleanup_rows_fold_d4a060fc1b46cffe(callback: SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { fun run(v0: ByteArray?) }
+    @JvmStatic external fun call_output_cleanup_rows_bulk_fold_8a047108d9782a30(callback: SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_output_cleanup_nested_fold_697431074ae8d31b { fun run(v0: Array<Any?>?) }
+    @JvmStatic external fun call_output_cleanup_nested_fold_4f16ec74e528db69(callback: SequenceSink_output_cleanup_nested_fold_697431074ae8d31b, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    internal fun interface SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac { fun run(v0: ByteArray?) }
+    @JvmStatic external fun call_output_cleanup_nested_bulk_fold_2c8fd0b69d9609fe(callback: SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_scalars_fold_70028742f64f0191 { fun run(v0: Boolean, v1: Byte, v2: Short, v3: Int, v4: Long, v5: Float, v6: Double, v7: ByteArray?, v8: String?) }
     @JvmStatic external fun call_collection_scalars_fold_3627b263ec4e572b(p0_w1: Array<Any?>?, p1_w1: Double, callback: SequenceSink_collection_scalars_fold_70028742f64f0191, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_u128_fold_6f48cddbc993447a { fun run(v0: ByteArray?) }
@@ -486,7 +498,7 @@ internal object JNINative {
     @JvmStatic external fun call_collection_optional_items_fold_912719d84a3df595(p0_w3: Array<Any?>?, callback: SequenceSink_collection_optional_items_fold_0dd26be8936deb87, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c { fun run(v0: Int) }
     @JvmStatic external fun call_collection_enum_fold_7a76112af7324a8e(p0_w1: Array<Any?>?, callback: SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
-    internal fun interface SequenceSink_collection_borrow_fold_b4856d1bed461622 { fun run(v0: Long) }
+    internal fun interface SequenceSink_collection_borrow_fold_b4856d1bed461622 { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_borrow_fold_22d09716b260bda8(p0_w1: Array<Any?>?, callback: SequenceSink_collection_borrow_fold_b4856d1bed461622, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_collection_slice_fold_2b262532b9b8b02f { fun run(v0: Long) }
     @JvmStatic external fun call_collection_slice_fold_6f331d2d69f04ead(p0_w1: Array<Any?>?, callback: SequenceSink_collection_slice_fold_2b262532b9b8b02f, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
@@ -494,11 +506,11 @@ internal object JNINative {
     @JvmStatic external fun call_collection_handles_fold_31a24f87629a2d5f(p0_w1: Array<Any?>?, p1_w1: Int, p2_w1: Int, ownership: LongArray, callback: SequenceSink_collection_handles_fold_94b94355358878bd, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_collection_result_fold_8dc1da1d06d04f3a { fun run(v0: Long) }
     @JvmStatic external fun call_collection_result_fold_72fabc4d8e10f6c8(p0_w1: Array<Any?>?, p1_w1: Boolean, callback: SequenceSink_collection_result_fold_8dc1da1d06d04f3a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
-    internal fun interface SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c { fun run(v0: Long) }
+    internal fun interface SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_collection_result_optional_fold_a6c94691b7ce90de(p0_w1: Array<Any?>?, p1_w1: Int, ownership: LongArray, callback: SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
     internal fun interface SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d { fun run(v0: Long) }
     @JvmStatic external fun call_sequence_late_drop_fold_7e360d29a6fc0d5f(callback: SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?
-    internal fun interface SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { fun run(v0: Boolean, v1: Byte, v2: Short, v3: Int, v4: Long, v5: Float, v6: Double, v7: ByteArray?, v8: String?) }
+    internal fun interface SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { fun run(v0: ByteArray?) }
     @JvmStatic external fun call_sequence_scalars_fold_5108aab400f755b1(callback: SequenceSink_sequence_scalars_fold_47a6ace8a9aad013, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     internal fun interface SequenceSink_sequence_parts_fold_34d4f8eed2926471 { fun run(v0: Long, v1: String?, v2: Long) }
     @JvmStatic external fun call_sequence_parts_fold_aeb653ed535ad4ab(p0_w1: Int, callback: SequenceSink_sequence_parts_fold_34d4f8eed2926471, outputAccepted: BooleanArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Array<Any?>?

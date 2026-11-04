@@ -532,6 +532,21 @@ pub fn jni_output_mixed(fail_at: i64) -> Vec<Vec<CallbackRowResource>> {
         .collect()
 }
 #[prebindgen]
+pub fn jni_output_mixed_frames(fail_at: i64) -> Vec<Vec<CallbackRowResource>> {
+    jni_output_mixed(fail_at)
+}
+
+// Move these handles into the fold so the sentinel destructor runs during
+// Kotlin failure cleanup, after earlier rows have reached the user's fold.
+#[prebindgen]
+pub fn jni_output_fold_drop() -> Vec<Vec<CallbackRowResource>> {
+    [[1, 2], [777, 3], [4, 5]]
+        .into_iter()
+        .map(|ids| ids.into_iter().map(callback_row_resource_new).collect())
+        .collect()
+}
+
+#[prebindgen]
 pub fn c_output_nested(fail_at: i64) -> Result<Vec<Vec<CallbackRow>>, ResultFailure> {
     Ok(native_bulk_nested(fail_at))
 }

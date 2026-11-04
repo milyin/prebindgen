@@ -145,6 +145,12 @@ internal class CollectionOwners {
         }
         return owner
     }
+    /** Transfer a successfully folded row to the caller and reuse the journal. */
+    fun release() {
+        owners?.clear()
+        scanned = 0
+        complete = false
+    }
     fun unread(): Boolean {
         if (scanned >= (owners?.size ?: 0)) return true
         scanned++

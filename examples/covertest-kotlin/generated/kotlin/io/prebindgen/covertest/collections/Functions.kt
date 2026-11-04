@@ -980,12 +980,12 @@ val nativeResult = try { run { val handles = try { (p0_w1_elements?.handles.orEm
 var outputowners: io.prebindgen.covertest.CollectionOwners? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-             if (nativeResult != null) {
-if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
  }
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners?.close(failure)
 if (outputowners?.complete != true) {
-try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
 var outputbulkFailure: Throwable? = failure
@@ -1007,10 +1007,10 @@ var outputowners: io.prebindgen.covertest.CollectionOwners? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
         try {
-            if (nativeResult != null) {
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners = io.prebindgen.covertest.CollectionOwners()
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
@@ -1023,14 +1023,14 @@ outputbulkList!!.add(requireNotNull(outputbulkItem_0))
 
 outputowners!!.complete = true
             }
-            if (nativeResult != null) requireNotNull(outputbulkList) else null
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) requireNotNull(outputbulkList) else null
         } catch (failure: Throwable) {
-            if (nativeResult != null) {
 if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
  }
+            if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[0])) == 1) {
 outputowners?.close(failure)
 if (outputowners?.complete != true) {
-try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rf59dc5e9e3cec997.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r227a8bb975da144e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
 val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.size
 var outputbulkFailure: Throwable? = failure
@@ -1097,45 +1097,27 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_scalars_fold_70028742f64f0191 { v0, v1, v2, v3, v4, v5, v6, v7, v8 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2, v3, v4, v5, v6, v7, v8)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_scalars_fold_3627b263ec4e572b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_scalars_fold_3627b263ec4e572b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
             if (__pb_fold_row[8] != null) {
             }
 
 current = fold(current, io.prebindgen.covertest.collections.SequenceScalars(__pb_fold_row[0] as Boolean, __pb_fold_row[1] as Byte, __pb_fold_row[2] as Short, __pb_fold_row[3] as Int, __pb_fold_row[4] as Long, __pb_fold_row[5] as Float, __pb_fold_row[6] as Double, java.math.BigInteger(__pb_fold_row[7] as ByteArray), if (__pb_fold_row[8] != null) __pb_fold_row[8] as String else null))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1145,43 +1127,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_u128_fold_6f48cddbc993447a { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_u128_fold_5aa4076e5dce00fc(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_u128_fold_5aa4076e5dce00fc(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, java.math.BigInteger(1, __pb_fold_row[0] as ByteArray))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1191,12 +1155,17 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_handles_fold_0322a075b01009ab { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (if (p0_w3 != null) (p0_w3_elements?.handles.orEmpty()) else kotlin.collections.emptyList()) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
@@ -1208,7 +1177,6 @@ val nativeResult = try { try { run { val handles = try { (if (p0_w3 != null) (p0
 
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
@@ -1216,26 +1184,25 @@ for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-__pb_pending = { failure ->             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
+try {
             foldElement0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[0] as Long)
 
 current = fold(current, requireNotNull(foldElement0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1249,7 +1216,10 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_nested_handles_fold_0692fa392fcf7c3f { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 var foldElementowners: io.prebindgen.covertest.CollectionOwners? = null
 var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
 
@@ -1270,7 +1240,9 @@ try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementind
 
 }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
@@ -1282,68 +1254,40 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
+var __pb_foldOwners: io.prebindgen.covertest.CollectionOwners? = null
         try {
 if (nativeResult != null) {
+if (__pb_rows.isNotEmpty()) __pb_foldOwners = io.prebindgen.covertest.CollectionOwners()
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
-var foldElementowners: io.prebindgen.covertest.CollectionOwners? = null
 var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
 
-__pb_pending = { failure -> foldElementowners?.close(failure)
-if (foldElementowners?.complete != true) {
 try {
-for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
-var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
-        var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
-
-} catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
-
-}
-} catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
-
-}
- }
-foldElementowners = io.prebindgen.covertest.CollectionOwners()
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row[0] as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
 val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            foldElementitem_0 = requireNotNull(foldElementowners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row[0] as Long))
+            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(io.prebindgen.covertest.resources.OwnedResource(foldElement_row[0] as Long))
 
 foldElementlist.add(requireNotNull(foldElementitem_0))
 }
 
-foldElementowners!!.complete = true
-
+__pb_foldOwners!!.complete = true
 current = fold(current, requireNotNull(foldElementlist))
-__pb_pending = null
+} catch (failure: Throwable) {
 __pb_processed++
-}
-__pb_accumulator = current
-}
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-var foldElementowners: io.prebindgen.covertest.CollectionOwners? = null
-var foldElementlist: kotlin.collections.MutableList<io.prebindgen.covertest.resources.OwnedResource>? = null
-
-foldElementowners?.close(failure)
-if (foldElementowners?.complete != true) {
+try {
+__pb_foldOwners?.close(failure)
+if (__pb_foldOwners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
 try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
         var foldElementitem_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { if (foldElementowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (__pb_foldOwners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
@@ -1351,8 +1295,17 @@ try { val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementind
 } catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
 
 }
-
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
 }
+__pb_processed++
+__pb_foldOwners!!.release()
+}
+__pb_accumulator = current
+}
+            __pb_accumulator as A
+        } catch (failure: Throwable) {
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1364,43 +1317,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_i64_fold_7481b0c247e22a81 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_i64_fold_808c7d955e03904b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_i64_fold_808c7d955e03904b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as Long)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1410,43 +1345,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_text_fold_eee532ef372c2cc4 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_text_fold_a7b24a9c45b3e186(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_text_fold_a7b24a9c45b3e186(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as String)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1456,43 +1373,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_bytes_fold_6625bb31d7dc18eb { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_bytes_fold_9e9770856c6c4641(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_bytes_fold_9e9770856c6c4641(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as ByteArray)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1504,28 +1403,19 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_nested_fold_63e97a79272db78e { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-var foldElementlist: kotlin.collections.MutableList<Long>? = null
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_nested_fold_b79bf8a96a5df66c(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_nested_fold_b79bf8a96a5df66c(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 var foldElementlist: kotlin.collections.MutableList<Long>? = null
 
-__pb_pending = { failure ->  }
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row[0] as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row[0] as kotlin.Array<*>).indices) {
 val foldElement_row = (__pb_fold_row[0] as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
@@ -1535,22 +1425,11 @@ foldElementlist.add(foldElement_row[0] as Long)
 }
 
 current = fold(current, requireNotNull(foldElementlist))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-var foldElementlist: kotlin.collections.MutableList<Long>? = null
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1560,45 +1439,27 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { (if 
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_options_fold_b6fa2828841c6e69 { v0, v1 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_options_fold_ded63bd11a5c595b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_options_fold_ded63bd11a5c595b(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
             if (__pb_fold_row[0] == 1) {
             }
 
 current = fold(current, if (__pb_fold_row[0] == 1) __pb_fold_row[1] as Long else null)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1608,43 +1469,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_fold_78209d4e9082c96a { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_fold_1efcbb0a1a187e64(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_fold_1efcbb0a1a187e64(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as Long)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator
     } finally { returnCapture.release() }
 }
 
@@ -1654,45 +1497,27 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { (if 
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_items_fold_0dd26be8936deb87 { v0, v1 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_items_fold_912719d84a3df595(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_optional_items_fold_912719d84a3df595(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
             if (__pb_fold_row[0] == 1) {
             }
 
 current = fold(current, if (__pb_fold_row[0] == 1) __pb_fold_row[1] as Long else null)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator
     } finally { returnCapture.release() }
 }
 
@@ -1702,43 +1527,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_enum_fold_7a76112af7324a8e(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_enum_fold_7a76112af7324a8e(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, io.prebindgen.covertest.enums.Code.fromWire(__pb_fold_row[0] as Int))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1748,43 +1555,27 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_borrow_fold_b4856d1bed461622 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_borrow_fold_22d09716b260bda8(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_borrow_fold_22d09716b260bda8(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 
-__pb_pending = { failure ->  }
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
 
-current = fold(current, __pb_fold_row[0] as Long)
-__pb_pending = null
-__pb_processed++
+current = fold(current, (requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1794,43 +1585,25 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_slice_fold_2b262532b9b8b02f { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_slice_fold_6f331d2d69f04ead(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_slice_fold_6f331d2d69f04ead(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as Long)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1840,12 +1613,17 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_handles_fold_94b94355358878bd { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
@@ -1858,7 +1636,6 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
@@ -1866,26 +1643,25 @@ for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-__pb_pending = { failure ->             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
+try {
             foldElement0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[0] as Long)
 
 current = fold(current, requireNotNull(foldElement0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1897,44 +1673,26 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_result_fold_8dc1da1d06d04f3a { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_result_fold_72fabc4d8e10f6c8(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_result_fold_72fabc4d8e10f6c8(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, __pb_fold_row[0] as Long)
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -1944,12 +1702,20 @@ kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w
 val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+ }
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
@@ -1962,34 +1728,36 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-__pb_pending = { failure ->             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
-            foldElement0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[0] as Long)
+try {
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+            foldElement0 = io.prebindgen.covertest.resources.OwnedResource((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long)
 
 current = fold(current, requireNotNull(foldElement0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+if (foldElementbulkReader == null) { foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+ }
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88((requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r1759b2fb0606880d.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -1999,12 +1767,17 @@ public fun <A> `sequenceLateDropFold`(initial: A, onBindingError: io.prebindgen.
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { try { run { val nativeArgument0 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_sequence_late_drop_fold_7e360d29a6fc0d5f(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
@@ -2014,7 +1787,6 @@ val nativeResult = try { try { run { val nativeArgument0 = try { __pb_sink } cat
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
@@ -2022,26 +1794,25 @@ for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
         var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-__pb_pending = { failure ->             try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
+try {
             foldElement0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[0] as Long)
 
 current = fold(current, requireNotNull(foldElement0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElement0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { val owner = foldElement0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[0] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -2049,47 +1820,31 @@ val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
 public fun <A> `sequenceScalarsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Boolean, Byte, Short, Int, Long, Float, Double, java.math.BigInteger, String?) -> A): A = run {
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { v0, v1, v2, v3, v4, v5, v6, v7, v8 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2, v3, v4, v5, v6, v7, v8)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { v0 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val nativeArgument0 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_sequence_scalars_fold_5108aab400f755b1(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+val nativeResult = try { run { val nativeArgument0 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_sequence_scalars_fold_5108aab400f755b1(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
+var foldElementbulkReader: io.prebindgen.covertest.BulkReader? = null
 
-__pb_pending = { failure ->  }
-            if (__pb_fold_row[8] != null) {
+foldElementbulkReader = io.prebindgen.covertest.BulkReader(__pb_fold_row[0] as ByteArray)
+            if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[8])) == 1) {
             }
 
-current = fold(current, __pb_fold_row[0] as Boolean, __pb_fold_row[1] as Byte, __pb_fold_row[2] as Short, __pb_fold_row[3] as Int, __pb_fold_row[4] as Long, __pb_fold_row[5] as Float, __pb_fold_row[6] as Double, java.math.BigInteger(__pb_fold_row[7] as ByteArray), if (__pb_fold_row[8] != null) __pb_fold_row[8] as String else null)
-__pb_pending = null
-__pb_processed++
+current = fold(current, ((requireNotNull(foldElementbulkReader).byte((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[0]).toInt() != 0)) as Boolean, (requireNotNull(foldElementbulkReader).byte((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[1])) as Byte, (requireNotNull(foldElementbulkReader).short((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[2])) as Short, (requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[3])) as Int, (requireNotNull(foldElementbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[4])) as Long, (requireNotNull(foldElementbulkReader).float((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[5])) as Float, (requireNotNull(foldElementbulkReader).double((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[6])) as Double, java.math.BigInteger((requireNotNull(foldElementbulkReader).wide((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[7])) as ByteArray), if ((requireNotNull(foldElementbulkReader).int((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[8])) == 1) (requireNotNull(foldElementbulkReader).text((0) + io.prebindgen.covertest.BulkLayouts.rbaa1d4558b2a3eeb.offsets[9])) as String else null)
 }
 __pb_accumulator = current
 }
-            __pb_accumulator as A
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator as A
     } finally { returnCapture.release() }
 }
 
@@ -2097,12 +1852,17 @@ public fun <A> `sequencePartsFold`(p0_w1: Int, initial: A, onBindingError: io.pr
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_parts_fold_34d4f8eed2926471 { v0, v1, v2 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (index in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
         var foldElementg0_g2_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
             try { val owner = foldElementg0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
 
-} }
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
 val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_sequence_parts_fold_aeb653ed535ad4ab(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
@@ -2112,7 +1872,6 @@ val nativeResult = try { try { run { val nativeArgument0 = try { p0_w1 } catch (
 onError.run(returnCapture.d0) }
     var __pb_accumulator: A? = null
 var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
         try {
 if (nativeResult != null) {
 var current = initial
@@ -2120,26 +1879,25 @@ for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
         var foldElementg0_g2_0: io.prebindgen.covertest.resources.OwnedResource? = null
 
-__pb_pending = { failure ->             try { val owner = foldElementg0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
- }
+try {
             foldElementg0_g2_0 = io.prebindgen.covertest.resources.OwnedResource(__pb_fold_row[2] as Long)
 
 current = fold(current, __pb_fold_row[0] as Long, __pb_fold_row[1] as String, requireNotNull(foldElementg0_g2_0))
-__pb_pending = null
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+            try { val owner = foldElementg0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
 __pb_processed++
 }
 __pb_accumulator = current
 }
             __pb_accumulator as A
         } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
-        var foldElementg0_g2_0: io.prebindgen.covertest.resources.OwnedResource? = null
-
-            try { val owner = foldElementg0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_OwnedResource_e39aa0af54304c88(__pb_fold_row[2] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
-
-}
+if (nativeResult != null) __pb_discard(failure, __pb_processed)
             throw failure
         }
     } finally { returnCapture.release() }
@@ -2149,44 +1907,26 @@ public fun <A> `storageGetVecFold`(p0_w1: io.prebindgen.covertest.Storage?, init
     val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()
 val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_storage_get_vec_fold_886389afd9ad2e6a { v0, v1, v2, v3 -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>(v0, v1, v2, v3)); kotlin.Unit }
 val __pb_outputAccepted = BooleanArray(1)
-fun __pb_discard(failure: Throwable) { for (rawRow in __pb_rows) { val __pb_fold_row = rawRow as kotlin.Array<*>
-
-
-} }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
         run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_storage_get_vec_fold_5d94b3f03ff97a04(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) }
-    } } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
     var __pb_accumulator: A? = null
-var __pb_processed = 0
-var __pb_pending: ((Throwable) -> Unit)? = null
-        try {
 if (nativeResult != null) {
 var current = initial
 for (rawRow in __pb_rows) {
 val __pb_fold_row = rawRow as kotlin.Array<*>
 
-__pb_pending = { failure ->  }
 
 current = fold(current, io.prebindgen.covertest.collections.Payload(__pb_fold_row[0] as Long, __pb_fold_row[1] as Int, __pb_fold_row[2] as Double, __pb_fold_row[3] as Boolean))
-__pb_pending = null
-__pb_processed++
 }
 __pb_accumulator = current
 }
-            __pb_accumulator
-        } catch (failure: Throwable) {
-__pb_pending?.invoke(failure)
-if (nativeResult != null) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until __pb_rows.size) {
-val __pb_fold_row = __pb_rows[index] as kotlin.Array<*>
 
-
-}
-            throw failure
-        }
+__pb_accumulator
     } finally { returnCapture.release() }
 }

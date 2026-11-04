@@ -1660,6 +1660,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             None
         };
+        let callback_cleanup = fold.as_ref().is_some_and(|fold| !fold.discard.is_empty());
         if let Some(fold) = &fold {
             setup.push_str(&fold.discard);
         }
@@ -1868,7 +1869,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             let all_locks = kotlin::lock_list(&locks, &lock_groups);
             format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
         };
-        let call = if callback {
+        let call = if callback_cleanup {
             format!("try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}")
         } else {
             call
@@ -1894,13 +1895,13 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             String::new()
         };
-        let callback_failure = if callback {
+        let callback_failure = if callback_cleanup {
             format!("if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException({result}[0] as String)); ")
         } else {
             String::new()
         };
         let native_call = if native_return.is_some() {
-            let callback_discard = if callback {
+            let callback_discard = if callback_cleanup {
                 "if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));"
             } else {
                 ""

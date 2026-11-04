@@ -67,7 +67,11 @@ impl ExpandReturnDecl {
         }
     }
     /// Group this expansion into a C-representation bulk carrier.
-    /// Getter, ownership and local conversion rules are retained.
+    /// Getter, ownership and local conversion rules are retained. Ordinary
+    /// collections combine these expansions into one frame. Callback delivery
+    /// keeps the expansion within each callback element instead: bulk `Row`
+    /// produces one frame per row of `Vec<Row>`, while bulk `Vec<Row>` produces
+    /// one frame per inner collection of `Vec<Vec<Row>>`.
     pub fn bulk(mut self) -> Self {
         self.bulk = true;
         self

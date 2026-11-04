@@ -2443,3 +2443,91 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         .unwrap();
     assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
 }
+
+#[test]
+fn callback_delivery_is_selected_before_bulk_promotion() {
+    let mut flat = parse("pub fn values()->Option<Vec<i64>>{}");
+    let defaults = Declarations::new(
+        &flat,
+        vec![],
+        vec![expand_return!(i64).field_self().bulk().into()],
+        vec![],
+    )
+    .unwrap();
+    let ty = flat.function("values").unwrap().ret.ty.clone();
+    let ordinary = defaults
+        .resolve_output(&flat, &TEST_CODEC, &ty, &Output::auto(), &Extra::default())
+        .unwrap();
+    assert!(matches!(ordinary, Output::Bulk(_)));
+    let variant = defaults
+        .callback_variant(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(values),
+            "values_fold",
+            &Extra::default(),
+        )
+        .unwrap();
+    let callback = defaults
+        .resolve_output(
+            &flat,
+            &TEST_CODEC,
+            &ty,
+            variant.ret.as_ref().unwrap(),
+            &Extra::default(),
+        )
+        .unwrap();
+    let Output::Optional(child) = callback else {
+        panic!("callback presence moved into a whole-collection bulk frame")
+    };
+    assert!(
+        matches!(*child,Output::Sequence {delivery:SequenceDelivery::Callback,element,..} if matches!(*element,Output::Bulk(_)))
+    );
+}
+
+#[test]
+fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
+    let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
+    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let callback = Output::Sequence {
+        delivery: SequenceDelivery::Callback,
+        mode: None,
+        element: Box::new(Output::Leaf.bulk()),
+    };
+    let recipe = Output::Sequence {
+        delivery: SequenceDelivery::Value,
+        mode: None,
+        element: Box::new(callback),
+    };
+    let resolved = defaults
+        .resolve_output(
+            &flat,
+            &TEST_CODEC,
+            &flat.function("values").unwrap().ret.ty,
+            &recipe,
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(
+        matches!(resolved,Output::Sequence {element,..} if matches!(*element,Output::Sequence {delivery:SequenceDelivery::Callback,..}))
+    );
+}
+
+#[test]
+fn resolved_bulk_enclosing_callback_delivery_is_diagnosed_before_adapter_lowering() {
+    let flat = parse("pub fn values()->Option<Vec<i64>>{}");
+    let recipe = Output::Optional(Box::new(Output::Sequence {
+        delivery: SequenceDelivery::Callback,
+        mode: None,
+        element: Box::new(Output::Leaf),
+    }))
+    .bulk();
+    let error = compile_output(&flat, &TEST_CODEC, "values", &recipe, &Extra::default())
+        .err()
+        .unwrap();
+    assert!(
+        error.contains("bulk cannot enclose callback delivery"),
+        "{error}"
+    );
+    assert!(flat.function("values").unwrap().ret.slot.is_none());
+}
