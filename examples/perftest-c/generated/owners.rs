@@ -36,6 +36,10 @@ fn __pb_owned_bytes_len(value: &Vec<u8>) -> usize {
 fn __pb_owned_bytes_view(value: &Vec<u8>) -> &[u8] {
     value.as_slice()
 }
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_bytes_view_mut(value: &mut Vec<u8>) -> &mut [u8] {
+    value.as_mut_slice()
+}
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
 impl<T: ?Sized> Drop for __PbOutputOwner<T> {
@@ -61,6 +65,12 @@ pub struct __PbRows {
 #[derive(Clone, Copy)]
 pub struct __PbBuffer {
     pub data: *const u8,
+    pub len: usize,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbBufferMut {
+    pub data: *mut u8,
     pub len: usize,
 }
 unsafe fn __pb_report_message(message: String, error: *mut *mut std::ffi::c_char) {
@@ -462,6 +472,18 @@ pub unsafe extern "C" fn owner_bytes_view(value: *const __PbOwned_bytes) -> __Pb
     let bytes = __pb_owned_bytes_view((*value).as_rust());
     __PbBuffer {
         data: bytes.as_ptr(),
+        len: bytes.len(),
+    }
+}
+/**# Safety
+The owner must remain live and stationary. Preserve exclusive access to its allocation until the returned view's last use; do not access, consume or drop the owner during that borrow.*/
+#[no_mangle]
+pub unsafe extern "C" fn owner_bytes_view_mut(
+    value: *mut __PbOwned_bytes,
+) -> __PbBufferMut {
+    let bytes = __pb_owned_bytes_view_mut((*value).as_rust_mut());
+    __PbBufferMut {
+        data: bytes.as_mut_ptr(),
         len: bytes.len(),
     }
 }
@@ -3276,6 +3298,77 @@ pub unsafe extern "C" fn owner_inline_text_take(p0_w1: *mut __PbOwned_text) -> u
         panic!("C binding failed: {}", error);
     }
     let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct owner_mutable_bytes_vector_expanded_result {
+    pub v0: __PbOwned_bytes,
+    pub v1: __PbBufferMut,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn owner_mutable_bytes_vector_expanded(
+    p0_w1: usize,
+    out1: *mut __PbBufferMut,
+) -> __PbOwned_bytes {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        owner_mutable_bytes_vector_expanded_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_vector_expanded(
+                __prebindgen_argument_0,
+            );
+            let mut ret_w0 = __PbOwned_bytes::guard(source_value);
+            let ret_w1 = __pb_owned_bytes_view_mut(unsafe {
+                &mut *(::core::ptr::addr_of_mut!(ret_w0.0).cast::<Vec<u8>>())
+            });
+            let ret_w2 = ret_w1;
+            let ret_w2 = __PbBufferMut {
+                data: ret_w2.as_mut_ptr().cast::<u8>(),
+                len: ret_w2.len(),
+            };
+            let result = owner_mutable_bytes_vector_expanded_result {
+                v0: ret_w0.0,
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
     value.v0
 }
 const _: () = {

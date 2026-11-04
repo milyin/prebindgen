@@ -46,6 +46,8 @@ typedef int32_t perftest_code;
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
+typedef struct perftest_mutable_bytes perftest_mutable_bytes;
+void perftest_drop_mutable_bytes(perftest_mutable_bytes *ptr);
 typedef struct perftest_borrow_packet perftest_borrow_packet;
 void perftest_drop_borrow_packet(perftest_borrow_packet *ptr);
 typedef struct perftest_borrow_no_clone perftest_borrow_no_clone;
@@ -91,6 +93,8 @@ void perftest_drop_option_ctor(perftest_option_ctor *ptr);
 typedef struct perftest_option_choice perftest_option_choice;
 void perftest_drop_option_choice(perftest_option_choice *ptr);
 typedef struct { const uint8_t *data; size_t len; } perftest_buffer_view;
+/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */
+typedef struct { uint8_t *data; size_t len; } perftest_buffer_view_mut;
 typedef struct {
 #ifdef __cplusplus
     alignas(8)
@@ -117,6 +121,8 @@ void perftest_drop_owned_vec_u8_672e72343c1b4cb4(perftest_owned_vec_u8_672e72343
 size_t perftest_owned_vec_u8_672e72343c1b4cb4_len(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Borrowed view; never free it. The owner retains the allocation. */
 perftest_buffer_view perftest_owned_vec_u8_672e72343c1b4cb4_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
+/* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */
+perftest_buffer_view_mut perftest_owned_vec_u8_672e72343c1b4cb4_view_mut(perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Rust signature: (String)->String. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_buffer (*run)(void *context, perftest_owned_string arg0);
@@ -1288,6 +1294,30 @@ bool perftest_getter_owner_try_optional_mut(perftest_getter_owner * p0_w1, int32
 /* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 const perftest_getter_child * perftest_getter_static_child(perftest_buffer p0_w1);
 perftest_getter_leaf * perftest_getter_two_clones_new(perftest_getter_leaf * *out1);
+uintptr_t perftest_mutable_bytes_address(const perftest_mutable_bytes * p0_w1);
+uintptr_t perftest_mutable_bytes_capacity(const perftest_mutable_bytes * p0_w1);
+uintptr_t perftest_mutable_bytes_drops(void);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_buffer_view_mut perftest_mutable_bytes_mut(perftest_mutable_bytes * p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+/* Option option1: *out1: 0 = None, 1 = Some; other active flags are errors; only when option0 is present. */
+int32_t perftest_mutable_bytes_nested(perftest_mutable_bytes * p0_w1, int32_t p1_w1, int32_t *out1, perftest_buffer_view_mut *out2);
+perftest_mutable_bytes * perftest_mutable_bytes_new(uintptr_t p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+int32_t perftest_mutable_bytes_optional(perftest_mutable_bytes * p0_w1, uint8_t p1_w1, perftest_buffer_view_mut *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_mutable_bytes_result(perftest_mutable_bytes * p0_w1, uint8_t p1_w1, perftest_buffer_view_mut *out0, char * *error);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: *out0: 0 = None, 1 = Some; other active flags are errors. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_mutable_bytes_result_optional(perftest_mutable_bytes * p0_w1, uint8_t p1_w1, uint8_t p2_w1, int32_t *out0, perftest_buffer_view_mut *out1, char * *error);
+uint8_t perftest_mutable_bytes_value(const perftest_mutable_bytes * p0_w1, uintptr_t p1_w1);
+perftest_owned_vec_u8_672e72343c1b4cb4 perftest_mutable_bytes_vector(uintptr_t p0_w1);
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: p0_w8 == 1114112 means None; other values encode Some and must be valid payloads; only when option0 is present. */
 int64_t perftest_niche_choice_id(int32_t p0_w1, int32_t p0_w3, uint32_t p0_w8, perftest_niche_choice * p0_w10);

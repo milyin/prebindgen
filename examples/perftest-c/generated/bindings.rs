@@ -113,6 +113,10 @@ fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_view(value: &Vec<u8>) -> &[u8] {
     value.as_slice()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_view_mut(value: &mut Vec<u8>) -> &mut [u8] {
+    value.as_mut_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_len(value: &Vec<usize>) -> usize {
     value.len()
 }
@@ -141,6 +145,12 @@ pub struct __PbRows {
 #[derive(Clone, Copy)]
 pub struct __PbBuffer {
     pub data: *const u8,
+    pub len: usize,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbBufferMut {
+    pub data: *mut u8,
     pub len: usize,
 }
 unsafe fn __pb_report_message(message: String, error: *mut *mut std::ffi::c_char) {
@@ -185,6 +195,21 @@ const _: () = {
         "C binding target differs from the Rust compilation target"
     );
 };
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_mutable_bytes(
+    ptr: *mut perftest_flat::MutableBytes,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -683,6 +708,20 @@ pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_view(
     let bytes = __pb_owned_owned_vec_u8_672e72343c1b4cb4_view((*value).as_rust());
     __PbBuffer {
         data: bytes.as_ptr(),
+        len: bytes.len(),
+    }
+}
+/**# Safety
+The owner must remain live and stationary. Preserve exclusive access to its allocation until the returned view's last use; do not access, consume or drop the owner during that borrow.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_view_mut(
+    value: *mut __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+) -> __PbBufferMut {
+    let bytes = __pb_owned_owned_vec_u8_672e72343c1b4cb4_view_mut(
+        (*value).as_rust_mut(),
+    );
+    __PbBufferMut {
+        data: bytes.as_mut_ptr(),
         len: bytes.len(),
     }
 }
@@ -20790,6 +20829,996 @@ pub unsafe extern "C" fn perftest_getter_two_clones_new(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_mutable_bytes_address_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_address(
+    p0_w1: *const perftest_flat::MutableBytes,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_address_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::MutableBytes = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_address(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_mutable_bytes_address_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_capacity_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_capacity(
+    p0_w1: *const perftest_flat::MutableBytes,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_capacity_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::MutableBytes = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_capacity(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_mutable_bytes_capacity_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_drops_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_drops() -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_drops_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::mutable_bytes_drops();
+            let ret_w0 = source_value;
+            let result = perftest_mutable_bytes_drops_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_mut_result {
+    pub v0: __PbBufferMut,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_mut(
+    p0_w1: *mut perftest_flat::MutableBytes,
+) -> __PbBufferMut {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::MutableBytes = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_mut(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let ret_w0 = __PbBufferMut {
+                data: ret_w0.as_mut_ptr().cast::<u8>(),
+                len: ret_w0.len(),
+            };
+            let result = perftest_mutable_bytes_mut_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_nested_result {
+    pub v0: i32,
+    pub v1: i32,
+    pub v2: __PbBufferMut,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_nested(
+    p0_w1: *mut perftest_flat::MutableBytes,
+    p1_w1: i32,
+    out1: *mut i32,
+    out2: *mut __PbBufferMut,
+) -> i32 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_nested_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        if out2.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::MutableBytes = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i32 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_nested(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let (ret_w0, (ret_w0_value0, ret_w0_value1), ret_w0_commit) = if let Some(
+                ret_w1,
+            ) = source_value {
+                let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
+                    let ret_w4 = ret_w3;
+                    let ret_w4 = __PbBufferMut {
+                        data: ret_w4.as_mut_ptr().cast::<u8>(),
+                        len: ret_w4.len(),
+                    };
+                    let ret_w2_values = (ret_w4,);
+                    (1i32, ret_w2_values, Some(move || {}))
+                } else {
+                    (
+                        0i32,
+                        (
+                            __PbBufferMut {
+                                data: std::ptr::null_mut(),
+                                len: 0,
+                            },
+                        ),
+                        None,
+                    )
+                };
+                let ret_w0_values = (ret_w2, ret_w2_value0);
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        if let Some(ret_w2_action) = ret_w2_commit {
+                            ret_w2_action();
+                        }
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        0,
+                        __PbBufferMut {
+                            data: std::ptr::null_mut(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_mutable_bytes_nested_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+                v2: ret_w0_value1,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_new_result {
+    pub v0: *mut perftest_flat::MutableBytes,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_new(
+    p0_w1: usize,
+) -> *mut perftest_flat::MutableBytes {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_new(__prebindgen_argument_0);
+            let ret_w0: *mut perftest_flat::MutableBytes = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_mutable_bytes_new_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_optional_result {
+    pub v0: i32,
+    pub v1: __PbBufferMut,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_optional(
+    p0_w1: *mut perftest_flat::MutableBytes,
+    p1_w1: u8,
+    out1: *mut __PbBufferMut,
+) -> i32 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::MutableBytes = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: bool = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_optional(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ret_w1;
+                let ret_w2 = __PbBufferMut {
+                    data: ret_w2.as_mut_ptr().cast::<u8>(),
+                    len: ret_w2.len(),
+                };
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBufferMut {
+                            data: std::ptr::null_mut(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_mutable_bytes_optional_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_result_result {
+    pub v0: __PbBufferMut,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_result(
+    p0_w1: *mut perftest_flat::MutableBytes,
+    p1_w1: u8,
+    out0: *mut __PbBufferMut,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_result_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::MutableBytes = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: bool = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_result(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let ret_w2 = __PbBufferMut {
+                data: ret_w2.as_mut_ptr().cast::<u8>(),
+                len: ret_w2.len(),
+            };
+            let result = perftest_mutable_bytes_result_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_result_optional_result {
+    pub v0: i32,
+    pub v1: __PbBufferMut,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_result_optional(
+    p0_w1: *mut perftest_flat::MutableBytes,
+    p1_w1: u8,
+    p2_w1: u8,
+    out0: *mut i32,
+    out1: *mut __PbBufferMut,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_result_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        if out1.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::MutableBytes = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: bool = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: bool = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_result_optional(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
+                let ret_w4 = ret_w3;
+                let ret_w4 = __PbBufferMut {
+                    data: ret_w4.as_mut_ptr().cast::<u8>(),
+                    len: ret_w4.len(),
+                };
+                let ret_w2_values = (ret_w4,);
+                (1i32, ret_w2_values, Some(move || {}))
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBufferMut {
+                            data: std::ptr::null_mut(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_mutable_bytes_result_optional_result {
+                v0: ret_w2,
+                v1: ret_w2_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w2_action) = ret_w2_commit {
+                    ret_w2_action();
+                }
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            std::ptr::write(out1, value.v1);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_value_result {
+    pub v0: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_value(
+    p0_w1: *const perftest_flat::MutableBytes,
+    p1_w1: usize,
+) -> u8 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_value_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::MutableBytes
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::MutableBytes = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: usize = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_value(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_mutable_bytes_value_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_mutable_bytes_vector_result {
+    pub v0: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_mutable_bytes_vector(
+    p0_w1: usize,
+) -> __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_mutable_bytes_vector_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::mutable_bytes_vector(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(source_value);
+            let result = perftest_mutable_bytes_vector_result {
+                v0: ret_w0.0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_niche_choice_id_result {
     pub v0: i64,
 }
@@ -30749,6 +31778,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::GetterOwner > () != 0,
     "flat object `GetterOwner` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::MutableBytes > () != 0,
+    "flat object `MutableBytes` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::NativeBulkNested > () != 0,

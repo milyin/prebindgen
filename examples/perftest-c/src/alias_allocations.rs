@@ -346,3 +346,91 @@ fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
         assert!(error.is_null());
     }
 }
+
+#[test]
+fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
+    for size in [0usize, 1, 65536] {
+        unsafe {
+            let owner = super::perftest_mutable_bytes_new(size);
+            let address = super::perftest_mutable_bytes_address(owner);
+            let capacity = super::perftest_mutable_bytes_capacity(owner);
+            let before_drops = super::perftest_mutable_bytes_drops();
+            let count = allocations(|| {
+                for i in 0..1000 {
+                    let view = super::perftest_mutable_bytes_mut(std::hint::black_box(owner));
+                    assert_eq!(view.data as usize, address);
+                    assert_eq!(view.len, size);
+                    if size > 0 {
+                        if size > 0 {
+                            *view.data = (i % 256) as u8;
+                        }
+                    }
+                }
+            });
+            assert_eq!(
+                count, 0,
+                "size={size}: view acquisition and in-place writes must not allocate"
+            );
+            assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+            assert_eq!(super::perftest_mutable_bytes_address(owner), address);
+            assert_eq!(super::perftest_mutable_bytes_capacity(owner), capacity);
+            if size > 0 {
+                assert_eq!(
+                    super::perftest_mutable_bytes_value(owner, 0),
+                    (999 % 256) as u8
+                );
+            }
+            assert_eq!(super::perftest_mutable_bytes_drops(), before_drops);
+            super::perftest_drop_mutable_bytes(owner);
+            assert_eq!(super::perftest_mutable_bytes_drops(), before_drops + 1);
+
+            use super::inline_owners as ffi;
+            let mut initial = ffi::__PbBufferMut {
+                data: std::ptr::null_mut(),
+                len: 0,
+            };
+            let mut vector = ffi::owner_mutable_bytes_vector_expanded(size, &mut initial);
+            let address = ffi::owner_bytes_view(&vector).data as usize;
+            let count = allocations(|| {
+                for i in 0..1000 {
+                    let view = ffi::owner_bytes_view_mut(std::hint::black_box(&mut vector));
+                    assert_eq!(view.data as usize, address);
+                    if size > 0 {
+                        *view.data = (i % 256) as u8;
+                    }
+                }
+            });
+            assert_eq!(count, 0);
+            if size > 0 {
+                assert_eq!(*ffi::owner_bytes_view(&vector).data, (999 % 256) as u8);
+            }
+            ffi::owner_drop_bytes(&mut vector);
+
+            let mut view = ffi::__PbBufferMut {
+                data: std::ptr::null_mut(),
+                len: 0,
+            };
+            let count = allocations(|| {
+                let mut expanded = ffi::owner_mutable_bytes_vector_expanded(size, &mut view);
+                assert_eq!(view.len, size);
+                let address = view.data as usize;
+                if size > 0 {
+                    *view.data = 73;
+                }
+                let observed = ffi::owner_bytes_view(&expanded);
+                assert_eq!(observed.data as usize, address);
+                if size > 0 {
+                    assert_eq!(*observed.data, 73);
+                }
+                ffi::owner_drop_bytes(&mut expanded);
+            });
+            // The sole allocation constructs the source Vec, including reserved empty storage.
+            assert_eq!(
+                count, 1,
+                "size={size}: only source Vec construction may allocate"
+            );
+            assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+            println!("mutable byte budget: size={size}, deliveries=1000, direct_allocations=0, vec_accessor_allocations=0, expanded_allocations=1 (source Vec only)");
+        }
+    }
+}

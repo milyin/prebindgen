@@ -27,6 +27,9 @@ pub enum CWire {
     },
     /// Non-owning byte/text view. No allocation is transferred.
     View,
+    /// Exclusive non-owning byte view. The caller preserves the source lifetime
+    /// and exclusive access; no allocation is transferred.
+    MutableView,
     /// A fieldless Rust enum represented by checked `int32_t` values.
     Enum {
         /// Unprefixed C typedef name.
@@ -144,8 +147,12 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer | Self::View | Self::Owned { .. } | Self::Rows | Self::Callback { .. } => {
-            }
+            Self::Buffer
+            | Self::View
+            | Self::MutableView
+            | Self::Owned { .. }
+            | Self::Rows
+            | Self::Callback { .. } => {}
         }
     }
     // A reserved sentinel remains valid even after availability advances or clears.
@@ -217,6 +224,7 @@ impl WireKind for CWire {
                 }
             }
             CWire::View | CWire::Buffer => syn::parse_quote!(__PbBuffer),
+            CWire::MutableView => syn::parse_quote!(__PbBufferMut),
             CWire::Owned {
                 owner,
                 access,

@@ -40,6 +40,12 @@ wrong_view.write_text('#include "bindings.h"\nvoid wrong(perftest_buffer_view vi
 rejected=subprocess.run(cc+["-fsyntax-only","-I"+str(outputs["perftest-c"]),str(wrong_view)],capture_output=True,text=True)
 if rejected.returncode==0 or "incompatible" not in rejected.stderr:
     raise RuntimeError("C compiler did not reject destroying a borrowed view: "+rejected.stderr)
+# Writable loans have their own carrier and cannot use the owning destructor.
+mutable_drop=build/"mutable-view-drop.c"
+mutable_drop.write_text('#include "bindings.h"\nvoid wrong(perftest_buffer_view_mut view) { perftest_free_buffer(view); }\n')
+rejected=subprocess.run(cc+["-fsyntax-only","-I"+str(outputs["perftest-c"]),str(mutable_drop)],capture_output=True,text=True)
+if rejected.returncode==0 or "incompatible" not in rejected.stderr:
+    raise RuntimeError("C compiler did not reject destroying a mutable borrowed view: "+rejected.stderr)
 # The C compiler must reject crossing distinct opaque pointer types.
 wrong_type = build / "wrong-pointer.c"
 wrong_type.write_text('#include "bindings.h"\nvoid wrong(perftest_storage *p) { perftest_drop_blob(p); }\n')

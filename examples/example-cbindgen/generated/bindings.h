@@ -29,6 +29,8 @@ void example_drop_caption(example_caption *ptr);
 typedef struct example_foo example_foo;
 void example_drop_foo(example_foo *ptr);
 typedef struct { const uint8_t *data; size_t len; } example_buffer_view;
+/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */
+typedef struct { uint8_t *data; size_t len; } example_buffer_view_mut;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 example_calculator * example_calculator_new(void);

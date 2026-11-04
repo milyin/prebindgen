@@ -3947,3 +3947,82 @@ pub fn output_cleanup_surround() -> OutputCleanupSurround {
 pub fn output_cleanup_surround_bulk() -> OutputCleanupSurround {
     output_cleanup_surround()
 }
+
+// Non-Clone owner used to check writable C slice loans without hidden copies.
+pub struct MutableBytesImpl(Vec<u8>);
+static MUTABLE_BYTES_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+impl Drop for MutableBytesImpl {
+    fn drop(&mut self) {
+        MUTABLE_BYTES_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type MutableBytes = MutableBytesImpl;
+#[prebindgen]
+pub fn mutable_bytes_new(size: usize) -> MutableBytes {
+    let mut bytes = Vec::with_capacity(size + 37);
+    bytes.resize(size, 7);
+    MutableBytesImpl(bytes)
+}
+#[prebindgen]
+pub fn mutable_bytes_mut(value: &mut MutableBytes) -> &mut [u8] {
+    value.0.as_mut_slice()
+}
+#[prebindgen]
+pub fn mutable_bytes_optional(value: &mut MutableBytes, present: bool) -> Option<&mut [u8]> {
+    present.then(|| value.0.as_mut_slice())
+}
+#[prebindgen]
+pub fn mutable_bytes_nested(value: &mut MutableBytes, mode: i32) -> Option<Option<&mut [u8]>> {
+    match mode {
+        0 => None,
+        1 => Some(None),
+        _ => Some(Some(value.0.as_mut_slice())),
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_result(value: &mut MutableBytes, fail: bool) -> Result<&mut [u8], String> {
+    if fail {
+        Err("mutable bytes failure".into())
+    } else {
+        Ok(value.0.as_mut_slice())
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_result_optional(
+    value: &mut MutableBytes,
+    present: bool,
+    fail: bool,
+) -> Result<Option<&mut [u8]>, String> {
+    if fail {
+        Err("mutable bytes failure".into())
+    } else {
+        Ok(mutable_bytes_optional(value, present))
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_address(value: &MutableBytes) -> usize {
+    value.0.as_ptr() as usize
+}
+#[prebindgen]
+pub fn mutable_bytes_value(value: &MutableBytes, index: usize) -> u8 {
+    value.0[index]
+}
+#[prebindgen]
+pub fn mutable_bytes_capacity(value: &MutableBytes) -> usize {
+    value.0.capacity()
+}
+#[prebindgen]
+pub fn mutable_bytes_drops() -> usize {
+    MUTABLE_BYTES_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn mutable_bytes_vector(size: usize) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(size + 37);
+    bytes.resize(size, 7);
+    bytes
+}
+#[prebindgen]
+pub fn mutable_bytes_vector_expanded(size: usize) -> Vec<u8> {
+    mutable_bytes_vector(size)
+}
