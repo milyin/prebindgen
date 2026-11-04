@@ -161,5 +161,27 @@ fun checkSequenceDelivery() {
     val nullSink = nativeParts.invokePacket(0, null, nullSinkAck)
     check(nullSink[0] == "null sequence callback" && !nullSinkAck[0])
     check(ownedResourceDrops() == beforeCollector + 3uL)
+    // A raw proxy explicitly handles the once-per-collection capacity hint;
+    // the run signature still contains only the primitive row field.
+    val nativeI64 = native.declaredMethods.single { method ->
+        val p = method.parameterTypes.dropLast(1)
+        p.size == 3 && p[1].simpleName.startsWith("SequenceSink_collection_i64_fold_")
+    }.also { it.isAccessible = true }
+    val i64SinkType = nativeI64.parameterTypes[1]
+    var reserved = 0
+    var received = 0
+    var sum = 0L
+    val i64Sink = java.lang.reflect.Proxy.newProxyInstance(i64SinkType.classLoader, arrayOf(i64SinkType)) { _, method, values ->
+        when (method.name) {
+            "reserve" -> { check(received == 0 && values!!.single() == 65); reserved++ }
+            "run" -> { check(reserved == 1); received++; sum += values!!.single() as Long }
+            else -> error("unexpected collector method ${method.name}")
+        }
+        null
+    }
+    val i64Ack = BooleanArray(1)
+    val rawRows = Array<Any?>(65) { arrayOf<Any?>(1000000L + it) }
+    check(nativeI64.invokePacket(rawRows, i64Sink, i64Ack)[0] == null)
+    check(i64Ack[0] && reserved == 1 && received == 65 && sum == 65002080L)
     check(collectionI64Fold(List(20000) { it.toLong() }, 0L) { a, v -> a + v } == 199990000L)
 }

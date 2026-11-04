@@ -7,7 +7,7 @@ import io.prebindgen.covertest.callbacks.*
 
 fun checkTypedSequenceRows() {
     // Zero/shared empty arrays, growth boundaries, reentry and concurrent calls.
-    for (size in listOf(0, 1, 2, 3, 7, 8, 9, 63, 64, 65, 1025)) {
+    for (size in listOf(0, 1, 2, 3, 7, 8, 9, 10, 11, 63, 64, 65, 1025)) {
         val values = List(size) { 1000000L + it }
         check(collectionI64Fold(values, 0L) { sum, value -> sum + value } == values.sum())
     }

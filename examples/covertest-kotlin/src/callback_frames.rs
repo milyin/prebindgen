@@ -12,8 +12,9 @@ struct Trace {
     exception: jthrowable,
     sink_class: jclass,
     frames: Vec<usize>,
-    reject: bool,
-    counts: [jlong; 4],
+    reject: jint,
+    reserve_method: jmethodID,
+    counts: [jlong; 6],
 }
 thread_local! { static TRACE: RefCell<Option<Trace>> = const { RefCell::new(None) }; }
 
@@ -53,29 +54,64 @@ unsafe extern "system" fn upcall(
     });
     // Match the generated collector interface, not the order of void upcalls.
     let sink = ((*original).IsInstanceOf.unwrap())(env, object, sink_class) != 0;
-    let (exception, reject) = TRACE.with(|slot| {
+    let (exception, reject, reserve) = TRACE.with(|slot| {
         let mut slot = slot.borrow_mut();
         let trace = slot.as_mut().expect("installed frame trace");
-        let reject = if sink {
+        let reserve = sink && method == trace.reserve_method;
+        let reject = if reserve {
+            assert_eq!(trace.counts[2], 0, "reserve precedes every row");
+            trace.counts[4] += 1;
+            trace.reject == 7
+        } else if sink {
             trace.counts[2] += 1;
             if let Some(frame) = trace.frames.last_mut() {
                 *frame += 1;
             }
-            trace.reject && trace.counts[2] == 2
+            trace.reject == 5 && trace.counts[2] == 2
         } else {
             false
         };
         if reject {
             trace.counts[3] += 1;
         }
-        (trace.exception, reject)
+        (trace.exception, reject, reserve)
     });
     if reject {
-        // Reject before Java retains the row, so native ownership is unchanged.
+        // Synthetic IOException before reservation or row acceptance, testing
+        // the same ownership unwind as an allocation failure (not a real OOM).
         ((*original).Throw.unwrap())(env, exception);
     } else {
         ((*original).CallVoidMethodA.unwrap())(env, object, method, args);
+        if reserve && ((*original).ExceptionCheck.unwrap())(env) == JNI_FALSE {
+            // HotSpot-only test introspection: reservation must have allocated
+            // enough reference slots before the first row can be accepted.
+            let capacity = collector_capacity(env, object).expect("read collector capacity");
+            TRACE.with(|slot| slot.borrow_mut().as_mut().unwrap().counts[5] = capacity);
+        }
     }
+}
+
+unsafe fn collector_capacity(
+    raw: *mut JNIEnv,
+    object: jobject,
+) -> prebindgen_runtime::Result<jlong> {
+    let mut env = Env::from_raw(raw).map_err(|e| e.to_string())?;
+    let object = prebindgen_jni_runtime::jni::objects::JObject::from_raw(object);
+    let rows = env
+        .get_field(&object, "rows", "Ljava/util/ArrayList;")
+        .and_then(|v| v.l())
+        .map_err(|e| e.to_string())?;
+    let rows = env.auto_local(rows);
+    let data = env
+        .get_field(&*rows, "elementData", "[Ljava/lang/Object;")
+        .and_then(|v| v.l())
+        .map_err(|e| e.to_string())?;
+    let data = env.auto_local(prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+        data,
+    ));
+    env.get_array_length(&*data)
+        .map(jlong::from)
+        .map_err(|e| e.to_string())
 }
 
 struct Hook {
@@ -88,7 +124,8 @@ struct Hook {
 impl Hook {
     unsafe fn install(
         env: &mut Env<'_>,
-        reject: bool,
+        reject: jint,
+        reserve_method: jmethodID,
         exception: GlobalRef,
         sink_class: GlobalRef,
     ) -> Self {
@@ -106,7 +143,8 @@ impl Hook {
                 sink_class: sink_class.as_obj().as_raw(),
                 frames: Vec::new(),
                 reject,
-                counts: [0; 4],
+                reserve_method,
+                counts: [0; 6],
             });
         });
         *raw = &*table;
@@ -118,7 +156,7 @@ impl Hook {
             _sink_class: sink_class,
         }
     }
-    fn counts(&self) -> [jlong; 4] {
+    fn counts(&self) -> [jlong; 6] {
         TRACE.with(|slot| {
             let slot = slot.borrow();
             let trace = slot.as_ref().expect("installed frame trace");
@@ -144,14 +182,14 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFrameProbe_measure(
     size: jint,
 ) -> jlongArray {
     let result = prebindgen_runtime::boundary(|| {
-        if !(0..=6).contains(&mode) || !(0..=20000).contains(&size) {
+        if !(0..=10).contains(&mode) || !(0..=20000).contains(&size) {
             return Err("invalid frame probe".into());
         }
         let class = env
             .find_class("io/prebindgen/covertest/CallbackFrameEntryPoint")
             .map_err(|e| e.to_string())?;
         // Initialize generated captures/layouts and exercise the path before tracing.
-        let warm_mode = if mode == 5 { 1 } else { mode };
+        let warm_mode = if mode == 5 || mode == 7 { 1 } else { mode };
         env.call_static_method(
             &class,
             "run",
@@ -167,14 +205,19 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFrameProbe_measure(
         let sink_class = env
             .call_static_method(
                 &class,
-                "sinkClass",
+                "collectorClass",
                 "(I)Ljava/lang/Class;",
                 &[JValue::Int(mode)],
             )
             .and_then(|value| value.l())
             .map_err(|e| e.to_string())?;
+        let collector_class: &JClass<'_> = (&sink_class).into();
+        let reserve_method = env
+            .get_method_id(collector_class, "reserve", "(I)V")
+            .map_err(|e| e.to_string())?
+            .into_raw();
         let sink_class = env.new_global_ref(sink_class).map_err(|e| e.to_string())?;
-        let hook = unsafe { Hook::install(&mut env, mode == 5, exception, sink_class) };
+        let hook = unsafe { Hook::install(&mut env, mode, reserve_method, exception, sink_class) };
         let run = env.call_static_method(
             &class,
             "run",
@@ -184,7 +227,9 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFrameProbe_measure(
         let counts = hook.counts();
         drop(hook);
         run.map_err(|e| e.to_string())?;
-        let result = env.new_long_array(4).map_err(|e| e.to_string())?;
+        let result = env
+            .new_long_array(counts.len() as jint)
+            .map_err(|e| e.to_string())?;
         env.set_long_array_region(&result, 0, &counts)
             .map_err(|e| e.to_string())?;
         Ok(result.into_raw())

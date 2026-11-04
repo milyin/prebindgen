@@ -1094,8 +1094,8 @@ if (nativeResult != null) requireNotNull(outputbulkList) else null
 public fun <A> `collectionScalarsFold`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.collections.SequenceScalars>, p1_w1: Double, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.collections.SequenceScalars) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5.`flag` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`byte` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`short` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`number` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`long` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`float` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`double` }, io.prebindgen.covertest.InputValidation.value { p0_w5.`wide`.toByteArray() }, io.prebindgen.covertest.InputValidation.value { if (p0_w5.`text` != null) requireNotNull(requireNotNull(p0_w5.`text`)) { "invalid option payload" } else null }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Boolean_Byte_Short_9_fa65775165ad52ea>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_scalars_fold_70028742f64f0191 { v0, v1, v2, v3, v4, v5, v6, v7, v8 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Boolean_Byte_Short_9_fa65775165ad52ea(v0, v1, v2, v3, v4, v5, v6, v7, v8)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_scalars_fold_b8b5464d6a39b802()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1124,8 +1124,8 @@ __pb_accumulator as A
 public fun <A> `collectionU128Fold`(p0_w1: kotlin.collections.List<java.math.BigInteger?>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, java.math.BigInteger) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5?.toByteArray() }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_u128_fold_6f48cddbc993447a { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_u128_fold_0c6bd38fdbd087c1()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1152,8 +1152,8 @@ __pb_accumulator as A
 public fun <A> `collectionOptionalHandlesFold`(p0_w3: kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource?>?, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.resources.OwnedResource) -> A): A? = run {
     val p0_w3_elements = try { if (p0_w3 != null) (if (true) requireNotNull(p0_w3).toList()?.let { p0_w3_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p0_w3_snapshot.size) { p0_w3_index -> val p0_w7 = p0_w3_snapshot[p0_w3_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w7 }) }, intArrayOf(2)) } else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_handles_fold_0322a075b01009ab { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_optional_handles_fold_6b1b4695033414c8()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1213,8 +1213,8 @@ public fun <A> `collectionNestedHandlesFold`(p0_w1: kotlin.collections.List<kotl
 val p0_w5_elements = if (true) p0_w5?.toList()?.let { p0_w5_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p0_w5_snapshot.size) { p0_w5_index -> val p0_w9 = p0_w5_snapshot[p0_w5_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w9 }) }, intArrayOf(2)) } else null
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5_elements }) }, null) } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_nested_handles_fold_0692fa392fcf7c3f { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_nested_handles_fold_2316fd6b75ceae74()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1314,8 +1314,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 public fun <A> `collectionI64Fold`(p0_w1: kotlin.collections.List<Long>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_i64_fold_7481b0c247e22a81 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_i64_fold_04492883dbff433a()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1342,8 +1342,8 @@ __pb_accumulator as A
 public fun <A> `collectionTextFold`(p0_w1: kotlin.collections.List<String?>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, String) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_String_1_b5440014bed04f6a>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_text_fold_eee532ef372c2cc4 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_String_1_b5440014bed04f6a(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_text_fold_2069b29da2dbd573()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1370,8 +1370,8 @@ __pb_accumulator as A
 public fun <A> `collectionBytesFold`(p0_w1: kotlin.collections.List<ByteArray?>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, ByteArray) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_bytes_fold_6625bb31d7dc18eb { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_bytes_fold_ba37d21197c79c60()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1400,8 +1400,8 @@ public fun <A> `collectionNestedFold`(p0_w1: kotlin.collections.List<kotlin.coll
 val p0_w5_elements = if (true) p0_w5?.toList()?.let { p0_w5_snapshot -> kotlin.Array<kotlin.Any?>(p0_w5_snapshot.size) { p0_w5_index -> val p0_w9 = p0_w5_snapshot[p0_w5_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w9 }) } } else null
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5_elements }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_nested_fold_63e97a79272db78e { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_nested_fold_d276919d7d3850f5()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1436,8 +1436,8 @@ __pb_accumulator as A
 public fun <A> `collectionOptionsFold`(p0_w1: kotlin.collections.List<Long?>, p1_w1: Short, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long?) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w7 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { (if (p0_w7 != null) 1 else 0) }, io.prebindgen.covertest.InputValidation.value { if (p0_w7 != null) requireNotNull(p0_w7) else 0L }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Int_Long_2_2d1ae54437bd2ee1>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_options_fold_b6fa2828841c6e69 { v0, v1 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Int_Long_2_2d1ae54437bd2ee1(v0, v1)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_options_fold_68c36a49e36a111a()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1466,8 +1466,8 @@ __pb_accumulator as A
 public fun <A> `collectionOptionalFold`(p0_w3: kotlin.collections.List<Long>?, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long) -> A): A? = run {
     val p0_w3_elements = try { if (p0_w3 != null) (if (true) requireNotNull(p0_w3).toList()?.let { p0_w3_snapshot -> kotlin.Array<kotlin.Any?>(p0_w3_snapshot.size) { p0_w3_index -> val p0_w7 = p0_w3_snapshot[p0_w3_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w7 }) } } else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_fold_78209d4e9082c96a { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_optional_fold_df6ab4cb4ee0f229()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1494,8 +1494,8 @@ __pb_accumulator
 public fun <A> `collectionOptionalItemsFold`(p0_w3: kotlin.collections.List<Long?>?, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long?) -> A): A? = run {
     val p0_w3_elements = try { if (p0_w3 != null) (if (true) requireNotNull(p0_w3).toList()?.let { p0_w3_snapshot -> kotlin.Array<kotlin.Any?>(p0_w3_snapshot.size) { p0_w3_index -> val p0_w9 = p0_w3_snapshot[p0_w3_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { (if (p0_w9 != null) 1 else 0) }, io.prebindgen.covertest.InputValidation.value { if (p0_w9 != null) requireNotNull(p0_w9) else 0L }) } } else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Int_Long_2_2d1ae54437bd2ee1>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_optional_items_fold_0dd26be8936deb87 { v0, v1 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Int_Long_2_2d1ae54437bd2ee1(v0, v1)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_optional_items_fold_f78a529c867c557c()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1524,8 +1524,8 @@ __pb_accumulator
 public fun <A> `collectionEnumFold`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.enums.Code>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.enums.Code) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5.wireValue }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Int_1_740d8169e2b203e5>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_enum_fold_c4e4e95a0f2dd06c { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Int_1_740d8169e2b203e5(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_enum_fold_09c4e027e41fd2af()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1552,8 +1552,8 @@ __pb_accumulator as A
 public fun <A> `collectionBorrowFold`(p0_w1: kotlin.collections.List<Long>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_borrow_fold_b4856d1bed461622 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_borrow_fold_7de9c6190123dac1()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1582,8 +1582,8 @@ __pb_accumulator as A
 public fun <A> `collectionSliceFold`(p0_w1: kotlin.collections.List<Long>, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Long) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_slice_fold_2b262532b9b8b02f { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_slice_fold_a2b3f546f3d7cf6c()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1610,8 +1610,8 @@ __pb_accumulator as A
 public fun <A> `collectionHandlesFold`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource?>, p1_w1: Int, p2_w1: Int, initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A>, fold: (A, io.prebindgen.covertest.resources.OwnedResource) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) }, intArrayOf(2)) } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_handles_fold_94b94355358878bd { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_handles_fold_d618321dfdd81036()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1670,8 +1670,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 public fun <A> `collectionResultFold`(p0_w1: kotlin.collections.List<Long>, p1_w1: Boolean, initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A>, fold: (A, Long) -> A): A = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_result_fold_8dc1da1d06d04f3a { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_result_fold_ff20bca811548f31()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorLong1_5ff51b1265add9de.acquire()
     try {
@@ -1699,8 +1699,8 @@ __pb_accumulator as A
 public fun <A> `collectionResultOptionalFold`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.resources.OwnedResource?>, p1_w1: Int, initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A?>, fold: (A, io.prebindgen.covertest.resources.OwnedResource) -> A): A? = run {
     val p0_w1_elements = try { if (true) p0_w1?.toList()?.let { p0_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w5 }) }, intArrayOf(2)) } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
-val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_collection_result_optional_fold_522f3e931c5b4b1c { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_collection_result_optional_fold_4c5723413f4bd16b()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1764,8 +1764,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `sequenceLateDropFold`(initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A>, fold: (A, io.prebindgen.covertest.resources.OwnedResource) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_late_drop_fold_c7e3bfa988c8796d { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_1_127a3c24b600dbe0(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_sequence_late_drop_fold_896f50a533967c16()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1819,8 +1819,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `sequenceScalarsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, Boolean, Byte, Short, Int, Long, Float, Double, java.math.BigInteger, String?) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_scalars_fold_47a6ace8a9aad013 { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_sequence_scalars_fold_380518ae064ebca8()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -1849,8 +1849,8 @@ __pb_accumulator as A
 }
 
 public fun <A> `sequencePartsFold`(p0_w1: Int, initial: A, onBindingError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.ResultFailureHandler<A>, fold: (A, Long, String, io.prebindgen.covertest.resources.OwnedResource) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_String_Long_3_b4558cb7b740d7c6>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_sequence_parts_fold_34d4f8eed2926471 { v0, v1, v2 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_String_Long_3_b4558cb7b740d7c6(v0, v1, v2)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_sequence_parts_fold_93c88adeff7d3a7a()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1904,8 +1904,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `storageGetVecFold`(p0_w1: io.prebindgen.covertest.Storage?, initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.collections.Payload) -> A): A? = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_Int_Double_4_5e82f5e29d89a757>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_storage_get_vec_fold_886389afd9ad2e6a { v0, v1, v2, v3 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_Int_Double_4_5e82f5e29d89a757(v0, v1, v2, v3)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_storage_get_vec_fold_26f37d7c5ac1e8a1()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {

@@ -1293,8 +1293,8 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
 }
 
 public fun <A> `outputCleanupRowsFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.cleanup.OutputCleanupRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_fold_75168968ea0ba55c { v0, v1, v2 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Long_Long_Long_3_ad466713697fa9e4(v0, v1, v2)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_output_cleanup_rows_fold_a3d8debfd37d4def()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1364,8 +1364,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupRowsBulkFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, io.prebindgen.covertest.cleanup.OutputCleanupRow) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_rows_bulk_fold_c0b0ae2e88fae38a { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_output_cleanup_rows_bulk_fold_aeddb997c707853d()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1442,8 +1442,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupNestedFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.cleanup.OutputCleanupRow>?) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_fold_697431074ae8d31b { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_output_cleanup_nested_fold_f1c07d387aa43c20()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {
@@ -1562,8 +1562,8 @@ if (nativeResult != null) __pb_discard(failure, __pb_processed)
 }
 
 public fun <A> `outputCleanupNestedBulkFold`(initial: A, onError: io.prebindgen.covertest.JniErrorHandler<A> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<io.prebindgen.covertest.cleanup.OutputCleanupRow>?) -> A): A = run {
-    val __pb_rows = kotlin.collections.ArrayList<io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c>()
-val __pb_sink = io.prebindgen.covertest.JNINative.SequenceSink_output_cleanup_nested_bulk_fold_a1404af9d5f22fac { v0 -> __pb_rows.add(io.prebindgen.covertest.JNINative.SequenceRow_ByteArray_1_92dc0f7ab995287c(v0)); kotlin.Unit }
+    val __pb_sink = io.prebindgen.covertest.JNINative.SequenceCollector_output_cleanup_nested_bulk_fold_f9eaa6c74f7feefb()
+val __pb_rows = __pb_sink.rows
 val __pb_outputAccepted = BooleanArray(1)
 fun __pb_discard(failure: Throwable, start: Int = 0) {
 for (__pb_rowIndex in start until __pb_rows.size) {

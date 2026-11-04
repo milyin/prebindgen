@@ -1,2 +1,4 @@
 -keep class io.prebindgen.covertest.JNINative { *; }
 -keep class io.prebindgen.covertest.JNINative$SequenceRow_* { *; }
+-keep class io.prebindgen.covertest.JNINative$SequenceSink_* { *; }
+-keep class io.prebindgen.covertest.JNINative$SequenceCollector_* { *; }

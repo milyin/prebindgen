@@ -1142,6 +1142,13 @@ This prevents user re-entry while Rust borrows are live. It deliberately buffers
 the result before running user code; it does not provide constant-memory streaming
 or early termination. The existing list-return variant remains available.
 
+For larger collections, Rust sends the known length to the internal Kotlin
+collector before delivering rows. The collector reserves backing-array capacity
+once, avoiding growth and repeated reference-array copies. Short collections skip
+this hint to avoid additional JNI setup calls. Reservation failure transfers no
+rows; Rust releases the still-owned output values. Public fold signatures and
+per-row delivery remain unchanged.
+
 A folder receives the accumulator followed by each element's projected Kotlin
 values. It owns handles from successfully completed steps. If a folder throws,
 the current element and all remaining undelivered elements are cleaned up, and

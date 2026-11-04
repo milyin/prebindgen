@@ -4,6 +4,7 @@ use prebindgen_declarations::SequenceOutput;
 
 pub(crate) fn transport(
     wire: syn::Ident,
+    length: syn::Ident,
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
@@ -66,6 +67,21 @@ pub(crate) fn transport(
             #env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
+            // The JVM ArrayList default capacity holds ten rows without growth.
+            // Short/empty collections keep the existing JNI setup path. Reserve
+            // once for larger collections, never inside the row loop.
+            if #length > 10 {
+                let capacity=<i32 as ::core::convert::TryFrom<_>>::try_from(#length).map_err(|_| "collection exceeds JVM capacity".to_string())?;
+                // Static modified-UTF8 descriptors avoid two temporary native
+                // string allocations for this fixed method lookup.
+                let reserve=unsafe {
+                    let table=#env.get_native_interface();
+                    ((**table).GetMethodID.expect("JNI method lookup"))(table,#class.as_raw(),b"reserve\0".as_ptr().cast(),b"(I)V\0".as_ptr().cast())
+                };
+                if reserve.is_null() { return Err("cannot resolve collection capacity hint".into()); }
+                let reserve=unsafe {::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)};
+                unsafe {#env.call_method_unchecked(&__pb_callback,reserve,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[::prebindgen_jni_runtime::jni::sys::jvalue{i:capacity}])}.map_err(|e|e.to_string())?;
+            }
             #env.delete_local_ref(#class).map_err(|e|e.to_string())?;
         },
         enter,
