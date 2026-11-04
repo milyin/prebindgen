@@ -339,7 +339,7 @@ pub(crate) fn input<C: Codec>(
                     let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
                     for #index in 0..#length {
                         #bind
-                        #[allow(clippy::redundant_closure_call)]
+                        #[allow(unused_variables,clippy::redundant_closure_call)]
                         let checked = (|| { #validation #collect Ok::<_,String>(()) })();
                         #release
                         checked?;
