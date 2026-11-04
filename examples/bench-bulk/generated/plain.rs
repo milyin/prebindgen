@@ -54,17 +54,77 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_drop_1WideRowReturnHand
         ::prebindgen_jni_runtime::fail(&mut env, &e);
     }
 }
+#[allow(non_upper_case_globals)]
+static __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea: ::prebindgen_jni_runtime::OutputRowType = ::prebindgen_jni_runtime::OutputRowType::new();
+#[allow(non_upper_case_globals)]
+static __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0: ::prebindgen_jni_runtime::OutputRowType = ::prebindgen_jni_runtime::OutputRowType::new();
+#[allow(non_upper_case_globals)]
+static __pb_row_type_SequenceRow_Long_Long_2_c3e8677e51c52ca2: ::prebindgen_jni_runtime::OutputRowType = ::prebindgen_jni_runtime::OutputRowType::new();
+#[allow(non_upper_case_globals)]
+static __pb_row_type_SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a: ::prebindgen_jni_runtime::OutputRowType = ::prebindgen_jni_runtime::OutputRowType::new();
+#[no_mangle]
+pub extern "system" fn Java_bench_plain_JNINative_init_1OutputRows_1776ecb9d0c3754e8(
+    mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+    classes: ::prebindgen_jni_runtime::jni::objects::JObjectArray<'_>,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if env.get_array_length(&classes).map_err(|e| e.to_string())? != 4i32 {
+            return Err("output row type count differs".into());
+        }
+        let class = env
+            .get_object_array_element(&classes, 0i32)
+            .map_err(|e| e.to_string())?;
+        let class = env
+            .auto_local(::prebindgen_jni_runtime::jni::objects::JClass::from(class));
+        __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea
+            .initialize(&mut env, &class, &["[Ljava/lang/Object;"])?;
+        let class = env
+            .get_object_array_element(&classes, 1i32)
+            .map_err(|e| e.to_string())?;
+        let class = env
+            .auto_local(::prebindgen_jni_runtime::jni::objects::JClass::from(class));
+        __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0
+            .initialize(&mut env, &class, &["J"])?;
+        let class = env
+            .get_object_array_element(&classes, 2i32)
+            .map_err(|e| e.to_string())?;
+        let class = env
+            .auto_local(::prebindgen_jni_runtime::jni::objects::JClass::from(class));
+        __pb_row_type_SequenceRow_Long_Long_2_c3e8677e51c52ca2
+            .initialize(&mut env, &class, &["J", "J"])?;
+        let class = env
+            .get_object_array_element(&classes, 3i32)
+            .map_err(|e| e.to_string())?;
+        let class = env
+            .auto_local(::prebindgen_jni_runtime::jni::objects::JClass::from(class));
+        __pb_row_type_SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
+            .initialize(&mut env, &class, &["J", "J", "J", "J", "J", "J", "J", "J"])?;
+        Ok(())
+    }) {
+        ::prebindgen_jni_runtime::fail(&mut env, &error);
+    }
+}
 #[allow(dead_code, non_snake_case)]
-fn __pb_cleanup_objects_InputHandle_2099cab566bedd37<'local>(
+fn __pb_cleanup_typed_InputHandle_a3d87635baf7af7c<'local>(
     env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObject<'local>,
 ) {
     ::prebindgen_jni_runtime::reclaim_output(
         env,
         |env| {
-            let raw = unsafe {
-                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-            }?;
+            let raw = env
+                .get_field_unchecked(
+                    row,
+                    __pb_row_type_SequenceRow_Long_Long_2_c3e8677e51c52ca2
+                        .get()?
+                        .field(0usize),
+                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                        ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
+                    ),
+                )
+                .and_then(|v| v.j())
+                .map_err(|e| e.to_string())?;
             if raw != 0 {
                 let _ = ::prebindgen_runtime::boundary(|| unsafe {
                     ::prebindgen_jni_runtime::drop_pointer::<
@@ -77,16 +137,25 @@ fn __pb_cleanup_objects_InputHandle_2099cab566bedd37<'local>(
     );
 }
 #[allow(dead_code, non_snake_case)]
-fn __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46<'local>(
+fn __pb_cleanup_typed_InputHandle_b207c5d0d65e1d12<'local>(
     env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObject<'local>,
 ) {
     ::prebindgen_jni_runtime::reclaim_output(
         env,
         |env| {
-            let raw = unsafe {
-                ::prebindgen_jni_runtime::output_handle(env, row, 0usize)
-            }?;
+            let raw = env
+                .get_field_unchecked(
+                    row,
+                    __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0
+                        .get()?
+                        .field(0usize),
+                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                        ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
+                    ),
+                )
+                .and_then(|v| v.j())
+                .map_err(|e| e.to_string())?;
             if raw != 0 {
                 let _ = ::prebindgen_runtime::boundary(|| unsafe {
                     ::prebindgen_jni_runtime::drop_pointer::<
@@ -99,15 +168,22 @@ fn __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46<'local>(
     );
 }
 #[allow(dead_code, non_snake_case)]
-fn __pb_cleanup_objects_Rows_c27fddfa623fb18e<'local>(
+fn __pb_cleanup_typed_Rows_fe4a4c800c91ea9c<'local>(
     env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    row: &::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>,
+    row: &::prebindgen_jni_runtime::jni::objects::JObject<'local>,
 ) {
     ::prebindgen_jni_runtime::reclaim_output(
         env,
         |env| {
             let rows = env
-                .get_object_array_element(row, 0usize as i32)
+                .get_field_unchecked(
+                    row,
+                    __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea
+                        .get()?
+                        .field(0usize),
+                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                )
+                .and_then(|v| v.l())
                 .map_err(|e| e.to_string())?;
             let rows = env
                 .auto_local(
@@ -117,11 +193,11 @@ fn __pb_cleanup_objects_Rows_c27fddfa623fb18e<'local>(
                 let length = env.get_array_length(&*rows).map_err(|e| e.to_string())?
                     as usize;
                 unsafe {
-                    ::prebindgen_jni_runtime::reclaim_rows(
+                    ::prebindgen_jni_runtime::reclaim_objects(
                         env,
                         rows.as_raw(),
                         length,
-                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                        __pb_cleanup_typed_InputHandle_b207c5d0d65e1d12,
                     );
                 }
             }
@@ -996,47 +1072,37 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
             let source_value = bench_flat::owned_handles_echo(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<bench_flat::InputHandle> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0
+                .get()?;
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             let mut ret_w0_owner = unsafe {
-                ::prebindgen_jni_runtime::OutputRows::new(
+                ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
                     &ret_w0,
-                    __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                    __pb_cleanup_typed_InputHandle_b207c5d0d65e1d12,
                 )
-            }?;
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let mut ret_w4 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w1,
                 });
-                let ret_w0_row = ::prebindgen_jni_runtime::array(
-                    &mut jni_environment,
-                    1usize,
-                )?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ((&mut *ret_w4)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >) as i64,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 0i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
+                        .construct(
+                            &mut jni_environment,
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ((&mut *ret_w4)
+                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                            bench_flat::InputHandle,
+                                        >) as i64,
+                                },
+                            ],
+                        )
+                }?;
+                let ret_w0_row = jni_environment.auto_local(ret_w0_row);
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
@@ -1051,7 +1117,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                 unsafe {
                     ret_w0_owner.complete_row();
                 }
-                drop(ret_w0_frame);
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -1284,66 +1349,42 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
             );
             let ret_w0_source: ::std::vec::Vec<bench_flat::HandleRecord> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Long_Long_2_c3e8677e51c52ca2
+                .get()?;
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             let mut ret_w0_owner = unsafe {
-                ::prebindgen_jni_runtime::OutputRows::new(
+                ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
                     &ret_w0,
-                    __pb_cleanup_objects_InputHandle_2099cab566bedd37,
+                    __pb_cleanup_typed_InputHandle_a3d87635baf7af7c,
                 )
-            }?;
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 10i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let mut ret_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w4_record.handle,
                 });
                 let ret_w4_f1 = ret_w4_record.tag;
-                let ret_w0_row = ::prebindgen_jni_runtime::array(
-                    &mut jni_environment,
-                    2usize,
-                )?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ((&mut *ret_w4_f0)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >) as i64,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 0i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f1,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 1i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
+                        .construct(
+                            &mut jni_environment,
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ((&mut *ret_w4_f0)
+                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                            bench_flat::InputHandle,
+                                        >) as i64,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f1,
+                                },
+                            ],
+                        )
+                }?;
+                let ret_w0_row = jni_environment.auto_local(ret_w0_row);
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
@@ -1358,7 +1399,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                 unsafe {
                     ret_w0_owner.complete_row();
                 }
-                drop(ret_w0_frame);
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -1622,14 +1662,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
             );
             let ret_w0_source: ::std::vec::Vec<Vec<bench_flat::InputHandle>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea
+                .get()?;
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             let mut ret_w0_owner = unsafe {
-                ::prebindgen_jni_runtime::OutputRows::new(
+                ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
                     &ret_w0,
-                    __pb_cleanup_objects_Rows_c27fddfa623fb18e,
+                    __pb_cleanup_typed_Rows_fe4a4c800c91ea9c,
                 )
-            }?;
+            };
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
@@ -1638,50 +1680,40 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                 }?;
                 let ret_w4_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                let ret_w4_row_constructor = __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0
+                    .get()?;
                 let ret_w4 = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     ret_w6,
                 )?;
                 let mut ret_w4_owner = unsafe {
-                    ::prebindgen_jni_runtime::OutputRows::new(
+                    ::prebindgen_jni_runtime::OutputRows::new_objects(
                         &mut jni_environment,
                         &ret_w4,
-                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                        __pb_cleanup_typed_InputHandle_b207c5d0d65e1d12,
                     )
-                }?;
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
-                    let ret_w4_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                    }?;
                     let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
                         value: ret_w5,
                     });
-                    let ret_w4_row = ::prebindgen_jni_runtime::array(
-                        &mut jni_environment,
-                        1usize,
-                    )?;
-                    let object = jni_environment
-                        .call_static_method(
-                            "java/lang/Long",
-                            "valueOf",
-                            "(J)Ljava/lang/Long;",
-                            &[
-                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                    ((&mut *ret_w8)
-                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                            bench_flat::InputHandle,
-                                        >) as i64,
-                                ),
-                            ],
-                        )
-                        .and_then(|v| v.l())
-                        .map_err(|e| e.to_string())?;
-                    jni_environment
-                        .set_object_array_element(&ret_w4_row, 0i32, &object)
-                        .map_err(|e| e.to_string())?;
-                    jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                    let ret_w4_row = unsafe {
+                        ret_w4_row_constructor
+                            .construct(
+                                &mut jni_environment,
+                                &[
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *ret_w8)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                bench_flat::InputHandle,
+                                            >) as i64,
+                                    },
+                                ],
+                            )
+                    }?;
+                    let ret_w4_row = jni_environment.auto_local(ret_w4_row);
                     jni_environment
                         .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
                         .map_err(|e| e.to_string())?;
@@ -1696,23 +1728,25 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     unsafe {
                         ret_w4_owner.complete_row();
                     }
-                    drop(ret_w4_frame);
                 }
                 let ret_w4 = Some(ret_w4);
-                let ret_w0_row = ::prebindgen_jni_runtime::array(
-                    &mut jni_environment,
-                    1usize,
-                )?;
-                let object = match (ret_w4).as_ref() {
+                let ret_w0_row_argument_0 = match (ret_w4).as_ref() {
                     Some(value) => {
                         jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                     }
                     None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                 };
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 0i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
+                        .construct(
+                            &mut jni_environment,
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: ret_w0_row_argument_0.as_raw(),
+                                },
+                            ],
+                        )
+                }?;
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
@@ -4943,13 +4977,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
             );
             let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
+                .get()?;
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let ret_w4_f0 = ret_w4_record.a;
                 let ret_w4_f1 = ret_w4_record.b;
@@ -4959,146 +4992,39 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
                 let ret_w4_f5 = ret_w4_record.f;
                 let ret_w4_f6 = ret_w4_record.g;
                 let ret_w4_f7 = ret_w4_record.h;
-                let ret_w0_row = ::prebindgen_jni_runtime::array(
-                    &mut jni_environment,
-                    8usize,
-                )?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f0,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 0i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f1,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 1i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f2,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 2i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f3,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 3i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f4,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 4i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f5,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 5i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f6,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 6i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f7,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 7i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
+                        .construct(
+                            &mut jni_environment,
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f0,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f1,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f2,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f3,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f4,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f5,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f6,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f7,
+                                },
+                            ],
+                        )
+                }?;
+                let ret_w0_row = jni_environment.auto_local(ret_w0_row);
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
@@ -5108,7 +5034,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_frame);
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -5392,13 +5317,12 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
             let source_value = bench_flat::rows_echo(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<bench_flat::Row> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
+                .get()?;
             let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 16i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let ret_w4_f0 = ret_w4_record.a;
                 let ret_w4_f1 = ret_w4_record.b;
@@ -5408,146 +5332,39 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                 let ret_w4_f5 = ret_w4_record.f;
                 let ret_w4_f6 = ret_w4_record.g;
                 let ret_w4_f7 = ret_w4_record.h;
-                let ret_w0_row = ::prebindgen_jni_runtime::array(
-                    &mut jni_environment,
-                    8usize,
-                )?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f0,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 0i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f1,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 1i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f2,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 2i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f3,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 3i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f4,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 4i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f5,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 5i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f6,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 6i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = jni_environment
-                    .call_static_method(
-                        "java/lang/Long",
-                        "valueOf",
-                        "(J)Ljava/lang/Long;",
-                        &[
-                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                ret_w4_f7,
-                            ),
-                        ],
-                    )
-                    .and_then(|v| v.l())
-                    .map_err(|e| e.to_string())?;
-                jni_environment
-                    .set_object_array_element(&ret_w0_row, 7i32, &object)
-                    .map_err(|e| e.to_string())?;
-                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
+                        .construct(
+                            &mut jni_environment,
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f0,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f1,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f2,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f3,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f4,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f5,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f6,
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    j: ret_w4_f7,
+                                },
+                            ],
+                        )
+                }?;
+                let ret_w0_row = jni_environment.auto_local(ret_w0_row);
                 jni_environment
                     .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
@@ -5557,7 +5374,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_frame);
             }
             let ret_w0 = Some(ret_w0);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -5895,6 +5711,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                         let callback_arg_0_w2 = ::std::vec::Vec::len(
                                             &callback_arg_0_w0_source,
                                         );
+                                        let callback_arg_0_w0_row_constructor = __pb_row_type_SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
+                                            .get()?;
                                         let callback_arg_0_w0 = ::prebindgen_jni_runtime::array(
                                             &mut callback_environment,
                                             callback_arg_0_w2,
@@ -5904,12 +5722,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                                 callback_arg_0_w0_source,
                                             ),
                                         ) {
-                                            let callback_arg_0_w0_frame = unsafe {
-                                                ::prebindgen_jni_runtime::LocalFrame::new(
-                                                    &callback_environment,
-                                                    16i32,
-                                                )
-                                            }?;
                                             let callback_arg_0_w4_record = callback_arg_0_w1;
                                             let callback_arg_0_w4_f0 = callback_arg_0_w4_record.a;
                                             let callback_arg_0_w4_f1 = callback_arg_0_w4_record.b;
@@ -5919,194 +5731,40 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                             let callback_arg_0_w4_f5 = callback_arg_0_w4_record.f;
                                             let callback_arg_0_w4_f6 = callback_arg_0_w4_record.g;
                                             let callback_arg_0_w4_f7 = callback_arg_0_w4_record.h;
-                                            let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
-                                                &mut callback_environment,
-                                                8usize,
-                                            )?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f0,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    0i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f1,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    1i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f2,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    2i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f3,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    3i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f4,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    4i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f5,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    5i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f6,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    6i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
-                                            let object = callback_environment
-                                                .call_static_method(
-                                                    "java/lang/Long",
-                                                    "valueOf",
-                                                    "(J)Ljava/lang/Long;",
-                                                    &[
-                                                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                                            callback_arg_0_w4_f7,
-                                                        ),
-                                                    ],
-                                                )
-                                                .and_then(|v| v.l())
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .set_object_array_element(
-                                                    &callback_arg_0_w0_row,
-                                                    7i32,
-                                                    &object,
-                                                )
-                                                .map_err(|e| e.to_string())?;
-                                            callback_environment
-                                                .delete_local_ref(object)
-                                                .map_err(|e| e.to_string())?;
+                                            let callback_arg_0_w0_row = unsafe {
+                                                callback_arg_0_w0_row_constructor
+                                                    .construct(
+                                                        &mut callback_environment,
+                                                        &[
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f0,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f1,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f2,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f3,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f4,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f5,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f6,
+                                                            },
+                                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                                                j: callback_arg_0_w4_f7,
+                                                            },
+                                                        ],
+                                                    )
+                                            }?;
+                                            let callback_arg_0_w0_row = callback_environment
+                                                .auto_local(callback_arg_0_w0_row);
                                             callback_environment
                                                 .set_object_array_element(
                                                     &callback_arg_0_w0,
@@ -6120,7 +5778,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                                 clippy::unused_unit
                                             )]
                                             let _: () = (|| -> () {})();
-                                            drop(callback_arg_0_w0_frame);
                                         }
                                         let callback_arg_0_w0 = Some(callback_arg_0_w0);
                                         let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
@@ -6861,50 +6518,40 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                 }?;
                 let ret_w4_source: ::std::vec::Vec<bench_flat::InputHandle> = ret_w1;
                 let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                let ret_w4_row_constructor = __pb_row_type_SequenceRow_Long_1_127a3c24b600dbe0
+                    .get()?;
                 let ret_w4 = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     ret_w6,
                 )?;
                 let mut ret_w4_owner = unsafe {
-                    ::prebindgen_jni_runtime::OutputRows::new(
+                    ::prebindgen_jni_runtime::OutputRows::new_objects(
                         &mut jni_environment,
                         &ret_w4,
-                        __pb_cleanup_objects_InputHandle_91a2db5ea30c1d46,
+                        __pb_cleanup_typed_InputHandle_b207c5d0d65e1d12,
                     )
-                }?;
+                };
                 for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
-                    let ret_w4_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                    }?;
                     let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
                         value: ret_w5,
                     });
-                    let ret_w4_row = ::prebindgen_jni_runtime::array(
-                        &mut jni_environment,
-                        1usize,
-                    )?;
-                    let object = jni_environment
-                        .call_static_method(
-                            "java/lang/Long",
-                            "valueOf",
-                            "(J)Ljava/lang/Long;",
-                            &[
-                                ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                                    ((&mut *ret_w8)
-                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                            bench_flat::InputHandle,
-                                        >) as i64,
-                                ),
-                            ],
-                        )
-                        .and_then(|v| v.l())
-                        .map_err(|e| e.to_string())?;
-                    jni_environment
-                        .set_object_array_element(&ret_w4_row, 0i32, &object)
-                        .map_err(|e| e.to_string())?;
-                    jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                    let ret_w4_row = unsafe {
+                        ret_w4_row_constructor
+                            .construct(
+                                &mut jni_environment,
+                                &[
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *ret_w8)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                bench_flat::InputHandle,
+                                            >) as i64,
+                                    },
+                                ],
+                            )
+                    }?;
+                    let ret_w4_row = jni_environment.auto_local(ret_w4_row);
                     jni_environment
                         .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
                         .map_err(|e| e.to_string())?;
@@ -6919,7 +6566,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                     unsafe {
                         ret_w4_owner.complete_row();
                     }
-                    drop(ret_w4_frame);
                 }
                 let ret_w4 = Some(ret_w4);
                 let ret_w0_callback_object_0 = match (ret_w4).as_ref() {

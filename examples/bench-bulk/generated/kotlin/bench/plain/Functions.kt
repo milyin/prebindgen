@@ -80,10 +80,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
@@ -100,10 +100,10 @@ var outputlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 outputowners = bench.plain.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_0: bench.plain.InputHandle? = null
 
-            outputitem_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row[0] as Long))
+            outputitem_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row.c0))
 
 outputlist.add(requireNotNull(outputitem_0))
 }
@@ -116,10 +116,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
@@ -148,10 +148,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
         var outputitem_g0_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
@@ -168,12 +168,12 @@ var outputlist: kotlin.collections.MutableList<bench.plain.HandleRecord>? = null
 outputowners = bench.plain.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
         var outputitem_g0_0: bench.plain.InputHandle? = null
 
-            outputitem_g0_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row[0] as Long))
+            outputitem_g0_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row.c0))
 
-outputlist.add(bench.plain.HandleRecord(requireNotNull(outputitem_g0_0), output_row[1] as Long))
+outputlist.add(bench.plain.HandleRecord(requireNotNull(outputitem_g0_0), output_row.c1))
 }
 
 outputowners!!.complete = true
@@ -184,10 +184,10 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
         var outputitem_g0_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row[0] as Long) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
 
 } catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
 
@@ -218,16 +218,16 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 
 try {
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
 var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_item_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row[0] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row.c0) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
 
 } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
 outputfailure = outputitem_failure
@@ -249,15 +249,15 @@ var outputlist: kotlin.collections.MutableList<kotlin.collections.List<bench.pla
 outputowners = bench.plain.CollectionOwners()
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 
-outputitem_list = kotlin.collections.ArrayList((output_row[0] as kotlin.Array<*>).size)
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
-val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+outputitem_list = kotlin.collections.ArrayList((output_row.c0 as kotlin.Array<*>).size)
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
+val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_item_0: bench.plain.InputHandle? = null
 
-            outputitem_item_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(outputitem__row[0] as Long))
+            outputitem_item_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(outputitem__row.c0))
 
 outputitem_list.add(requireNotNull(outputitem_item_0))
 }
@@ -273,16 +273,16 @@ if (outputowners?.complete != true) {
 try {
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
 var outputfailure: kotlin.Throwable? = failure
-try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
 var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
 
 try {
-for (outputitem_index in (output_row[0] as kotlin.Array<*>).indices) {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
 var outputitem_failure: kotlin.Throwable? = outputfailure
-try { val outputitem__row = (output_row[0] as kotlin.Array<*>)[outputitem_index] as kotlin.Array<*>
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var outputitem_item_0: bench.plain.InputHandle? = null
 
-            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row[0] as Long) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row.c0) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
 
 } catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
 outputfailure = outputitem_failure
@@ -506,10 +506,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failur
     var outputlist: kotlin.collections.MutableList<bench.plain.Row>? = null
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
 
 
-outputlist.add(bench.plain.Row(output_row[0] as Long, output_row[1] as Long, output_row[2] as Long, output_row[3] as Long, output_row[4] as Long, output_row[5] as Long, output_row[6] as Long, output_row[7] as Long))
+outputlist.add(bench.plain.Row(output_row.c0, output_row.c1, output_row.c2, output_row.c3, output_row.c4, output_row.c5, output_row.c6, output_row.c7))
 }
 
 requireNotNull(outputlist)
@@ -528,10 +528,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
     var outputlist: kotlin.collections.MutableList<bench.plain.Row>? = null
 outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
 for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
-val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.Array<*>
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
 
 
-outputlist.add(bench.plain.Row(output_row[0] as Long, output_row[1] as Long, output_row[2] as Long, output_row[3] as Long, output_row[4] as Long, output_row[5] as Long, output_row[6] as Long, output_row[7] as Long))
+outputlist.add(bench.plain.Row(output_row.c0, output_row.c1, output_row.c2, output_row.c3, output_row.c4, output_row.c5, output_row.c6, output_row.c7))
 }
 
 requireNotNull(outputlist)
@@ -562,10 +562,10 @@ var callbackOutput0_list: kotlin.collections.MutableList<bench.plain.Row>? = nul
         try {
 callbackOutput0_list = kotlin.collections.ArrayList((raw0 as kotlin.Array<*>).size)
 for (callbackOutput0_index in (raw0 as kotlin.Array<*>).indices) {
-val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as bench.plain.JNINative.SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a
 
 
-callbackOutput0_list.add(bench.plain.Row(callbackOutput0__row[0] as Long, callbackOutput0__row[1] as Long, callbackOutput0__row[2] as Long, callbackOutput0__row[3] as Long, callbackOutput0__row[4] as Long, callbackOutput0__row[5] as Long, callbackOutput0__row[6] as Long, callbackOutput0__row[7] as Long))
+callbackOutput0_list.add(bench.plain.Row(callbackOutput0__row.c0, callbackOutput0__row.c1, callbackOutput0__row.c2, callbackOutput0__row.c3, callbackOutput0__row.c4, callbackOutput0__row.c5, callbackOutput0__row.c6, callbackOutput0__row.c7))
 }
             callbackArgument0_0 = requireNotNull(callbackOutput0_list)
         } catch (failure: Throwable) {
@@ -688,10 +688,10 @@ if (foldElementowners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: bench.plain.InputHandle? = null
 
-            try { if (foldElementowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (foldElementowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
@@ -726,10 +726,10 @@ var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = 
 try {
 foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
-val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: bench.plain.InputHandle? = null
 
-            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(bench.plain.InputHandle(foldElement_row[0] as Long))
+            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(bench.plain.InputHandle(foldElement_row.c0))
 
 foldElementlist.add(requireNotNull(foldElementitem_0))
 }
@@ -744,10 +744,10 @@ if (__pb_foldOwners?.complete != true) {
 try {
 for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
 var foldElementfailure: kotlin.Throwable? = failure
-try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as kotlin.Array<*>
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
         var foldElementitem_0: bench.plain.InputHandle? = null
 
-            try { if (__pb_foldOwners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row[0] as Long) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+            try { if (__pb_foldOwners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
 
 } catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
 
