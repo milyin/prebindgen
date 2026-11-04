@@ -1126,7 +1126,7 @@ impl JniGen {
             if !text.contains("internal class SequenceRow_") { return None; }
             let mut rules=format!("-keep class {package}.JNINative {{ *; }}\n-keep class {package}.JNINative$SequenceRow_* {{ *; }}\n");
             if text.contains("internal class SequenceCollector_") {
-                rules.push_str(&format!("-keep class {package}.JNINative$SequenceSink_* {{ *; }}\n-keep class {package}.JNINative$SequenceCollector_* {{ *; }}\n"));
+                rules.push_str(&format!("-keep class {package}.JNINative$SequenceSink_* {{ *; }}\n-keep class {package}.JNINative$SequenceCollector_* {{ *; }}\n-keep interface {package}.JNINative$SequenceCapacity {{ *; }}\n"));
             }
             Some(rules)
         }).collect()
@@ -1337,6 +1337,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     );
     let mut names = names::Names::default();
     let mut row_captures = BTreeSet::new();
+    let mut capacity_registered = false;
     for (ty, c) in classes.values() {
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
@@ -1588,6 +1589,10 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             kt_args.push("ownership".into());
         }
         if callback {
+            if !capacity_registered {
+                sequence_callback::emit_capacity(prefix, &mut rust, &mut native, &mut names)?;
+                capacity_registered = true;
+            }
             let sink = names.name(
                 "SequenceSink",
                 &f.name.to_string(),
@@ -1618,7 +1623,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 &[&names::path_identity(&f.path), &f.name.to_string()],
             )?;
             native.push_str(&format!(
-                "    internal interface {sink} {{ fun reserve(capacity: Int); fun run({}) }}\n    internal class {collector} : {sink} {{\n        @JvmField val rows = kotlin.collections.ArrayList<{storage}>()\n        override fun reserve(capacity: Int) {{ rows.ensureCapacity(capacity) }}\n        override fun run({}) {{ rows.add({storage}({arguments})) }}\n    }}\n",
+                "    internal interface {sink} : SequenceCapacity {{ fun run({}) }}\n    internal class {collector} : {sink} {{\n        @JvmField val rows = kotlin.collections.ArrayList<{storage}>()\n        override fun reserve(capacity: Int) {{ rows.ensureCapacity(capacity) }}\n        override fun run({}) {{ rows.add({storage}({arguments})) }}\n    }}\n",
                 fields.join(", "), fields.join(", ")
             ));
             setup.push_str(&format!("val __pb_sink = {prefix}.JNINative.{collector}()\nval __pb_rows = __pb_sink.rows\n"));

@@ -72,15 +72,8 @@ pub(crate) fn transport(
             // once for larger collections, never inside the row loop.
             if #length > 10 {
                 let capacity=<i32 as ::core::convert::TryFrom<_>>::try_from(#length).map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                // Static modified-UTF8 descriptors avoid two temporary native
-                // string allocations for this fixed method lookup.
-                let reserve=unsafe {
-                    let table=#env.get_native_interface();
-                    ((**table).GetMethodID.expect("JNI method lookup"))(table,#class.as_raw(),b"reserve\0".as_ptr().cast(),b"(I)V\0".as_ptr().cast())
-                };
-                if reserve.is_null() { return Err("cannot resolve collection capacity hint".into()); }
-                let reserve=unsafe {::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)};
-                unsafe {#env.call_method_unchecked(&__pb_callback,reserve,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[::prebindgen_jni_runtime::jni::sys::jvalue{i:capacity}])}.map_err(|e|e.to_string())?;
+                let (_, reserve)=__PB_SEQUENCE_CAPACITY.get().ok_or_else(|| "collection capacity hint is not initialized".to_string())?;
+                unsafe {#env.call_method_unchecked(&__pb_callback,*reserve,::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::Void),&[::prebindgen_jni_runtime::jni::sys::jvalue{i:capacity}])}.map_err(|e|e.to_string())?;
             }
             #env.delete_local_ref(#class).map_err(|e|e.to_string())?;
         },
@@ -268,4 +261,40 @@ pub(crate) fn fold(
             cleanup,
         },
     })
+}
+
+/// One reservation method shared by every generated collector. Register the
+/// actual interface class once, avoiding application-class lookups on workers
+/// and method-name/signature allocations on each large return.
+pub(crate) fn emit_capacity(
+    prefix: &str,
+    rust: &mut TokenStream,
+    native: &mut String,
+    names: &mut names::Names,
+) -> Result<()> {
+    let method = names.name("init", "SequenceCapacity", &["collection capacity hint"])?;
+    let symbol = symbol(prefix, &method);
+    rust.extend(quote! {
+        static __PB_SEQUENCE_CAPACITY: ::std::sync::OnceLock<(
+            ::prebindgen_jni_runtime::jni::objects::GlobalRef,
+            ::prebindgen_jni_runtime::jni::objects::JMethodID,
+        )> = ::std::sync::OnceLock::new();
+        #[no_mangle]
+        pub extern "system" fn #symbol(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>, _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>, capacity: ::prebindgen_jni_runtime::jni::objects::JClass<'_>) {
+            if let Err(error)=::prebindgen_runtime::boundary(|| {
+                if __PB_SEQUENCE_CAPACITY.get().is_none() {
+                    let reserve=env.get_method_id(&capacity,"reserve","(I)V").map_err(|e|e.to_string())?;
+                    let class=env.new_global_ref(&capacity).map_err(|e|e.to_string())?;
+                    let _=__PB_SEQUENCE_CAPACITY.set((class,reserve));
+                }
+                let (class,_)=__PB_SEQUENCE_CAPACITY.get().expect("capacity method initialized");
+                if !env.is_same_object(class.as_obj(),&capacity).map_err(|e|e.to_string())? {
+                    return Err("collection capacity interface registered with a different class".into());
+                }
+                Ok(())
+            }) { ::prebindgen_jni_runtime::fail(&mut env,&error); }
+        }
+    });
+    native.push_str(&format!("    internal interface SequenceCapacity {{ fun reserve(capacity: Int) }}\n    @JvmStatic private external fun {method}(capacity: Class<*>)\n    init {{ {method}(SequenceCapacity::class.java) }}\n"));
+    Ok(())
 }

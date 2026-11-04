@@ -3366,7 +3366,7 @@ fn ordinary_output_rows_share_capture_classes_and_use_unboxed_constructors() {
     assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
     assert_eq!(
         generated.proguard_rules(),
-        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n-keep class test.JNINative$SequenceSink_* { *; }\n-keep class test.JNINative$SequenceCollector_* { *; }\n"
+        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n-keep class test.JNINative$SequenceSink_* { *; }\n-keep class test.JNINative$SequenceCollector_* { *; }\n-keep interface test.JNINative$SequenceCapacity { *; }\n"
     );
     assert_eq!(generated.rust.matches("static __pb_row_type_").count(), 1);
     assert!(native.contains("::class.java"));
@@ -3472,7 +3472,8 @@ fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures(
         .build()
         .unwrap();
     let native = &generated.kotlin["test/JNINative.kt"];
-    assert!(native.contains("fun reserve(capacity: Int); fun run(v0: Long)"));
+    assert!(native.contains("interface SequenceCapacity { fun reserve(capacity: Int) }"));
+    assert!(native.contains(": SequenceCapacity { fun run(v0: Long)"));
     assert!(native.contains("rows.ensureCapacity(capacity)"));
     assert!(native.contains("override fun run(v0: Long) { rows.add("));
     assert!(!native.contains("capacity: Int, v0"));
@@ -3494,9 +3495,12 @@ fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures(
     assert!(transport.begin.to_string().contains("reserve"));
     assert!(!transport.store.to_string().contains("reserve"));
     assert!(!transport.store.to_string().contains("length"));
-    assert!(generated.rust.contains(r#"b"(I)V\0""#));
+    assert!(transport
+        .begin
+        .to_string()
+        .contains("__PB_SEQUENCE_CAPACITY"));
     assert!(!transport.begin.to_string().contains(r#""reserve""#));
-    assert_eq!(generated.rust.matches(r#"b"reserve\0""#).count(), 1);
+    assert_eq!(generated.rust.matches(r#""reserve""#).count(), 1);
     syn::parse_file(&generated.rust).unwrap();
 }
 

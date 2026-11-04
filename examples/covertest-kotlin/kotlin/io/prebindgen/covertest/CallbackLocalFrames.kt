@@ -10,6 +10,7 @@ internal object CallbackFrameProbe {
 
 object CallbackFrameEntryPoint {
     @JvmField val rejected = java.io.IOException("primitive callback collector rejected")
+    @JvmStatic fun capacityClass(): Class<*> = JNINative.SequenceCapacity::class.java
     @JvmStatic fun collectorClass(mode: Int): Class<*> {
         val name = when (mode) {
             0 -> "i64"

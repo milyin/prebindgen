@@ -211,9 +211,13 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFrameProbe_measure(
             )
             .and_then(|value| value.l())
             .map_err(|e| e.to_string())?;
-        let collector_class: &JClass<'_> = (&sink_class).into();
+        let capacity_class = env
+            .call_static_method(&class, "capacityClass", "()Ljava/lang/Class;", &[])
+            .and_then(|v| v.l())
+            .map_err(|e| e.to_string())?;
+        let capacity_class = env.auto_local(JClass::from(capacity_class));
         let reserve_method = env
-            .get_method_id(collector_class, "reserve", "(I)V")
+            .get_method_id(&capacity_class, "reserve", "(I)V")
             .map_err(|e| e.to_string())?
             .into_raw();
         let sink_class = env.new_global_ref(sink_class).map_err(|e| e.to_string())?;

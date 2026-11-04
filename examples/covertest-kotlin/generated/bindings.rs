@@ -90567,6 +90567,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
         }
     }
 }
+static __PB_SEQUENCE_CAPACITY: ::std::sync::OnceLock<
+    (
+        ::prebindgen_jni_runtime::jni::objects::GlobalRef,
+        ::prebindgen_jni_runtime::jni::objects::JMethodID,
+    ),
+> = ::std::sync::OnceLock::new();
+#[no_mangle]
+pub extern "system" fn Java_io_prebindgen_covertest_JNINative_init_1SequenceCapacity_1e067e94ae7b50e2a(
+    mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+    capacity: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if __PB_SEQUENCE_CAPACITY.get().is_none() {
+            let reserve = env
+                .get_method_id(&capacity, "reserve", "(I)V")
+                .map_err(|e| e.to_string())?;
+            let class = env.new_global_ref(&capacity).map_err(|e| e.to_string())?;
+            let _ = __PB_SEQUENCE_CAPACITY.set((class, reserve));
+        }
+        let (class, _) = __PB_SEQUENCE_CAPACITY
+            .get()
+            .expect("capacity method initialized");
+        if !env.is_same_object(class.as_obj(), &capacity).map_err(|e| e.to_string())? {
+            return Err(
+                "collection capacity interface registered with a different class".into(),
+            );
+        }
+        Ok(())
+    }) {
+        ::prebindgen_jni_runtime::fail(&mut env, &error);
+    }
+}
 #[allow(
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
@@ -90618,30 +90651,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -90813,32 +90832,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                 if ret_w4 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w2_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -91021,30 +91024,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -91273,30 +91262,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -91537,30 +91512,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             if ret_w4 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w2_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -91800,30 +91761,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -91973,30 +91920,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -92206,30 +92139,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -92464,30 +92383,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -92777,30 +92682,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -93365,30 +93256,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -93669,30 +93546,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -93976,32 +93839,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 if ret_w4 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w2_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -94345,30 +94192,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -94647,30 +94480,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -94884,30 +94703,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -95132,30 +94937,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -95431,30 +95222,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -95749,30 +95526,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -96008,32 +95771,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 if ret_w4 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w2_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -96294,32 +96041,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 if ret_w4 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w2_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -96562,30 +96293,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -96801,30 +96518,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -97051,30 +96754,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -97388,30 +97077,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w4 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w2_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -97665,30 +97340,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if ret_w4 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w2_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -97979,32 +97640,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 if ret_w6 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w6)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w4_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -98215,30 +97860,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             if ret_w5 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w5)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w3_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -98395,30 +98026,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -98686,30 +98303,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             if ret_w4 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w2_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
@@ -98917,32 +98520,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 if ret_w4 > 10 {
                     let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                    let reserve = unsafe {
-                        let table = jni_environment.get_native_interface();
-                        ((**table)
-                            .GetMethodID
-                            .expect(
-                                "JNI method lookup",
-                            ))(
-                            table,
-                            ret_w2_callback_class.as_raw(),
-                            b"reserve\0".as_ptr().cast(),
-                            b"(I)V\0".as_ptr().cast(),
-                        )
-                    };
-                    if reserve.is_null() {
-                        return Err("cannot resolve collection capacity hint".into());
-                    }
-                    let reserve = unsafe {
-                        ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(
-                            reserve,
-                        )
-                    };
+                    let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                        .get()
+                        .ok_or_else(|| {
+                            "collection capacity hint is not initialized".to_string()
+                        })?;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                reserve,
+                                *reserve,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
@@ -99115,30 +98702,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
             if ret_w2 > 10 {
                 let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
-                let reserve = unsafe {
-                    let table = jni_environment.get_native_interface();
-                    ((**table)
-                        .GetMethodID
-                        .expect(
-                            "JNI method lookup",
-                        ))(
-                        table,
-                        ret_w0_callback_class.as_raw(),
-                        b"reserve\0".as_ptr().cast(),
-                        b"(I)V\0".as_ptr().cast(),
-                    )
-                };
-                if reserve.is_null() {
-                    return Err("cannot resolve collection capacity hint".into());
-                }
-                let reserve = unsafe {
-                    ::prebindgen_jni_runtime::jni::objects::JMethodID::from_raw(reserve)
-                };
+                let (_, reserve) = __PB_SEQUENCE_CAPACITY
+                    .get()
+                    .ok_or_else(|| {
+                        "collection capacity hint is not initialized".to_string()
+                    })?;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            reserve,
+                            *reserve,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
