@@ -1,4 +1,5 @@
 #![allow(non_camel_case_types, unused_variables)]
+mod callback_frames;
 mod diagnostics;
 mod output_rows;
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

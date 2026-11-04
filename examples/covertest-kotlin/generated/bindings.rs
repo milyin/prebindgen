@@ -83742,9 +83742,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 10i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let ret_w4_f0 = ret_w4_record.number;
                 let ret_w4_f1 = ret_w4_record.fraction;
@@ -83773,7 +83770,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -83902,12 +83898,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w2_callback_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(
-                            &jni_environment,
-                            10i32,
-                        )
-                    }?;
                     let ret_w6_record = ret_w3;
                     let ret_w6_f0 = ret_w6_record.number;
                     let ret_w6_f1 = ret_w6_record.fraction;
@@ -83936,7 +83926,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {})();
-                    drop(ret_w2_callback_frame);
                 }
                 let ret_w2 = Some(
                     ::prebindgen_jni_runtime::array(&mut jni_environment, 0)?,
@@ -84749,9 +84738,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let ret_w4 = ret_w1;
                 unsafe {
                     jni_environment
@@ -84775,7 +84761,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -84887,9 +84872,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
-                }?;
                 let ret_w4_record = ret_w1;
                 let ret_w4_f0 = ret_w4_record.id;
                 let (_, (ret_w4_f1_present_value0,), ret_w4_f1_present_commit) = if let Some(
@@ -84973,7 +84955,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
                         ret_w4_f2_present_action();
                     }
                 })();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -86708,9 +86689,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w2_callback_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                    }?;
                     let mut ret_w6 = Box::new(::prebindgen_jni_runtime::Allocation {
                         value: ret_w3,
                     });
@@ -86741,7 +86719,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     let _: () = (|| -> () {
                         let _ = Box::into_raw(ret_w6).expose_provenance();
                     })();
-                    drop(ret_w2_callback_frame);
                 }
                 let ret_w2 = Some(
                     ::prebindgen_jni_runtime::array(&mut jni_environment, 0)?,
@@ -87314,9 +87291,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let ret_w4 = ret_w1;
                 unsafe {
                     jni_environment
@@ -87340,7 +87314,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -88273,9 +88246,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 10i32)
-                }?;
                 let (ret_w4, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w1 {
                     let ret_w6 = ret_w5;
                     let ret_w4_values = (ret_w6,);
@@ -88312,7 +88282,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         ret_w4_action();
                     }
                 })();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -88497,9 +88466,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w2_callback_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                    }?;
                     let ret_w6 = ret_w3;
                     unsafe {
                         jni_environment
@@ -88523,7 +88489,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {})();
-                    drop(ret_w2_callback_frame);
                 }
                 let ret_w2 = Some(
                     ::prebindgen_jni_runtime::array(&mut jni_environment, 0)?,
@@ -88746,12 +88711,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w2_callback_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(
-                            &jni_environment,
-                            10i32,
-                        )
-                    }?;
                     let (ret_w6, (ret_w6_value0,), ret_w6_commit) = if let Some(
                         ret_w7,
                     ) = ret_w3 {
@@ -88790,7 +88749,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                             ret_w6_action();
                         }
                     })();
-                    drop(ret_w2_callback_frame);
                 }
                 let ret_w2 = Some(
                     ::prebindgen_jni_runtime::array(&mut jni_environment, 0)?,
@@ -88980,9 +88938,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let ret_w4: i32 = match &(ret_w1) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
                     perftest_flat::SparseCode::MinusTwo => -2i32,
@@ -89014,7 +88969,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -89395,9 +89349,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w0_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let ret_w4 = ret_w1;
                 unsafe {
                     jni_environment
@@ -89421,7 +89372,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w0_callback_frame);
             }
             let ret_w0 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w0).as_ref() {
@@ -89697,9 +89647,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
-                let ret_w2_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let mut ret_w6 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w3,
                 });
@@ -89730,7 +89677,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let _: () = (|| -> () {
                     let _ = Box::into_raw(ret_w6).expose_provenance();
                 })();
-                drop(ret_w2_callback_frame);
             }
             let ret_w2 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w2).as_ref() {
@@ -89939,9 +89885,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w2_source),
             ) {
-                let ret_w2_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let ret_w6 = ret_w3;
                 unsafe {
                     jni_environment
@@ -89965,7 +89908,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {})();
-                drop(ret_w2_callback_frame);
             }
             let ret_w2 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w2).as_ref() {
@@ -90413,9 +90355,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
                 ::core::iter::IntoIterator::into_iter(ret_w3_source),
             ) {
-                let ret_w3_callback_frame = unsafe {
-                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
-                }?;
                 let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w4,
                 });
@@ -90446,7 +90385,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                 let _: () = (|| -> () {
                     let _ = Box::into_raw(ret_w7).expose_provenance();
                 })();
-                drop(ret_w3_callback_frame);
             }
             let ret_w3 = Some(::prebindgen_jni_runtime::array(&mut jni_environment, 0)?);
             let __pb_direct_object = match (ret_w3).as_ref() {
@@ -91002,12 +90940,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
                     ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w2_callback_frame = unsafe {
-                        ::prebindgen_jni_runtime::LocalFrame::new(
-                            &jni_environment,
-                            12i32,
-                        )
-                    }?;
                     let ret_w6_record = ret_w3;
                     let ret_w6_f0 = ret_w6_record.id;
                     let ret_w6_f1 = ret_w6_record.seq;
@@ -91044,7 +90976,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {})();
-                    drop(ret_w2_callback_frame);
                 }
                 let ret_w2 = Some(
                     ::prebindgen_jni_runtime::array(&mut jni_environment, 0)?,
