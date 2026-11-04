@@ -45,19 +45,19 @@ internal object JNINative {
         override fun reserve(capacity: Int) { rows.ensureCapacity(capacity) }
         override fun run(v0: Long) { rows.add(SequenceRow_Long_1_127a3c24b600dbe0(v0)) }
     }
-    @JvmStatic external fun call_owned_handles_echo_fold_769ead1c15ceb95c(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_owned_handles_echo_fold_769ead1c15ceb95c(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_owned_handles_echo_fold_3b50da75bf6f9626, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     internal interface SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a : SequenceCapacity { fun run(v0: Array<Any?>?) }
     internal class SequenceCollector_nested_owned_handles_echo_fold_9847d4ca29b981db : SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a {
         @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_Array_Any___1_00f39593b4ea53ea>()
         override fun reserve(capacity: Int) { rows.ensureCapacity(capacity) }
         override fun run(v0: Array<Any?>?) { rows.add(SequenceRow_Array_Any___1_00f39593b4ea53ea(v0)) }
     }
-    @JvmStatic external fun call_nested_owned_handles_echo_fold_55ebe6c8ba226f50(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_nested_owned_handles_echo_fold_55ebe6c8ba226f50(p0_w1: Array<Any?>?, ownership: LongArray, callback: SequenceSink_nested_owned_handles_echo_fold_5978b5e7b216ac8a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     internal interface SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b : SequenceCapacity { fun run(v0: Long, v1: Long, v2: Long, v3: Long, v4: Long, v5: Long, v6: Long, v7: Long) }
     internal class SequenceCollector_rows_for_reduce_fold_bac33805078e0166 : SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b {
         @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a>()
         override fun reserve(capacity: Int) { rows.ensureCapacity(capacity) }
         override fun run(v0: Long, v1: Long, v2: Long, v3: Long, v4: Long, v5: Long, v6: Long, v7: Long) { rows.add(SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a(v0, v1, v2, v3, v4, v5, v6, v7)) }
     }
-    @JvmStatic external fun call_rows_for_reduce_fold_587a8aef1d9a0485(p0_w1: Long, p1_w1: Long, callback: SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_rows_for_reduce_fold_587a8aef1d9a0485(p0_w1: Long, p1_w1: Long, callback: SequenceSink_rows_for_reduce_fold_6202aebdeb4d4c0b, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
 }
