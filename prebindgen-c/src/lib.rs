@@ -2842,7 +2842,11 @@ mod generation_tests {
             .map(|i| format!("f{i}:H"))
             .collect::<Vec<_>>()
             .join(",");
-        source.push_str(&format!("pub struct Wide{{{fields}}} pub fn wide({fields})->Wide{{}} pub fn wide_cb(cb:impl Fn()->Wide)->i64{{}}"));
+        let record_fields = (0..33)
+            .map(|i| format!("pub f{i}:H"))
+            .collect::<Vec<_>>()
+            .join(",");
+        source.push_str(&format!("pub struct Wide{{{record_fields}}} pub fn wide({fields})->Wide{{}} pub fn wide_cb(cb:impl Fn()->Wide)->i64{{}}"));
         for alternatives in [false, true] {
             let expansion = expand_param!(Pair).variant(fun!(pair));
             let expansion = if alternatives {
