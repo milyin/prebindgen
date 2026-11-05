@@ -279,9 +279,9 @@ pub unsafe extern "C" fn bench_callback_fixed(
                             let callback_return_w2 = raw_result.v0;
                             let callback_return_w4 = raw_result.v1;
                             let callback_return_w6 = raw_result.v2;
-                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                __prebindgen_input_consumed,
-                            );
+                            let mut callback_return_owners = ::prebindgen_runtime::FixedCallbackReturnAllocations::<
+                                2usize,
+                            >::tracking(__prebindgen_input_consumed);
                             unsafe {
                                 callback_return_owners
                                     .receive(

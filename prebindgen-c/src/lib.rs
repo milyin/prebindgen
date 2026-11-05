@@ -2836,7 +2836,13 @@ mod generation_tests {
     #[test]
     fn fixed_callback_results_select_stack_capacity_and_keep_collection_fallback() {
         use prebindgen_declarations::{expand_param, fun};
-        let source="pub type H=String; pub struct Pair {pub first:H,pub second:H} pub fn pair(first:H,second:H)->Pair{} pub fn one(first:H)->Pair{} pub fn fixed(cb:impl Fn()->Pair)->i64{} pub fn optional(cb:impl Fn()->Option<Pair>)->i64{} pub fn selected(cb:impl Fn()->Pair)->i64{} pub fn many(cb:impl Fn()->Vec<Pair>)->i64{} pub fn scalar(cb:impl Fn()->i64)->i64{}";
+        let mut source=String::from("pub type H=String; pub struct Pair {pub first:H,pub second:H} pub fn pair(first:H,second:H)->Pair{} pub fn one(first:H)->Pair{} pub fn fixed(cb:impl Fn()->Pair)->i64{} pub fn optional(cb:impl Fn()->Option<Pair>)->i64{} pub fn many(cb:impl Fn()->Vec<Pair>)->i64{} pub fn scalar(cb:impl Fn()->i64)->i64{}" );
+        source.push_str(" pub struct Names{pub h:H,pub names:Vec<i64>}pub fn names(h:H,names:Vec<i64>)->Names{} pub fn names_cb(cb:impl Fn()->Names)->i64{} pub struct Nested{pub h:H,pub rows:Vec<Pair>}pub fn nested(h:H,rows:Vec<Pair>)->Nested{} pub fn nested_cb(cb:impl Fn()->Nested)->i64{}");
+        let fields = (0..33)
+            .map(|i| format!("f{i}:H"))
+            .collect::<Vec<_>>()
+            .join(",");
+        source.push_str(&format!("pub struct Wide{{{fields}}} pub fn wide({fields})->Wide{{}} pub fn wide_cb(cb:impl Fn()->Wide)->i64{{}}"));
         for alternatives in [false, true] {
             let expansion = expand_param!(Pair).variant(fun!(pair));
             let expansion = if alternatives {
@@ -2844,9 +2850,18 @@ mod generation_tests {
             } else {
                 expansion
             };
-            let generated = Cbindgen::new(error_model(source))
+            let generated = Cbindgen::new(error_model(&source))
                 .opaque_ptr("h", syn::parse_quote!(H))
                 .expand(expansion)
+                .expand(expand_param!(Names).variant(fun!(names)))
+                .expand(expand_param!(Nested).variant(fun!(nested)))
+                .expand(expand_param!(Wide).variant(fun!(wide)))
+                .function(fun!(names_cb))
+                .panic()
+                .function(fun!(nested_cb))
+                .panic()
+                .function(fun!(wide_cb))
+                .panic()
                 .function(fun!(fixed))
                 .panic()
                 .function(fun!(optional))
@@ -2876,6 +2891,11 @@ mod generation_tests {
                     "{name}: {}",
                     body(name)
                 );
+            }
+            assert!(body("pb_names_cb").contains("FixedCallbackReturnAllocations :: < 1usize"));
+            for name in ["pb_nested_cb", "pb_wide_cb"] {
+                assert!(!body(name).contains("FixedCallbackReturnAllocations"));
+                assert!(body(name).contains("CallbackReturnAllocations :: tracking"));
             }
             assert!(!body("pb_many").contains("FixedCallbackReturnAllocations"));
             assert!(body("pb_many").contains("CallbackReturnAllocations :: tracking"));

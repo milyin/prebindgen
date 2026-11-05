@@ -412,9 +412,12 @@ impl CCallback {
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
+        // Bound trampoline stack use even for unusually wide result records.
         let guard = match fixed_return_owner_count(&plan.node, &self.return_owners) {
-            Some(count) => quote!(::prebindgen_runtime::FixedCallbackReturnAllocations::<#count>),
-            None => quote!(::prebindgen_runtime::CallbackReturnAllocations),
+            Some(count) if count <= 32 => {
+                quote!(::prebindgen_runtime::FixedCallbackReturnAllocations::<#count>)
+            }
+            _ => quote!(::prebindgen_runtime::CallbackReturnAllocations),
         };
         Ok((
             quote!(let mut callback_return_owners=#guard::tracking(__prebindgen_input_consumed);#scan callback_return_owners.check()?;),

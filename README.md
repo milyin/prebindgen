@@ -987,14 +987,13 @@ UTF-8, presence and selector validation, ownership receipts and failure cleanup
 remain active. Collection inputs construct rows in one traversal without alias
 history or the alias-validation staging buffer. Callback-return ownership scans
 needed to reclaim unread owners on failure remain active.
-For C callback results with a fixed maximum number of returned handles, cleanup
+For C callback results with a fixed maximum of up to 32 returned owners, cleanup
 bookkeeping uses stack storage sized during generation, including optional fields
 and alternative constructors. Scalar and single-handle results retain their
-existing lightweight guards. Results containing handle collections keep dynamic
-storage. Both forms skip consumed owners and reclaim unread owners on failure,
+existing lightweight guards. Results containing handle collections or more than 32 potential owners keep
+dynamic storage. Both forms skip consumed owners and reclaim unread owners on failure,
 including duplicate pointers rejected by checked decoding; cleanup continues if
 a destructor panics. This changes no C representation or generator configuration.
-
 
 Low-level generators constructing `CContext`, `CModule` or `CFunction` directly
 must supply the new `emit_alias_checks` field (or use their metadata defaults).

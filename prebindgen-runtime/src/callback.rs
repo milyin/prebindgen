@@ -98,7 +98,7 @@ impl Drop for CallbackReturnAllocations<'_> {
 /// Stack storage for the bounded set of owners in one callback result.
 ///
 /// The generator computes `N` from the result's fields and active alternatives.
-/// Collection results continue to use [`CallbackReturnAllocations`]. Like its
+/// Handle-bearing collections use [`CallbackReturnAllocations`]. Like its
 /// tracking mode, this guard leaves alias validation to the input decoder.
 pub struct FixedCallbackReturnAllocations<'a, const N: usize> {
     consumed: &'a core::cell::Cell<usize>,
@@ -120,7 +120,10 @@ impl<'a, const N: usize> FixedCallbackReturnAllocations<'a, N> {
     ///
     /// # Safety
     /// Each non-null, aligned pointer must transfer a live `Box<T>`. Repeated
-    /// addresses must have the same type. At most `N` owners may be received.
+    /// addresses must have the same type.
+    ///
+    /// # Panics
+    /// Panics when a valid, non-null owner would exceed the capacity `N`.
     #[inline]
     pub unsafe fn receive<T>(&mut self, pointer: *mut T) {
         if pointer.is_null() {
@@ -139,8 +142,10 @@ impl<'a, const N: usize> FixedCallbackReturnAllocations<'a, N> {
     ///
     /// # Safety
     /// `pointer` must remain readable and contain a live `T` until acquisition or
-    /// cleanup. Repeated addresses must have the same type. At most `N` owners
-    /// may be received, counting both pointer and inline owners.
+    /// cleanup. Repeated addresses must have the same type.
+    ///
+    /// # Panics
+    /// Panics if pointer and inline owners together would exceed capacity `N`.
     #[inline]
     pub unsafe fn receive_inline<T>(&mut self, pointer: *const T) {
         unsafe fn release<T>(value: *mut ()) {
