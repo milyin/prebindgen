@@ -31,3 +31,10 @@ pub fn alias_handler_call(handler: &AliasHandler) -> Result<i64, ResultFailure> 
     let pair = (handler.0)();
     Ok(owned_resource_id(&pair.first) + owned_resource_id(&pair.second))
 }
+
+#[prebindgen]
+pub fn alias_callback_rows(
+    callback: impl Fn() -> Vec<OwnedResource>,
+) -> Result<i64, ResultFailure> {
+    Ok(callback().iter().map(owned_resource_id).sum())
+}

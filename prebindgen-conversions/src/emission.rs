@@ -6,7 +6,8 @@ use quote::{quote, ToTokens};
 /// Optional rendering support for stored [`crate::InputPlan`] and
 /// [`crate::OutputPlan`] templates. Custom conversions need not implement this.
 pub trait TemplateContext {
-    /// Resolve the template's explicit parameter markers.
+    /// Resolve the template's explicit parameter markers. Composition may invoke
+    /// this repeatedly; already-rendered Rust must remain unchanged.
     fn render(&self, code: &TokenStream) -> Result<TokenStream>;
 }
 

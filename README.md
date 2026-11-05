@@ -988,6 +988,16 @@ remain active. Collection inputs construct rows in one traversal without alias
 history or the alias-validation staging buffer. Callback-return ownership scans
 needed to reclaim unread owners on failure remain active.
 
+Low-level generators constructing `CContext`, `CModule` or `CFunction` directly
+must supply the new `emit_alias_checks` field (or use their metadata defaults).
+Stored plans may contain reserved input-alias scope macros until wrapper emission.
+Custom code that rewrites stored Rust syntax should first call
+`prebindgen_conversions::render_input_alias_checks(code, enabled)`; the normal C
+and JNI emitters do this automatically. Custom template contexts that leave the
+scopes unresolved need the matching `prebindgen-runtime` revision for its checked
+fallback macro. All generator/runtime crates should come from the same revision.
+
+
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level
 state until address encoding under the existing locks. Bulk handle inputs pack

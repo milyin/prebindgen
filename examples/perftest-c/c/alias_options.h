@@ -7,6 +7,16 @@ static fast_alias_handler_new_callback_return fast_pair_callback(void *context) 
     return (fast_alias_handler_new_callback_return){fast_collection_resource_new(7), state->invalid ? NULL : fast_collection_resource_new(9)};
 }
 static void fast_pair_drop(void *context) { ++((struct fast_callback_state *)context)->drops; }
+struct fast_rows_state {int releases;};
+static fast_alias_callback_rows_callback_return fast_rows_callback(void *context) {
+    (void)context;
+    static fast_alias_callback_rows_callback_return_row rows[3];
+    rows[0].v0=fast_collection_resource_new(7); rows[1].v0=NULL; rows[2].v0=fast_collection_resource_new(9);
+    return (fast_alias_callback_rows_callback_return){rows,3};
+}
+static void fast_rows_release(void *context,const fast_alias_callback_rows_callback_return *value) {
+    assert(value->len==3); ++((struct fast_rows_state *)context)->releases;
+}
 static void check_alias_options(void) {
     fast_owned_resource *left=fast_collection_resource_new(7), *right=fast_collection_resource_new(9);
     assert(fast_alias_fixed(left,right)==16);
@@ -75,5 +85,12 @@ static void check_alias_options(void) {
     fast_free_error(error);
     assert(state.calls==2 && fast_owned_resource_drops()==drops+3);
     fast_drop_alias_handler(handler); assert(state.drops==1);
+    struct fast_rows_state row_state={0}; drops=fast_owned_resource_drops(); result=12345; error=NULL;
+    assert(!fast_alias_callback_rows((fast_alias_callback_rows_callback){.run=fast_rows_callback,.context=&row_state,.release_result=fast_rows_release},&result,&error));
+    assert(result==12345 && error!=NULL && row_state.releases==1);
+    /* The prefix was decoded and dropped; the unread suffix was reclaimed by
+       callback-result ownership tracking. C releases only the row storage. */
+    assert(fast_owned_resource_drops()==drops+2); fast_free_error(error);
+
     puts("C alias options PASS: unchecked inputs, local checks, retained callbacks and error cleanup");
 }

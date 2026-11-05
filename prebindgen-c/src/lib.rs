@@ -1335,7 +1335,6 @@ impl Cbindgen {
                 let name = format!("{}_each", decl.name);
                 let variant =
                     declarations.callback_variant(&mut flat, &codec, &decl, &name, &())?;
-                flat.function_mut(&name)?.metadata = flat.function(&decl.name)?.metadata.clone();
                 declarations.fill(&mut flat, &codec, &variant, &())?;
                 sequence::callback_target(
                     &(flat.function(&name)?.output_conversion()?)

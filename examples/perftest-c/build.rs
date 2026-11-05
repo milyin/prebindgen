@@ -1128,6 +1128,7 @@ fn main() {
         .panic()
         .function(fun!(alias_handler_new))
         .panic()
+        .function(fun!(alias_callback_rows))
         .function(fun!(alias_handler_call))
         .alias_checks(true)
         .build()
