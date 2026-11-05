@@ -9,6 +9,7 @@ use quote::quote;
 /// Defer the input-alias choice until the owning wrapper is rendered.
 /// No runtime policy lookup is emitted by the C or JNI adapters.
 pub fn input_alias_checks(checked: TokenStream, unchecked: TokenStream) -> TokenStream {
+    // Keep no-op fragments bare so call composition can omit them before rendering.
     if checked.to_string() == unchecked.to_string() {
         return checked;
     }

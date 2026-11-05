@@ -58,10 +58,30 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } fast_callback_396f37c4ec343c74;
+typedef struct {
+    fast_owned_resource * v0;
+} fast_callback_8735da2fee137b57_callback_return_w1_row;
+typedef struct { fast_callback_8735da2fee137b57_callback_return_w1_row *data; size_t len; } fast_callback_8735da2fee137b57_callback_return_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Rust signature: ()->Vec < perftest_flat :: OwnedResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    fast_callback_8735da2fee137b57_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const fast_callback_8735da2fee137b57_callback_return_w1_rows *result);
+} fast_callback_8735da2fee137b57;
+typedef fast_callback_8735da2fee137b57 fast_alias_callback_rows_callback;
+typedef fast_callback_8735da2fee137b57_callback_return_w1_rows fast_alias_callback_rows_callback_return;
+typedef fast_callback_8735da2fee137b57_callback_return_w1_row fast_alias_callback_rows_callback_return_row;
 typedef fast_callback_396f37c4ec343c74 fast_alias_handler_new_callback;
 typedef fast_callback_396f37c4ec343c74_result fast_alias_handler_new_callback_return;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_alias_callback_rows(fast_callback_8735da2fee137b57 p0_callback, int64_t *out0, size_t *ownership, char * *error);
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 int64_t fast_alias_fixed(fast_owned_resource * p0_w1, const fast_owned_resource * p1_w1);
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */

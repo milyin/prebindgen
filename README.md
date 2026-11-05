@@ -997,7 +997,6 @@ and JNI emitters do this automatically. Custom template contexts that leave the
 scopes unresolved need the matching `prebindgen-runtime` revision for its checked
 fallback macro. All generator/runtime crates should come from the same revision.
 
-
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level
 state until address encoding under the existing locks. Bulk handle inputs pack

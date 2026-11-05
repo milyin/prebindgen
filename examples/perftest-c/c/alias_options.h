@@ -86,8 +86,8 @@ static void check_alias_options(void) {
     assert(state.calls==2 && fast_owned_resource_drops()==drops+3);
     fast_drop_alias_handler(handler); assert(state.drops==1);
     struct fast_rows_state row_state={0}; drops=fast_owned_resource_drops(); result=12345; error=NULL;
-    assert(!fast_alias_callback_rows((fast_alias_callback_rows_callback){.run=fast_rows_callback,.context=&row_state,.release_result=fast_rows_release},&result,&error));
-    assert(result==12345 && error!=NULL && row_state.releases==1);
+    assert(!fast_alias_callback_rows((fast_alias_callback_rows_callback){.run=fast_rows_callback,.context=&row_state,.release_result=fast_rows_release},&result,&consumed,&error));
+    assert(result==12345 && error!=NULL && consumed==1 && row_state.releases==1);
     /* The prefix was decoded and dropped; the unread suffix was reclaimed by
        callback-result ownership tracking. C releases only the row storage. */
     assert(fast_owned_resource_drops()==drops+2); fast_free_error(error);
