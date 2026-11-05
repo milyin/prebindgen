@@ -62,7 +62,7 @@ fn signature_defaults_and_local_overrides_are_independent() {
         "{default}"
     );
     assert!(local.contains("Boolean, arg1_0: Long): Boolean"), "{local}");
-    assert!(output.kotlin["example/Functions.kt"].contains("example.handlers.Local"));
+    assert!(output.kotlin["example/Functions.kt"].contains("example.handlers.Local,"));
     assert!(!output.rust.contains("fn unselected"));
     assert!(output.rust.contains("crate::positive"));
     assert!(output.rust.contains("crate::from_flag"));
@@ -109,7 +109,7 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
         nested.contains("Boolean, arg1_0: Long): Boolean"),
         "{nested}"
     );
-    assert!(output.kotlin["example/Functions.kt"].contains("List<example.handlers.Nested"));
+    assert!(output.kotlin["example/Functions.kt"].contains("List<example.handlers.Nested>"));
     assert!(output.rust.contains("crate::make"));
 }
 
@@ -456,7 +456,7 @@ fn derived_names_and_local_only_overrides_work_with_fold_variants() {
     assert!(output.kotlin["example/Functions.kt"].contains("valuesFold"));
     assert_eq!(
         output.kotlin["example/Functions.kt"]
-            .matches("example.handlers.i64Toi64Callback")
+            .matches("example.handlers.i64Toi64Callback,")
             .count(),
         2
     );

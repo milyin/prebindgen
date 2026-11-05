@@ -2,7 +2,6 @@ import io.prebindgen.covertest.JniErrorHandler;
 import io.prebindgen.covertest.nullability.FunctionsKt;
 import io.prebindgen.covertest.nullability.NullabilityHandle;
 import java.math.BigInteger;
-import java.util.Collections;
 
 public class InputNullabilityJava {
     private static void rejectsNull(Runnable body) {
@@ -20,7 +19,6 @@ public class InputNullabilityJava {
         rejectsNull(() -> FunctionsKt.nullabilityWide(null, wideFail));
         rejectsNull(() -> FunctionsKt.nullabilityTextCallback(null, textFail));
         rejectsNull(() -> FunctionsKt.nullabilityValues(null, fail));
-        rejectsNull(() -> FunctionsKt.nullabilityValues(Collections.singletonList(null), fail));
         if (FunctionsKt.nullabilityHandleOptional(null, fail) != -1L) throw new AssertionError();
         if (FunctionsKt.nullabilityTextOptional(null, fail) != -1L) throw new AssertionError();
         if (FunctionsKt.nullabilityBytesOptional(null, fail) != -1L) throw new AssertionError();

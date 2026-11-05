@@ -1859,7 +1859,9 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
     assert!(output.kotlin["example/values/OriginalCallback.kt"]
         .contains("arg0_0: example.values.Renamed"));
     assert!(output.kotlin["example/VoidCallback.kt"].contains("public fun run()"));
-    assert!(output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback"));
+    assert!(
+        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback,")
+    );
     syn::parse_file(&output.rust).unwrap();
 }
 
@@ -2090,7 +2092,7 @@ fn callbacks_return_typed_values_and_keep_unit_interfaces() {
     assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(arg0_0: Long)"));
     assert!(generated.kotlin["test/i64Toi64Callback.kt"].contains(": Long"));
     assert!(generated.kotlin["test/i64ToboolCallback.kt"].contains(": Boolean"));
-    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String"));
+    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
     assert!(generated.rust.contains("invoke_return"));
     syn::parse_file(&generated.rust).unwrap();
 }
@@ -3878,7 +3880,7 @@ fn required_inputs_are_nonnull_and_options_preserve_nullable_containers() {
         assert!(functions.contains("input: kotlin.collections.List<test.Handle>,"));
         assert!(functions.contains("input: kotlin.collections.List<test.Handle>?,"));
         assert!(!functions.contains("List<test.Handle?>"));
-        assert!(g.kotlin["test/VoidToStringCallback.kt"].contains("run(): String"));
+        assert!(g.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
     }
 }
 

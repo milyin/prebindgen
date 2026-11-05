@@ -21,11 +21,11 @@ val nativeResult = try { run { val nativeArgument0 = try { `value` } catch (fail
     } finally { returnCapture.release() }
 }
 
-public fun inputHandleValue(`value`: bench.bulk.InputHandle?, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun inputHandleValue(`value`: bench.bulk.InputHandle, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_input_handle_value_9dacbaa67102b1db(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { `value` } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { `value`.raw } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_input_handle_value_9dacbaa67102b1db(nativeArgument0, nativeArgument1) }
     } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -34,7 +34,31 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`val
     } finally { returnCapture.release() }
 }
 
-public fun handleValuesSum(values: kotlin.collections.List<bench.bulk.InputHandle?>, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun bufferSizes(text: String, bytes: ByteArray, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { text } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { bytes } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_buffer_sizes_09330eed51da0791(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun selectedHandle(valueVariant: Int, valueVariant0: Long, valueVariant1Value: bench.bulk.InputHandle?, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handle0 = try { if (valueVariant == 1) requireNotNull(valueVariant1Value) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { valueVariant } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { valueVariant0 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (valueVariant == 1) requireNotNull(valueVariant1Value) { "null handle" }.raw else 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_selected_handle_0b5f8bb745f1d664(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) }
+    } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun handleValuesSum(values: kotlin.collections.List<bench.bulk.InputHandle>, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_f738f16d97296060()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
@@ -85,7 +109,7 @@ val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.
     } finally { returnCapture.release() }
 }
 
-public fun ownedHandlesEcho(values: kotlin.collections.List<bench.bulk.InputHandle?>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<bench.bulk.InputHandle>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.bulk.InputHandle> = run {
+public fun ownedHandlesEcho(values: kotlin.collections.List<bench.bulk.InputHandle>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<bench.bulk.InputHandle>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.bulk.InputHandle> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_49da87bb4c377b9a()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
@@ -254,7 +278,7 @@ try {         var outputbulkItem_g0_0: bench.bulk.InputHandle? = null
     } finally { returnCapture.release() }
 }
 
-public fun nestedOwnedHandlesEcho(values: kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle?>>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>> = run {
+public fun nestedOwnedHandlesEcho(values: kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<bench.bulk.InputHandle>> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_5e24e8a1a6fd1960()
 val p0_w3_bulkList = bench.bulk.InputValidation.value { p0_w3_elements }
@@ -450,10 +474,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_writer_state?.a
     } finally { returnCapture.release() }
 }
 
-public fun rowReturnHandlerNew(callback: bench.bulk.RowReturnCallback?, onError: bench.bulk.JniErrorHandler<bench.bulk.RowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.RowReturnHandler = run {
+public fun rowReturnHandlerNew(callback: bench.bulk.RowReturnCallback, onError: bench.bulk.JniErrorHandler<bench.bulk.RowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.RowReturnHandler = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -500,10 +524,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun wideRowReturnHandlerNew(callback: bench.bulk.WideRowReturnCallback?, onError: bench.bulk.JniErrorHandler<bench.bulk.WideRowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.WideRowReturnHandler = run {
+public fun wideRowReturnHandlerNew(callback: bench.bulk.WideRowReturnCallback, onError: bench.bulk.JniErrorHandler<bench.bulk.WideRowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.WideRowReturnHandler = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -574,11 +598,11 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun rowReturnFire(handler: bench.bulk.RowReturnHandler?, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun rowReturnFire(handler: bench.bulk.RowReturnHandler, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(handler) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { handler?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_row_return_fire_7c8a1183dcdd277c(nativeArgument0, nativeArgument1, nativeArgument2) }
+val nativeResult = try { run { val handle0 = try { handler } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { handler.raw } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_row_return_fire_7c8a1183dcdd277c(nativeArgument0, nativeArgument1, nativeArgument2) }
     } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -587,11 +611,11 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(hand
     } finally { returnCapture.release() }
 }
 
-public fun wideRowReturnFire(handler: bench.bulk.WideRowReturnHandler?, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun wideRowReturnFire(handler: bench.bulk.WideRowReturnHandler, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(handler) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { handler?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_return_fire_88ad5bbf9c8c73e2(nativeArgument0, nativeArgument1, nativeArgument2) }
+val nativeResult = try { run { val handle0 = try { handler } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { handler.raw } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_return_fire_88ad5bbf9c8c73e2(nativeArgument0, nativeArgument1, nativeArgument2) }
     } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -818,10 +842,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_writer_state?.a
     } finally { returnCapture.release() }
 }
 
-public fun handlerNew(callback: bench.bulk.RowsCallback?, onError: bench.bulk.JniErrorHandler<bench.bulk.Handler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.Handler = run {
+public fun handlerNew(callback: bench.bulk.RowsCallback, onError: bench.bulk.JniErrorHandler<bench.bulk.Handler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.Handler = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -869,11 +893,11 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun fire(handler: bench.bulk.Handler?, count: Long, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun fire(handler: bench.bulk.Handler, count: Long, seed: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(handler) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { handler?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { count } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_fire_6fdab6ebdaeffb11(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) }
+val nativeResult = try { run { val handle0 = try { handler } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { handler.raw } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { count } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { seed } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_fire_6fdab6ebdaeffb11(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) }
     } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }

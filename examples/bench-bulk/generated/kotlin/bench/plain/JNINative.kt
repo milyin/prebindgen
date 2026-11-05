@@ -14,6 +14,8 @@ internal object JNINative {
     init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java)) }
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_input_handle_value_9dacbaa67102b1db(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_buffer_sizes_09330eed51da0791(p0_w1: String?, p1_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_selected_handle_0b5f8bb745f1d664(p0_w1: Int, p0_w3: Long, p0_w6: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_handle_values_sum_cc53b2df8a803a98(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_handle_records_sum_cabe62d5ee2df7d3(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_owned_handles_echo_951038e1201850d3(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
