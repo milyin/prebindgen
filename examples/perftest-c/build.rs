@@ -1097,7 +1097,7 @@ fn main() {
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
-    let unchecked = prebindgen_c::Cbindgen::builder()
+    let mut unchecked = prebindgen_c::Cbindgen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .prefix("fast")
         .set_emit_alias_checks(false)
@@ -1130,9 +1130,11 @@ fn main() {
         .panic()
         .function(fun!(alias_callback_rows))
         .function(fun!(alias_handler_call))
-        .alias_checks(true)
-        .build()
-        .unwrap();
+        .alias_checks(true);
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        unchecked = unchecked.opaque_layouts_file(path);
+    }
+    let unchecked = unchecked.build().unwrap();
     unchecked.write_rust(out.join("unchecked.rs")).unwrap();
     unchecked.write_header(out.join("unchecked.h")).unwrap();
 }
