@@ -53,6 +53,8 @@ pub use jni_buffers::*;
 pub use runtime_costs::*;
 pub use typed_rows::*;
 pub mod callback_returns;
+mod parameter_names;
+pub use parameter_names::*;
 mod gc_handles;
 pub use borrowed_getters::*;
 pub use callback_returns::*;

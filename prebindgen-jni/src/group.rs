@@ -26,6 +26,8 @@ pub enum JniBranch {
 pub enum JniGroup {
     /// Ordered conversion components, such as constructor arguments or output views.
     Values,
+    /// A source constructor argument, retained for public Kotlin parameter naming.
+    Argument(String),
     /// An explicitly named output view.
     Named(String),
     /// Source record fields. JNI may associate the record with a Kotlin data class.

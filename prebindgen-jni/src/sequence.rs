@@ -252,6 +252,7 @@ pub(crate) fn input_list(
         format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {rows} }} else null")
     };
     Ok(KotlinInput {
+        parameter_paths: vec![prebindgen_declarations::ComponentPath::default()],
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
             if condition == "true" { "" } else { "?" }

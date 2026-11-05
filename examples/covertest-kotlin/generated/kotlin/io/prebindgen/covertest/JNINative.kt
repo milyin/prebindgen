@@ -146,6 +146,14 @@ internal object JNINative {
     @JvmStatic external fun call_return_domain_cb3675a75d892ba1(p0_w1: Long, p1_w1: Boolean, p2_callback: Any?, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
     @JvmStatic external fun call_return_pair_8bb51b9e0f2fc283(p0_w1: Long, returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
     @JvmStatic external fun call_return_wide_af7145445fe5e699(p0_w1: Long, returns: Return_Long_Long_Long130_ErrorEmpty_d02793509212a1f3): Unit
+    @JvmStatic external fun call_parameter_sum_83f208ac1978fef1(p0_w2: Long, p0_w4: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_optional_98841e5b8a3bad26(p0_w1: Int, p0_w4: Long, p0_w6: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_bulk_sum_b42ccdd89f7b8352(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_sum_object_f81116dd2577a97f(p0_w1_f0: Long, p0_w1_f1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_variants_8d7d583d82d7fc46(p0_w1: Int, p0_w3_f0: Long, p0_w3_f1: Long, p0_w6: Long, p0_w8: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_collisions_0fcb430c5f288a73(p0_w1: Long, p1_w1: Long, p2_w1: Long, p3_w1: Long, p4_w1: Long, p5_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_record_306b9dc9d6961224(p0_w1_f0: Long, p0_w1_f1: String?, returns: Return_Long_String2_ErrorEmpty_1b009765d5d6eed0): Unit
+    @JvmStatic external fun call_parameter_records_3f3e92735953a16b(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_gc_resource_new_7ae6fd267af3001d(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_gc_resource_value_20a9f8cccf5d47f5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_gc_resource_consume_8efd1138a357f171(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

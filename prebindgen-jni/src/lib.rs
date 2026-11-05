@@ -42,6 +42,7 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 mod names;
+mod parameter_names;
 pub use emission::JniContext;
 type InputPlan<W> =
     prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
@@ -787,6 +788,20 @@ impl Codec for JniCodec {
     type Branch = JniBranch;
     fn group_metadata(&self) -> JniBranch {
         JniBranch::Group(JniGroup::Values)
+    }
+
+    fn prefix_layout(
+        &self,
+        node: &mut prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
+            *node = prebindgen_flat::WireNode::Branch {
+                controls: vec![],
+                meta: JniBranch::Group(JniGroup::Argument(name)),
+                children: vec![std::mem::take(node)],
+            };
+        }
     }
 
     fn named_output_group(&self, name: &str) -> Result<JniBranch> {
@@ -1677,8 +1692,21 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             params.push(quote!(#n:#rt));
             raw_params.push(format!("{n}: {}", w.kind.kotlin_type()));
         }
-        for input in f.input_conversions()? {
-            let code = input.kotlin(&kotlin_context)?;
+        let inputs = f.input_conversions()?;
+        let mut kotlin_inputs = inputs
+            .iter()
+            .map(|input| input.kotlin(&kotlin_context))
+            .collect::<Result<Vec<_>>>()?;
+        parameter_names::apply(
+            &f.params
+                .iter()
+                .map(|p| p.name.to_string())
+                .collect::<Vec<_>>(),
+            &mut kotlin_inputs,
+            prefix,
+            exception,
+        )?;
+        for code in kotlin_inputs {
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
             locks.extend(code.locks);

@@ -1,0 +1,25 @@
+{
+  "baseline_ref": "34233e44725825ac1ffb0a8ec3097403631bb651",
+  "method": "Regenerate the baseline covertest build.rs declarations with the updated JNI generator; omit the new naming-specific fixture declarations so the source interface is identical.",
+  "scope": "Generated Rust/JNI code, JNI declarations and bulk layout descriptors only; public Functions.kt parameter names intentionally change. This is code-equivalence evidence, not a latency benchmark.",
+  "checks": [
+    {
+      "file": "bindings.rs",
+      "baseline_sha256": "78f7a6a87e40a6ac4beaa64f197329f475d9d030e3fa2897b66027aa3922627a",
+      "updated_sha256": "78f7a6a87e40a6ac4beaa64f197329f475d9d030e3fa2897b66027aa3922627a",
+      "identical": true
+    },
+    {
+      "file": "kotlin/io/prebindgen/covertest/JNINative.kt",
+      "baseline_sha256": "d053226cfe0d591ef7129ba92064677e72edb541baf6e2c90c2fbaaf8e47ee2f",
+      "updated_sha256": "d053226cfe0d591ef7129ba92064677e72edb541baf6e2c90c2fbaaf8e47ee2f",
+      "identical": true
+    },
+    {
+      "file": "kotlin/io/prebindgen/covertest/BulkLayouts.kt",
+      "baseline_sha256": "1abc18d520ff92beb024a453a843f9ea9c3de849982a6f672a7d3c6716bebb56",
+      "updated_sha256": "1abc18d520ff92beb024a453a843f9ea9c3de849982a6f672a7d3c6716bebb56",
+      "identical": true
+    }
+  ]
+}

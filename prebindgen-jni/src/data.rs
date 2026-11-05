@@ -623,6 +623,14 @@ impl Codec for DataCodec<'_> {
         JniBranch::Group(JniGroup::Values)
     }
 
+    fn prefix_layout(
+        &self,
+        node: &mut prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        JniCodec.prefix_layout(node, segment)
+    }
+
     fn named_output_group(&self, name: &str) -> Result<JniBranch> {
         JniCodec.named_output_group(name)
     }

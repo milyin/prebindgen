@@ -428,11 +428,11 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
         .build().unwrap();
     assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
     let functions = &generated.kotlin["test/Functions.kt"];
-    assert!(functions.contains("p0_w1: test.Envelope"));
-    assert!(functions.contains("p0_w1.`inner`.`bytes`"));
+    assert!(functions.contains("`x`: test.Envelope"));
+    assert!(functions.contains("`x`.`inner`.`bytes`"));
     assert!(functions.contains("test.Envelope(test.model.Inner("));
     assert!(
-        functions.contains("public fun `make`(p0_w1: ULong, onError: test.JniErrorHandler<ULong>")
+        functions.contains("public fun `make`(`id`: ULong, onError: test.JniErrorHandler<ULong>")
     );
     assert!(!generated.rust.contains("drop_pointer"));
     assert!(generated.kotlin["test/model/Inner.kt"].contains("contentEquals"));
@@ -625,7 +625,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
             .package(package!().class(data_class!(Value)).fun(function))
             .build();
         if replace {
-            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("p0_w1: test.Value"));
+            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("`value`: test.Value"));
         } else {
             assert!(result.err().unwrap().contains("no handle class"));
         }
@@ -758,9 +758,8 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .build()
         .unwrap();
     let kt = &generated.kotlin["test/Functions.kt"];
-    assert!(kt.contains(
-        "public fun `h`(p0_w3: test.Handle?, onError: test.JniErrorHandler<test.Handle?>"
-    ));
+    assert!(kt
+        .contains("public fun `h`(`x`: test.Handle?, onError: test.JniErrorHandler<test.Handle?>"));
     assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
     assert!(kt.contains("invalid option payload"));
     assert!(kt.contains("if (nativeResult != 0L)"));
@@ -1450,7 +1449,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             builder = builder.configure(|flat| install(flat, true));
         }
         let generated = builder.build().unwrap();
-        assert!(generated.kotlin["test/Functions.kt"].contains("native_input: Long"));
+        assert!(generated.kotlin["test/Functions.kt"].contains("`value`: Long"));
     }
     let builder = JniGen::builder()
         .flat(flat("pub fn echo(value:i64)->i64{}"))

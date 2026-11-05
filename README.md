@@ -76,6 +76,19 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_c
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
+Public Kotlin function parameters use the Rust source names in camelCase. For
+example, `gcResourceNew(id = 1uL, value = 42uL)` uses `id` and `value` rather than
+internal wire identifiers. Constructor and record expansions add component names,
+such as `pointX` and `pointY`; a data-class object or collection keeps its outer
+parameter name. Optional expansions use `present`, with `some` for nested optional
+payloads; selector expansions use `variant` and their explicit arm indices.
+Names follow the effective conversion after type-wide defaults and local
+overrides. Kotlin keywords are escaped with backticks. Colliding names and names
+reserved by generated code receive stable hash suffixes derived from their
+source parameter and component path. Existing named calls using wire identifiers
+must adopt these public names; positional argument order is preserved.
+Naming adds no runtime statements and keeps native wire identifiers separate.
+
 `ptr_class!(Query).gc_managed()` opts that handle class into automatic cleanup
 of abandoned wrappers through `java.lang.ref.Cleaner` (Java 9 or newer, or a
 runtime providing that API). Explicit `close()` still releases immediately;

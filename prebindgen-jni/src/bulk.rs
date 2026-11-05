@@ -1031,6 +1031,11 @@ fn schema(node: &JniNode) -> Result<String> {
             ..
         } => schema(child)?,
         WireNode::Branch {
+            meta: JniBranch::Group(JniGroup::Argument(_)),
+            children,
+            controls,
+        } if controls.is_empty() && children.len() == 1 => schema(&children[0])?,
+        WireNode::Branch {
             meta,
             children,
             controls,
