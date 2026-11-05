@@ -312,7 +312,7 @@ mod tests {
         let consumed = core::cell::Cell::new(0);
         let mut owners = FixedCallbackReturnAllocations::<2>::tracking(&consumed);
         unsafe {
-            owners.receive(1usize as *mut Owner);
+            owners.receive(valid.cast::<u8>().wrapping_add(1).cast::<Owner>());
             owners.receive(valid);
         }
         assert!(owners.check().is_err());
@@ -421,9 +421,13 @@ mod eager_tests {
         let consumed = Cell::new(0);
         let first = TransferredOwner::new(Owner(drops.clone()), &consumed, 0);
         let second = TransferredOwner::new(Owner(drops.clone()), &consumed, 1);
+        // Simulate the decoder moving this owner out of its guarded storage.
+        let acquired = unsafe { core::ptr::read(&*first.value) };
         consumed.set(1);
         drop(first);
         drop(second);
         assert_eq!(drops.get(), 1);
+        drop(acquired);
+        assert_eq!(drops.get(), 2);
     }
 }
