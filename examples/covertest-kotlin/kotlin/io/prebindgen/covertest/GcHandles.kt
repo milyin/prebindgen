@@ -40,8 +40,8 @@ private fun temporaryBorrowedRows(): ULong =
     gcResourceReadRows(List(256) { gcResourceNew(20uL, it.toULong()) })
 
 fun checkGcHandles() {
-    val a = gcResourceNew(0uL, 42uL)
-    check(gcResourceValue(a) == 42uL)
+    val a = gcResourceNew(id = 0uL, value = 42uL)
+    check(gcResourceValue(value = a) == 42uL)
     a.close()
     a.close()
     check(a.isClosed && gcResourceDrops(0uL) == 1uL)

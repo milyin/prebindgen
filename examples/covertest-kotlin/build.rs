@@ -274,6 +274,15 @@ fn main() {
             .fun(fun!(return_single_ownership).expand_return(expand_return!(ReturnOwner).field(fun!(return_owner_resource))))
             .fun(fun!(return_domain)).fun(fun!(return_pair).expand_return(expand_return!(ReturnPair).field(fun!(return_pair_first)).field(fun!(return_pair_second))))
             .fun(fun!(return_wide).expand_return(wide_return)))
+        .expand(expand_param!(ParameterPoint).variant(fun!(parameter_point)))
+        .package(package!("paramnames")
+            .class(data_class!(ParameterPoint)).class(data_class!(WireNamedFields))
+            .fun(fun!(parameter_sum)).fun(fun!(parameter_optional))
+            .fun(fun!(parameter_bulk_sum).expand_param("point", expand_param!(ParameterPoint).variant(fun!(parameter_point)).bulk()))
+            .fun(fun!(parameter_sum_object).expand_param("point", expand_param!(ParameterPoint).variant_self()))
+            .fun(fun!(parameter_variants).expand_param("point", expand_param!(ParameterPoint).variant_self().variant(fun!(parameter_point))))
+            .fun(fun!(parameter_collisions)).fun(fun!(parameter_escaped_names))
+            .fun(fun!(parameter_record)).fun(fun!(parameter_records)))
         .package(package!("gc")
             .class(ptr_class!(GcResource).gc_managed())
             .class(ptr_class!(PlainResource))
@@ -1781,6 +1790,29 @@ fn main() {
         .kotlin
         .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
         .is_some());
+    // Class/function placement survives moving the native runtime to another root.
+    let relocated = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .set_package_prefix("com.prebindgen.paramnames")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .configure(|flat| {
+            flat.metadata.package = "org.prebindgen.paramnames".into();
+            Ok(())
+        })
+        .package(
+            package!()
+                .class(data_class!(ParameterPoint))
+                .fun(fun!(parameter_external)),
+        )
+        .build()
+        .unwrap();
+    jni.rust.push_str(&format!(
+        "\nmod relocated_parameter_names {{ {} }}\n",
+        relocated.rust
+    ));
+    for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
     jni.write_rust("bindings.rs").unwrap();
     std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();
     let kotlin = out.join("kotlin");

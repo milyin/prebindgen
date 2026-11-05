@@ -1,6 +1,7 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
 use crate::group::validate_layout;
+use prebindgen_declarations::{ComponentPath, ComponentSegment};
 use prebindgen_flat::{Conversion, Wire};
 use prebindgen_flat::{InputConversion, OutputConversion};
 
@@ -66,6 +67,10 @@ pub struct KotlinInput {
     pub lock_groups: Vec<String>,
     /// Public parameter declarations.
     pub parameters: Vec<String>,
+    /// Relative constructor-argument/record-field paths for public parameters,
+    /// in the same order as `parameters`. Either empty (no naming hints), or
+    /// exactly one path per parameter. Empty paths use positional fallback names.
+    pub parameter_paths: Vec<ComponentPath>,
     /// Expressions passed to native wires, in wire order.
     pub arguments: Vec<String>,
     /// Values cached when preparing collection rows, before extracting handle
@@ -82,6 +87,14 @@ pub struct KotlinInput {
     pub consumed: Vec<String>,
 }
 impl KotlinInput {
+    pub(crate) fn complete_parameter_paths(&mut self) -> Result<()> {
+        if !self.parameter_paths.is_empty() && self.parameter_paths.len() != self.parameters.len() {
+            return Err("Kotlin parameter naming paths must match public parameters".into());
+        }
+        self.parameter_paths
+            .resize(self.parameters.len(), ComponentPath::default());
+        Ok(())
+    }
     pub(crate) fn prepare_arguments(&mut self, handles: bool) -> Result<()> {
         if self.prepared_arguments.is_empty() && !self.arguments.is_empty() {
             if handles {
@@ -143,7 +156,7 @@ impl KotlinOutput {
             .enumerate()
             .map(|(i, ty)| {
                 if self.result_names.get(i).is_some_and(|name| name.is_some()) {
-                    format!("`{}`: {ty}", names[i])
+                    format!("{}: {ty}", kotlin_identifier(&names[i]))
                 } else {
                     ty.clone()
                 }
@@ -158,13 +171,7 @@ impl KotlinOutput {
             .result_types
             .iter()
             .enumerate()
-            .map(|(i, ty)| {
-                if self.result_names.get(i).is_some_and(|name| name.is_some()) {
-                    format!("`{}`: {ty}", names[i])
-                } else {
-                    format!("{}: {ty}", names[i])
-                }
-            })
+            .map(|(i, ty)| format!("{}: {ty}", kotlin_identifier(&names[i])))
             .collect::<Vec<_>>()
             .join(", "))
     }
@@ -327,6 +334,15 @@ pub(crate) fn input_leaves(
     Ok(KotlinInput {
         prepared_arguments,
         parameters: kt_params,
+        parameter_paths: (0..wires.len())
+            .map(|i| {
+                ComponentPath(if wires.len() == 1 {
+                    vec![]
+                } else {
+                    vec![ComponentSegment::Named(format!("value{i}"))]
+                })
+            })
+            .collect(),
         arguments: kt_args,
         setup: Vec::new(),
         lock_groups: Vec::new(),
@@ -483,7 +499,7 @@ pub(crate) fn input_handles(node: &JniNode, owned_only: bool) -> bool {
 }
 
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
-    match node {
+    let mut out = match node {
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
         JniNode::Chain {
             meta: JniChain::Bulk(record),
@@ -497,8 +513,23 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
             ..
         } => {
             let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
-            for arm in elements {
-                merge_input(&mut out, input_kotlin(arm, context)?)?;
+            out.parameter_paths = controls
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    ComponentPath(vec![if controls.len() == 1 {
+                        ComponentSegment::Selector
+                    } else {
+                        ComponentSegment::Named(format!("variant{i}"))
+                    }])
+                })
+                .collect();
+            for (i, arm) in elements.iter().enumerate() {
+                let mut child = input_kotlin(arm, context)?;
+                for path in &mut child.parameter_paths {
+                    path.prepend(ComponentSegment::Alternative(i));
+                }
+                merge_input(&mut out, child)?;
             }
             Ok(out)
         }
@@ -524,9 +555,25 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
             ..
         } => match metadata {
             JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context),
+            JniGroup::Argument(name) => {
+                let mut out = input_components(elements, context)?;
+                for path in &mut out.parameter_paths {
+                    path.prepend(ComponentSegment::Argument(name.clone()));
+                }
+                Ok(out)
+            }
+            JniGroup::Field(name) => {
+                let mut out = input_components(elements, context)?;
+                for path in &mut out.parameter_paths {
+                    path.prepend(ComponentSegment::Field(name.to_string()));
+                }
+                Ok(out)
+            }
             _ => input_components(elements, context),
         },
-    }
+    }?;
+    out.complete_parameter_paths()?;
+    Ok(out)
 }
 pub(crate) fn input_components(
     nodes: &[JniNode],
@@ -540,10 +587,12 @@ pub(crate) fn input_components(
 }
 
 fn merge_input(out: &mut KotlinInput, mut child: KotlinInput) -> Result<()> {
+    child.complete_parameter_paths()?;
     child.prepare_arguments(
         !child.locks.is_empty() || !child.lock_groups.is_empty() || !child.consumed.is_empty(),
     )?;
     out.parameters.extend(child.parameters);
+    out.parameter_paths.extend(child.parameter_paths);
     out.arguments.extend(child.arguments);
     out.prepared_arguments.extend(child.prepared_arguments);
     out.setup.extend(child.setup);

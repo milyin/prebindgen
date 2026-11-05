@@ -42,6 +42,7 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 mod names;
+mod parameter_names;
 pub use emission::JniContext;
 type InputPlan<W> =
     prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
@@ -789,6 +790,20 @@ impl Codec for JniCodec {
         JniBranch::Group(JniGroup::Values)
     }
 
+    fn prefix_layout(
+        &self,
+        node: &mut prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
+            *node = prebindgen_flat::WireNode::Branch {
+                controls: vec![],
+                meta: JniBranch::Group(JniGroup::Argument(name)),
+                children: vec![std::mem::take(node)],
+            };
+        }
+    }
+
     fn named_output_group(&self, name: &str) -> Result<JniBranch> {
         validate_name(name)?;
         Ok(JniBranch::Group(JniGroup::Named(name.into())))
@@ -1280,40 +1295,109 @@ fn validate_class_name(name: &str) -> Result<()> {
     }
     Ok(())
 }
+fn kotlin_keyword(name: &str) -> bool {
+    [
+        "as",
+        "break",
+        "class",
+        "continue",
+        "do",
+        "else",
+        "false",
+        "for",
+        "fun",
+        "if",
+        "in",
+        "interface",
+        "is",
+        "null",
+        "object",
+        "package",
+        "return",
+        "super",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typealias",
+        "typeof",
+        "val",
+        "var",
+        "when",
+        "while",
+    ]
+    .contains(&name)
+}
+/// Render an already validated declaration/component name. Unicode letter and
+/// decimal-digit categories follow Kotlin's identifier grammar, rather than
+/// Rust's broader Unicode identifier rules. All keyword spellings are escaped
+/// by this helper, including soft keywords, to keep the rule independent of context.
+fn kotlin_identifier(name: &str) -> String {
+    static PLAIN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\A[\p{L}_][\p{L}\p{Nd}_]*\z").expect("Kotlin identifier grammar")
+    });
+    let reserved = kotlin_keyword(name)
+        || [
+            "abstract",
+            "actual",
+            "annotation",
+            "by",
+            "catch",
+            "companion",
+            "const",
+            "constructor",
+            "context",
+            "crossinline",
+            "data",
+            "delegate",
+            "dynamic",
+            "enum",
+            "expect",
+            "external",
+            "field",
+            "file",
+            "final",
+            "finally",
+            "get",
+            "import",
+            "infix",
+            "init",
+            "inline",
+            "inner",
+            "internal",
+            "lateinit",
+            "noinline",
+            "open",
+            "operator",
+            "out",
+            "override",
+            "param",
+            "private",
+            "property",
+            "protected",
+            "public",
+            "receiver",
+            "reified",
+            "sealed",
+            "set",
+            "setparam",
+            "suspend",
+            "tailrec",
+            "value",
+            "vararg",
+            "where",
+        ]
+        .contains(&name);
+    if !reserved && !name.chars().all(|c| c == '_') && PLAIN.is_match(name) {
+        name.to_owned()
+    } else {
+        format!("`{name}`")
+    }
+}
 fn validate_name(s: &str) -> Result<()> {
     if s.is_empty()
         || s.chars().all(|c| c == '_')
-        || [
-            "as",
-            "break",
-            "class",
-            "continue",
-            "do",
-            "else",
-            "false",
-            "for",
-            "fun",
-            "if",
-            "in",
-            "interface",
-            "is",
-            "null",
-            "object",
-            "package",
-            "return",
-            "super",
-            "this",
-            "throw",
-            "true",
-            "try",
-            "typealias",
-            "typeof",
-            "val",
-            "var",
-            "when",
-            "while",
-        ]
-        .contains(&s)
+        || kotlin_keyword(s)
         || !s
             .chars()
             .enumerate()
@@ -1499,6 +1583,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         },
         &mut files,
     )?;
+    let parameter_package_roots = parameter_names::package_roots(flat);
     for (source, placement) in functions {
         let source = source.to_string();
         let pkg = &placement.package;
@@ -1677,8 +1762,20 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             params.push(quote!(#n:#rt));
             raw_params.push(format!("{n}: {}", w.kind.kotlin_type()));
         }
-        for input in f.input_conversions()? {
-            let code = input.kotlin(&kotlin_context)?;
+        let inputs = f.input_conversions()?;
+        let mut kotlin_inputs = inputs
+            .iter()
+            .map(|input| input.kotlin(&kotlin_context))
+            .collect::<Result<Vec<_>>>()?;
+        parameter_names::apply(
+            &f.params
+                .iter()
+                .map(|p| p.name.to_string())
+                .collect::<Vec<_>>(),
+            &mut kotlin_inputs,
+            &parameter_package_roots,
+        )?;
+        for code in kotlin_inputs {
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
             locks.extend(code.locks);
@@ -2083,7 +2180,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             .join("\n");
         let text = packages.entry(pkg.clone()).or_default();
         text.push_str(&format!(
-            "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
+            "{throws}public fun {generic}{}({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
+            kotlin_identifier(name),
             kt_params.join(", ")
         ));
     }

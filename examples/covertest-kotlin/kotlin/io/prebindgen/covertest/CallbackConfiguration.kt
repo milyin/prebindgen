@@ -3,7 +3,7 @@ package io.prebindgen.covertest
 import io.prebindgen.covertest.callbackconfig.*
 
 fun checkCallbackConfiguration() {
-    check(callbackConfigTypeDefault(p0_callback = { it * 2 }) == 42L)
+    check(callbackConfigTypeDefault(callback = { it * 2 }) == 42L)
     check(callbackConfigDefault({ number, extra -> number + extra == 28L }) == 42L)
     check(callbackConfigArgument({ positive, extra -> positive && extra == 7L }) == 42L)
     check(callbackConfigReturn({ number, extra -> number + extra }) == 28L)

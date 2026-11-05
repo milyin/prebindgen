@@ -1,0 +1,33 @@
+{
+  "baseline_ref": "34233e44725825ac1ffb0a8ec3097403631bb651",
+  "method": "Regenerate the baseline covertest build.rs declarations with the updated JNI generator; omit the new naming-specific fixture declarations so the source interface is identical.",
+  "scope": "Generated Rust/JNI code, JNI declarations and bulk layout descriptors only; public Functions.kt parameter names intentionally change. This is code-equivalence evidence, not a latency benchmark.",
+  "checks": [
+    {
+      "file": "bindings.rs",
+      "baseline_sha256": "78f7a6a87e40a6ac4beaa64f197329f475d9d030e3fa2897b66027aa3922627a",
+      "updated_sha256": "78f7a6a87e40a6ac4beaa64f197329f475d9d030e3fa2897b66027aa3922627a",
+      "identical": true
+    },
+    {
+      "file": "kotlin/io/prebindgen/covertest/JNINative.kt",
+      "baseline_sha256": "d053226cfe0d591ef7129ba92064677e72edb541baf6e2c90c2fbaaf8e47ee2f",
+      "updated_sha256": "d053226cfe0d591ef7129ba92064677e72edb541baf6e2c90c2fbaaf8e47ee2f",
+      "identical": true
+    },
+    {
+      "file": "kotlin/io/prebindgen/covertest/BulkLayouts.kt",
+      "baseline_sha256": "1abc18d520ff92beb024a453a843f9ea9c3de849982a6f672a7d3c6716bebb56",
+      "updated_sha256": "1abc18d520ff92beb024a453a843f9ea9c3de849982a6f672a7d3c6716bebb56",
+      "identical": true
+    }
+  ],
+  "additional_kotlin_compatibility": {
+    "scope": "Every baseline typed JNI return-capture class (Return_*.kt). Other public Kotlin files intentionally change optional identifier backticks.",
+    "files_compared": 48,
+    "digest_method": "SHA-256 over sorted relative paths and bytes, each prefixed with its 64-bit little-endian byte length.",
+    "baseline_sha256": "76a2d1b15f8e6aaf0eea71dc0215dbebf92572094f975a672605c97b5e183aa8",
+    "updated_sha256": "76a2d1b15f8e6aaf0eea71dc0215dbebf92572094f975a672605c97b5e183aa8",
+    "identical": true
+  }
+}

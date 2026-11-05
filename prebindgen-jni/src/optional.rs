@@ -108,6 +108,7 @@ pub(crate) fn input_kotlin(
         let name = name.to_string();
         let ty = ty.trim_end_matches('?');
         out.parameters.push(format!("{name}: {ty}?"));
+        out.parameter_paths = c.parameter_paths.clone();
         for a in c
             .arguments
             .iter_mut()
@@ -127,6 +128,19 @@ pub(crate) fn input_kotlin(
     } else {
         out.parameters.push(format!("{}: Boolean", root));
         out.parameters.extend(c.parameters.clone());
+        out.parameter_paths
+            .push(prebindgen_declarations::ComponentPath(vec![
+                prebindgen_declarations::ComponentSegment::Named("present".into()),
+            ]));
+        let mut payload_paths = c.parameter_paths.clone();
+        if kotlin::has_optional(nodes) {
+            for path in &mut payload_paths {
+                path.prepend(prebindgen_declarations::ComponentSegment::Named(
+                    "some".into(),
+                ));
+            }
+        }
+        out.parameter_paths.extend(payload_paths);
         root.to_string()
     };
     let tag = format!("(if ({presence}) 1 else 0)");
