@@ -426,10 +426,10 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
             .fun(fun!(make).expand_return(expand_return!(Outer).field(fun!(id)))))
         .package(package!("model").class(data_class!(Inner)))
         .build().unwrap();
-    assert!(generated.kotlin["test/Envelope.kt"].contains("val inner: test.model.Inner"));
+    assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
     let functions = &generated.kotlin["test/Functions.kt"];
     assert!(functions.contains("x: test.Envelope"));
-    assert!(functions.contains("x.inner.bytes"));
+    assert!(functions.contains("x.`inner`.bytes"));
     assert!(functions.contains("test.Envelope(test.model.Inner("));
     assert!(functions.contains("public fun make(id: ULong, onError: test.JniErrorHandler<ULong>"));
     assert!(!generated.rust.contains("drop_pointer"));
@@ -623,7 +623,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
             .package(package!().class(data_class!(Value)).fun(function))
             .build();
         if replace {
-            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("value: test.Value"));
+            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("`value`: test.Value"));
         } else {
             assert!(result.err().unwrap().contains("no handle class"));
         }
@@ -1448,7 +1448,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             builder = builder.configure(|flat| install(flat, true));
         }
         let generated = builder.build().unwrap();
-        assert!(generated.kotlin["test/Functions.kt"].contains("value: Long"));
+        assert!(generated.kotlin["test/Functions.kt"].contains("`value`: Long"));
     }
     let builder = JniGen::builder()
         .flat(flat("pub fn echo(value:i64)->i64{}"))
@@ -3796,13 +3796,19 @@ fn collector_capacity_registration_is_shared_and_follows_the_library_loader() {
 
 #[test]
 fn kotlin_identifiers_only_escape_keywords_and_nonidentifier_characters() {
-    for name in [
-        "packetId", "_packet2", "field", "value", "get", "set", "suspend", "数据", "é", "n١",
-    ] {
+    for name in ["packetId", "_packet2", "type", "数据", "é", "n١"] {
         assert_eq!(kotlin_identifier(name), name);
     }
     for name in [
         "when",
+        "value",
+        "field",
+        "get",
+        "set",
+        "suspend",
+        "context",
+        "constructor",
+        "init",
         "class",
         "in",
         "fun",
