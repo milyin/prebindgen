@@ -58,4 +58,17 @@ pub fn text_new(resource:Resource,text:String)->TextInput {TextInput{resource,te
 #[prebindgen]
 pub fn take_text(values:Vec<TextInput>)->u64 {values.iter().map(|v|v.resource.0+v.text.len() as u64).sum()}
 #[prebindgen]
+pub struct BytesInput {pub resource:Resource,pub bytes:Vec<u8>}
+#[prebindgen]
+pub fn bytes_new(resource:Resource,bytes:Vec<u8>)->BytesInput {BytesInput{resource,bytes}}
+fn bytes_score(bytes:&[u8])->u64 {bytes.len() as u64+u64::from(bytes.first().copied().unwrap_or(0))+u64::from(bytes.last().copied().unwrap_or(0))}
+#[prebindgen]
+pub fn take_bytes(values:Vec<BytesInput>)->u64 {values.iter().map(|v|v.resource.0+bytes_score(&v.bytes)).sum()}
+#[prebindgen]
+pub struct BuffersInput {pub resource:Resource,pub text:String,pub bytes:Vec<u8>}
+#[prebindgen]
+pub fn buffers_new(resource:Resource,text:String,bytes:Vec<u8>)->BuffersInput {BuffersInput{resource,text,bytes}}
+#[prebindgen]
+pub fn take_buffers(values:Vec<BuffersInput>)->u64 {values.iter().map(|v|v.resource.0+v.text.len() as u64+bytes_score(&v.bytes)).sum()}
+#[prebindgen]
 pub fn take_numbers(values:Vec<u64>)->u64 {values.iter().sum()}

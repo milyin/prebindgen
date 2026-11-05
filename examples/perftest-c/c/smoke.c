@@ -14,6 +14,7 @@ static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4
 #include "inline_owners.h"
 #include "mutable_byte_views.h"
 #include "output_owners.h"
+#include "buffer_inputs.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -599,6 +600,7 @@ int main(void) {
     assert(perftest_owned_resource_drops() == omitted_before + 3);
 
     check_collections();
+    check_buffer_inputs();
     check_output_owners();
     check_sequence_delivery();
     EXPECT_ABORT(perftest_c_plain_panic());

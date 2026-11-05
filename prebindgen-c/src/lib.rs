@@ -338,6 +338,19 @@ impl Codec for CCodec {
         plan.fallible = !matches!(Value::of(ty), Some(Value::Scalar(p)) if p != Primitive::Char);
         Ok(plan)
     }
+    fn input_row_leaf(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<CWire>> {
+        let mut plan = self.input_leaf(flat, ty, extra, wire, var, active)?;
+        sequence::defer_buffer_decode(&mut plan);
+        Ok(plan)
+    }
     fn output_leaf(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -2584,12 +2597,12 @@ mod generation_tests {
     }
 
     #[test]
-    fn replay_audits_builtin_scalar_and_opaque_pointer_validation() {
+    fn replay_audits_builtin_scalar_pointer_and_buffer_validation() {
         let flat = Cbindgen::new(error_model("pub type Handle=String;"))
             .opaque_ptr("handle", syn::parse_quote!(Handle))
             .prepare()
             .unwrap();
-        // These are all Scalar/Pointer leaf mappings provided by CCodec.
+        // These are all Scalar/Pointer/Buffer leaf mappings provided by CCodec.
         // User constructors are declarations, not leaf validators; they are
         // checked separately for deferred, exactly-once execution below.
         for ty in [
@@ -2612,10 +2625,16 @@ mod generation_tests {
             "Handle",
             "&Handle",
             "&mut Handle",
+            "String",
+            "&String",
+            "&str",
+            "Vec<u8>",
+            "&Vec<u8>",
+            "&[u8]",
         ] {
             let ty = syn::parse_str(ty).unwrap();
             let plan = CCodec
-                .input_leaf(
+                .input_row_leaf(
                     &flat,
                     &ty,
                     &(),
@@ -2635,6 +2654,11 @@ mod generation_tests {
             assert!(transport.reread_rows);
             assert!(transport.release.is_empty());
             assert!(plan.resources.iter().all(|r| !r.registered));
+            if matches!(Value::of(&ty), Some(Value::Text | Value::Bytes)) {
+                assert!(plan.validation.is_empty());
+                assert!(plan.acquire.is_empty());
+                assert!(!plan.statements.is_empty());
+            }
         }
     }
 
@@ -2665,7 +2689,7 @@ mod generation_tests {
     }
 
     #[test]
-    fn simple_handle_rows_reread_but_decode_once_rows_keep_preparation() {
+    fn scalar_and_buffer_handle_rows_reread_and_construct_once() {
         use prebindgen_declarations::{expand_param, fun};
         let source="pub type Handle=String; pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
         let model =
@@ -2689,11 +2713,14 @@ mod generation_tests {
                 .unwrap()
                 .validation
                 .to_string();
-            assert_eq!(code.contains("_prepared"), constructor == "text", "{code}");
+            assert!(!code.contains("_prepared"), "{code}");
             assert!(code.contains("accept_group"));
-            if constructor == "row" {
-                assert_eq!(code.matches(":: row (").count(), 1, "{code}");
-                assert!(code.find("accept_group").unwrap() < code.find(":: row (").unwrap());
+            let call = format!(":: {constructor} (");
+            assert_eq!(code.matches(&call).count(), 1, "{code}");
+            assert!(code.find("accept_group").unwrap() < code.find(&call).unwrap());
+            if constructor == "text" {
+                assert_eq!(code.matches("from_utf8").count(), 1, "{code}");
+                assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
             }
         }
         let flat = model().function(fun!(options)).panic().prepare().unwrap();

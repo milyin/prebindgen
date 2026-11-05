@@ -13,6 +13,19 @@ pub enum CSequence {
     Callback,
 }
 
+pub(crate) fn defer_buffer_decode(plan: &mut InputPlan<CWire>) {
+    if matches!(&plan.node, WireNode::Leaf(wires) if wires.iter().all(|w| matches!(w.kind, CWire::Buffer)))
+    {
+        // Called only for leaves sharing a flat row's construction scope.
+        // Keep decoded borrows and any &String/&Vec temporary alive until the
+        // row constructor finishes. UTF-8 validation and owned copies run once,
+        // after grouped handle validation, rather than in both replay passes.
+        let validation = std::mem::take(&mut plan.validation);
+        let statements = std::mem::take(&mut plan.statements);
+        plan.statements = quote!(#validation #statements);
+    }
+}
+
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
@@ -20,8 +33,12 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
-    let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element))
-        .all(|wire| matches!(wire.kind, CWire::Scalar { .. } | CWire::Pointer { .. }));
+    let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element)).all(|wire| {
+        matches!(
+            wire.kind,
+            CWire::Scalar { .. } | CWire::Pointer { .. } | CWire::Buffer
+        )
+    });
     let slice = format_ident!("{wire}_rows");
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
@@ -35,9 +52,10 @@ pub(crate) fn input(
         });
         values.push((field.name.clone(), quote!(#name)));
     }
-    // Only these leaves validate into Copy scalars and raw pointers. Buffer,
-    // enum, inline-owner, callback and nested-row conversions keep their prepared
-    // state: validation can decode owned values or execute nested construction.
+    // These leaves validate only Copy scalars and raw pointers. Buffer decoding
+    // runs during construction, once the complete handle group has been checked.
+    // Enum, inline-owner, callback and nested-row conversions keep their prepared
+    // state until their validation effects have been audited separately.
     let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {
         reread_rows,

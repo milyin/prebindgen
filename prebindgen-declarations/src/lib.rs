@@ -909,6 +909,25 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<CodecInput<Self>>;
+    /// Convert a leaf inside a flat collection row whose construction is deferred.
+    ///
+    /// Its statements and argument share the row constructor's scope, so an
+    /// adapter may decode row-local buffers there instead of retaining decoded
+    /// values during grouped validation. Resource identity and pointer validation
+    /// needed by the grouped check must remain in `validation`; every value must
+    /// still be validated before use. Nested sequences/callbacks retain their
+    /// ordinary input preparation. The default uses the usual leaf conversion.
+    fn input_row_leaf(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        self.input_leaf(flat, ty, extra, wire, var, active)
+    }
     /// Convert a leaf with explicit ownership, independently of its usual policy.
     ///
     /// The compiler supplies either an owned value or a shared reference according
@@ -1789,6 +1808,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 return if self.bulk.get() {
                     self.codec
                         .input_bulk_leaf(self.flat, ty, extra, w, var, active)
+                } else if self.grouped_input.get() {
+                    self.codec
+                        .input_row_leaf(self.flat, ty, extra, w, var, active)
                 } else {
                     self.codec.input_leaf(self.flat, ty, extra, w, var, active)
                 };

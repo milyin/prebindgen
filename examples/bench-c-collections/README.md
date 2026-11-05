@@ -57,3 +57,12 @@ python3 examples/bench-c-collections/build.py --output /tmp/c-record --record-ge
 
 CI builds the counting fixture with `--check-generated`, then executes all shapes
 and the scalar control using `compare.py --kind count --smoke --forks 1`.
+
+Input comparisons use `input-compare.py`. In addition to handles and scalar rows,
+the input driver covers a handle plus text, bytes, or both. Short payloads contain
+three bytes; `_large` cases use a 4 KiB UTF-8 string (Euro signs plus one ASCII
+byte) or a 4 KiB byte payload. Payloads, handles and C rows are prepared before
+timing. Native decoding, required owned copies, alias checks, construction and
+destruction remain timed. `--same-build` uses the selected `--cases` and `--sizes`
+for an identical-library control. Per-run console logs stay in the selected
+output directory; only compact summaries need to be committed for PR review.

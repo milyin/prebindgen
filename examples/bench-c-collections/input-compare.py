@@ -19,7 +19,7 @@ p.add_argument('--kind',choices=['count','time'],required=True)
 p.add_argument('--forks',type=int,default=4)
 p.add_argument('--same-build',choices=['before','after'])
 p.add_argument('--smoke',action='store_true')
-p.add_argument('--cases',default='handles,records,wide,text,numbers,control')
+p.add_argument('--cases',default='handles,records,wide,text,bytes,buffers,text_large,bytes_large,buffers_large,numbers,control')
 p.add_argument('--sizes',default='0,1,8,64,512,4096')
 p.add_argument('--batches',type=int)
 p.add_argument('--target-ms',type=int,default=20)
@@ -40,11 +40,10 @@ effective=builds if not a.same_build else {v:builds[a.same_build] for v in build
 # and dladdr in the executable verifies the library that actually answered.
 driver=effective['before']['input_driver']
 cases=a.cases.split(',');sizes=[int(n) for n in a.sizes.split(',')]
-assert set(cases)<=set(['handles','records','wide','text','numbers','control'])
+assert set(cases)<=set(['handles','records','wide','text','bytes','buffers','text_large','bytes_large','buffers_large','numbers','control'])
 cells=[(case,n) for case in cases if case!='control' for n in sizes]
 if 'control' in cases:cells+=[('control',1)]
-if a.same_build and a.kind=='time':cells=[('control',1),('handles',512),('wide',512)]
-if a.smoke:cells=[('handles',0),('handles',8),('records',8),('wide',8),('text',8),('numbers',8),('control',1)]
+if a.smoke:cells=[('handles',0),('handles',8),('records',8),('wide',8),('text',8),('bytes',8),('buffers',8),('text_large',8),('bytes_large',8),('buffers_large',8),('numbers',8),('control',1)]
 batches=a.batches or (10 if a.kind=='count' else 12)
 if a.smoke:batches=2
 runs=[];samples=[]

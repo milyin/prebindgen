@@ -12,14 +12,17 @@ extern void bench_counter_start(void);
 extern void bench_counter_stop(uint64_t *out);
 static uint64_t now(clockid_t clock) { struct timespec t; assert(clock_gettime(clock,&t)==0); return (uint64_t)t.tv_sec*1000000000+(uint64_t)t.tv_nsec; }
 static volatile uint64_t sink;
+static uint8_t large_text[4096], large_bytes[4096];
 struct batch {void *rows; size_t n, iterations; int kind;};
 static struct batch prepare(int kind,size_t n,size_t iterations) {
     if(kind==5)return (struct batch){NULL,n,iterations,kind};
     size_t stride=sizeof(bench_take_handles_p0_w1_row);
     if(kind==1)stride=sizeof(bench_take_records_p0_w1_row);
     if(kind==2)stride=sizeof(bench_take_wide_p0_w1_row);
-    if(kind==3)stride=sizeof(bench_take_text_p0_w1_row);
+    if(kind==3 || kind==7)stride=sizeof(bench_take_text_p0_w1_row);
     if(kind==4)stride=sizeof(bench_take_numbers_p0_w1_row);
+    if(kind==6 || kind==8)stride=sizeof(bench_take_bytes_p0_w1_row);
+    if(kind==9 || kind==10)stride=sizeof(bench_take_buffers_p0_w1_row);
     void *rows=n ? malloc(stride*n*iterations) : NULL; assert(!n || rows);
     for(size_t j=0;j<iterations;++j)for(size_t i=0;i<n;++i) {
         size_t k=j*n+i;
@@ -29,6 +32,11 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
         case 2: ((bench_take_wide_p0_w1_row *)rows)[k]=(bench_take_wide_p0_w1_row){bench_resource_new(i),i,i,i,i,i,i,i}; break;
         case 3: ((bench_take_text_p0_w1_row *)rows)[k]=(bench_take_text_p0_w1_row){bench_resource_new(i),{(const uint8_t *)"abc",3}}; break;
         case 4: ((bench_take_numbers_p0_w1_row *)rows)[k]=(bench_take_numbers_p0_w1_row){i}; break;
+        case 6: ((bench_take_bytes_p0_w1_row *)rows)[k]=(bench_take_bytes_p0_w1_row){bench_resource_new(i),{(const uint8_t *)"abc",3}}; break;
+        case 7: ((bench_take_text_p0_w1_row *)rows)[k]=(bench_take_text_p0_w1_row){bench_resource_new(i),{large_text,sizeof(large_text)}}; break;
+        case 8: ((bench_take_bytes_p0_w1_row *)rows)[k]=(bench_take_bytes_p0_w1_row){bench_resource_new(i),{large_bytes,sizeof(large_bytes)}}; break;
+        case 9: ((bench_take_buffers_p0_w1_row *)rows)[k]=(bench_take_buffers_p0_w1_row){bench_resource_new(i),{(const uint8_t *)"abc",3},{(const uint8_t *)"abc",3}}; break;
+        case 10: ((bench_take_buffers_p0_w1_row *)rows)[k]=(bench_take_buffers_p0_w1_row){bench_resource_new(i),{large_text,sizeof(large_text)},{large_bytes,sizeof(large_bytes)}}; break;
         default: break;
         }
     }
@@ -44,6 +52,9 @@ static uint64_t run(struct batch b) {
         case 2: total+=bench_take_wide((bench_take_wide_p0_w1_rows){b.rows ? (bench_take_wide_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 3: total+=bench_take_text((bench_take_text_p0_w1_rows){b.rows ? (bench_take_text_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 4: total+=bench_take_numbers((bench_take_numbers_p0_w1_rows){b.rows ? (bench_take_numbers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 6: case 8: total+=bench_take_bytes((bench_take_bytes_p0_w1_rows){b.rows ? (bench_take_bytes_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 7: total+=bench_take_text((bench_take_text_p0_w1_rows){b.rows ? (bench_take_text_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 9: case 10: total+=bench_take_buffers((bench_take_buffers_p0_w1_rows){b.rows ? (bench_take_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         default: total+=bench_control(b.n); break;
         }
     }
@@ -61,8 +72,12 @@ static struct score measure(int kind,size_t n,size_t iterations,bool counts,uint
 }
 int main(int argc,char **argv) {
     assert(argc==6);bool counts=strcmp(argv[1],"count")==0;assert(counts || strcmp(argv[1],"time")==0);assert(bench_counter_enabled()==counts);
-    const char *names[]={"handles","records","wide","text","numbers","control"};int kind=-1;
-    for(int i=0;i<6;++i)if(strcmp(argv[2],names[i])==0)kind=i;
+    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large"};int kind=-1;
+    for(int i=0;i<11;++i)if(strcmp(argv[2],names[i])==0)kind=i;
+    // 1365 Euro signs plus one ASCII byte: valid UTF-8 exercises the scan as
+    // well as copying. All source payload storage is prepared outside timing.
+    for(size_t i=0;i+2<sizeof(large_text);i+=3) {large_text[i]=0xe2;large_text[i+1]=0x82;large_text[i+2]=0xac;}
+    large_text[sizeof(large_text)-1]='x';memset(large_bytes,0x5a,sizeof(large_bytes));
     size_t n=strtoull(argv[3],NULL,10);int batches=atoi(argv[4]);uint64_t target=(uint64_t)atoi(argv[5])*1000000;
     assert(kind>=0 && n<=100000 && batches>0 && target>0);
     uint64_t expected=(uint64_t)n*(n ? n-1 : 0)/2;
@@ -70,6 +85,11 @@ int main(int argc,char **argv) {
     if(kind==2)expected*=8;
     if(kind==3)expected+=3*n;
     if(kind==5)expected=n;
+    if(kind==6)expected+=(3+'a'+'c')*n;
+    if(kind==7)expected+=sizeof(large_text)*n;
+    if(kind==8)expected+=(sizeof(large_bytes)+2*0x5a)*n;
+    if(kind==9)expected+=(3+3+'a'+'c')*n;
+    if(kind==10)expected+=(sizeof(large_text)+sizeof(large_bytes)+2*0x5a)*n;
     Dl_info library;assert(dladdr((void *)bench_control,&library));printf("LIBRARY,%s\n",library.dli_fname);
     if(counts) {
         for(int j=0;j<10;++j)assert(measure(kind,n,1,false,NULL).sum==expected);

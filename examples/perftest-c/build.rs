@@ -434,6 +434,23 @@ fn main() {
             ),
         )
         .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
+        .function(fun!(buffer_rows_sum))
+        .function(fun!(buffer_rows_optional))
+        .function(
+            fun!(buffer_rows_borrowed)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_borrow))),
+        )
+        .function(fun!(buffer_rows_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_temporary)),
+        ))
+        .function(fun!(buffer_row_reset_counts))
+        .panic()
+        .function(fun!(buffer_row_constructor_calls))
+        .panic()
+        .function(fun!(buffer_row_function_calls))
+        .panic()
         .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error("result_error", pq!(CResultError))
         .error("panic_error", pq!(CPanicError))
