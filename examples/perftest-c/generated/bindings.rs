@@ -984,6 +984,31 @@ pub struct perftest_callback_a4bc3153f04892c6 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_a7558edd85392388_result {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: u32,
+    pub v2: __PbBuffer,
+    pub v3: *mut perftest_flat::OwnedResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_a7558edd85392388 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> perftest_callback_a7558edd85392388_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_callback_a7558edd85392388_result,
+        ),
+    >,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0 {
     pub v0: i64,
 }
@@ -11636,9 +11661,9 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
                             };
                             let callback_return_w2 = raw_result.v0;
                             let callback_return_w4 = raw_result.v1;
-                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                __prebindgen_input_consumed,
-                            );
+                            let mut callback_return_owners = ::prebindgen_runtime::FixedCallbackReturnAllocations::<
+                                1usize,
+                            >::tracking(__prebindgen_input_consumed);
                             unsafe {
                                 callback_return_owners
                                     .receive(
@@ -21783,6 +21808,329 @@ pub unsafe extern "C" fn perftest_enum_record_echo(
     let value = storage.assume_init();
     std::ptr::write(out1, value.v1);
     value.v0
+}
+#[repr(C)]
+pub struct perftest_fixed_cleanup_call_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_fixed_cleanup_call(
+    p0_callback: perftest_callback_a7558edd85392388,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_fixed_cleanup_call_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_callback_run = if true {
+                Some(p0_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                let p0_callback_release_result = p0_callback.release_result;
+                let p0_callback_owner = if true {
+                    {
+                        (&ownership_accepted).set((&ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p0_callback_run = p0_callback_run
+                        .expect("validated active callback");
+                    let p0_callback_owner = p0_callback_owner
+                        .expect("validated active callback");
+                    let p0_callback_value = move || {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::FixedInputs::<
+                                2usize,
+                            >::default();
+                            let raw_result = unsafe {
+                                p0_callback_run(p0_callback_owner.context())
+                            };
+                            let callback_result = __PbCallbackResult {
+                                value: raw_result,
+                                context: p0_callback_owner.context(),
+                                release: p0_callback_release_result,
+                            };
+                            let raw_result = callback_result.value;
+                            let callback_return_w2 = raw_result.v0;
+                            let callback_return_w4 = raw_result.v1;
+                            let callback_return_w6 = raw_result.v2;
+                            let callback_return_w10 = raw_result.v3;
+                            let mut callback_return_owners = ::prebindgen_runtime::FixedCallbackReturnAllocations::<
+                                2usize,
+                            >::tracking(__prebindgen_input_consumed);
+                            unsafe {
+                                callback_return_owners
+                                    .receive(
+                                        callback_return_w2 as *mut perftest_flat::OwnedResource,
+                                    );
+                            }
+                            if (callback_return_w10 as usize) != 0 {
+                                unsafe {
+                                    callback_return_owners
+                                        .receive(
+                                            callback_return_w10 as *mut perftest_flat::OwnedResource,
+                                        );
+                                }
+                            }
+                            callback_return_owners.check()?;
+                            {
+                                let callback_return_w2_pointer = if true {
+                                    callback_return_w2 as *mut perftest_flat::OwnedResource
+                                } else {
+                                    ::core::ptr::null_mut()
+                                };
+                                if true {
+                                    ::prebindgen_runtime::validate_pointer(
+                                        callback_return_w2_pointer,
+                                    )?;
+                                }
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w1_built = if true {
+                                    let mut callback_return_w1_built_transferred_0 = 0usize;
+                                    if true {
+                                        for address in ::core::iter::once(
+                                            (callback_return_w2_pointer.addr()) as usize,
+                                        ) {
+                                            __prebindgen_input_aliases.access(address, true)?;
+                                            callback_return_w1_built_transferred_0 += 1;
+                                        }
+                                    }
+                                    let callback_return_w1 = if true {
+                                        Some(unsafe { Box::from_raw(callback_return_w2_pointer) })
+                                    } else {
+                                        None
+                                    };
+                                    __prebindgen_input_consumed
+                                        .set(
+                                            __prebindgen_input_consumed.get()
+                                                + callback_return_w1_built_transferred_0,
+                                        );
+                                    Some({
+                                        let callback_return_w1: perftest_flat::OwnedResource = *callback_return_w1
+                                            .expect("active allocation");
+                                        callback_return_w1
+                                    })
+                                } else {
+                                    None
+                                };
+                                let callback_return_w3 = if true {
+                                    Some(
+                                        char::from_u32(callback_return_w4)
+                                            .ok_or("invalid Unicode scalar")?,
+                                    )
+                                } else {
+                                    None
+                                };
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w3_built = if true {
+                                    Some({
+                                        let callback_return_w3: char = ::core::convert::Into::into(
+                                            callback_return_w3.expect("active value"),
+                                        );
+                                        callback_return_w3
+                                    })
+                                } else {
+                                    None
+                                };
+                                let callback_return_w5 = if true {
+                                    Some(
+                                        std::str::from_utf8(unsafe {
+                                                __pb_read(callback_return_w6)?
+                                            })
+                                            .map_err(|_| "invalid UTF-8")?,
+                                    )
+                                } else {
+                                    None
+                                };
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w5_built = if true {
+                                    Some({
+                                        let callback_return_w5: String = ::core::convert::Into::into(
+                                            callback_return_w5.expect("active value"),
+                                        );
+                                        callback_return_w5
+                                    })
+                                } else {
+                                    None
+                                };
+                                let callback_return_w8: i32 = i32::from(
+                                    (callback_return_w10 as usize) != 0,
+                                );
+                                let callback_return_w10_pointer = if callback_return_w8
+                                    == 1i32
+                                {
+                                    callback_return_w10 as *mut perftest_flat::OwnedResource
+                                } else {
+                                    ::core::ptr::null_mut()
+                                };
+                                if callback_return_w8 == 1i32 {
+                                    ::prebindgen_runtime::validate_pointer(
+                                        callback_return_w10_pointer,
+                                    )?;
+                                }
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w9_built = if callback_return_w8 == 1i32
+                                {
+                                    let mut callback_return_w9_built_transferred_0 = 0usize;
+                                    if callback_return_w8 == 1i32 {
+                                        for address in ::core::iter::once(
+                                            (callback_return_w10_pointer.addr()) as usize,
+                                        ) {
+                                            __prebindgen_input_aliases.access(address, true)?;
+                                            callback_return_w9_built_transferred_0 += 1;
+                                        }
+                                    }
+                                    let callback_return_w9 = if callback_return_w8 == 1i32 {
+                                        Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
+                                    } else {
+                                        None
+                                    };
+                                    __prebindgen_input_consumed
+                                        .set(
+                                            __prebindgen_input_consumed.get()
+                                                + callback_return_w9_built_transferred_0,
+                                        );
+                                    Some({
+                                        let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
+                                            .expect("active allocation");
+                                        callback_return_w9
+                                    })
+                                } else {
+                                    None
+                                };
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w7_built = if true {
+                                    Some({
+                                        let callback_return_w7 = if callback_return_w8 == 1i32 {
+                                            Some(callback_return_w9_built.expect("active input"))
+                                        } else {
+                                            None
+                                        };
+                                        callback_return_w7
+                                    })
+                                } else {
+                                    None
+                                };
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w0_built = if true {
+                                    Some({
+                                        let callback_return_w0: perftest_flat::FixedCleanupRecord = perftest_flat::fixed_cleanup_new(
+                                            callback_return_w1_built.expect("active input"),
+                                            callback_return_w3_built.expect("active input"),
+                                            callback_return_w5_built.expect("active input"),
+                                            callback_return_w7_built.expect("active input"),
+                                        );
+                                        callback_return_w0
+                                    })
+                                } else {
+                                    None
+                                };
+                                let callback_return_value = callback_return_w0_built
+                                    .expect("active input");
+                                Ok(callback_return_value)
+                            }
+                        });
+                        result
+                            .unwrap_or_else(|error| {
+                                ::prebindgen_runtime::report_callback_error(
+                                    "perftest_callback_a7558edd85392388",
+                                    "()->perftest_flat :: FixedCleanupRecord",
+                                    &error,
+                                );
+                                panic!("callback failed: {}", error)
+                            })
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = perftest_flat::fixed_cleanup_call(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_fixed_cleanup_call_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
 }
 #[repr(C)]
 pub struct perftest_getter_child_name_result {
@@ -34647,6 +34995,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::EnumRecord > () != 0,
     "flat object `EnumRecord` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::FixedCleanupRecord > () != 0,
+    "flat object `FixedCleanupRecord` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::GetterChild > () != 0,
