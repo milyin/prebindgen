@@ -1331,7 +1331,7 @@
 <a href=#1331 id=1331 data-nosnippet>1331</a><span class="doccomment">/// Render an already validated declaration/component name. Unicode letter and
 <a href=#1332 id=1332 data-nosnippet>1332</a>/// decimal-digit categories follow Kotlin's identifier grammar, rather than
 <a href=#1333 id=1333 data-nosnippet>1333</a>/// Rust's broader Unicode identifier rules. All keyword spellings are escaped
-<a href=#1334 id=1334 data-nosnippet>1334</a>/// everywhere, including soft keywords, to keep this rule independent of context.
+<a href=#1334 id=1334 data-nosnippet>1334</a>/// by this helper, including soft keywords, to keep the rule independent of context.
 <a href=#1335 id=1335 data-nosnippet>1335</a></span><span class="kw">fn </span>kotlin_identifier(name: <span class="kw-2">&amp;</span>str) -&gt; String {
 <a href=#1336 id=1336 data-nosnippet>1336</a>    <span class="kw">static </span>PLAIN: std::sync::LazyLock&lt;regex::Regex&gt; = std::sync::LazyLock::new(|| {
 <a href=#1337 id=1337 data-nosnippet>1337</a>        regex::Regex::new(<span class="string">r"\A[\p{L}_][\p{L}\p{Nd}_]*\z"</span>).expect(<span class="string">"Kotlin identifier grammar"</span>)
