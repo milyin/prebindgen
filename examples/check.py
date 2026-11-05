@@ -2,6 +2,7 @@
 """Build both adapters, then execute actual C and Kotlin/JNI callers."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -88,3 +89,17 @@ java_test.write_text("""public class ResultJava {
 classpath = str(build / "covertest-kotlin.jar")
 subprocess.run(["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(build), str(java_test)], check=True)
 run_java(["-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "ResultJava"])
+
+# Required Kotlin inputs reject null in source, including nested collection
+# elements. Option containers/values and inactive slots run in the positive suite.
+negative = ROOT / "examples/covertest-kotlin/compile-fail/RequiredInputs.kt"
+rejected = subprocess.run([os.environ.get("KOTLINC", "kotlinc"), "-cp", classpath,
+                           str(negative), "-d", str(build / "required-inputs-invalid.jar")],
+                          capture_output=True, text=True)
+expected = {i for i, line in enumerate(negative.read_text().splitlines(), 1) if "REQUIRED_NULL" in line}
+errors = {int(i) for i in re.findall(r"RequiredInputs\.kt:(\d+):\d+: error:", rejected.stdout + rejected.stderr)}
+if rejected.returncode == 0 or not expected.issubset(errors):
+    raise RuntimeError("Kotlin did not reject each required null input:\n" + rejected.stdout + rejected.stderr)
+java_nullability = ROOT / "examples/covertest-kotlin/java/InputNullabilityJava.java"
+subprocess.run(["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(build), str(java_nullability)], check=True)
+run_java(["-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "InputNullabilityJava"])

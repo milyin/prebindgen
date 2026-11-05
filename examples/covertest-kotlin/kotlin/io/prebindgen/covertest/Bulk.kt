@@ -40,7 +40,7 @@ fun checkBulk() {
     var invalidSurrogate = false
     check(bulkText("\ud800", JniErrorHandler { invalidSurrogate = true; "recovered" }) == "recovered")
     check(invalidSurrogate)
-    check(bulkText(null, JniErrorHandler { "recovered" }) == "recovered")
+    rejectNullPrecondition { bulkText(invalidJavaNull()) }
     val strings = listOf("", "世界", "nul\u0000text")
     check(bulkStrings(strings) == strings)
     check(bulkOptional(null) == null)
@@ -65,9 +65,7 @@ fun checkBulk() {
     var wideFailed = false
     try { bulkWide(listOf(minWide.negate())) } catch (_: IllegalArgumentException) { wideFailed = true }
     check(wideFailed)
-    var nullWideFailed = false
-    check(bulkWide(listOf(null), JniErrorHandler { nullWideFailed = true; emptyList() }).isEmpty())
-    check(nullWideFailed)
+    rejectNullPrecondition { bulkWide(listOf(invalidJavaNull<java.math.BigInteger>())) }
     check(bulkCallback(BulkNumbersCallback { values -> values.map { it * 3 } }) == listOf(3L, 6L, 9L))
     check(bulkCallbackWorker(BulkWorkerCallback { values -> values.map { it + 10 } }) == listOf(13L, 14L))
     val drops = bulkDrops()

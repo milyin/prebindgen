@@ -42,9 +42,17 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
     val one = bench.plain.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
     val cycleCleanup = mutableListOf<AutoCloseable>()
     val inputHandles = mutableListOf<bench.plain.InputHandle>()
+    val singleHandle = bench.plain.inputHandleNew(BASE)
+    inputHandles.add(singleHandle)
+    val referenceText = "x".repeat(64)
+    val referenceBytes = ByteArray(64)
     val cases = mutableListOf(
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.plain.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.plain.scalar(BASE + (i and MASK)) }),
+        Case("handle_input", 1, BASE, 0, Operation { _ -> bench.plain.inputHandleValue(singleHandle) }),
+        Case("selected_handle_input", 1, BASE, 0, Operation { _ -> bench.plain.selectedHandle(1, 0L, singleHandle) }),
+        Case("inactive_handle_input", 1, BASE, 0, Operation { _ -> bench.plain.selectedHandle(0, BASE, singleHandle) }),
+        Case("buffer_input", 1, 128, 0, Operation { _ -> bench.plain.bufferSizes(referenceText, referenceBytes) }),
         Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.plain.rowSum(one) }),
         Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumPlain(bench.plain.rowMake(BASE + (i and MASK))) }),
         Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.plain.wideRowSum(wide) }),
@@ -149,9 +157,17 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
     val one = bench.bulk.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
     val cycleCleanup = mutableListOf<AutoCloseable>()
     val inputHandles = mutableListOf<bench.bulk.InputHandle>()
+    val singleHandle = bench.bulk.inputHandleNew(BASE)
+    inputHandles.add(singleHandle)
+    val referenceText = "x".repeat(64)
+    val referenceBytes = ByteArray(64)
     val cases = mutableListOf(
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.bulk.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.bulk.scalar(BASE + (i and MASK)) }),
+        Case("handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.inputHandleValue(singleHandle) }),
+        Case("selected_handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.selectedHandle(1, 0L, singleHandle) }),
+        Case("inactive_handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.selectedHandle(0, BASE, singleHandle) }),
+        Case("buffer_input", 1, 128, 0, Operation { _ -> bench.bulk.bufferSizes(referenceText, referenceBytes) }),
         Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.bulk.rowSum(one) }),
         Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumBulk(bench.bulk.rowMake(BASE + (i and MASK))) }),
         Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.bulk.wideRowSum(wide) }),

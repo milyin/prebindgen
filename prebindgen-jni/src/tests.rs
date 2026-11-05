@@ -1860,7 +1860,7 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
         .contains("arg0_0: example.values.Renamed"));
     assert!(output.kotlin["example/VoidCallback.kt"].contains("public fun run()"));
     assert!(
-        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback?")
+        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback,")
     );
     syn::parse_file(&output.rust).unwrap();
 }
@@ -2092,7 +2092,7 @@ fn callbacks_return_typed_values_and_keep_unit_interfaces() {
     assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(arg0_0: Long)"));
     assert!(generated.kotlin["test/i64Toi64Callback.kt"].contains(": Long"));
     assert!(generated.kotlin["test/i64ToboolCallback.kt"].contains(": Boolean"));
-    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String?"));
+    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
     assert!(generated.rust.contains("invoke_return"));
     syn::parse_file(&generated.rust).unwrap();
 }
@@ -3819,5 +3819,104 @@ fn kotlin_identifiers_only_escape_keywords_and_nonidentifier_characters() {
         "Ⅷ",
     ] {
         assert_eq!(kotlin_identifier(name), format!("`{name}`"));
+    }
+}
+
+#[test]
+fn required_inputs_are_nonnull_and_options_preserve_nullable_containers() {
+    let source = "pub type Handle=String; pub enum Choice { A,B } pub fn required(h:&Handle,text:&str,bytes:&[u8],wide:i128,choice:Choice,callback:impl Fn()->String)->i64{} pub fn optional(h:Option<&Handle>,text:Option<&str>,bytes:Option<&[u8]>,wide:Option<i128>,choice:Option<Choice>)->i64{} pub fn rows(input:Vec<Handle>)->i64{} pub fn maybe_rows(input:Option<Vec<Handle>>)->i64{}";
+    for bulk in [false, true] {
+        let mut rows = fun!(rows);
+        let mut maybe_rows = fun!(maybe_rows);
+        if bulk {
+            rows = rows.expand_param("input", expand_param!(Vec<Handle>).variant_self().bulk());
+            maybe_rows = maybe_rows.expand_param(
+                "input",
+                expand_param!(Option<Vec<Handle>>).variant_self().bulk(),
+            );
+        }
+        let g = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(enum_class!(Choice))
+                    .fun(fun!(required))
+                    .fun(fun!(optional))
+                    .fun(rows)
+                    .fun(maybe_rows),
+            )
+            .build()
+            .unwrap();
+        let functions = &g.kotlin["test/Functions.kt"];
+        let required = functions
+            .lines()
+            .find(|l| l.starts_with("public fun required("))
+            .unwrap();
+        for ty in [
+            "h: test.Handle,",
+            "text: String,",
+            "bytes: ByteArray,",
+            "wide: java.math.BigInteger,",
+            "choice: test.Choice,",
+            "callback: test.VoidToStringCallback,",
+        ] {
+            assert!(required.contains(ty), "{required}");
+        }
+        let optional = functions
+            .lines()
+            .find(|l| l.starts_with("public fun optional("))
+            .unwrap();
+        for ty in [
+            "h: test.Handle?",
+            "text: String?",
+            "bytes: ByteArray?",
+            "wide: java.math.BigInteger?",
+            "choice: test.Choice?",
+        ] {
+            assert!(optional.contains(ty), "{optional}");
+        }
+        assert!(functions.contains("input: kotlin.collections.List<test.Handle>,"));
+        assert!(functions.contains("input: kotlin.collections.List<test.Handle>?,"));
+        assert!(!functions.contains("List<test.Handle?>"));
+        assert!(g.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
+    }
+}
+
+#[test]
+fn selector_reference_slots_are_nullable_for_plain_and_bulk_inputs() {
+    let source="pub type Handle=String;pub enum Choice{A,B}pub struct Value{pub text:String}pub fn from_fields(text:String,bytes:Vec<u8>,wide:i128,choice:Choice,h:&Handle)->Value{}pub fn choose(value:Value)->i64{}";
+    for bulk in [false, true] {
+        let expansion = expand_param!(Value)
+            .variant_self()
+            .variant(fun!(from_fields));
+        let expansion = if bulk { expansion.bulk() } else { expansion };
+        let g = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(enum_class!(Choice))
+                    .class(data_class!(Value))
+                    .fun(fun!(choose).expand_param("value", expansion)),
+            )
+            .build()
+            .unwrap();
+        let signature = g.kotlin["test/Functions.kt"]
+            .lines()
+            .find(|l| l.starts_with("public fun choose("))
+            .unwrap();
+        for ty in [
+            "valueVariant0: test.Value?",
+            "valueVariant1Text: String?",
+            "valueVariant1Bytes: ByteArray?",
+            "valueVariant1Wide: java.math.BigInteger?",
+            "valueVariant1Choice: test.Choice?",
+            "valueVariant1H: test.Handle?",
+        ] {
+            assert!(signature.contains(ty), "{signature}");
+        }
     }
 }

@@ -280,3 +280,9 @@ pub fn owned_handle_records_echo(values: Vec<HandleRecord>) -> Vec<HandleRecord>
 pub fn nested_owned_handles_echo(values: Vec<Vec<InputHandle>>) -> Vec<Vec<InputHandle>> {
     std::hint::black_box(values)
 }
+
+#[prebindgen]
+pub fn buffer_sizes(text: &str, bytes: &[u8]) -> i64 { (text.len() + bytes.len()) as i64 }
+
+#[prebindgen]
+pub fn selected_handle(value: i64) -> i64 { value }

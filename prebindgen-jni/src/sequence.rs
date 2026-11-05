@@ -189,9 +189,10 @@ pub(crate) fn input_list(
     sequence: &JniSequence,
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     if *sequence == JniSequence::Bulk {
-        return crate::bulk::input_list(carrier, element, context);
+        return crate::bulk::input_list(carrier, element, context, active);
     }
     if *sequence != JniSequence::Buffered {
         return Err("collection input requires a buffered array or bulk sequence".into());
@@ -255,7 +256,7 @@ pub(crate) fn input_list(
         parameter_paths: vec![prebindgen_declarations::ComponentPath::default()],
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
-            if condition == "true" { "" } else { "?" }
+            if active == "true" { "" } else { "?" }
         )],
         setup: vec![KotlinBinding {
             name: state.clone(),

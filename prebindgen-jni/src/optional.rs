@@ -95,15 +95,28 @@ pub(crate) fn input_kotlin(
     nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let root = &o.presence().to_string();
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
+    // A single optional value is evaluated only in its present branch. Build
+    // that converter as required, then expose T? and validate it once below.
     let mut c = kotlin::input_kotlin(nodes, context)?;
+    let single = c.parameters.len() == 1 && !kotlin::has_optional(nodes);
+    if !single {
+        let present = format!("{root} == 1");
+        let present = if active == "true" {
+            present
+        } else {
+            format!("({active}) && ({present})")
+        };
+        c = kotlin::input_kotlin_when(nodes, context, &present)?;
+    }
     c.prepare_arguments(kotlin::input_handles(nodes, false))?;
     // A single converted value is idiomatic T?. Multiple views retain an
     // explicit presence argument so Some with nullable components is distinct.
-    let presence = if c.parameters.len() == 1 && !kotlin::has_optional(nodes) {
+    let presence = if single {
         let (name, ty) = c.parameters[0].split_once(": ").unwrap();
         let name = name.to_string();
         let ty = ty.trim_end_matches('?');
@@ -124,7 +137,11 @@ pub(crate) fn input_kotlin(
                 .replace(&format!("{name}!!"), &name);
             *a = replace(a, &name, &format!("requireNotNull({name})"));
         }
-        format!("{name} != null")
+        if active == "true" {
+            format!("{name} != null")
+        } else {
+            format!("({active}) && ({name} != null)")
+        }
     } else {
         out.parameters.push(format!("{}: Boolean", root));
         out.parameters.extend(c.parameters.clone());

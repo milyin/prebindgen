@@ -1,7 +1,7 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.bulk
 
-public fun bulkPatchRows(rowFirst: io.prebindgen.covertest.bulk.BulkHandle?, rowChildren: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>?>?, rowLast: io.prebindgen.covertest.bulk.BulkHandle?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
+public fun bulkPatchRows(rowFirst: io.prebindgen.covertest.bulk.BulkHandle?, rowChildren: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>?>?, rowLast: io.prebindgen.covertest.bulk.BulkHandle, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
     val p0_w10_elements = try { if (rowChildren != null) (if (true) requireNotNull(rowChildren).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i64_i32_7fe138bb3730f8e7()
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.offsets[0], io.prebindgen.covertest.InputValidation.value { if (rowFirst != null) requireNotNull(if (true) requireNotNull(rowFirst) else null) { "invalid option payload" } else null }, true)
@@ -52,10 +52,10 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkPatchCallback(callback: io.prebindgen.covertest.BulkPatchCallback?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
+public fun bulkPatchCallback(callback: io.prebindgen.covertest.BulkPatchCallback, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -157,10 +157,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_writer_state?.a
     } finally { returnCapture.release() }
 }
 
-public fun bulkPairTextCallback(callback: io.prebindgen.covertest.BulkPairTextCallback?, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+public fun bulkPairTextCallback(callback: io.prebindgen.covertest.BulkPairTextCallback, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -289,7 +289,7 @@ try {         var outputbulkItem_g0_0: io.prebindgen.covertest.bulk.BulkHandle? 
     } finally { returnCapture.release() }
 }
 
-public fun bulkCollectionLockGroups(first: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>?, second: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>, probe: io.prebindgen.covertest.CollectionLocksProbe?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
+public fun bulkCollectionLockGroups(first: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>?, second: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>, probe: io.prebindgen.covertest.CollectionLocksProbe, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
     val p0_w3_elements = try { if (first != null) (if (true) requireNotNull(first).toList()?.let { p0_w3_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p0_w3_snapshot.size) { p0_w3_index -> val p0_w7 = p0_w3_snapshot[p0_w3_index]
 kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w7 }) }, intArrayOf(2)) } else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p1_w1_elements = try { if (true) second?.toList()?.let { p1_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(p1_w1_snapshot.size) { p1_w1_index -> val p1_w5 = p1_w1_snapshot[p1_w1_index]
@@ -298,7 +298,7 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
     try {
 val nativeResult = try { run { val handles = try { ((if (first != null) (p0_w3_elements?.handles.orEmpty()) else kotlin.collections.emptyList()) + (p1_w1_elements?.handles.orEmpty())) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handles) {
         val ownership = LongArray(1) { -1L }
-        try { run { val nativeArgument0 = try { if (first != null) requireNotNull(p0_w3_elements?.encode()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1_elements?.encode() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (probe == null) null else object {
+        try { run { val nativeArgument0 = try { if (first != null) requireNotNull(p0_w3_elements?.encode()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1_elements?.encode() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Boolean {
         var callbackCleanupFailure: Throwable? = null
@@ -324,7 +324,7 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun bulkHandleNested(values: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = run {
+public fun bulkHandleNested(values: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_Range_46147a291c22570d()
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
@@ -446,10 +446,10 @@ outputbulkFailure = outputbulkItem_bulkFailure
     } finally { returnCapture.release() }
 }
 
-public fun bulkHandleTextCallback(callback: io.prebindgen.covertest.BulkHandleTextCallback?, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+public fun bulkHandleTextCallback(callback: io.prebindgen.covertest.BulkHandleTextCallback, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -639,7 +639,7 @@ requireNotNull(outputbulkList)
 public fun bulkEnvelope(`value`: io.prebindgen.covertest.bulk.BulkEnvelope?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.bulk.BulkEnvelope?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.bulk.BulkEnvelope? = run {
     val returnCapture = io.prebindgen.covertest.Return_Int_Long_Double4_ErrorEmpty_4244d173b136f580.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { (if (`value` != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (`value` != null) if (true) if (true) requireNotNull(requireNotNull(requireNotNull(`value`)).point).x else 0L else 0L else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (`value` != null) if (true) if (true) requireNotNull(requireNotNull(requireNotNull(`value`)).point).y else 0.0 else 0.0 else 0.0 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { if (`value` != null) if (true) requireNotNull(requireNotNull(`value`)).tag else 0L else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_envelope_c78cdfdfd18c33f1(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val nativeResult = try { run { val nativeArgument0 = try { (if (`value` != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (`value` != null) if (true) if (true) requireNotNull(`value`).point.x else 0L else 0L else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (`value` != null) if (true) if (true) requireNotNull(`value`).point.y else 0.0 else 0.0 else 0.0 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { if (`value` != null) if (true) requireNotNull(`value`).tag else 0L else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_envelope_c78cdfdfd18c33f1(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
@@ -678,7 +678,7 @@ io.prebindgen.covertest.bulk.BulkPrimitives(((requireNotNull(outputbulkReader).b
 public fun bulkOptionalWide(`value`: java.math.BigInteger?, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger? = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (`value` != null) 1 else 0) })
-p0_w1_writer.wide((0) + io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.offsets[1], io.prebindgen.covertest.InputValidation.value { if (`value` != null) if (true) requireNotNull(requireNotNull(`value`)) { "null 128-bit integer" }.toByteArray() else null else null }, true)
+p0_w1_writer.wide((0) + io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.offsets[1], io.prebindgen.covertest.InputValidation.value { if (`value` != null) requireNotNull(`value`).toByteArray() else null }, true)
 
 p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
@@ -696,14 +696,14 @@ if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayo
     } finally { returnCapture.release() }
 }
 
-public fun bulkOptionalCallback(`value`: io.prebindgen.covertest.BulkOptionalCallback?, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+public fun bulkOptionalCallback(`value`: io.prebindgen.covertest.BulkOptionalCallback, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`value` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
-        var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>? = null
+        var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>? = null
         try {
         } catch (failure: Throwable) {
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
@@ -777,7 +777,7 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun <R> bulkExpanded(valueNumber: Long, valueText: String?, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (Long, String) -> R): R = run {
+public fun <R> bulkExpanded(valueNumber: Long, valueText: String, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (Long, String) -> R): R = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.size)
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[0], io.prebindgen.covertest.InputValidation.value { valueNumber })
 p0_w1_writer.text((0) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[1], io.prebindgen.covertest.InputValidation.value { valueText })
@@ -833,7 +833,7 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun <R> bulkResult(valueNumber: Long, valueText: String?, success: Boolean, onBindingError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.BulkFailureHandler<R>, build: (Long, String) -> R): R = run {
+public fun <R> bulkResult(valueNumber: Long, valueText: String, success: Boolean, onBindingError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.BulkFailureHandler<R>, build: (Long, String) -> R): R = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.size)
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[0], io.prebindgen.covertest.InputValidation.value { valueNumber })
 p0_w1_writer.text((0) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[1], io.prebindgen.covertest.InputValidation.value { valueText })
@@ -875,11 +875,11 @@ val nativeResult = try { run { val nativeArgument0 = try { `value` } catch (fail
     } finally { returnCapture.release() }
 }
 
-public fun bulkHandleValue(`value`: io.prebindgen.covertest.bulk.BulkHandle?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun bulkHandleValue(`value`: io.prebindgen.covertest.bulk.BulkHandle, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_handle_value_020d7d074b3973cd(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { `value` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { `value`.raw } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_handle_value_020d7d074b3973cd(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -953,7 +953,7 @@ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkR
     } finally { returnCapture.release() }
 }
 
-public fun bulkHandles(values: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle> = run {
+public fun bulkHandles(values: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_Range_42eab86179b36709()
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
@@ -1037,7 +1037,7 @@ try {         var outputbulkItem_0: io.prebindgen.covertest.bulk.BulkHandle? = n
     } finally { returnCapture.release() }
 }
 
-public fun bulkBorrow(`value`: io.prebindgen.covertest.bulk.BulkHandle?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun bulkBorrow(`value`: io.prebindgen.covertest.bulk.BulkHandle, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i64_d515d9783303b819()
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.rd515d9783303b819.offsets[0], io.prebindgen.covertest.InputValidation.value { `value` }, false)
 
@@ -1054,7 +1054,7 @@ val nativeResult = try { run { val handles = try { (p0_w1_writer_state?.handles.
     } finally { returnCapture.release() }
 }
 
-public fun bulkChecked(`value`: io.prebindgen.covertest.bulk.BulkHandle?, number: Int, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.bulk.BulkHandle> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.bulk.BulkHandle = run {
+public fun bulkChecked(`value`: io.prebindgen.covertest.bulk.BulkHandle, number: Int, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.bulk.BulkHandle> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.bulk.BulkHandle = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i64_638fef00b45d8f09()
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r638fef00b45d8f09.offsets[0], io.prebindgen.covertest.InputValidation.value { `value` }, true)
 
@@ -1092,7 +1092,7 @@ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkR
     } finally { returnCapture.release() }
 }
 
-public fun bulkWide(values: kotlin.collections.List<java.math.BigInteger?>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<java.math.BigInteger>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<java.math.BigInteger> = run {
+public fun bulkWide(values: kotlin.collections.List<java.math.BigInteger>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<java.math.BigInteger>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<java.math.BigInteger> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.re0c6fa25bb7482b5.size)
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
@@ -1100,7 +1100,7 @@ if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.
 val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r659298f90cfa7005)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.re0c6fa25bb7482b5.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.wide((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r659298f90cfa7005.size) + io.prebindgen.covertest.BulkLayouts.r659298f90cfa7005.offsets[0], io.prebindgen.covertest.InputValidation.value { if (true) requireNotNull(p0_w8) { "null 128-bit integer" }.toByteArray() else null }, true)
+p0_w1_writer.wide((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r659298f90cfa7005.size) + io.prebindgen.covertest.BulkLayouts.r659298f90cfa7005.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w8.toByteArray() }, true)
 }
 }
 
@@ -1128,7 +1128,7 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkUnsignedWide(values: kotlin.collections.List<java.math.BigInteger?>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<java.math.BigInteger>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<java.math.BigInteger> = run {
+public fun bulkUnsignedWide(values: kotlin.collections.List<java.math.BigInteger>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<java.math.BigInteger>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<java.math.BigInteger> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r31d2b5a17a152d89.size)
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
@@ -1136,7 +1136,7 @@ if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.
 val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r98c254983b527011)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r31d2b5a17a152d89.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.wide((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r98c254983b527011.size) + io.prebindgen.covertest.BulkLayouts.r98c254983b527011.offsets[0], io.prebindgen.covertest.InputValidation.value { if (true) requireNotNull(p0_w8) { "null 128-bit integer" }.toByteArray() else null }, false)
+p0_w1_writer.wide((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r98c254983b527011.size) + io.prebindgen.covertest.BulkLayouts.r98c254983b527011.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w8.toByteArray() }, false)
 }
 }
 
@@ -1164,10 +1164,10 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkCallbackWorker(`value`: io.prebindgen.covertest.BulkWorkerCallback?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
+public fun bulkCallbackWorker(`value`: io.prebindgen.covertest.BulkWorkerCallback, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`value` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -1231,10 +1231,10 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkCallback(`value`: io.prebindgen.covertest.BulkNumbersCallback?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
+public fun bulkCallback(`value`: io.prebindgen.covertest.BulkNumbersCallback, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`value` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -1298,10 +1298,10 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkHandleCallback(`value`: io.prebindgen.covertest.BulkHandlesCallback?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle> = run {
+public fun bulkHandleCallback(`value`: io.prebindgen.covertest.BulkHandlesCallback, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`value` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -1310,7 +1310,7 @@ var callbackOutput0_owners: io.prebindgen.covertest.CollectionOwners? = null
 var callbackOutput0_bulkRange: io.prebindgen.covertest.BulkRange? = null
 var callbackOutput0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkHandle>? = null
         lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>
-        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle?>
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkHandle>
         try {
 callbackOutput0_bulkReader = io.prebindgen.covertest.BulkReader(raw0 as ByteArray)
 callbackOutput0_owners = io.prebindgen.covertest.CollectionOwners()
@@ -1840,7 +1840,7 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun bulkText(`value`: String?, onError: io.prebindgen.covertest.JniErrorHandler<String> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): String = run {
+public fun bulkText(`value`: String, onError: io.prebindgen.covertest.JniErrorHandler<String> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): String = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r963ae3ba49e0cb2b.size)
 p0_w1_writer.text((0) + io.prebindgen.covertest.BulkLayouts.r963ae3ba49e0cb2b.offsets[0], io.prebindgen.covertest.InputValidation.value { `value` })
 
@@ -1858,7 +1858,7 @@ outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
     } finally { returnCapture.release() }
 }
 
-public fun bulkStrings(values: kotlin.collections.List<String?>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<String>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<String> = run {
+public fun bulkStrings(values: kotlin.collections.List<String>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<String>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<String> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r79427dd643a1b061.size)
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
@@ -1936,7 +1936,7 @@ if ((requireNotNull(outputbulkReader).int((0) + io.prebindgen.covertest.BulkLayo
     } finally { returnCapture.release() }
 }
 
-public fun bulkBytes(`value`: kotlin.collections.List<ByteArray?>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<ByteArray>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<ByteArray> = run {
+public fun bulkBytes(`value`: kotlin.collections.List<ByteArray>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<ByteArray>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<ByteArray> = run {
     val p0_w3_elements = try { if (true) `value`?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rba88ec47a5d9bc85.size)
 val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }

@@ -2,7 +2,11 @@
 
 This fixture binds the same Rust functions twice in one release native library:
 `bench.plain` uses ordinary JNI conversion and `bench.bulk` adds `.bulk()` to the
-relevant expansion. Both modes disable automatic bulk-return selection with
+relevant expansion. Identical `handle_input`, `selected_handle_input`,
+`inactive_handle_input` and `buffer_input` cases measure direct handle reads,
+active/inactive constructor slots and required text/byte arguments separately
+from collection transport.
+Both modes disable automatic bulk-return selection with
 `set_bulk_collection_outputs(false)` so future defaults cannot change the ordinary
 baseline. The comparison still uses explicit bulk overrides.
 
@@ -38,6 +42,9 @@ The matrix includes batches of 0, 1, 8, 64 and 512 elements:
 | Case | Timed work | Reason to compare |
 | --- | --- | --- |
 | `control` | Identical ordinary `i64` argument/result in both packages | Indicates process-to-process timing variation. |
+| `handle_input` | Read one shared handle | Measures required-handle entry checks and locking without collections. |
+| `selected_handle_input` / `inactive_handle_input` | Select a constructor reading a shared handle, or its primitive alternative | Measures active/inactive nullable slots without allocating or cloning a Rust handle. |
+| `buffer_input` | Read lengths of a required 64-byte string and byte array | Measures required reference arguments and their normal JNI conversion. |
 | `record_return` | One eight-field record returned from Rust, then a Kotlin checksum | Expanded output uses a primitive-parameter capture callback; bulk returns a frame directly. |
 | `wide_record_input` / `wide_record_return` | One record with 32 named `i64` fields | Tests wider primitive argument and return expansion without source collections. |
 | `callback_record_return` / `callback_wide_record_return` | A pre-registered Kotlin callback returns one eight-/32-field record; Rust checksums it | Compares boxed-field callback results against packing the result fields. |

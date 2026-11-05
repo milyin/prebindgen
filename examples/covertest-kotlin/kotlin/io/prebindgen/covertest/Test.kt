@@ -14,6 +14,7 @@ private fun expectInvalid(action: () -> Unit) {
 // Exercises the active subset of the migrated source and build declarations.
 fun main() {
     checkParameterNames()
+    checkInputNullability()
     checkGcHandles()
     checkBulk()
     checkPreparedInputs()
@@ -44,8 +45,7 @@ fun main() {
         check(stringLen(text) == text.encodeToByteArray().size.toULong())
         check(textEcho(text) == text)
     }
-    try { stringNew(null); error("expected null input failure") }
-    catch (_: IllegalArgumentException) { }
+    rejectNullPrecondition { stringNew(invalidJavaNull()) }
     for (value in listOf(0L, 21L, -7L, Long.MAX_VALUE)) {
         check(i64RefDouble(value) == value * 2)
     }
@@ -65,7 +65,7 @@ fun main() {
         check(blob.hashCode() == echoed.hashCode())
         check(blobValueEcho(blob) == blob) // value inputs remain reusable
     }
-    expectInvalid { blobValueNew(0, null) }
+    rejectNullPrecondition { blobValueNew(0, invalidJavaNull()) }
     for (label in listOf("", "héllo 世界", "embedded\u0000nul")) {
         val report = reportNew(42, 3.5, label) { count, total, stamp, projected, handle ->
             check(count == 42L && total == 3.5 && stamp.secs == 1L && stamp.nanos == 2L)
@@ -89,7 +89,7 @@ fun main() {
     val reclaimed = checkNotNull(escaped)
     check(reclaimed.isClosed)
     reclaimed.close()
-    expectInvalid { reportNew(0, 0.0, null) { _, _, _, _, handle -> handle.close() } }
+    rejectNullPrecondition { reportNew(0, 0.0, invalidJavaNull()) { _, _, _, _, handle -> handle.close() } }
     io.prebindgen.covertest.model.stampNew(Long.MIN_VALUE, Long.MAX_VALUE) { secs, nanos ->
         check(secs == Long.MIN_VALUE && nanos == Long.MAX_VALUE)
     }

@@ -921,6 +921,7 @@ pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let inner = nodes
         .iter()
@@ -933,15 +934,15 @@ pub(crate) fn input_kotlin(
         "{}: {}{}",
         d.root,
         d.class_name,
-        if d.condition == "true" { "" } else { "?" }
+        if active == "true" { "" } else { "?" }
     ));
     let fields = fields(nodes)?;
     if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
-    for (p, (field, children)) in c.parameters.iter().zip(&fields) {
+    for (p, (field, _)) in c.parameters.iter().zip(&fields) {
         let name = p.split_once(": ").unwrap().0;
-        let receiver = if d.condition == "true" {
+        let receiver = if active == "true" {
             d.root.clone()
         } else {
             format!("requireNotNull({})", d.root)
@@ -959,13 +960,6 @@ pub(crate) fn input_kotlin(
             .chain(c.lock_groups.iter_mut())
             .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
-            if matches!(kotlin::leaf_wires(children).as_slice(), [w] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
-            {
-                *a = a.replace(
-                    &format!("{name}?.toByteArray()"),
-                    &format!("{name}.toByteArray()"),
-                );
-            }
             *a = optional::replace(a, name, &expr);
         }
     }

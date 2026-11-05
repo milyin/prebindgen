@@ -66,7 +66,7 @@ fun checkCollections() {
     storage.close()
 
     var nullRouted = false
-    check(collectionHandles(listOf(null), 65, 0,
+    check(collectionHandles(listOf(invalidJavaNull()), 65, 0,
         onBindingError = JniErrorHandler { nullRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(nullRouted)

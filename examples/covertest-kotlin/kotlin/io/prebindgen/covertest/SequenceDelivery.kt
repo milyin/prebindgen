@@ -35,7 +35,7 @@ fun checkSequenceDelivery() {
     check(ownedResourceId(moved.single()) == 20L)
     moved.single().close()
     var bindingCalls = 0
-    check(collectionHandlesFold(listOf(null), 65, 0, 0, onBindingError = JniErrorHandler { bindingCalls++; -1 }, onError = fail) { _, _ -> error("fold after binding error") } == -1)
+    check(collectionHandlesFold(listOf(invalidJavaNull()), 65, 0, 0, onBindingError = JniErrorHandler { bindingCalls++; -1 }, onError = fail) { _, _ -> error("fold after binding error") } == -1)
     check(bindingCalls == 1)
     val storage = io.prebindgen.covertest.storage.storageNew()
     storagePutSlice(storage, listOf(Payload(1, 2, 3.0, true)))

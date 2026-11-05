@@ -605,6 +605,7 @@ pub(crate) fn input_list(
     carrier: &Wire<JniWire>,
     element: &JniNode,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let input = row_input(element, context)?;
     if input.parameters.len() != 1 {
@@ -621,7 +622,7 @@ pub(crate) fn input_list(
     Ok(KotlinInput {
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
-            if condition == "true" { "" } else { "?" }
+            if active == "true" { "" } else { "?" }
         )],
         setup: vec![KotlinBinding {
             name: state.clone(),
@@ -639,8 +640,9 @@ pub(crate) fn input_kotlin(
     controls: &[Wire<JniWire>],
     child: &JniNode,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
-    let mut input = crate::kotlin::input_kotlin(child, context)?;
+    let mut input = crate::kotlin::input_kotlin_when(child, context, active)?;
     let writer = format!("{}_writer", controls[0].name);
     let schema = kt_layout(layout, context);
     input.prepare_arguments(crate::kotlin::input_handles(child, false))?;

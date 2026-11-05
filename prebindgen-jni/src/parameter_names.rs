@@ -509,7 +509,7 @@ mod tests {
             .unwrap();
         let functions = &output.kotlin["test/Functions.kt"];
         assert!(
-            functions.contains("packetId: ULong, callback: test.i64Callback?"),
+            functions.contains("packetId: ULong, callback: test.i64Callback,"),
             "{functions}"
         );
         assert!(functions.contains("packetId.toLong()"));

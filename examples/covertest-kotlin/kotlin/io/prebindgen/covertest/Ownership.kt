@@ -10,8 +10,9 @@ private fun rejected(action: () -> Unit) {
 
 fun checkOwnership() {
     val invalidReport = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
-    rejected { reportRelabel(invalidReport, null) { _, _, _, _, handle -> handle.close() } }
-    check(invalidReport.isClosed)
+    rejectNullPrecondition { reportRelabel(invalidReport, invalidJavaNull()) { _, _, _, _, handle -> handle.close() } }
+    check(!invalidReport.isClosed)
+    invalidReport.close()
     val report = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
     reportRelabel(report, "changed") { _, _, _, label, handle ->
         check(label == "changed" && report.isClosed)
@@ -50,8 +51,9 @@ fun checkOwnership() {
     failure.get()?.let { throw it }
 
     val invalidNested = storageSummaryHandle(a)
-    rejected { reportLabel(1, 0, 0.0, invalidNested, null) }
-    check(invalidNested.isClosed)
+    rejectNullPrecondition { reportLabel(1, 0, 0.0, invalidNested, invalidJavaNull()) }
+    check(!invalidNested.isClosed)
+    invalidNested.close()
     val nested = storageSummaryHandle(a)
     check(reportLabel(1, 0, 0.0, nested, "nested") == "nested")
     check(nested.isClosed)
