@@ -412,8 +412,12 @@ impl CCallback {
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
+        let guard = match fixed_return_owner_count(&plan.node, &self.return_owners) {
+            Some(count) => quote!(::prebindgen_runtime::FixedCallbackReturnAllocations::<#count>),
+            None => quote!(::prebindgen_runtime::CallbackReturnAllocations),
+        };
         Ok((
-            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);#scan callback_return_owners.check()?;),
+            quote!(let mut callback_return_owners=#guard::tracking(__prebindgen_input_consumed);#scan callback_return_owners.check()?;),
             quote!(),
         ))
     }
@@ -595,6 +599,50 @@ fn inline_return_guards(
     }
     Some((prepare, commit))
 }
+// Maximum received owners in one active result. Optional fields keep their
+// upper bound; alternatives select one arm. A handle-bearing sequence requires
+// dynamic storage, including a sequence nested inside a fixed record.
+fn fixed_return_owner_count(
+    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    owners: &BTreeMap<String, syn::Type>,
+) -> Option<usize> {
+    match node {
+        WireNode::Leaf(fields) => Some(
+            fields
+                .iter()
+                .filter(|field| {
+                    matches!(&field.kind, CWire::Pointer { .. })
+                        && owners.contains_key(&field.name.to_string())
+                        || matches!(
+                            &field.kind,
+                            CWire::Owned {
+                                access: Access::Move,
+                                by_value: true,
+                                ..
+                            }
+                        )
+                })
+                .count(),
+        ),
+        WireNode::Chain {
+            meta: CChain::Sequence(_),
+            child,
+            ..
+        } => (fixed_return_owner_count(child, owners)? == 0).then_some(0),
+        WireNode::Chain { child, .. } => fixed_return_owner_count(child, owners),
+        WireNode::Branch { meta, children, .. } => {
+            let mut counts = children
+                .iter()
+                .map(|child| fixed_return_owner_count(child, owners));
+            if matches!(meta, CBranch::Alternatives) {
+                counts.try_fold(0usize, |max, count| Some(max.max(count?)))
+            } else {
+                counts.try_fold(0usize, |sum, count| sum.checked_add(count?))
+            }
+        }
+    }
+}
+
 fn receive_return_owners(
     node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
     context: &CContext,

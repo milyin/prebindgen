@@ -432,3 +432,67 @@ fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
         }
     }
 }
+
+#[test]
+fn fixed_callback_results_need_no_cleanup_allocations() {
+    use super::unchecked;
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    struct Inputs {
+        pairs: Vec<(
+            *mut perftest_flat::OwnedResource,
+            *mut perftest_flat::OwnedResource,
+        )>,
+        next: usize,
+    }
+    unsafe extern "C" fn run(
+        context: *mut core::ffi::c_void,
+    ) -> unchecked::fast_callback_396f37c4ec343c74_result {
+        let inputs = unsafe { &mut *context.cast::<Inputs>() };
+        let (first, second) = inputs.pairs[inputs.next];
+        inputs.next += 1;
+        unchecked::fast_callback_396f37c4ec343c74_result {
+            v0: first,
+            v1: second,
+        }
+    }
+    let mut inputs = Inputs {
+        pairs: (0..1000)
+            .map(|_| unsafe {
+                (
+                    unchecked::fast_collection_resource_new(7),
+                    unchecked::fast_collection_resource_new(9),
+                )
+            })
+            .collect(),
+        next: 0,
+    };
+    unsafe {
+        let handler =
+            unchecked::fast_alias_handler_new(unchecked::fast_callback_396f37c4ec343c74 {
+                run: Some(run),
+                context: (&mut inputs as *mut Inputs).cast(),
+                drop: None,
+            });
+        let count = allocations(|| {
+            for _ in 0..1000 {
+                let mut result = 0;
+                let mut error = core::ptr::null_mut();
+                assert!(unchecked::fast_alias_handler_call(
+                    handler,
+                    &mut result,
+                    &mut error
+                ));
+                assert_eq!(result, 16);
+                assert!(error.is_null());
+            }
+        });
+        unchecked::fast_drop_alias_handler(handler);
+        assert_eq!(inputs.next, 1000);
+        assert_eq!(
+            count, 0,
+            "fixed callback result bookkeeping must stay on the stack"
+        );
+    }
+}

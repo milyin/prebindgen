@@ -2834,6 +2834,56 @@ mod generation_tests {
     }
 
     #[test]
+    fn fixed_callback_results_select_stack_capacity_and_keep_collection_fallback() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type H=String; pub struct Pair {pub first:H,pub second:H} pub fn pair(first:H,second:H)->Pair{} pub fn one(first:H)->Pair{} pub fn fixed(cb:impl Fn()->Pair)->i64{} pub fn optional(cb:impl Fn()->Option<Pair>)->i64{} pub fn selected(cb:impl Fn()->Pair)->i64{} pub fn many(cb:impl Fn()->Vec<Pair>)->i64{} pub fn scalar(cb:impl Fn()->i64)->i64{}";
+        for alternatives in [false, true] {
+            let expansion = expand_param!(Pair).variant(fun!(pair));
+            let expansion = if alternatives {
+                expansion.variant(fun!(one))
+            } else {
+                expansion
+            };
+            let generated = Cbindgen::new(error_model(source))
+                .opaque_ptr("h", syn::parse_quote!(H))
+                .expand(expansion)
+                .function(fun!(fixed))
+                .panic()
+                .function(fun!(optional))
+                .panic()
+                .function(fun!(many))
+                .panic()
+                .function(fun!(scalar))
+                .panic()
+                .build()
+                .unwrap();
+            let parsed = syn::parse_file(&generated.rust).unwrap();
+            let body = |name: &str| {
+                parsed
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        syn::Item::Fn(f) if f.sig.ident == name => {
+                            Some(quote::ToTokens::to_token_stream(&f.block).to_string())
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            for name in ["pb_fixed", "pb_optional"] {
+                assert!(
+                    body(name).contains("FixedCallbackReturnAllocations :: < 2usize"),
+                    "{name}: {}",
+                    body(name)
+                );
+            }
+            assert!(!body("pb_many").contains("FixedCallbackReturnAllocations"));
+            assert!(body("pb_many").contains("CallbackReturnAllocations :: tracking"));
+            assert!(!body("pb_scalar").contains("CallbackReturnAllocations"));
+        }
+    }
+
+    #[test]
     fn project_alias_policy_also_applies_to_manually_bound_slots() {
         use prebindgen_declarations::{bind_input, bind_output, Input, Output};
         let mut flat = error_model("pub type H=String;pub fn call(a:&mut H,b:&H)->i64{}");

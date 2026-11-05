@@ -88,23 +88,116 @@ impl<'a> CallbackReturnAllocations<'a> {
 }
 impl Drop for CallbackReturnAllocations<'_> {
     fn drop(&mut self) {
-        if let Some(consumed) = self.consumed {
-            debug_assert!(
-                consumed.get() <= self.values.len(),
-                "callback owner scan and decoder disagree"
-            );
-            if consumed.get() == self.values.len() {
-                return;
-            }
-            for value in self.values.iter_mut().take(consumed.get()) {
-                value.2 = true;
-            }
+        let consumed = self.consumed.map_or(0, core::cell::Cell::get);
+        if consumed != self.values.len() {
+            release_unconsumed(&mut self.values, consumed);
         }
-        self.deduplicate();
-        for (pointer, release, taken) in self.values.drain(..) {
-            if taken {
-                continue;
+    }
+}
+
+/// Stack storage for the bounded set of owners in one callback result.
+///
+/// The generator computes `N` from the result's fields and active alternatives.
+/// Collection results continue to use [`CallbackReturnAllocations`]. Like its
+/// tracking mode, this guard leaves alias validation to the input decoder.
+pub struct FixedCallbackReturnAllocations<'a, const N: usize> {
+    consumed: &'a core::cell::Cell<usize>,
+    values: [core::mem::MaybeUninit<ReceivedAllocation>; N],
+    len: usize,
+    failure: Option<String>,
+}
+impl<'a, const N: usize> FixedCallbackReturnAllocations<'a, N> {
+    /// Reclaim result owners not acquired by the decoder's consumed-prefix count.
+    pub fn tracking(consumed: &'a core::cell::Cell<usize>) -> Self {
+        Self {
+            consumed,
+            values: [core::mem::MaybeUninit::uninit(); N],
+            len: 0,
+            failure: None,
+        }
+    }
+    /// Receive a callback-owned pointer; null values do not occupy storage.
+    ///
+    /// # Safety
+    /// Each non-null, aligned pointer must transfer a live `Box<T>`. Repeated
+    /// addresses must have the same type. At most `N` owners may be received.
+    #[inline]
+    pub unsafe fn receive<T>(&mut self, pointer: *mut T) {
+        if pointer.is_null() {
+            return;
+        }
+        if let Err(error) = validate_pointer(pointer) {
+            self.failure.get_or_insert(error);
+        } else {
+            unsafe fn release<T>(value: *mut ()) {
+                drop(Box::from_raw(value as *mut T));
             }
+            self.push((pointer.cast::<()>(), release::<T>, false));
+        }
+    }
+    /// Receive an inline owner without freeing its foreign storage.
+    ///
+    /// # Safety
+    /// `pointer` must remain readable and contain a live `T` until acquisition or
+    /// cleanup. Repeated addresses must have the same type. At most `N` owners
+    /// may be received, counting both pointer and inline owners.
+    #[inline]
+    pub unsafe fn receive_inline<T>(&mut self, pointer: *const T) {
+        unsafe fn release<T>(value: *mut ()) {
+            drop(core::ptr::read(value as *const T));
+        }
+        self.push((pointer.cast_mut().cast::<()>(), release::<T>, false));
+    }
+    #[inline]
+    fn push(&mut self, value: ReceivedAllocation) {
+        self.values[self.len].write(value);
+        self.len += 1;
+    }
+    /// Report invalid pointer encodings before the decoder acquires any owner.
+    pub fn check(&self) -> Result<()> {
+        self.failure
+            .as_ref()
+            .map_or(Ok(()), |message| Err(message.clone()))
+    }
+}
+impl<const N: usize> Drop for FixedCallbackReturnAllocations<'_, N> {
+    fn drop(&mut self) {
+        if self.consumed.get() != self.len {
+            // The initialized prefix contains only pointer/function/bool tuples.
+            // Moving the guard never moves the referenced foreign allocations.
+            let values = unsafe {
+                core::slice::from_raw_parts_mut(
+                    self.values.as_mut_ptr().cast::<ReceivedAllocation>(),
+                    self.len,
+                )
+            };
+            release_unconsumed(values, self.consumed.get());
+        }
+    }
+}
+
+// Both storage modes preserve the scan order until decoding has finished. Only
+// failure cleanup sorts addresses, combining taken flags before releasing a
+// duplicate. This keeps a consumed alias from ever being destroyed twice.
+#[cold]
+fn release_unconsumed(values: &mut [ReceivedAllocation], consumed: usize) {
+    debug_assert!(
+        consumed <= values.len(),
+        "callback owner scan and decoder disagree"
+    );
+    for value in values.iter_mut().take(consumed) {
+        value.2 = true;
+    }
+    values.sort_unstable_by_key(|(pointer, _, _)| *pointer);
+    let mut index = 0;
+    while index < values.len() {
+        let (pointer, release, mut taken) = values[index];
+        index += 1;
+        while index < values.len() && values[index].0 == pointer {
+            taken |= values[index].2;
+            index += 1;
+        }
+        if !taken {
             if let Err(error) = boundary(|| {
                 unsafe { release(pointer) };
                 Ok(())
@@ -196,6 +289,37 @@ mod tests {
         assert_eq!(drops.load(Ordering::SeqCst), 2);
     }
     #[test]
+    fn fixed_result_cleanup_deduplicates_and_continues_after_drop_failure() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let first = Box::into_raw(Box::new(Owner(drops.clone(), true)));
+        let second = Box::into_raw(Box::new(Owner(drops.clone(), false)));
+        let consumed = core::cell::Cell::new(0);
+        let mut owners = FixedCallbackReturnAllocations::<3>::tracking(&consumed);
+        unsafe {
+            owners.receive(first);
+            owners.receive(first);
+            owners.receive(second);
+        }
+        // Tracking guards delegate alias rejection to the generated decoder.
+        owners.check().unwrap();
+        drop(owners);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+    #[test]
+    fn fixed_result_rejects_invalid_encoding_and_reclaims_later_owners() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let valid = Box::into_raw(Box::new(Owner(drops.clone(), false)));
+        let consumed = core::cell::Cell::new(0);
+        let mut owners = FixedCallbackReturnAllocations::<2>::tracking(&consumed);
+        unsafe {
+            owners.receive(1usize as *mut Owner);
+            owners.receive(valid);
+        }
+        assert!(owners.check().is_err());
+        drop(owners);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+    #[test]
     fn result_owner_commit_leaves_allocations_for_acquisition() {
         let drops = Arc::new(AtomicUsize::new(0));
         let pointer = Box::into_raw(Box::new(Owner(drops.clone(), false)));
@@ -241,6 +365,55 @@ mod eager_tests {
         drop(value);
         drop(guard);
         assert_eq!(drops.get(), 2);
+    }
+    #[test]
+    fn fixed_cleanup_skips_null_and_consumed_aliases() {
+        let drops = Rc::new(Cell::new(0));
+        let consumed = Cell::new(0);
+        let a = Box::into_raw(Box::new(Owner(drops.clone())));
+        let b = Box::into_raw(Box::new(Owner(drops.clone())));
+        let mut guard = FixedCallbackReturnAllocations::<3>::tracking(&consumed);
+        unsafe {
+            guard.receive(core::ptr::null_mut::<Owner>());
+            guard.receive(a);
+            guard.receive(a);
+            guard.receive(b);
+        }
+        guard.check().unwrap();
+        consumed.set(1);
+        unsafe {
+            drop(Box::from_raw(a));
+        }
+        drop(guard);
+        assert_eq!(drops.get(), 2);
+    }
+    #[test]
+    fn fixed_cleanup_handles_mixed_inline_and_pointer_owners() {
+        for taken in 0..=2 {
+            let drops = Rc::new(Cell::new(0));
+            let consumed = Cell::new(0);
+            let mut inline = core::mem::ManuallyDrop::new(Owner(drops.clone()));
+            let pointer = Box::into_raw(Box::new(Owner(drops.clone())));
+            let mut guard = FixedCallbackReturnAllocations::<2>::tracking(&consumed);
+            unsafe {
+                guard.receive_inline(&*inline);
+                guard.receive(pointer);
+            }
+            guard.check().unwrap();
+            if taken >= 1 {
+                unsafe {
+                    core::mem::ManuallyDrop::drop(&mut inline);
+                }
+            }
+            if taken == 2 {
+                unsafe {
+                    drop(Box::from_raw(pointer));
+                }
+            }
+            consumed.set(taken);
+            drop(guard);
+            assert_eq!(drops.get(), 2);
+        }
     }
     #[test]
     fn stack_guards_release_only_unread_slots() {

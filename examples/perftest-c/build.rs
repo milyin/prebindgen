@@ -434,6 +434,8 @@ fn main() {
             ),
         )
         .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(FixedCleanupRecord).variant(fun!(fixed_cleanup_new)))
+        .function(fun!(fixed_cleanup_call))
         .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
         .function(fun!(buffer_rows_sum))
         .function(fun!(buffer_rows_optional))
