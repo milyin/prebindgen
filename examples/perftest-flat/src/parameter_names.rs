@@ -63,3 +63,8 @@ pub fn parameter_external(org: i64, com: i64, callback: impl Fn(ParameterPoint))
     callback(ParameterPoint { x: org, y: com });
     ParameterPoint { x: org, y: com }
 }
+
+#[prebindgen]
+pub fn parameter_escaped_names(value: i64, field: i64, r#when: i64, 数据: i64, x́: i64) -> i64 {
+    value + 10 * field + 100 * r#when + 1000 * 数据 + 10_000 * x́
+}

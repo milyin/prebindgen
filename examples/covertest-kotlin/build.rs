@@ -281,7 +281,7 @@ fn main() {
             .fun(fun!(parameter_bulk_sum).expand_param("point", expand_param!(ParameterPoint).variant(fun!(parameter_point)).bulk()))
             .fun(fun!(parameter_sum_object).expand_param("point", expand_param!(ParameterPoint).variant_self()))
             .fun(fun!(parameter_variants).expand_param("point", expand_param!(ParameterPoint).variant_self().variant(fun!(parameter_point))))
-            .fun(fun!(parameter_collisions))
+            .fun(fun!(parameter_collisions)).fun(fun!(parameter_escaped_names))
             .fun(fun!(parameter_record)).fun(fun!(parameter_records)))
         .package(package!("gc")
             .class(ptr_class!(GcResource).gc_managed())

@@ -1,10 +1,10 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.typedrows
 
-public fun `typedRowsWorker`(`callback`: io.prebindgen.covertest.OrdinaryCallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackJob = run {
+public fun typedRowsWorker(callback: io.prebindgen.covertest.OrdinaryCallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackJob = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`callback` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Array<Any?>?) {
         var callbackCleanupFailure: Throwable? = null
@@ -49,7 +49,7 @@ callbackCleanupFailure = callbackOutput0_failure
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }
-        `callback`.run(callbackArgument0_0)
+        callback.run(callbackArgument0_0)
 
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_typed_rows_worker_6b9e6aab9bf9dcf9(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -69,7 +69,7 @@ callbackCleanupFailure = callbackOutput0_failure
     } finally { returnCapture.release() }
 }
 
-public fun `typedRowsLimit`(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.typedrows.Row127>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.typedrows.Row127> = run {
+public fun typedRowsLimit(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.typedrows.Row127>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.typedrows.Row127> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_typed_rows_limit_2e92146cd4dd53c0(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -89,10 +89,10 @@ requireNotNull(outputlist)
     } finally { returnCapture.release() }
 }
 
-public fun `typedRowsWide`(`count`: ULong, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow> = run {
+public fun typedRowsWide(count: ULong, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { `count`.toLong() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_typed_rows_wide_3a9a88de1b1dce19(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val nativeResult = try { run { val nativeArgument0 = try { count.toLong() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_typed_rows_wide_3a9a88de1b1dce19(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputowners: io.prebindgen.covertest.CollectionOwners? = null
 var outputlist: kotlin.collections.MutableList<io.prebindgen.covertest.typedrows.WideRow>? = null
  outputowners?.close(failure)
@@ -152,7 +152,7 @@ try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as kotlin.
     } finally { returnCapture.release() }
 }
 
-public fun `typedRowsMixed`(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>> = run {
+public fun typedRowsMixed(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.typedrows.WideRow>> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_typed_rows_mixed_f837b40bf5799358(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }

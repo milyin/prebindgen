@@ -1,10 +1,10 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.getters
 
-public fun <R> `getterOwnerNew`(`present`: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, Long, String, Long?, String?, io.prebindgen.covertest.getters.GetterDetails?, kotlin.collections.List<io.prebindgen.covertest.getters.GetterDetails>, io.prebindgen.covertest.getters.GetterLeaf) -> R): R = run {
+public fun <R> getterOwnerNew(present: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, Long, String, Long?, String?, io.prebindgen.covertest.getters.GetterDetails?, kotlin.collections.List<io.prebindgen.covertest.getters.GetterDetails>, io.prebindgen.covertest.getters.GetterLeaf) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_Long_String10_ErrorEmpty_9bb213f8e50528d9.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { `present` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_new_9b3691104cf4f094(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val nativeResult = try { run { val nativeArgument0 = try { present } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_new_9b3691104cf4f094(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);         var outputg0_0: io.prebindgen.covertest.getters.GetterOwner? = null
 var outputg4_g0_bulkReader: io.prebindgen.covertest.BulkReader? = null
 var outputg4_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
@@ -45,7 +45,7 @@ outputg4_g0_bulkList!!.add(io.prebindgen.covertest.getters.GetterDetails((requir
     } finally { returnCapture.release() }
 }
 
-public fun <R> `getterOwnerFailure`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, io.prebindgen.covertest.getters.GetterLeaf, String) -> R): R = run {
+public fun <R> getterOwnerFailure(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, io.prebindgen.covertest.getters.GetterLeaf, String) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_Long_String3_ErrorEmpty_857937f364385c79.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_failure_983fd2bf1ecc08ff(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -70,11 +70,11 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun `getterOwnerId`(`value`: io.prebindgen.covertest.getters.GetterOwner?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun getterOwnerId(value: io.prebindgen.covertest.getters.GetterOwner?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_id_6e5c79e15f3c8ecb(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(value) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { value?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_id_6e5c79e15f3c8ecb(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -83,11 +83,11 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`val
     } finally { returnCapture.release() }
 }
 
-public fun `getterLeafId`(`value`: io.prebindgen.covertest.getters.GetterLeaf?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun getterLeafId(value: io.prebindgen.covertest.getters.GetterLeaf?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_leaf_id_2b89bfb1695b1a8e(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(value) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { value?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_leaf_id_2b89bfb1695b1a8e(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -96,7 +96,7 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`val
     } finally { returnCapture.release() }
 }
 
-public fun `getterStaticLeaf`(onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.getters.GetterLeaf> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.getters.GetterLeaf = run {
+public fun getterStaticLeaf(onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.getters.GetterLeaf> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.getters.GetterLeaf = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_static_leaf_3de084de8ab56cf6(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -116,11 +116,11 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun <R> `getterOwnerRead`(`value`: io.prebindgen.covertest.getters.GetterOwner?, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (Long, String) -> R): R = run {
+public fun <R> getterOwnerRead(value: io.prebindgen.covertest.getters.GetterOwner?, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (Long, String) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_String2_ErrorEmpty_1b009765d5d6eed0.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_read_405afcf1de6633af(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(value) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { value?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_read_405afcf1de6633af(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -129,7 +129,7 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`val
     } finally { returnCapture.release() }
 }
 
-public fun `getterCounts`(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<ULong>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<ULong> = run {
+public fun getterCounts(onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<ULong>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<ULong> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_counts_ac432be3e581775f(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -153,7 +153,7 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun <R> `getterTwoClonesNew`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterLeaf, io.prebindgen.covertest.getters.GetterLeaf) -> R): R = run {
+public fun <R> getterTwoClonesNew(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterLeaf, io.prebindgen.covertest.getters.GetterLeaf) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_Long2_ErrorEmpty_951bc171243c8a73.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_two_clones_new_c6e10ed44149bf78(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -178,7 +178,7 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun <R> `getterFieldsNew`(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, Long, String) -> R): R = run {
+public fun <R> getterFieldsNew(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.getters.GetterOwner, Long, String) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_Long_Long_String3_ErrorEmpty_857937f364385c79.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_fields_new_6223254642400003(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -198,10 +198,10 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun `getterCallback`(`callback`: io.prebindgen.covertest.getters.GetterObserver?, `present`: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+public fun getterCallback(callback: io.prebindgen.covertest.getters.GetterObserver?, present: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (`callback` == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long, raw1: String?, raw2: Long, raw3: String?, raw4: Int, raw5: Long, raw6: String?, raw7: ByteArray?, raw8: Long) {
         var callbackCleanupFailure: Throwable? = null
@@ -243,10 +243,10 @@ callbackOutput0_g3_g0_bulkList!!.add(io.prebindgen.covertest.getters.GetterDetai
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }
-        `callback`.run(callbackArgument0_0, callbackArgument0_1, callbackArgument0_2, callbackArgument0_3, callbackArgument0_4, callbackArgument0_5, callbackArgument0_6)
+        callback.run(callbackArgument0_0, callbackArgument0_1, callbackArgument0_2, callbackArgument0_3, callbackArgument0_4, callbackArgument0_5, callbackArgument0_6)
 
     }
-} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { `present` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_callback_261a8655bbbdf16f(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { present } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_callback_261a8655bbbdf16f(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 

@@ -156,7 +156,7 @@ impl KotlinOutput {
             .enumerate()
             .map(|(i, ty)| {
                 if self.result_names.get(i).is_some_and(|name| name.is_some()) {
-                    format!("`{}`: {ty}", names[i])
+                    format!("{}: {ty}", kotlin_identifier(&names[i]))
                 } else {
                     ty.clone()
                 }
@@ -173,7 +173,7 @@ impl KotlinOutput {
             .enumerate()
             .map(|(i, ty)| {
                 if self.result_names.get(i).is_some_and(|name| name.is_some()) {
-                    format!("`{}`: {ty}", names[i])
+                    format!("{}: {ty}", kotlin_identifier(&names[i]))
                 } else {
                     format!("{}: {ty}", names[i])
                 }

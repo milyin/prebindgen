@@ -152,6 +152,7 @@ internal object JNINative {
     @JvmStatic external fun call_parameter_sum_object_f81116dd2577a97f(p0_w1_f0: Long, p0_w1_f1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_parameter_variants_8d7d583d82d7fc46(p0_w1: Int, p0_w3_f0: Long, p0_w3_f1: Long, p0_w6: Long, p0_w8: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_parameter_collisions_0fcb430c5f288a73(p0_w1: Long, p1_w1: Long, p2_w1: Long, p3_w1: Long, p4_w1: Long, p5_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_parameter_escaped_names_3a6c23522a1c4542(p0_w1: Long, p1_w1: Long, p2_w1: Long, p3_w1: Long, p4_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_parameter_record_306b9dc9d6961224(p0_w1_f0: Long, p0_w1_f1: String?, returns: Return_Long_String2_ErrorEmpty_1b009765d5d6eed0): Unit
     @JvmStatic external fun call_parameter_records_3f3e92735953a16b(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_gc_resource_new_7ae6fd267af3001d(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

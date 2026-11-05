@@ -83,8 +83,9 @@ such as `pointX` and `pointY`; a data-class object or collection keeps its outer
 parameter name. Optional expansions use `present`, with `some` for nested optional
 payloads; selector expansions use `variant` and their explicit arm indices.
 Names follow the effective conversion after type-wide defaults and local
-overrides. Kotlin keywords are escaped with backticks. Colliding names and names
-reserved by generated code receive stable hash suffixes derived from their
+overrides. Ordinary Kotlin identifiers are emitted without backticks; hard keywords
+and names containing characters outside Kotlin's identifier grammar are escaped.
+Colliding names and names reserved by generated code receive stable hash suffixes derived from their
 source parameter and component path. Existing named calls using wire identifiers
 must adopt these public names; positional argument order is preserved.
 Naming adds no runtime statements and keeps native wire identifiers separate.

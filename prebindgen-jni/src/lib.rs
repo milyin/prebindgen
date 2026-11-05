@@ -1295,40 +1295,56 @@ fn validate_class_name(name: &str) -> Result<()> {
     }
     Ok(())
 }
+fn kotlin_keyword(name: &str) -> bool {
+    [
+        "as",
+        "break",
+        "class",
+        "continue",
+        "do",
+        "else",
+        "false",
+        "for",
+        "fun",
+        "if",
+        "in",
+        "interface",
+        "is",
+        "null",
+        "object",
+        "package",
+        "return",
+        "super",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typealias",
+        "typeof",
+        "val",
+        "var",
+        "when",
+        "while",
+    ]
+    .contains(&name)
+}
+/// Render an already validated declaration/component name. Unicode letter and
+/// decimal-digit categories follow Kotlin's identifier grammar, rather than
+/// Rust's broader Unicode identifier rules. Soft keywords can remain plain.
+fn kotlin_identifier(name: &str) -> String {
+    static PLAIN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\A[\p{L}_][\p{L}\p{Nd}_]*\z").expect("Kotlin identifier grammar")
+    });
+    if !kotlin_keyword(name) && !name.chars().all(|c| c == '_') && PLAIN.is_match(name) {
+        name.to_owned()
+    } else {
+        format!("`{name}`")
+    }
+}
 fn validate_name(s: &str) -> Result<()> {
     if s.is_empty()
         || s.chars().all(|c| c == '_')
-        || [
-            "as",
-            "break",
-            "class",
-            "continue",
-            "do",
-            "else",
-            "false",
-            "for",
-            "fun",
-            "if",
-            "in",
-            "interface",
-            "is",
-            "null",
-            "object",
-            "package",
-            "return",
-            "super",
-            "this",
-            "throw",
-            "true",
-            "try",
-            "typealias",
-            "typeof",
-            "val",
-            "var",
-            "when",
-            "while",
-        ]
-        .contains(&s)
+        || kotlin_keyword(s)
         || !s
             .chars()
             .enumerate()
@@ -2111,7 +2127,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             .join("\n");
         let text = packages.entry(pkg.clone()).or_default();
         text.push_str(&format!(
-            "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
+            "{throws}public fun {generic}{}({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
+            kotlin_identifier(name),
             kt_params.join(", ")
         ));
     }

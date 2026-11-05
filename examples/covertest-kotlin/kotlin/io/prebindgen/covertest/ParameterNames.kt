@@ -21,6 +21,7 @@ fun checkParameterNames() {
         `when` = 5L,
         io_c6e3d58b26b43793 = 6L,
     ) == 654321L)
+    check(parameterEscapedNames(value = 1L, field = 2L, `when` = 3L, 数据 = 4L, `x́` = 5L) == 54321L)
     var delivered = false
     val external = com.prebindgen.paramnames.parameterExternal(3L, 7L, callback = {
         check(it.x == 3L && it.y == 7L)

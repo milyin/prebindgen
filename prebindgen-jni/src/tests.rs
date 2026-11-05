@@ -426,14 +426,12 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
             .fun(fun!(make).expand_return(expand_return!(Outer).field(fun!(id)))))
         .package(package!("model").class(data_class!(Inner)))
         .build().unwrap();
-    assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
+    assert!(generated.kotlin["test/Envelope.kt"].contains("val inner: test.model.Inner"));
     let functions = &generated.kotlin["test/Functions.kt"];
-    assert!(functions.contains("`x`: test.Envelope"));
-    assert!(functions.contains("`x`.`inner`.`bytes`"));
+    assert!(functions.contains("x: test.Envelope"));
+    assert!(functions.contains("x.inner.bytes"));
     assert!(functions.contains("test.Envelope(test.model.Inner("));
-    assert!(
-        functions.contains("public fun `make`(`id`: ULong, onError: test.JniErrorHandler<ULong>")
-    );
+    assert!(functions.contains("public fun make(id: ULong, onError: test.JniErrorHandler<ULong>"));
     assert!(!generated.rust.contains("drop_pointer"));
     assert!(generated.kotlin["test/model/Inner.kt"].contains("contentEquals"));
 }
@@ -625,7 +623,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
             .package(package!().class(data_class!(Value)).fun(function))
             .build();
         if replace {
-            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("`value`: test.Value"));
+            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("value: test.Value"));
         } else {
             assert!(result.err().unwrap().contains("no handle class"));
         }
@@ -641,7 +639,7 @@ fn data_class_properties_and_operators_use_qualified_standard_types() {
         .build()
         .unwrap();
     let class = &generated.kotlin["test/Long.kt"];
-    assert!(class.contains("val `n`: kotlin.Long"));
+    assert!(class.contains("val n: kotlin.Long"));
     assert!(class.contains("equals(other: kotlin.Any?): kotlin.Boolean"));
     assert!(class.contains("hashCode(): kotlin.Int"));
     assert!(class.contains("toString(): kotlin.String"));
@@ -758,8 +756,9 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .build()
         .unwrap();
     let kt = &generated.kotlin["test/Functions.kt"];
-    assert!(kt
-        .contains("public fun `h`(`x`: test.Handle?, onError: test.JniErrorHandler<test.Handle?>"));
+    assert!(
+        kt.contains("public fun h(x: test.Handle?, onError: test.JniErrorHandler<test.Handle?>")
+    );
     assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
     assert!(kt.contains("invalid option payload"));
     assert!(kt.contains("if (nativeResult != 0L)"));
@@ -1117,7 +1116,7 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
     let kotlin = &generated.kotlin["test/Functions.kt"];
     assert!(kotlin.contains("valuesFold"));
     assert!(kotlin.contains("fold: (A, Long, String) -> A"));
-    assert!(!kotlin.contains("`values`("));
+    assert!(!kotlin.contains("values("));
     assert!(generated.rust.contains("call_method_unchecked"));
     assert!(generated.rust.contains("(JLjava/lang/String;)V"));
     syn::parse_file(&generated.rust).unwrap();
@@ -1127,8 +1126,8 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
         .package(package!().fun(fun!(values).callback_return()))
         .build()
         .unwrap();
-    assert!(both.kotlin["test/Functions.kt"].contains("`values`("));
-    assert!(both.kotlin["test/Functions.kt"].contains("`valuesFold`("));
+    assert!(both.kotlin["test/Functions.kt"].contains("values("));
+    assert!(both.kotlin["test/Functions.kt"].contains("valuesFold("));
     for source in [
         "pub fn f()->i64{}",
         "pub fn f()->Vec<i64>{} pub fn f_fold(){}",
@@ -1198,7 +1197,7 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
         .build()
         .unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
-    assert!(kotlin.contains("`readFold`"));
+    assert!(kotlin.contains("readFold"));
     assert!(kotlin.contains("fold: (A, Long) -> A): A?"));
 }
 
@@ -1449,7 +1448,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             builder = builder.configure(|flat| install(flat, true));
         }
         let generated = builder.build().unwrap();
-        assert!(generated.kotlin["test/Functions.kt"].contains("`value`: Long"));
+        assert!(generated.kotlin["test/Functions.kt"].contains("value: Long"));
     }
     let builder = JniGen::builder()
         .flat(flat("pub fn echo(value:i64)->i64{}"))
@@ -1554,7 +1553,7 @@ fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
         .prepare()
         .unwrap();
     let files = generate(&prepared).unwrap().kotlin;
-    assert!(files["test/EHandler.kt"].contains("run(`message`: String)"));
+    assert!(files["test/EHandler.kt"].contains("run(message: String)"));
 }
 
 #[test]
@@ -1573,9 +1572,10 @@ fn explicit_view_names_reach_builders_and_duplicate_parameters_are_rejected() {
             .build()
     };
     let generated = build("message").unwrap();
-    assert!(generated.kotlin["test/Functions.kt"]
-        .contains("build: (`code`: Long, `message`: String) -> R"));
-    assert!(generated.kotlin["test/EHandler.kt"].contains("run(`code`: Long, `message`: String)"));
+    assert!(
+        generated.kotlin["test/Functions.kt"].contains("build: (code: Long, message: String) -> R")
+    );
+    assert!(generated.kotlin["test/EHandler.kt"].contains("run(code: Long, message: String)"));
     assert!(build("code")
         .err()
         .unwrap()
@@ -1653,9 +1653,9 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
         .keys()
         .any(|name| name.starts_with("__pb_jni_error_")));
     let generated = generate(&prepared).unwrap();
-    assert!(generated.kotlin["canonical/Functions.kt"].contains("`renamed`"));
-    assert!(generated.kotlin["canonical/Functions.kt"].contains("`rowsFold`"));
-    assert!(!generated.kotlin["canonical/Functions.kt"].contains("`rows`("));
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("renamed"));
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("rowsFold"));
+    assert!(!generated.kotlin["canonical/Functions.kt"].contains("rows("));
     assert!(generated.kotlin["canonical/JNINative.kt"].contains("canonical init"));
     assert!(generated.kotlin.contains_key("canonical/EHandler.kt"));
     assert!(generated
@@ -1856,12 +1856,8 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
         .prepare()
         .unwrap();
     let output = generate(&prepared).unwrap();
-    assert!(
-        output.kotlin["example/values/OriginalCallback.kt"]
-            .contains("arg0_0: example.values.Renamed")
-            || output.kotlin["example/values/OriginalCallback.kt"]
-                .contains("`arg0_0`: example.values.Renamed")
-    );
+    assert!(output.kotlin["example/values/OriginalCallback.kt"]
+        .contains("arg0_0: example.values.Renamed"));
     assert!(output.kotlin["example/VoidCallback.kt"].contains("public fun run()"));
     assert!(
         output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback?")
@@ -1973,7 +1969,7 @@ fn callback_constructor_is_resolved_without_exporting_the_helper() {
     assert!(prepared.function("make").unwrap().metadata.is_none());
     let generated = generate(&prepared).unwrap();
     assert!(generated.kotlin.contains_key("test/i64Callback.kt"));
-    assert!(!generated.kotlin["test/Functions.kt"].contains("`make`("));
+    assert!(!generated.kotlin["test/Functions.kt"].contains("make("));
     syn::parse_file(&generated.rust).unwrap();
 }
 
@@ -2093,7 +2089,7 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
 fn callbacks_return_typed_values_and_keep_unit_interfaces() {
     let generated=JniGen::builder().flat(flat("pub fn unit(cb:impl Fn(i64)) {} pub fn number(cb:impl Fn(i64)->i64)->i64{} pub fn flag(cb:impl Fn(i64)->bool)->bool{} pub fn zero(cb:impl Fn()->String)->String{}"))
         .set_package_prefix("test").package(package!().fun(fun!(unit)).fun(fun!(number)).fun(fun!(flag)).fun(fun!(zero))).build().unwrap();
-    assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(`arg0_0`: Long)"));
+    assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(arg0_0: Long)"));
     assert!(generated.kotlin["test/i64Toi64Callback.kt"].contains(": Long"));
     assert!(generated.kotlin["test/i64ToboolCallback.kt"].contains(": Boolean"));
     assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String?"));
@@ -2773,10 +2769,10 @@ fn automatic_bulk_collections_preserve_fold_and_callback_local_overrides() {
                 .expand_param(0,expand_return!(Vec<Row>).field_self()))))
         .build().unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
-    assert!(kotlin.contains("`rows`("));
-    assert!(kotlin.contains("`rowsFold`("));
-    assert!(kotlin.contains("`onlyFold`("));
-    assert!(!kotlin.contains("`only`("));
+    assert!(kotlin.contains("rows("));
+    assert!(kotlin.contains("rowsFold("));
+    assert!(kotlin.contains("onlyFold("));
+    assert!(!kotlin.contains("only("));
     assert!(kotlin.contains("fun run(raw0: ByteArray?)"));
     assert!(kotlin.contains("fun run(raw0: Array<Any?>?)"), "{kotlin}");
     assert!(kotlin.contains("SequenceCollector_rows_fold_"));
@@ -2922,7 +2918,7 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
             .package(package!().fun(declaration))
             .build()
             .unwrap();
-        assert!(generated.kotlin["test/Functions.kt"].contains("`rowsFold`("));
+        assert!(generated.kotlin["test/Functions.kt"].contains("rowsFold("));
     }
     // This Flat API maps fixed arrays to lists, including byte arrays. The
     // legacy generator's primitive-array representation is not used here.
@@ -3796,4 +3792,26 @@ fn collector_capacity_registration_is_shared_and_follows_the_library_loader() {
     assert!(generated
         .proguard_rules()
         .contains("JNINative$SequenceCapacity"));
+}
+
+#[test]
+fn kotlin_identifiers_only_escape_keywords_and_nonidentifier_characters() {
+    for name in [
+        "packetId", "_packet2", "field", "value", "get", "set", "suspend", "数据", "é", "n١",
+    ] {
+        assert_eq!(kotlin_identifier(name), name);
+    }
+    for name in [
+        "when",
+        "class",
+        "in",
+        "fun",
+        "x\u{301}",
+        "value-name",
+        "2nd",
+        "a²",
+        "Ⅷ",
+    ] {
+        assert_eq!(kotlin_identifier(name), format!("`{name}`"));
+    }
 }

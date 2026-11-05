@@ -23,11 +23,11 @@
     }
   ],
   "additional_kotlin_compatibility": {
-    "scope": "Every baseline Kotlin file except public Functions.kt wrappers, including return captures, typed rows, callbacks, classes and runtime helpers.",
-    "files_compared": 251,
+    "scope": "Every baseline typed JNI return-capture class (Return_*.kt). Other public Kotlin files intentionally change optional identifier backticks.",
+    "files_compared": 48,
     "digest_method": "SHA-256 over sorted relative paths and bytes, each prefixed with its 64-bit little-endian byte length.",
-    "baseline_sha256": "eefaddf8cefc7bee2ebeee4d8eec73566bcdf2dce4d27f921fd87ede4071d345",
-    "updated_sha256": "eefaddf8cefc7bee2ebeee4d8eec73566bcdf2dce4d27f921fd87ede4071d345",
+    "baseline_sha256": "76a2d1b15f8e6aaf0eea71dc0215dbebf92572094f975a672605c97b5e183aa8",
+    "updated_sha256": "76a2d1b15f8e6aaf0eea71dc0215dbebf92572094f975a672605c97b5e183aa8",
     "identical": true
   }
 }

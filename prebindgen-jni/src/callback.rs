@@ -749,7 +749,10 @@ fn returned_handle_cleanup(
         } => {
             let mut body = String::new();
             for (field, child) in crate::data::fields(children)? {
-                let expr = format!("{local}.`{}`", field.to_string().trim_start_matches("r#"));
+                let expr = format!(
+                    "{local}.{}",
+                    kotlin_identifier(field.to_string().trim_start_matches("r#"))
+                );
                 body.push_str(&returned_handle_cleanup(child, &expr, prefix, next)?);
             }
             format!(
@@ -865,7 +868,7 @@ pub(crate) fn files(
                 while !names.insert(name.clone()) {
                     name.push('_');
                 }
-                params.push(format!("`{name}`: {ty}"));
+                params.push(format!("{}: {ty}", kotlin_identifier(&name)));
             }
         }
         let return_type = callback

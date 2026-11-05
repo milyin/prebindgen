@@ -156,8 +156,11 @@ impl JniEnum {
         for (variant, value) in &self.mapping.variants {
             let name = self.variant_name(variant);
             prebindgen_declarations::ident(&format!("v_{name}"))?;
-            entries.push(format!("    `{name}`({value})"));
-            cases.push(format!("            {value} -> `{name}`"));
+            entries.push(format!("    {}({value})", kotlin_identifier(&name)));
+            cases.push(format!(
+                "            {value} -> {}",
+                kotlin_identifier(&name)
+            ));
         }
         let member = self.value_member();
         let decode = self.decode_member();
@@ -187,8 +190,8 @@ mod tests {
             .package(package!("codes").class(enum_class!(E).name("Code")))
             .set_package_prefix("test").build().unwrap();
         let enumeration = &generated.kotlin["test/codes/Code.kt"];
-        assert!(enumeration.contains("`B`(-1)"));
-        assert!(enumeration.contains("`C`(7)"));
+        assert!(enumeration.contains("B(-1)"));
+        assert!(enumeration.contains("C(7)"));
         assert!(enumeration.contains("else -> throw kotlin.IllegalArgumentException"));
         let record = &generated.kotlin["test/records/Record.kt"];
         assert!(record.contains("test.codes.Code"));

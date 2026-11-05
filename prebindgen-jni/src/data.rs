@@ -328,8 +328,8 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
         .iter()
         .map(|f| {
             format!(
-                "    public val `{}`: {}",
-                field_name(f),
+                "    public val {}: {}",
+                kotlin_identifier(&field_name(f)),
                 f.metadata.kotlin_type
             )
         })
@@ -349,15 +349,15 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let n = kotlin_identifier(&field_name(f));
                 match &f.metadata {
                     _ if f.metadata.bytes => {
-                        format!("this.`{n}`.contentEquals(other.`{n}`)")
+                        format!("this.{n}.contentEquals(other.{n})")
                     }
                     _ if f.metadata.floating => {
-                        format!("this.`{n}`.compareTo(other.`{n}`) == 0")
+                        format!("this.{n}.compareTo(other.{n}) == 0")
                     }
-                    _ => format!("this.`{n}` == other.`{n}`"),
+                    _ => format!("this.{n} == other.{n}"),
                 }
             })
             .collect::<Vec<_>>()
@@ -366,11 +366,11 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let n = kotlin_identifier(&field_name(f));
                 if f.metadata.bytes {
-                    format!("this.`{n}`.contentHashCode()")
+                    format!("this.{n}.contentHashCode()")
                 } else {
-                    format!("this.`{n}`.hashCode()")
+                    format!("this.{n}.hashCode()")
                 }
             })
             .collect::<Vec<_>>();
@@ -382,13 +382,14 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let label = field_name(f);
+                let n = kotlin_identifier(&label);
                 let suffix = if f.metadata.bytes {
                     ".contentToString()"
                 } else {
                     ""
                 };
-                format!("{n}=${{this.`{n}`{suffix}}}")
+                format!("{label}=${{this.{n}{suffix}}}")
             })
             .collect::<Vec<_>>()
             .join(", ");
@@ -946,8 +947,8 @@ pub(crate) fn input_kotlin(
             format!("requireNotNull({})", d.root)
         };
         let expr = format!(
-            "{receiver}.`{}`",
-            field.to_string().trim_start_matches("r#")
+            "{receiver}.{}",
+            kotlin_identifier(field.to_string().trim_start_matches("r#"))
         );
         for a in c
             .arguments
@@ -1197,7 +1198,7 @@ mod group_tests {
         };
         let input = kotlin::input_kotlin(&field, &context).unwrap();
         assert_eq!(input.parameters, ["point: example.Point"]);
-        assert!(input.arguments[0].contains("point.`type`"));
+        assert!(input.arguments[0].contains("point.type"));
         let output = kotlin::output_kotlin(&field, &context).unwrap();
         assert_eq!(output.result_types, ["example.Point"]);
         assert!(output.delivered[0].contains("example.Point(result[0]"));

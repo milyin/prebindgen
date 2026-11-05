@@ -197,7 +197,7 @@ pub(crate) fn apply(
             return Err(format!("duplicate public Kotlin parameter `{public}`"));
         }
         if mappings[name.input]
-            .insert(name.wire, format!("`{public}`"))
+            .insert(name.wire, kotlin_identifier(&public))
             .is_some()
         {
             return Err("duplicate Kotlin input parameter binding".into());
@@ -458,7 +458,7 @@ mod tests {
         apply(&["input".into()], &mut codes, &BTreeSet::new()).unwrap();
         assert_ne!(codes[0].parameters[0], codes[0].parameters[1]);
         for parameter in &codes[0].parameters {
-            assert!(parameter.starts_with("`inputValue0_"));
+            assert!(parameter.starts_with("inputValue0_"));
         }
     }
 
@@ -476,7 +476,7 @@ mod tests {
             .build()
             .unwrap();
         let functions = &output.kotlin["foreign/Functions.kt"];
-        assert!(functions.contains("`foreign_"), "{functions}");
+        assert!(functions.contains("foreign_"), "{functions}");
         assert!(functions.contains("foreign.Row("), "{functions}");
     }
 
@@ -509,11 +509,11 @@ mod tests {
             .unwrap();
         let functions = &output.kotlin["test/Functions.kt"];
         assert!(
-            functions.contains("`packetId`: ULong, `callback`: test.i64Callback?"),
+            functions.contains("packetId: ULong, callback: test.i64Callback?"),
             "{functions}"
         );
-        assert!(functions.contains("`packetId`.toLong()"));
-        assert!(functions.contains("`callback`.run("));
+        assert!(functions.contains("packetId.toLong()"));
+        assert!(functions.contains("callback.run("));
         assert!(output.kotlin["test/JNINative.kt"].contains("p0_w1: Long, p1_callback: Any?"));
     }
 
@@ -528,9 +528,9 @@ mod tests {
                 .build()
                 .unwrap();
             let functions = &output.kotlin["test/Functions.kt"];
-            assert!(functions.contains("`rowPresent`: Boolean"), "{functions}");
-            assert!(functions.contains("`rowNumber`: Long"), "{functions}");
-            assert!(functions.contains("`rowLabel`: String?"), "{functions}");
+            assert!(functions.contains("rowPresent: Boolean"), "{functions}");
+            assert!(functions.contains("rowNumber: Long"), "{functions}");
+            assert!(functions.contains("rowLabel: String?"), "{functions}");
         }
     }
 
@@ -543,10 +543,10 @@ mod tests {
             .unwrap();
         let functions = &output.kotlin["test/Functions.kt"];
         assert!(
-            functions.contains("`records`: kotlin.collections.List<test.Row>"),
+            functions.contains("records: kotlin.collections.List<test.Row>"),
             "{functions}"
         );
-        assert!(functions.contains("`packet`: test.Row"), "{functions}");
+        assert!(functions.contains("packet: test.Row"), "{functions}");
     }
 
     #[test]
@@ -575,12 +575,12 @@ mod tests {
         let b = names(
             "pub fn call(fooBar:i64,foo_bar:i64,on_error:i64,return_capture:i64,r#when:i64){}",
         );
-        assert!(a[0].starts_with("`fooBar_") && a[1].starts_with("`fooBar_"));
+        assert!(a[0].starts_with("fooBar_") && a[1].starts_with("fooBar_"));
         assert_ne!(a[0], a[1]);
         assert_eq!(a[0], b[1]);
         assert_eq!(a[1], b[0]);
-        assert!(a[2].starts_with("`onError_"));
-        assert!(a[3].starts_with("`returnCapture_"));
+        assert!(a[2].starts_with("onError_"));
+        assert!(a[3].starts_with("returnCapture_"));
         assert_eq!(a[4], "`when`");
     }
 
@@ -622,12 +622,9 @@ mod tests {
             .lines()
             .find(|s| s.starts_with("public fun"))
             .unwrap();
-        assert_eq!(signature.matches("`rowPresent_").count(), 2, "{signature}");
-        assert!(
-            signature.contains("`nestedPresent`: Boolean"),
-            "{signature}"
-        );
-        assert!(signature.contains("`nestedSome`: Long?"), "{signature}");
+        assert_eq!(signature.matches("rowPresent_").count(), 2, "{signature}");
+        assert!(signature.contains("nestedPresent: Boolean"), "{signature}");
+        assert!(signature.contains("nestedSome: Long?"), "{signature}");
     }
 
     #[test]
@@ -640,7 +637,7 @@ mod tests {
                 .package(package!().class(ptr_class!(Handle)).fun(fun!(call)))
                 .build()
                 .unwrap();
-            assert!(output.kotlin["test/Functions.kt"].contains("`owner`: Long"));
+            assert!(output.kotlin["test/Functions.kt"].contains("owner: Long"));
         }
     }
 }
