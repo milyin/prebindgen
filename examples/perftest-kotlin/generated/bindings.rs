@@ -1,5 +1,5 @@
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop_1Storage_19651261943550368(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,

@@ -22,6 +22,7 @@ internal object JNINative {
     @JvmStatic external fun drop_CallbackSet_42869ab2828f84d4(id: Long)
     @JvmStatic external fun drop_CallbackTransferred_eab9ef9641575576(id: Long)
     @JvmStatic external fun drop_CallbackUniqueResource_d31d0c3f2ae0419c(id: Long)
+    @JvmStatic external fun drop_GcResource_0ee976436a63104d(id: Long)
     @JvmStatic external fun drop_GetterLeaf_b28f97ae79569aa8(id: Long)
     @JvmStatic external fun drop_GetterOwner_bc1803eb5b8c76ef(id: Long)
     @JvmStatic external fun drop_NicheChoiceHandle_820b60fc3ef75039(id: Long)
@@ -29,6 +30,7 @@ internal object JNINative {
     @JvmStatic external fun drop_OptionCtor_9701b4353b1ab7b0(id: Long)
     @JvmStatic external fun drop_OwnedResource_e39aa0af54304c88(id: Long)
     @JvmStatic external fun drop_PayloadHandle_af81cbfac6e10b9d(id: Long)
+    @JvmStatic external fun drop_PlainResource_b08b40798e6273bd(id: Long)
     @JvmStatic external fun drop_ProjectionHandle_46b41135284839d8(id: Long)
     @JvmStatic external fun drop_Report_965f7809bbde41dd(id: Long)
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
@@ -144,6 +146,22 @@ internal object JNINative {
     @JvmStatic external fun call_return_domain_cb3675a75d892ba1(p0_w1: Long, p1_w1: Boolean, p2_callback: Any?, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
     @JvmStatic external fun call_return_pair_8bb51b9e0f2fc283(p0_w1: Long, returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit
     @JvmStatic external fun call_return_wide_af7145445fe5e699(p0_w1: Long, returns: Return_Long_Long_Long130_ErrorEmpty_d02793509212a1f3): Unit
+    @JvmStatic external fun call_gc_resource_new_7ae6fd267af3001d(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_value_20a9f8cccf5d47f5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_consume_8efd1138a357f171(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_fail_bbca11f56e815020(p0_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
+    @JvmStatic external fun call_gc_resource_pair_5b8cb5677c43d3b0(p0_w1: Long, p1_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_drops_53900a369e1b88bb(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_three_43d8964dd265c043(p0_w1: Long, p1_w1: Long, p2_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_consume_rows_4fb308d2bb5df313(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_read_rows_855e8e95b1044388(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_emit_c3aa9044644f4b9c(p0_w1: Long, p1_w1: Long, p2_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_gc_resource_hold_c14426251e7e19b0(p0_w1: Long, p1_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_return_6e25e73ee67bf26e(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_gc_resource_emit_owned_5c69b3edc59eb5a1(p0_w1: Long, p1_w1: Long, p2_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_gc_resource_rows_cdbbaa46996fd3a0(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_plain_resource_new_d97fe9314c02793e(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_plain_resource_value_efe7741f532a6c5b(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_buffer_views_optional_text_2e5df9089cef5211(p0_w1: Boolean, returns: Return_String_Long2_ErrorEmpty_b2c3b4b34db92d24): Unit
     @JvmStatic external fun call_buffer_views_optional_bytes_f3f56b8a8b1996c2(p0_w1: Boolean, returns: Return_ByteArray_Long2_ErrorEmpty_34705c584e211183): Unit
     @JvmStatic external fun call_buffer_views_text_d3011d2eb33189c1(returns: Return_String_Long2_ErrorEmpty_b2c3b4b34db92d24): Unit
@@ -505,6 +523,13 @@ internal object JNINative {
         override fun run(v0: Long, v1: Double) { rows.add(SequenceRow_Long_Double_2_012db11776ed72c5(v0, v1)) }
     }
     @JvmStatic external fun call_default_bulk_optional_fold_a9233ea21645798f(p0_w1: Long, callback: SequenceSink_default_bulk_optional_fold_98317e3c22588d99, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
+    internal interface SequenceSink_gc_resource_rows_fold_98b54dd95d8e015f : SequenceCapacity { fun run(v0: Long) }
+    internal class SequenceCollector_gc_resource_rows_fold_a0cec018fb39eb7c : SequenceSink_gc_resource_rows_fold_98b54dd95d8e015f {
+        @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_Long_1_127a3c24b600dbe0>()
+        override fun reserve(capacity: Int) { rows.ensureCapacity(capacity) }
+        override fun run(v0: Long) { rows.add(SequenceRow_Long_1_127a3c24b600dbe0(v0)) }
+    }
+    @JvmStatic external fun call_gc_resource_rows_fold_5c247ce3042d4525(p0_w1: Long, p1_w1: Long, callback: SequenceSink_gc_resource_rows_fold_98b54dd95d8e015f, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     internal interface SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 : SequenceCapacity { fun run(v0: ByteArray?) }
     internal class SequenceCollector_jni_output_mixed_frames_fold_a5668456db986db2 : SequenceSink_jni_output_mixed_frames_fold_b4828e3a4ee22135 {
         @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_ByteArray_1_92dc0f7ab995287c>()
