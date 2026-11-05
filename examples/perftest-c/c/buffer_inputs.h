@@ -81,5 +81,45 @@ static void check_buffer_inputs(void) {
     assert(perftest_buffer_rows_temporaries((perftest_buffer_rows_temporaries_p0_w1_rows){temporary, 1}, &result, &consumed, &error));
     assert(result == 15 && consumed == 1 && perftest_owned_resource_drops() == drops + 1);
     assert(perftest_buffer_row_constructor_calls() == 1 && perftest_buffer_row_function_calls() == 1);
-    puts("C buffer input replay PASS: decode once, aliases, optional slots, prefix cleanup and temporary lifetimes");
+    /* Optional borrowed leaves keep storage outside the presence branch. */
+    perftest_buffer_row_reset_counts(); drops = perftest_owned_resource_drops();
+    perftest_buffer_rows_views_p0_w1_row views[] = {
+        {perftest_collection_resource_new(1), 1, text, 1, payload},
+        {perftest_collection_resource_new(2), 0, {NULL, SIZE_MAX}, 0, {NULL, SIZE_MAX}}
+    };
+    assert(perftest_buffer_rows_views((perftest_buffer_rows_views_p0_w1_rows){views, 2}, &result, &consumed, &error));
+    assert(result == 11 && consumed == 2 && perftest_owned_resource_drops() == drops + 2);
+    assert(perftest_buffer_row_constructor_calls() == 2);
+    perftest_buffer_rows_optional_temporaries_p0_w1_row optional_temps[] = {
+        {perftest_collection_resource_new(1), 1, text, 1, payload},
+        {perftest_collection_resource_new(2), 0, {NULL, SIZE_MAX}, 0, {NULL, SIZE_MAX}}
+    };
+    assert(perftest_buffer_rows_optional_temporaries((perftest_buffer_rows_optional_temporaries_p0_w1_rows){optional_temps, 2}, &result, &consumed, &error));
+    assert(result == 11 && consumed == 2);
+
+    /* Selected constructors can borrow optional buffers without leaking a
+       reference into an arm-local temporary. Inactive slots stay untouched. */
+    shared = perftest_collection_resource_new(7);
+    perftest_buffer_rows_alternatives_p0_w1_row alternatives[] = {
+        {0, perftest_collection_resource_new(1), 1, text, 1, payload, NULL, {NULL, SIZE_MAX}, {NULL, SIZE_MAX}},
+        {1, NULL, 0, {NULL, SIZE_MAX}, 0, {NULL, SIZE_MAX}, shared, text, payload}
+    };
+    perftest_buffer_row_reset_counts(); drops = perftest_owned_resource_drops();
+    assert(perftest_buffer_rows_alternatives((perftest_buffer_rows_alternatives_p0_w1_rows){alternatives, 2}, &result, &consumed, &error));
+    assert(result == 24 && consumed == 1 && perftest_owned_resource_drops() == drops + 1);
+    assert(perftest_buffer_row_constructor_calls() == 2 && perftest_option_resource_id(shared) == 7);
+    perftest_drop_owned_resource(shared);
+
+    /* Enums retain the staged fallback. It captures stable C descriptors and
+       declares temporary storage when invoked, after releasing no C row state. */
+    perftest_buffer_rows_enum_p0_w1_row enums[] = {
+        {perftest_collection_resource_new(1), 0, 1, text, 1, payload},
+        {perftest_collection_resource_new(2), 0, 1, {invalid, sizeof(invalid)}, 1, payload}
+    };
+    perftest_buffer_row_reset_counts(); drops = perftest_owned_resource_drops(); result = 12345;
+    assert(!perftest_buffer_rows_enum((perftest_buffer_rows_enum_p0_w1_rows){enums, 2}, &result, &consumed, &error));
+    assert(result == 12345 && consumed == 2 && perftest_owned_resource_drops() == drops + 2);
+    assert(perftest_buffer_row_constructor_calls() == 1 && perftest_buffer_row_function_calls() == 0);
+    perftest_free_error(error);
+    puts("C buffer input replay PASS: decode once, aliases, optional/selector borrows, staged rows and prefix cleanup");
 }

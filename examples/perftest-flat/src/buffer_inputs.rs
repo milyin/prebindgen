@@ -1,5 +1,5 @@
 //! C row replay with borrowed buffers, ownership transfer and failing decoding.
-use crate::{owned_resource_id, OwnedResource, ResultFailure};
+use crate::{owned_resource_id, OwnedResource, ResultFailure, SparseCode};
 use prebindgen_proc_macro::prebindgen;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -69,6 +69,65 @@ pub fn buffer_row_temporary(resource: OwnedResource, text: &String, bytes: &Vec<
 }
 #[prebindgen]
 pub fn buffer_rows_temporaries(rows: Vec<i64>) -> Result<i64, ResultFailure> {
+    CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(rows.iter().sum())
+}
+#[prebindgen]
+pub fn buffer_row_optional_views(
+    resource: OwnedResource,
+    text: Option<&str>,
+    bytes: Option<&[u8]>,
+) -> i64 {
+    CONSTRUCTORS.fetch_add(1, Ordering::SeqCst);
+    owned_resource_id(&resource)
+        + text.map_or(0, str::len) as i64
+        + bytes
+            .unwrap_or_default()
+            .iter()
+            .map(|b| i64::from(*b))
+            .sum::<i64>()
+}
+#[prebindgen]
+pub fn buffer_row_optional_temporaries(
+    resource: OwnedResource,
+    text: Option<&String>,
+    bytes: Option<&Vec<u8>>,
+) -> i64 {
+    CONSTRUCTORS.fetch_add(1, Ordering::SeqCst);
+    owned_resource_id(&resource)
+        + text.map_or(0, String::len) as i64
+        + bytes
+            .into_iter()
+            .flatten()
+            .map(|b| i64::from(*b))
+            .sum::<i64>()
+}
+#[prebindgen]
+pub fn buffer_row_enum(
+    resource: OwnedResource,
+    _code: SparseCode,
+    text: Option<&String>,
+    bytes: Option<&Vec<u8>>,
+) -> i64 {
+    buffer_row_optional_temporaries(resource, text, bytes)
+}
+#[prebindgen]
+pub fn buffer_rows_views(rows: Vec<i64>) -> Result<i64, ResultFailure> {
+    CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(rows.iter().sum())
+}
+#[prebindgen]
+pub fn buffer_rows_optional_temporaries(rows: Vec<i64>) -> Result<i64, ResultFailure> {
+    CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(rows.iter().sum())
+}
+#[prebindgen]
+pub fn buffer_rows_alternatives(rows: Vec<i64>) -> Result<i64, ResultFailure> {
+    CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(rows.iter().sum())
+}
+#[prebindgen]
+pub fn buffer_rows_enum(rows: Vec<i64>) -> Result<i64, ResultFailure> {
     CALLS.fetch_add(1, Ordering::SeqCst);
     Ok(rows.iter().sum())
 }

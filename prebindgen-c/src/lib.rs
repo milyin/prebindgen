@@ -232,7 +232,9 @@ impl Codec for CCodec {
                 quote!(std::ptr::null())
             }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
-            CWire::View | CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::View | CWire::Buffer | CWire::DeferredBuffer => {
+                quote!(#buffer_type {data:std::ptr::null(),len:0})
+            }
             CWire::MutableView => quote!(__PbBufferMut {
                 data: std::ptr::null_mut(),
                 len: 0
@@ -313,15 +315,12 @@ impl Codec for CCodec {
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
-        let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
-            Some(Value::Text) => (
-                quote!(std::str::from_utf8(unsafe {#read_buffer(#w)?}).map_err(|_|"invalid UTF-8")?),
-                CWire::Buffer,
-            ),
-            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CWire::Buffer),
+            Some(value @ (Value::Text | Value::Bytes)) => {
+                (sequence::decode_buffer(value, &w), CWire::Buffer)
+            }
             None => {
                 return prebindgen_conversions::boxed::input(
                     &prebindgen_conversions::boxed::Storage::Direct,
@@ -347,8 +346,8 @@ impl Codec for CCodec {
         var: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
-        let mut plan = self.input_leaf(flat, ty, extra, wire, var, active)?;
-        sequence::defer_buffer_decode(&mut plan);
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
         Ok(plan)
     }
     fn output_leaf(
@@ -1466,7 +1465,7 @@ fn c_ty(
                 )
             }
         }
-        CWire::Buffer => format!("{prefix}_buffer"),
+        CWire::Buffer | CWire::DeferredBuffer => format!("{prefix}_buffer"),
         CWire::Rows => format!(
             "{prefix}_{}_rows",
             context.row_types[&wire.name.to_string()]
@@ -2656,8 +2655,29 @@ mod generation_tests {
             assert!(plan.resources.iter().all(|r| !r.registered));
             if matches!(Value::of(&ty), Some(Value::Text | Value::Bytes)) {
                 assert!(plan.validation.is_empty());
-                assert!(plan.acquire.is_empty());
+                assert!(!plan.acquire.to_string().contains("from_utf8"));
                 assert!(!plan.statements.is_empty());
+                let ordinary = CCodec
+                    .input_leaf(
+                        &flat,
+                        &ty,
+                        &(),
+                        syn::parse_quote!(value),
+                        syn::parse_quote!(decoded),
+                        &prebindgen_declarations::Condition::default(),
+                    )
+                    .unwrap();
+                let ordinary_transport = sequence::input(
+                    syn::parse_quote!(rows),
+                    syn::parse_quote!(len),
+                    syn::parse_quote!(index),
+                    &ordinary.node,
+                )
+                .unwrap();
+                assert!(
+                    !ordinary_transport.reread_rows,
+                    "ordinary buffer decoding must not be repeated"
+                );
             }
         }
     }
@@ -2691,14 +2711,17 @@ mod generation_tests {
     #[test]
     fn scalar_and_buffer_handle_rows_reread_and_construct_once() {
         use prebindgen_declarations::{expand_param, fun};
-        let source="pub type Handle=String; pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
-        let model =
-            || Cbindgen::new(error_model(source)).opaque_ptr("handle", syn::parse_quote!(Handle));
-        for constructor in ["row", "text"] {
-            let expansion = if constructor == "row" {
-                expand_param!(Row).variant(fun!(row))
-            } else {
-                expand_param!(Row).variant(fun!(text))
+        let source="pub type Handle=String; pub enum Tag{A} pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn tagged(h:Handle,n:Option<&String>,bytes:Option<&Vec<u8>>,tag:Tag)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("handle", syn::parse_quote!(Handle))
+                .enum_type("tag", syn::parse_quote!(Tag))
+        };
+        for constructor in ["row", "text", "tagged"] {
+            let expansion = match constructor {
+                "row" => expand_param!(Row).variant(fun!(row)),
+                "text" => expand_param!(Row).variant(fun!(text)),
+                _ => expand_param!(Row).variant(fun!(tagged)),
             };
             let flat = model()
                 .expand(expansion)
@@ -2713,14 +2736,22 @@ mod generation_tests {
                 .unwrap()
                 .validation
                 .to_string();
-            assert!(!code.contains("_prepared"), "{code}");
+            assert_eq!(
+                code.contains("_prepared"),
+                constructor == "tagged",
+                "{code}"
+            );
             assert!(code.contains("accept_group"));
             let call = format!(":: {constructor} (");
             assert_eq!(code.matches(&call).count(), 1, "{code}");
-            assert!(code.find("accept_group").unwrap() < code.find(&call).unwrap());
-            if constructor == "text" {
+            if constructor != "tagged" {
+                assert!(code.find("accept_group").unwrap() < code.find(&call).unwrap());
+            }
+            if constructor != "row" {
                 assert_eq!(code.matches("from_utf8").count(), 1, "{code}");
-                assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
+                if constructor == "text" {
+                    assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
+                }
             }
         }
         let flat = model().function(fun!(options)).panic().prepare().unwrap();

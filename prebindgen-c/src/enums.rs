@@ -239,8 +239,8 @@ impl Codec for EnumCodec<'_> {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
-        let mut plan = self.input_leaf(flat, ty, extra, wire, var, active)?;
-        sequence::defer_buffer_decode(&mut plan);
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
         Ok(plan)
     }
     fn output_leaf(

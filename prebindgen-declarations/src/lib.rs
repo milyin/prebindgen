@@ -915,7 +915,10 @@ pub trait Codec {
     /// adapter may decode row-local buffers there instead of retaining decoded
     /// values during grouped validation. Resource identity and pointer validation
     /// needed by the grouped check must remain in `validation`; every value must
-    /// still be validated before use. Nested sequences/callbacks retain their
+    /// still be validated before use. Deferred wire reads must remain valid after
+    /// the transport releases its per-row state, including when construction is
+    /// retained in a prepared-row closure rather than rereading source rows.
+    /// Nested sequences/callbacks retain their
     /// ordinary input preparation. The default uses the usual leaf conversion.
     fn input_row_leaf(
         &self,

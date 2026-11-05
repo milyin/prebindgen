@@ -445,6 +445,26 @@ fn main() {
             "rows",
             expand_param!(i64).variant(fun!(buffer_row_temporary)),
         ))
+        .function(fun!(buffer_rows_views).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_views)),
+        ))
+        .function(fun!(buffer_rows_optional_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_temporaries)),
+        ))
+        .function(
+            fun!(buffer_rows_alternatives).expand_param(
+                "rows",
+                expand_param!(i64)
+                    .variant(fun!(buffer_row_optional_views))
+                    .variant(fun!(buffer_row_borrow)),
+            ),
+        )
+        .function(
+            fun!(buffer_rows_enum)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
+        )
         .function(fun!(buffer_row_reset_counts))
         .panic()
         .function(fun!(buffer_row_constructor_calls))

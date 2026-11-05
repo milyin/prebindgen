@@ -953,7 +953,8 @@ constructor finishes. Invalid later buffers may fail after earlier rows and
 the current row's handles have been consumed. Rust drops the constructed prefix
 and acquired values; ownership receipts identify the consumed prefix, and unread
 owners remain with the caller. Direct function parameter decoding is unchanged.
-Enum, inline-owner and callback rows retain their existing preparation strategy.
+Enum, inline-owner and callback rows retain prepared storage; flat C rows in that
+fallback also defer their buffer decoding until construction.
 Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
 throughout the call, including source constructor invocations; neither reentrant
 code nor another thread may mutate the wire rows or descriptors. This applies to

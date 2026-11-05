@@ -56,7 +56,7 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
                 CWire::Rows => "rows".into(),
                 CWire::View => "view".into(),
                 CWire::MutableView => "view_mut".into(),
-                CWire::Buffer => "buffer".into(),
+                CWire::Buffer | CWire::DeferredBuffer => "buffer".into(),
                 CWire::Callback { callback } => format!("callback:{}", callback.name),
             };
             out.push_str(&format!("{}:{value};", value.len()));
@@ -283,7 +283,7 @@ impl CCallback {
     fn has_release(&self) -> bool {
         self.return_fields()
             .iter()
-            .any(|w| matches!(w.kind, CWire::Buffer | CWire::Rows))
+            .any(|w| matches!(w.kind, CWire::Buffer | CWire::DeferredBuffer | CWire::Rows))
     }
     pub(crate) fn absent_value(&self) -> TokenStream {
         let name = format_ident!("{}", self.name);
