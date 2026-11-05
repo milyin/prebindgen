@@ -124,6 +124,7 @@ pub(crate) fn emit(
         let helper = helper(name);
         let input = format_ident!("source_error");
         let context = CContext {
+            emit_alias_checks: Some(true),
             row_types: {
                 let mut schemas = Vec::new();
                 sequence::schemas(&plan.outcomes.success, &mut schemas);

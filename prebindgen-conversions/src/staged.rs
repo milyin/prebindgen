@@ -6,6 +6,16 @@ use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
+/// Defer the input-alias choice until the owning wrapper is rendered.
+/// No runtime policy lookup is emitted by the C or JNI adapters.
+pub fn input_alias_checks(checked: TokenStream, unchecked: TokenStream) -> TokenStream {
+    // Keep no-op fragments bare so call composition can omit them before rendering.
+    if checked.to_string() == unchecked.to_string() {
+        return checked;
+    }
+    quote!(::prebindgen_runtime::__prebindgen_alias_checks! { {#checked} {#unchecked} })
+}
+
 /// Check whether function parameters conflict in their access to foreign allocations.
 ///
 /// Include every parameter's access requirements during generation. Compiled
@@ -499,7 +509,7 @@ where
     let setup = if early_receipt {
         let counter = context_counter(context)?;
         let aliases = if eager {
-            check.initialize()?
+            input_alias_checks(check.initialize()?, TokenStream::new())
         } else {
             TokenStream::new()
         };
@@ -508,7 +518,7 @@ where
         TokenStream::new()
     };
     if !eager {
-        checks.push(check.emit()?);
+        checks.push(input_alias_checks(check.emit()?, quote!(())));
     }
     checks.retain(|code| code.to_string() != quote!(()).to_string());
     let alias_checks = quote!(#(let _: () = #checks;)*);
@@ -561,7 +571,7 @@ where
         }
     }
     body = scope(setup, body)?;
-    Ok(body)
+    context.render(&body)
 }
 fn plug(scope: &TokenStream, next: TokenStream) -> Result<TokenStream> {
     let code = crate::render_template(scope, &|name| {

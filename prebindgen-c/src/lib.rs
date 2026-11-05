@@ -232,7 +232,9 @@ impl Codec for CCodec {
                 quote!(std::ptr::null())
             }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
-            CWire::View | CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::View | CWire::Buffer | CWire::DeferredBuffer => {
+                quote!(#buffer_type {data:std::ptr::null(),len:0})
+            }
             CWire::MutableView => quote!(__PbBufferMut {
                 data: std::ptr::null_mut(),
                 len: 0
@@ -313,15 +315,12 @@ impl Codec for CCodec {
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
-        let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
-            Some(Value::Text) => (
-                quote!(std::str::from_utf8(unsafe {#read_buffer(#w)?}).map_err(|_|"invalid UTF-8")?),
-                CWire::Buffer,
-            ),
-            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CWire::Buffer),
+            Some(value @ (Value::Text | Value::Bytes)) => {
+                (sequence::decode_buffer(value, &w), CWire::Buffer)
+            }
             None => {
                 return prebindgen_conversions::boxed::input(
                     &prebindgen_conversions::boxed::Storage::Direct,
@@ -336,6 +335,19 @@ impl Codec for CCodec {
         let mut plan =
             prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)?;
         plan.fallible = !matches!(Value::of(ty), Some(Value::Scalar(p)) if p != Primitive::Char);
+        Ok(plan)
+    }
+    fn input_row_leaf(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<CWire>> {
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
         Ok(plan)
     }
     fn output_leaf(
@@ -830,6 +842,8 @@ pub struct Cbindgen {
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
+    emit_alias_checks: Option<bool>,
+    function_alias_checks: std::collections::BTreeMap<String, bool>,
 }
 impl Cbindgen {
     /// Create an unconfigured builder with the symbol prefix `pb`.
@@ -851,6 +865,8 @@ impl Cbindgen {
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            emit_alias_checks: None,
+            function_alias_checks: Default::default(),
         }
     }
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
@@ -932,6 +948,33 @@ impl Cbindgen {
         self
     }
 
+    /// Set the project default for generated input-handle alias conflict checks.
+    /// Enabled by default. When disabled, callers must ensure moved/exclusive
+    /// inputs never alias another active input. Pointer/length/UTF-8 validation
+    /// and ownership cleanup remain enabled. This also governs callback results
+    /// for callbacks registered by the binding, including later worker calls.
+    pub fn set_emit_alias_checks(mut self, enabled: bool) -> Self {
+        self.emit_alias_checks = Some(enabled);
+        self
+    }
+
+    /// Override alias conflict checks for the last declared function and the
+    /// callbacks it registers. This overrides the project default in either
+    /// direction. A disabled check transfers Rust's aliasing obligations to C.
+    ///
+    /// # Panics
+    /// Panics if no function has been declared.
+    pub fn alias_checks(mut self, enabled: bool) -> Self {
+        let name = self
+            .functions
+            .last()
+            .expect("alias_checks() must follow function(...)")
+            .name
+            .clone();
+        self.function_alias_checks.insert(name, enabled);
+        self
+    }
+
     /// Allow binding conversion errors to abort the last declared non-Result
     /// function. Required for fallible conversions without a Result error channel.
     /// Result functions continue to report errors through their explicit output.
@@ -976,6 +1019,8 @@ impl Cbindgen {
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            emit_alias_checks: None,
+            function_alias_checks: Default::default(),
         }
     }
     /// Set the prefix for exported functions, C types and destructors.
@@ -1133,6 +1178,9 @@ impl Cbindgen {
             _ => return Err("supply exactly one source or flat model".into()),
         };
         flat.metadata.prefix = self.prefix;
+        if let Some(enabled) = self.emit_alias_checks {
+            flat.metadata.emit_alias_checks = enabled;
+        }
         flat.metadata.target = Some((target.clone(), pointer_width, target_info.to_cfg_tokens()));
         let mut enum_names = std::collections::BTreeSet::new();
         for (name, ty) in self.enums {
@@ -1276,6 +1324,7 @@ impl Cbindgen {
             flat.function_mut(&decl.name)?.metadata = Some(CFunction {
                 abort_on_failure: self.panics.contains(&decl.name),
                 requires_abort: false,
+                emit_alias_checks: self.function_alias_checks.get(&decl.name).copied(),
             });
         }
         errors::prepare(&mut flat, &codec, &declarations)
@@ -1453,7 +1502,7 @@ fn c_ty(
                 )
             }
         }
-        CWire::Buffer => format!("{prefix}_buffer"),
+        CWire::Buffer | CWire::DeferredBuffer => format!("{prefix}_buffer"),
         CWire::Rows => format!(
             "{prefix}_{}_rows",
             context.row_types[&wire.name.to_string()]
@@ -1658,6 +1707,12 @@ where
             return Err("recoverable C delivery requires a binding-failure schema".into());
         }
         let context = CContext {
+            emit_alias_checks: Some(
+                f.metadata
+                    .as_ref()
+                    .and_then(|m| m.emit_alias_checks)
+                    .unwrap_or(flat.metadata.emit_alias_checks),
+            ),
             row_types: {
                 let mut schemas = Vec::new();
                 for slot in f.input_conversions()? {
@@ -1962,6 +2017,9 @@ The pointer must be null or a live allocation of the declared type returned by t
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let inputs = crate::group::function_parameters(f)?.collect::<Vec<_>>();
+        if context.emit_alias_checks == Some(false) {
+            header.push_str("/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */\n");
+        }
         let outputs =
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .collect::<Vec<_>>();
@@ -2584,12 +2642,12 @@ mod generation_tests {
     }
 
     #[test]
-    fn replay_audits_builtin_scalar_and_opaque_pointer_validation() {
+    fn replay_audits_builtin_scalar_pointer_and_buffer_validation() {
         let flat = Cbindgen::new(error_model("pub type Handle=String;"))
             .opaque_ptr("handle", syn::parse_quote!(Handle))
             .prepare()
             .unwrap();
-        // These are all Scalar/Pointer leaf mappings provided by CCodec.
+        // These are all Scalar/Pointer/Buffer leaf mappings provided by CCodec.
         // User constructors are declarations, not leaf validators; they are
         // checked separately for deferred, exactly-once execution below.
         for ty in [
@@ -2612,10 +2670,16 @@ mod generation_tests {
             "Handle",
             "&Handle",
             "&mut Handle",
+            "String",
+            "&String",
+            "&str",
+            "Vec<u8>",
+            "&Vec<u8>",
+            "&[u8]",
         ] {
             let ty = syn::parse_str(ty).unwrap();
             let plan = CCodec
-                .input_leaf(
+                .input_row_leaf(
                     &flat,
                     &ty,
                     &(),
@@ -2635,6 +2699,32 @@ mod generation_tests {
             assert!(transport.reread_rows);
             assert!(transport.release.is_empty());
             assert!(plan.resources.iter().all(|r| !r.registered));
+            if matches!(Value::of(&ty), Some(Value::Text | Value::Bytes)) {
+                assert!(plan.validation.is_empty());
+                assert!(!plan.acquire.to_string().contains("from_utf8"));
+                assert!(!plan.statements.is_empty());
+                let ordinary = CCodec
+                    .input_leaf(
+                        &flat,
+                        &ty,
+                        &(),
+                        syn::parse_quote!(value),
+                        syn::parse_quote!(decoded),
+                        &prebindgen_declarations::Condition::default(),
+                    )
+                    .unwrap();
+                let ordinary_transport = sequence::input(
+                    syn::parse_quote!(rows),
+                    syn::parse_quote!(len),
+                    syn::parse_quote!(index),
+                    &ordinary.node,
+                )
+                .unwrap();
+                assert!(
+                    !ordinary_transport.reread_rows,
+                    "ordinary buffer decoding must not be repeated"
+                );
+            }
         }
     }
 
@@ -2657,6 +2747,9 @@ mod generation_tests {
             .unwrap()
             .validation
             .to_string();
+        let code = prebindgen_conversions::render_input_alias_checks(&code.parse().unwrap(), true)
+            .unwrap()
+            .to_string();
         assert!(!code.contains("_prepared"));
         for constructor in [":: inner (", ":: row ("] {
             assert_eq!(code.matches(constructor).count(), 1, "{code}");
@@ -2665,16 +2758,118 @@ mod generation_tests {
     }
 
     #[test]
-    fn simple_handle_rows_reread_but_decode_once_rows_keep_preparation() {
+    fn alias_policy_covers_fixed_nested_callback_and_fold_bindings() {
         use prebindgen_declarations::{expand_param, fun};
-        let source="pub type Handle=String; pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
-        let model =
-            || Cbindgen::new(error_model(source)).opaque_ptr("handle", syn::parse_quote!(Handle));
-        for constructor in ["row", "text"] {
-            let expansion = if constructor == "row" {
-                expand_param!(Row).variant(fun!(row))
-            } else {
-                expand_param!(Row).variant(fun!(text))
+        let source="pub type H=String;pub struct Row{pub h:H,pub text:String}pub fn row(h:H,text:String)->Row{} pub fn fixed(a:&mut H,b:&H)->i64{} pub fn many(v:Vec<Row>)->i64{} pub fn safe(v:Vec<Row>)->i64{} pub fn nested(v:Vec<Vec<H>>)->i64{} pub fn callback(cb:impl Fn()->Vec<H>)->i64{} pub fn checked_callback(cb:impl Fn()->Vec<H>)->i64{} pub fn checked_fixed(a:&mut H,b:&H)->i64{} pub fn folded(v:Vec<H>)->Vec<H>{}pub fn inherited(a:&mut H,b:&H)->i64{}";
+        for global in [true, false] {
+            let generated = Cbindgen::new(error_model(source))
+                .opaque_ptr("h", syn::parse_quote!(H))
+                .expand(expand_param!(Row).variant(fun!(row)))
+                .function(fun!(fixed))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(many))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(safe))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(nested))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(callback))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(checked_callback))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(checked_fixed))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(folded).callback_return_only())
+                .alias_checks(false)
+                .panic()
+                .function(fun!(inherited))
+                .panic()
+                .set_emit_alias_checks(global)
+                .build()
+                .unwrap();
+            assert!(!generated.rust.contains("__prebindgen_alias_checks"));
+            let parsed = syn::parse_file(&generated.rust).unwrap();
+            let body = |name: &str| {
+                parsed
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        syn::Item::Fn(f) if f.sig.ident == name => {
+                            Some(quote::ToTokens::to_token_stream(&f.block).to_string())
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            for name in [
+                "pb_fixed",
+                "pb_many",
+                "pb_nested",
+                "pb_callback",
+                "pb_folded_each",
+            ] {
+                let code = body(name);
+                assert!(
+                    !code.contains("__prebindgen_input_aliases"),
+                    "{name}: {code}"
+                );
+                assert!(!code.contains("_prepared"), "{name}: {code}");
+                assert!(!code.contains("accept_group"), "{name}: {code}");
+            }
+            assert!(body("pb_safe").contains("accept_group"));
+            assert!(body("pb_checked_callback").contains("accept_group"));
+            assert!(body("pb_checked_fixed").contains("FixedInputs"));
+            assert_eq!(body("pb_inherited").contains("FixedInputs"), global);
+            assert!(body("pb_many").contains("validate_pointer"));
+            assert!(body("pb_many").contains("from_utf8"));
+            assert!(body("pb_callback").contains("CallbackReturnAllocations"));
+        }
+    }
+
+    #[test]
+    fn project_alias_policy_also_applies_to_manually_bound_slots() {
+        use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+        let mut flat = error_model("pub type H=String;pub fn call(a:&mut H,b:&H)->i64{}");
+        flat = Cbindgen::new(flat)
+            .opaque_ptr("h", syn::parse_quote!(H))
+            .prepare()
+            .unwrap();
+        for param in ["a", "b"] {
+            bind_input(&mut flat, &CCodec, "call", param, &Input::Leaf, &()).unwrap();
+        }
+        bind_output(&mut flat, &CCodec, "call", &Output::Leaf, &()).unwrap();
+        flat.function_mut("call").unwrap().metadata = Some(CFunction {
+            abort_on_failure: true,
+            ..Default::default()
+        });
+        let generated = Cbindgen::new(flat)
+            .set_emit_alias_checks(false)
+            .build()
+            .unwrap();
+        assert!(!generated.rust.contains("__prebindgen_input_aliases"));
+    }
+
+    #[test]
+    fn scalar_and_buffer_handle_rows_reread_and_construct_once() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type Handle=String; pub enum Tag{A} pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn tagged(h:Handle,n:Option<&String>,bytes:Option<&Vec<u8>>,tag:Tag)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("handle", syn::parse_quote!(Handle))
+                .enum_type("tag", syn::parse_quote!(Tag))
+        };
+        for constructor in ["row", "text", "tagged"] {
+            let expansion = match constructor {
+                "row" => expand_param!(Row).variant(fun!(row)),
+                "text" => expand_param!(Row).variant(fun!(text)),
+                _ => expand_param!(Row).variant(fun!(tagged)),
             };
             let flat = model()
                 .expand(expansion)
@@ -2689,11 +2884,26 @@ mod generation_tests {
                 .unwrap()
                 .validation
                 .to_string();
-            assert_eq!(code.contains("_prepared"), constructor == "text", "{code}");
+            let code =
+                prebindgen_conversions::render_input_alias_checks(&code.parse().unwrap(), true)
+                    .unwrap()
+                    .to_string();
+            assert_eq!(
+                code.contains("_prepared"),
+                constructor == "tagged",
+                "{code}"
+            );
             assert!(code.contains("accept_group"));
-            if constructor == "row" {
-                assert_eq!(code.matches(":: row (").count(), 1, "{code}");
-                assert!(code.find("accept_group").unwrap() < code.find(":: row (").unwrap());
+            let call = format!(":: {constructor} (");
+            assert_eq!(code.matches(&call).count(), 1, "{code}");
+            if constructor != "tagged" {
+                assert!(code.find("accept_group").unwrap() < code.find(&call).unwrap());
+            }
+            if constructor != "row" {
+                assert_eq!(code.matches("from_utf8").count(), 1, "{code}");
+                if constructor == "text" {
+                    assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
+                }
             }
         }
         let flat = model().function(fun!(options)).panic().prepare().unwrap();
@@ -3069,6 +3279,7 @@ mod generation_tests {
     #[test]
     fn reclaiming_undelivered_outputs_does_not_destroy_loans() {
         let context = CContext {
+            emit_alias_checks: Some(true),
             row_types: Default::default(),
             acknowledgement: syn::parse_quote!(accepted),
             output_pointer: syn::parse_quote!(out),
@@ -3170,6 +3381,7 @@ mod generation_tests {
             .unwrap()
             .pointer = Some("item".into());
         flat.function_mut("inspect").unwrap().metadata = Some(CFunction {
+            emit_alias_checks: None,
             abort_on_failure: true,
             requires_abort: false,
         });

@@ -3,18 +3,28 @@ fn rows(element: Output<OutputRequest>) -> Output<OutputRequest> {
     Output::Sequence { element: Box::new(element), mode: None, delivery: SequenceDelivery::Value }
 }
 fn main() {
+    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_CHECKS");
     let generation = prebindgen_c::Cbindgen::builder()
         .source(c_collection_flat::PREBINDGEN_OUT_DIR).prefix("bench")
+        .set_emit_alias_checks(std::env::var("BENCH_ALIAS_CHECKS").as_deref()!=Ok("0"))
         .opaque_ptr("resource", syn::parse_quote!(Resource))
         .expand(expand_return!(Record).fields_into(fields!(record_into)))
         .expand(expand_param!(Record).variant(fun!(record_new)))
         .expand(expand_param!(WideInput).variant(fun!(wide_new)))
         .expand(expand_param!(TextInput).variant(fun!(text_new)))
+        .expand(expand_param!(BytesInput).variant(fun!(bytes_new)))
+        .expand(expand_param!(BuffersInput).variant(fun!(buffers_new)))
         .function(fun!(resource_new)).panic()
+        .function(fun!(fixed_borrow)).panic()
+        .function(fun!(fixed_move)).panic()
+        .function(fun!(callback_fixed)).panic()
+        .function(fun!(callback_many)).panic()
         .function(fun!(take_handles)).panic()
         .function(fun!(take_records)).panic()
         .function(fun!(take_wide)).panic()
         .function(fun!(take_text)).panic()
+        .function(fun!(take_bytes)).panic()
+        .function(fun!(take_buffers)).panic()
         .function(fun!(take_numbers)).panic()
         .function(fun!(control)).panic()
         .function(fun!(resource_value)).panic()

@@ -528,6 +528,127 @@ perftest_borrow_packet * perftest_borrow_packet_new(uintptr_t p0_w1);
 const perftest_borrow_packet * perftest_borrow_packet_optional(const perftest_borrow_packet * p0_w1, uint8_t p1_w1);
 /* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 const perftest_borrow_packet * perftest_borrow_packet_ref(const perftest_borrow_packet * p0_w1);
+uintptr_t perftest_buffer_row_constructor_calls(void);
+uintptr_t perftest_buffer_row_function_calls(void);
+void perftest_buffer_row_reset_counts(void);
+typedef struct {
+    int32_t v0;
+    perftest_owned_resource * v1;
+    int32_t v2;
+    perftest_buffer v3;
+    int32_t v4;
+    perftest_buffer v5;
+    const perftest_owned_resource * v6;
+    perftest_buffer v7;
+    perftest_buffer v8;
+} perftest_buffer_rows_alternatives_p0_w1_row;
+typedef struct { perftest_buffer_rows_alternatives_p0_w1_row *data; size_t len; } perftest_buffer_rows_alternatives_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 9 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v2: 0 = None, 1 = Some; other active flags are errors. */
+/* Option option1: row.v4: 0 = None, 1 = Some; other active flags are errors. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_alternatives(perftest_buffer_rows_alternatives_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    const perftest_owned_resource * v0;
+    perftest_buffer v1;
+    perftest_buffer v2;
+} perftest_buffer_rows_borrowed_p1_w1_row;
+typedef struct { perftest_buffer_rows_borrowed_p1_w1_row *data; size_t len; } perftest_buffer_rows_borrowed_p1_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p1_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_borrowed(perftest_owned_resource * p0_w1, perftest_buffer_rows_borrowed_p1_w1_rows p1_w1, int64_t *out0, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_code v1;
+    int32_t v2;
+    perftest_buffer v3;
+    int32_t v4;
+    perftest_buffer v5;
+} perftest_buffer_rows_enum_p0_w1_row;
+typedef struct { perftest_buffer_rows_enum_p0_w1_row *data; size_t len; } perftest_buffer_rows_enum_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 6 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v2: 0 = None, 1 = Some; other active flags are errors. */
+/* Option option1: row.v4: 0 = None, 1 = Some; other active flags are errors. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_enum(perftest_buffer_rows_enum_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_buffer v1;
+    perftest_buffer v2;
+} perftest_buffer_rows_optional_p0_w3_row;
+typedef struct { perftest_buffer_rows_optional_p0_w3_row *data; size_t len; } perftest_buffer_rows_optional_p0_w3_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
+/* Collection rows: p0_w3 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option1: row.v0 == NULL means None; non-null means Some; only when option0 is present. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_optional(int32_t p0_w1, perftest_buffer_rows_optional_p0_w3_rows p0_w3, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    int32_t v1;
+    perftest_buffer v2;
+    int32_t v3;
+    perftest_buffer v4;
+} perftest_buffer_rows_optional_temporaries_p0_w1_row;
+typedef struct { perftest_buffer_rows_optional_temporaries_p0_w1_row *data; size_t len; } perftest_buffer_rows_optional_temporaries_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v1: 0 = None, 1 = Some; other active flags are errors. */
+/* Option option1: row.v3: 0 = None, 1 = Some; other active flags are errors. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_optional_temporaries(perftest_buffer_rows_optional_temporaries_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_buffer v1;
+    perftest_buffer v2;
+} perftest_buffer_rows_sum_p0_w1_row;
+typedef struct { perftest_buffer_rows_sum_p0_w1_row *data; size_t len; } perftest_buffer_rows_sum_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_sum(perftest_buffer_rows_sum_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_buffer v1;
+    perftest_buffer v2;
+} perftest_buffer_rows_temporaries_p0_w1_row;
+typedef struct { perftest_buffer_rows_temporaries_p0_w1_row *data; size_t len; } perftest_buffer_rows_temporaries_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_temporaries(perftest_buffer_rows_temporaries_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    perftest_owned_resource * v0;
+    int32_t v1;
+    perftest_buffer v2;
+    int32_t v3;
+    perftest_buffer v4;
+} perftest_buffer_rows_views_p0_w1_row;
+typedef struct { perftest_buffer_rows_views_p0_w1_row *data; size_t len; } perftest_buffer_rows_views_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v1: 0 = None, 1 = Some; other active flags are errors. */
+/* Option option1: row.v3: 0 = None, 1 = Some; other active flags are errors. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_buffer_rows_views(perftest_buffer_rows_views_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
 uintptr_t perftest_buffer_views_address(void);
 perftest_owned_vec_u8_672e72343c1b4cb4 perftest_buffer_views_bytes(uintptr_t *out1);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */

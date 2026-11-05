@@ -943,11 +943,18 @@ Byte inputs and JNI byte collections retain their byte-buffer transport.
 Collection inputs without handle conflicts reserve their row count and fill
 final native storage directly, including custom constructors. Resource-bearing
 rows retain decoded state when decoding cannot safely be repeated. Flat C input
-rows made only of scalar fields and opaque handles instead use two traversals:
+rows made only of scalar fields, opaque handles and text/byte buffer descriptors use two traversals:
 validate and check the complete address group, then reread the rows and construct
 the final Rust vector directly. This omits the prepared-row closure buffer.
-Constructors still run once, after the grouped check. String/buffer, enum,
-inline-owner and callback rows retain their existing preparation strategy.
+Constructors still run once, after the grouped check. Buffer decoding, UTF-8
+validation and any required owned copies run once during row construction;
+borrowed views and `&String`/`&Vec<u8>` temporaries remain alive until that
+constructor finishes. Invalid later buffers may fail after earlier rows and
+the current row's handles have been consumed. Rust drops the constructed prefix
+and acquired values; ownership receipts identify the consumed prefix, and unread
+owners remain with the caller. Direct function parameter decoding is unchanged.
+Enum, inline-owner and callback rows retain prepared storage; flat C rows in that
+fallback also defer their buffer decoding until construction.
 Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
 throughout the call, including source constructor invocations; neither reentrant
 code nor another thread may mutate the wire rows or descriptors. This applies to
@@ -959,6 +966,36 @@ construction; no intermediate acquired-row vector is created. This applies to or
 released after decoding each row, and are never retained for construction.
 Shared-only calls need no alias history. Other calls keep checked addresses so
 later parameters and collections can reject conflicts with earlier inputs.
+
+C bindings can omit input-handle conflict checks globally or per function:
+
+```rust
+let bindings = Cbindgen::builder()
+    .set_emit_alias_checks(false)
+    .function(fun!(fast_path)).panic()
+    .function(fun!(checked_path)).alias_checks(true).panic();
+```
+
+Checks remain enabled by default. `.alias_checks(false)` also opts out a single
+function under the checked project default. Local overrides take precedence
+regardless of setter order. The setting also applies to return values from
+callbacks registered by that function, even if a callback is retained and invoked
+later by a different function. With checks disabled, C must uphold Rust's ownership
+and aliasing rules: moved or exclusively borrowed allocations must not overlap
+another active input. Violations can cause undefined behavior. Pointer/length,
+UTF-8, presence and selector validation, ownership receipts and failure cleanup
+remain active. Collection inputs construct rows in one traversal without alias
+history or the alias-validation staging buffer. Callback-return ownership scans
+needed to reclaim unread owners on failure remain active.
+
+Low-level generators constructing `CContext`, `CModule` or `CFunction` directly
+must supply the new `emit_alias_checks` field (or use their metadata defaults).
+Stored plans may contain reserved input-alias scope macros until wrapper emission.
+Custom code that rewrites stored Rust syntax should first call
+`prebindgen_conversions::render_input_alias_checks(code, enabled)`; the normal C
+and JNI emitters do this automatically. Custom template contexts that leave the
+scopes unresolved need the matching `prebindgen-runtime` revision for its checked
+fallback macro. All generator/runtime crates should come from the same revision.
 
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level

@@ -6,13 +6,15 @@ use quote::{quote, ToTokens};
 /// Optional rendering support for stored [`crate::InputPlan`] and
 /// [`crate::OutputPlan`] templates. Custom conversions need not implement this.
 pub trait TemplateContext {
-    /// Resolve the template's explicit parameter markers.
+    /// Resolve the template's explicit parameter markers. Composition may invoke
+    /// this repeatedly; already-rendered Rust must remain unchanged.
     fn render(&self, code: &TokenStream) -> Result<TokenStream>;
 }
 
 impl TemplateContext for () {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        render_template(code, &|name| match name {
+        let code = render_input_alias_checks(code, true)?;
+        render_template(&code, &|name| match name {
             "input_consumed" => Ok(quote!(&::core::cell::Cell::new(0usize))),
             "input_aliases" => Ok(quote!(__prebindgen_input_aliases)),
             _ => Err(format!("unknown emission parameter `{name}`")),
@@ -79,4 +81,89 @@ pub fn render_template(
         index += 1;
     }
     Ok(output)
+}
+
+/// Select input-alias scopes once the owning wrapper's policy is known.
+/// Intermediate template composition leaves these scopes intact; unresolved
+/// scopes use the runtime crate's checked compatibility macro.
+pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<TokenStream> {
+    let tokens: Vec<_> = code.clone().into_iter().collect();
+    let mut output = TokenStream::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let colon = |i| matches!(tokens.get(i), Some(TokenTree::Punct(p)) if p.as_char()==':');
+        if colon(index)
+            && colon(index + 1)
+            && matches!(tokens.get(index+2),Some(TokenTree::Ident(id)) if id=="prebindgen_runtime")
+            && colon(index + 3)
+            && colon(index + 4)
+            && matches!(tokens.get(index+5),Some(TokenTree::Ident(id)) if id=="__prebindgen_alias_checks")
+            && matches!(tokens.get(index+6),Some(TokenTree::Punct(p)) if p.as_char()=='!')
+        {
+            let Some(TokenTree::Group(group)) = tokens.get(index + 7) else {
+                return Err("invalid input alias scope".into());
+            };
+            let branches = group.stream().into_iter().collect::<Vec<_>>();
+            let [TokenTree::Group(checked), TokenTree::Group(unchecked)] = branches.as_slice()
+            else {
+                return Err("invalid input alias branches".into());
+            };
+            output.extend(render_input_alias_checks(
+                &if enabled {
+                    checked.stream()
+                } else {
+                    unchecked.stream()
+                },
+                enabled,
+            )?);
+            index += 8;
+            continue;
+        }
+        match &tokens[index] {
+            TokenTree::Group(group) => {
+                let mut rendered = Group::new(
+                    group.delimiter(),
+                    render_input_alias_checks(&group.stream(), enabled)?,
+                );
+                rendered.set_span(group.span());
+                output.extend([TokenTree::Group(rendered)]);
+            }
+            other => output.extend([other.clone()]),
+        }
+        index += 1;
+    }
+    Ok(output)
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use super::*;
+    #[test]
+    fn alias_scopes_preserve_composition_and_resolve_nested_policy() {
+        let inner = crate::staged::input_alias_checks(quote!(checked()), quote!(unchecked()));
+        let choice =
+            crate::staged::input_alias_checks(quote!(let value=#inner;), quote!(let value=7;));
+        let code = quote!({#choice __prebindgen_emit!(continuation)});
+        let composed = render_template(&code, &|_| Ok(quote!(value))).unwrap();
+        let checked = render_input_alias_checks(&composed, true)
+            .unwrap()
+            .to_string();
+        let unchecked = render_input_alias_checks(&composed, false)
+            .unwrap()
+            .to_string();
+        assert!(checked.contains("checked ()"));
+        assert!(!checked.contains("unchecked"));
+        assert!(unchecked.contains("value = 7"));
+        assert!(!unchecked.contains("checked"));
+        for code in [checked, unchecked] {
+            syn::parse_str::<syn::Expr>(&code).unwrap();
+        }
+        let literal = quote!("::prebindgen_runtime::__prebindgen_alias_checks!{{bad}{bad}}");
+        assert_eq!(
+            render_input_alias_checks(&literal, false)
+                .unwrap()
+                .to_string(),
+            literal.to_string()
+        );
+    }
 }

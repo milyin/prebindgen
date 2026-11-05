@@ -13,6 +13,12 @@ fn __pb_owned_owned_vec_option_i64_33d2f0297e3115f7_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_option_perftest_flat_bufferinputrow_99c0a6a07204d20f_len(
+    value: &Vec<Option<perftest_flat::BufferInputRow>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_string_3292bf5148c953ec_len(value: &Vec<String>) -> usize {
     value.len()
 }
@@ -42,6 +48,12 @@ fn __pb_owned_owned_vec_char_ae6d41c8646359d5_len(value: &Vec<char>) -> usize {
 }
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_bufferinputrow_f62bf6f2ce9e50d2_len(
+    value: &Vec<perftest_flat::BufferInputRow>,
+) -> usize {
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
@@ -3603,6 +3615,2215 @@ pub unsafe extern "C" fn perftest_borrow_packet_ref(
     }
     let value = storage.assume_init();
     value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_row_constructor_calls_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_row_constructor_calls() -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_row_constructor_calls_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_row_constructor_calls();
+            let ret_w0 = source_value;
+            let result = perftest_buffer_row_constructor_calls_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_row_function_calls_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_row_function_calls() -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_row_function_calls_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_row_function_calls();
+            let ret_w0 = source_value;
+            let result = perftest_buffer_row_function_calls_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_row_reset_counts_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_row_reset_counts() {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_row_reset_counts_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_row_reset_counts();
+            let result = perftest_buffer_row_reset_counts_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_alternatives_p0_w1 {
+    pub v0: i32,
+    pub v1: *mut perftest_flat::OwnedResource,
+    pub v2: i32,
+    pub v3: __PbBuffer,
+    pub v4: i32,
+    pub v5: __PbBuffer,
+    pub v6: *const perftest_flat::OwnedResource,
+    pub v7: __PbBuffer,
+    pub v8: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_alternatives_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_alternatives_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_buffer_rows_alternatives_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(2usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables)]
+                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w19 = p0_w1_rows[p0_w3].v6;
+                    #[allow(unused_variables)]
+                    let p0_w21 = p0_w1_rows[p0_w3].v7;
+                    #[allow(unused_variables)]
+                    let p0_w23 = p0_w1_rows[p0_w3].v8;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        if !(0..2i32).contains(&(p0_w5)) {
+                            return Err("invalid selector".into());
+                        }
+                        let p0_w8_pointer = if (p0_w5) == 0i32 {
+                            (p0_w8) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if (p0_w5) == 0i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
+                        }
+                        if ((p0_w5) == 0i32) && ((p0_w10) != 0 && (p0_w10) != 1) {
+                            return Err("invalid option presence".into());
+                        }
+                        if ((p0_w5) == 0i32) && ((p0_w14) != 0 && (p0_w14) != 1) {
+                            return Err("invalid option presence".into());
+                        }
+                        let p0_w19_pointer = if (p0_w5) == 1i32 {
+                            (p0_w19) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if (p0_w5) == 1i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w19_pointer)?;
+                        }
+                        if (p0_w5) == 0i32 {
+                            for address in ::core::iter::once(
+                                (p0_w8_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        if (p0_w5) == 1i32 {
+                            for address in ::core::iter::once(
+                                (p0_w19_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, false));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables)]
+                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w19 = p0_w1_rows[p0_w3].v6;
+                    #[allow(unused_variables)]
+                    let p0_w21 = p0_w1_rows[p0_w3].v7;
+                    #[allow(unused_variables)]
+                    let p0_w23 = p0_w1_rows[p0_w3].v8;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        if !(0..2i32).contains(&(p0_w5)) {
+                            return Err("invalid selector".into());
+                        }
+                        let p0_w8_pointer = if (p0_w5) == 0i32 {
+                            (p0_w8) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if (p0_w5) == 0i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
+                        }
+                        if ((p0_w5) == 0i32) && ((p0_w10) != 0 && (p0_w10) != 1) {
+                            return Err("invalid option presence".into());
+                        }
+                        if ((p0_w5) == 0i32) && ((p0_w14) != 0 && (p0_w14) != 1) {
+                            return Err("invalid option presence".into());
+                        }
+                        let p0_w19_pointer = if (p0_w5) == 1i32 {
+                            (p0_w19) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if (p0_w5) == 1i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w19_pointer)?;
+                        }
+                        if (p0_w5) == 0i32 {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w8_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w7 = if (p0_w5) == 0i32 {
+                            Some(unsafe { Box::from_raw(p0_w8_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w11: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w15: Option<&[u8]> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w20: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w22: Option<&[u8]> = None;
+                        let p0_w4: i64 = match p0_w5 {
+                            0i32 => {
+                                let p0_w7: perftest_flat::OwnedResource = *p0_w7
+                                    .expect("active allocation");
+                                let p0_w9 = if ((p0_w5) == 0i32) && ((p0_w10) == 1i32) {
+                                    p0_w11 = if ((p0_w5) == 0i32) && ((p0_w10) == 1i32) {
+                                        Some(
+                                            std::str::from_utf8(unsafe { __pb_read(p0_w12)? })
+                                                .map_err(|_| "invalid UTF-8")?,
+                                        )
+                                    } else {
+                                        None
+                                    };
+                                    Some(
+                                        ::core::convert::AsRef::<
+                                            str,
+                                        >::as_ref(p0_w11.as_ref().expect("active value")),
+                                    )
+                                } else {
+                                    None
+                                };
+                                let p0_w13 = if ((p0_w5) == 0i32) && ((p0_w14) == 1i32) {
+                                    p0_w15 = if ((p0_w5) == 0i32) && ((p0_w14) == 1i32) {
+                                        Some(unsafe { __pb_read(p0_w16)? })
+                                    } else {
+                                        None
+                                    };
+                                    Some(
+                                        ::core::convert::AsRef::<
+                                            [u8],
+                                        >::as_ref(p0_w15.as_ref().expect("active value")),
+                                    )
+                                } else {
+                                    None
+                                };
+                                let p0_w6: i64 = perftest_flat::buffer_row_optional_views(
+                                    p0_w7,
+                                    p0_w9,
+                                    p0_w13,
+                                );
+                                p0_w6
+                            }
+                            1i32 => {
+                                let p0_w18: &perftest_flat::OwnedResource = unsafe {
+                                    &(*p0_w19_pointer)
+                                };
+                                p0_w20 = if (p0_w5) == 1i32 {
+                                    Some(
+                                        std::str::from_utf8(unsafe { __pb_read(p0_w21)? })
+                                            .map_err(|_| "invalid UTF-8")?,
+                                    )
+                                } else {
+                                    None
+                                };
+                                p0_w22 = if (p0_w5) == 1i32 {
+                                    Some(unsafe { __pb_read(p0_w23)? })
+                                } else {
+                                    None
+                                };
+                                let p0_w17: i64 = perftest_flat::buffer_row_borrow(
+                                    p0_w18,
+                                    ::core::convert::AsRef::<
+                                        str,
+                                    >::as_ref(p0_w20.as_ref().expect("active value")),
+                                    ::core::convert::AsRef::<
+                                        [u8],
+                                    >::as_ref(p0_w22.as_ref().expect("active value")),
+                                );
+                                p0_w17
+                            }
+                            _ => unreachable!("validated selector"),
+                        };
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_alternatives(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_alternatives_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_borrowed_p1_w1 {
+    pub v0: *const perftest_flat::OwnedResource,
+    pub v1: __PbBuffer,
+    pub v2: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_borrowed_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
+    p0_w1: *mut perftest_flat::OwnedResource,
+    p1_w1: __PbRows,
+    out0: *mut i64,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_borrowed_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::OwnedResource
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::OwnedResource = unsafe {
+                        &mut (*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if __prebindgen_input_aliases.needs_group() {
+                let mut p1_w0: Vec<i64> = Vec::new();
+                if true {
+                    let p1_w2 = p1_w1.len;
+                    ::prebindgen_runtime::validate_slice(
+                        p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1,
+                        p1_w2,
+                    )?;
+                    let p1_w1_rows: &[__PbRow_buffer_rows_borrowed_p1_w1] = if p1_w2 == 0
+                    {
+                        &[]
+                    } else {
+                        unsafe {
+                            ::core::slice::from_raw_parts(
+                                p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1,
+                                p1_w2,
+                            )
+                        }
+                    };
+                    let mut p1_w1_accesses = __prebindgen_input_aliases
+                        .begin_group(p1_w2.saturating_mul(1usize));
+                    for p1_w3 in 0..p1_w2 {
+                        let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
+                        let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
+                        let p1_w10 = p1_w1_rows[p1_w3].v2;
+                        #[allow(unused_variables, clippy::redundant_closure_call)]
+                        let checked = (|| {
+                            let p1_w6_pointer = if true {
+                                (p1_w6) as *mut perftest_flat::OwnedResource
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
+                            }
+                            if true {
+                                for address in ::core::iter::once(
+                                    (p1_w6_pointer.addr()) as usize,
+                                ) {
+                                    p1_w1_accesses.push((address, false));
+                                }
+                            }
+                            Ok::<_, String>(())
+                        })();
+                        checked?;
+                    }
+                    __prebindgen_input_aliases.accept_group(p1_w1_accesses)?;
+                    p1_w0.reserve_exact(p1_w2);
+                    for p1_w3 in 0..p1_w2 {
+                        let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
+                        let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
+                        let p1_w10 = p1_w1_rows[p1_w3].v2;
+                        #[allow(clippy::redundant_closure_call)]
+                        let p1_w1_element_built = (|| -> ::core::result::Result<
+                            i64,
+                            String,
+                        > {
+                            let p1_w6_pointer = if true {
+                                (p1_w6) as *mut perftest_flat::OwnedResource
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
+                            }
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p1_w7: Option<&str> = None;
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p1_w9: Option<&[u8]> = None;
+                            let p1_w5: &perftest_flat::OwnedResource = unsafe {
+                                &(*p1_w6_pointer)
+                            };
+                            p1_w7 = if true {
+                                Some(
+                                    std::str::from_utf8(unsafe { __pb_read(p1_w8)? })
+                                        .map_err(|_| "invalid UTF-8")?,
+                                )
+                            } else {
+                                None
+                            };
+                            p1_w9 = if true {
+                                Some(unsafe { __pb_read(p1_w10)? })
+                            } else {
+                                None
+                            };
+                            let p1_w4: i64 = perftest_flat::buffer_row_borrow(
+                                p1_w5,
+                                ::core::convert::AsRef::<
+                                    str,
+                                >::as_ref(p1_w7.as_ref().expect("active value")),
+                                ::core::convert::AsRef::<
+                                    [u8],
+                                >::as_ref(p1_w9.as_ref().expect("active value")),
+                            );
+                            let p1_w0 = p1_w4;
+                            Ok(p1_w0)
+                        })();
+                        let element = p1_w1_element_built?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p1_w0.len();
+                            p1_w0.as_mut_ptr().add(initialized).write(element);
+                            p1_w0.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p1_w0
+            } else {
+                let mut p1_w0: Vec<i64> = Vec::new();
+                if true {
+                    let p1_w2 = p1_w1.len;
+                    ::prebindgen_runtime::validate_slice(
+                        p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1,
+                        p1_w2,
+                    )?;
+                    let p1_w1_rows: &[__PbRow_buffer_rows_borrowed_p1_w1] = if p1_w2 == 0
+                    {
+                        &[]
+                    } else {
+                        unsafe {
+                            ::core::slice::from_raw_parts(
+                                p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1,
+                                p1_w2,
+                            )
+                        }
+                    };
+                    p1_w0.reserve_exact(p1_w2);
+                    for p1_w3 in 0..p1_w2 {
+                        let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
+                        let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
+                        let p1_w10 = p1_w1_rows[p1_w3].v2;
+                        #[allow(clippy::redundant_closure_call)]
+                        let p1_w1_element_built = (|| -> ::core::result::Result<
+                            i64,
+                            String,
+                        > {
+                            let p1_w6_pointer = if true {
+                                (p1_w6) as *mut perftest_flat::OwnedResource
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            if true {
+                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
+                            }
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p1_w7: Option<&str> = None;
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p1_w9: Option<&[u8]> = None;
+                            let p1_w5: &perftest_flat::OwnedResource = unsafe {
+                                &(*p1_w6_pointer)
+                            };
+                            p1_w7 = if true {
+                                Some(
+                                    std::str::from_utf8(unsafe { __pb_read(p1_w8)? })
+                                        .map_err(|_| "invalid UTF-8")?,
+                                )
+                            } else {
+                                None
+                            };
+                            p1_w9 = if true {
+                                Some(unsafe { __pb_read(p1_w10)? })
+                            } else {
+                                None
+                            };
+                            let p1_w4: i64 = perftest_flat::buffer_row_borrow(
+                                p1_w5,
+                                ::core::convert::AsRef::<
+                                    str,
+                                >::as_ref(p1_w7.as_ref().expect("active value")),
+                                ::core::convert::AsRef::<
+                                    [u8],
+                                >::as_ref(p1_w9.as_ref().expect("active value")),
+                            );
+                            let p1_w0 = p1_w4;
+                            Ok(p1_w0)
+                        })();
+                        let element = p1_w1_element_built?;
+                        #[allow(clippy::zst_offset)]
+                        unsafe {
+                            let initialized = p1_w0.len();
+                            p1_w0.as_mut_ptr().add(initialized).write(element);
+                            p1_w0.set_len(initialized + 1);
+                        }
+                    }
+                }
+                p1_w0
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true { Some(p1_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_borrowed(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_borrowed_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_enum_p0_w1 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: i32,
+    pub v2: i32,
+    pub v3: __PbBuffer,
+    pub v4: i32,
+    pub v5: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_enum_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_enum(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_enum_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1,
+                    p0_w2,
+                )?;
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                let mut p0_w1_prepared = Vec::with_capacity(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w8 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v1
+                    };
+                    let p0_w10 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v2
+                    };
+                    let p0_w12 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v3
+                    };
+                    let p0_w14 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v4
+                    };
+                    let p0_w16 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
+                            .add(p0_w3)))
+                            .v5
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let prepared = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        let p0_w7 = if true {
+                            Some(
+                                match p0_w8 {
+                                    -2147483648i32 => perftest_flat::SparseCode::Bottom,
+                                    -2i32 => perftest_flat::SparseCode::MinusTwo,
+                                    -1i32 => perftest_flat::SparseCode::MinusOne,
+                                    0i32 => perftest_flat::SparseCode::Zero,
+                                    7i32 => perftest_flat::SparseCode::Seven,
+                                    8i32 => perftest_flat::SparseCode::Eight,
+                                    2147483647i32 => perftest_flat::SparseCode::Top,
+                                    _ => return Err("invalid enum discriminant".into()),
+                                },
+                            )
+                        } else {
+                            None
+                        };
+                        if (p0_w10) != 0 && (p0_w10) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if (p0_w14) != 0 && (p0_w14) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<
+                            _,
+                            String,
+                        >(move || -> ::core::result::Result<i64, String> {
+                            if true {
+                                __prebindgen_input_consumed
+                                    .set(
+                                        __prebindgen_input_consumed.get()
+                                            + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                                .count(),
+                                    );
+                            }
+                            let p0_w5 = if true {
+                                Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                            } else {
+                                None
+                            };
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p0_w11: Option<String> = None;
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p0_w15: Option<Vec<u8>> = None;
+                            let p0_w5: perftest_flat::OwnedResource = *p0_w5
+                                .expect("active allocation");
+                            let p0_w7 = p0_w7.expect("active enum");
+                            let p0_w9 = if (p0_w10) == 1i32 {
+                                p0_w11 = if (p0_w10) == 1i32 {
+                                    Some(
+                                        ::core::convert::Into::<
+                                            String,
+                                        >::into(
+                                            std::str::from_utf8(unsafe { __pb_read(p0_w12)? })
+                                                .map_err(|_| "invalid UTF-8")?,
+                                        ),
+                                    )
+                                } else {
+                                    None
+                                };
+                                Some(p0_w11.as_ref().expect("active value"))
+                            } else {
+                                None
+                            };
+                            let p0_w13 = if (p0_w14) == 1i32 {
+                                p0_w15 = if (p0_w14) == 1i32 {
+                                    Some(
+                                        ::core::convert::Into::<
+                                            Vec<u8>,
+                                        >::into(unsafe { __pb_read(p0_w16)? }),
+                                    )
+                                } else {
+                                    None
+                                };
+                                Some(p0_w15.as_ref().expect("active value"))
+                            } else {
+                                None
+                            };
+                            let p0_w4: i64 = perftest_flat::buffer_row_enum(
+                                p0_w5,
+                                p0_w7,
+                                p0_w9,
+                                p0_w13,
+                            );
+                            let p0_w0 = p0_w4;
+                            Ok(p0_w0)
+                        })
+                    })();
+                    p0_w1_prepared.push(prepared?);
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for build in p0_w1_prepared {
+                    let element = build()?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_enum(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_enum_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_optional_p0_w3 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: __PbBuffer,
+    pub v2: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_optional_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_optional(
+    p0_w1: i32,
+    p0_w3: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            if p0_w1 != 0 && p0_w1 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let mut p0_w2: Vec<Option<perftest_flat::BufferInputRow>> = Vec::new();
+            if p0_w1 == 1i32 {
+                let p0_w4 = p0_w3.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3,
+                    p0_w4,
+                )?;
+                let p0_w3_rows: &[__PbRow_buffer_rows_optional_p0_w3] = if p0_w4 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3,
+                            p0_w4,
+                        )
+                    }
+                };
+                let mut p0_w3_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w4.saturating_mul(1usize));
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w10 = p0_w3_rows[p0_w5].v0;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w3_rows[p0_w5].v1;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w3_rows[p0_w5].v2;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w7: i32 = i32::from(((p0_w10) as usize) != 0);
+                        let p0_w10_pointer = if p0_w7 == 1i32 {
+                            (p0_w10) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if p0_w7 == 1i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
+                        }
+                        if p0_w7 == 1i32 {
+                            for address in ::core::iter::once(
+                                (p0_w10_pointer.addr()) as usize,
+                            ) {
+                                p0_w3_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w10 = p0_w3_rows[p0_w5].v0;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w3_rows[p0_w5].v1;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w3_rows[p0_w5].v2;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<
+                        Option<perftest_flat::BufferInputRow>,
+                        String,
+                    > {
+                        let p0_w7: i32 = i32::from(((p0_w10) as usize) != 0);
+                        let p0_w10_pointer = if p0_w7 == 1i32 {
+                            (p0_w10) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if p0_w7 == 1i32 {
+                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
+                        }
+                        if p0_w7 == 1i32 {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w10_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w9 = if p0_w7 == 1i32 {
+                            Some(unsafe { Box::from_raw(p0_w10_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w11: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w13: Option<&[u8]> = None;
+                        let p0_w6 = if p0_w7 == 1i32 {
+                            let p0_w9: perftest_flat::OwnedResource = *p0_w9
+                                .expect("active allocation");
+                            p0_w11 = if p0_w7 == 1i32 {
+                                Some(
+                                    std::str::from_utf8(unsafe { __pb_read(p0_w12)? })
+                                        .map_err(|_| "invalid UTF-8")?,
+                                )
+                            } else {
+                                None
+                            };
+                            let p0_w11: String = ::core::convert::Into::into(
+                                p0_w11.expect("active value"),
+                            );
+                            p0_w13 = if p0_w7 == 1i32 {
+                                Some(unsafe { __pb_read(p0_w14)? })
+                            } else {
+                                None
+                            };
+                            let p0_w13: Vec<u8> = ::core::convert::Into::into(
+                                p0_w13.expect("active value"),
+                            );
+                            let p0_w8: perftest_flat::BufferInputRow = perftest_flat::buffer_row_new(
+                                p0_w9,
+                                p0_w11,
+                                p0_w13,
+                            );
+                            Some(p0_w8)
+                        } else {
+                            None
+                        };
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if p0_w1 == 1i32 { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0 = if p0_w1 == 1i32 {
+                        Some(p0_w2_built.expect("active input"))
+                    } else {
+                        None
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_optional(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_optional_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_optional_temporaries_p0_w1 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: i32,
+    pub v2: __PbBuffer,
+    pub v3: i32,
+    pub v4: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_optional_temporaries_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_optional_temporaries_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_optional_temporaries_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_buffer_rows_optional_temporaries_p0_w1] = if p0_w2
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data
+                                as *const __PbRow_buffer_rows_optional_temporaries_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if (p0_w8) != 0 && (p0_w8) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if (p0_w8) != 0 && (p0_w8) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w9: Option<String> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w13: Option<Vec<u8>> = None;
+                        let p0_w5: perftest_flat::OwnedResource = *p0_w5
+                            .expect("active allocation");
+                        let p0_w7 = if (p0_w8) == 1i32 {
+                            p0_w9 = if (p0_w8) == 1i32 {
+                                Some(
+                                    ::core::convert::Into::<
+                                        String,
+                                    >::into(
+                                        std::str::from_utf8(unsafe { __pb_read(p0_w10)? })
+                                            .map_err(|_| "invalid UTF-8")?,
+                                    ),
+                                )
+                            } else {
+                                None
+                            };
+                            Some(p0_w9.as_ref().expect("active value"))
+                        } else {
+                            None
+                        };
+                        let p0_w11 = if (p0_w12) == 1i32 {
+                            p0_w13 = if (p0_w12) == 1i32 {
+                                Some(
+                                    ::core::convert::Into::<
+                                        Vec<u8>,
+                                    >::into(unsafe { __pb_read(p0_w14)? }),
+                                )
+                            } else {
+                                None
+                            };
+                            Some(p0_w13.as_ref().expect("active value"))
+                        } else {
+                            None
+                        };
+                        let p0_w4: i64 = perftest_flat::buffer_row_optional_temporaries(
+                            p0_w5,
+                            p0_w7,
+                            p0_w11,
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_optional_temporaries(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_optional_temporaries_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_sum_p0_w1 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: __PbBuffer,
+    pub v2: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_sum_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_sum(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<perftest_buffer_rows_sum_result>::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<perftest_flat::BufferInputRow> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_buffer_rows_sum_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        perftest_flat::BufferInputRow,
+                        String,
+                    > {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w7: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w9: Option<&[u8]> = None;
+                        let p0_w5: perftest_flat::OwnedResource = *p0_w5
+                            .expect("active allocation");
+                        p0_w7 = if true {
+                            Some(
+                                std::str::from_utf8(unsafe { __pb_read(p0_w8)? })
+                                    .map_err(|_| "invalid UTF-8")?,
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w7: String = ::core::convert::Into::into(
+                            p0_w7.expect("active value"),
+                        );
+                        p0_w9 = if true {
+                            Some(unsafe { __pb_read(p0_w10)? })
+                        } else {
+                            None
+                        };
+                        let p0_w9: Vec<u8> = ::core::convert::Into::into(
+                            p0_w9.expect("active value"),
+                        );
+                        let p0_w4: perftest_flat::BufferInputRow = perftest_flat::buffer_row_new(
+                            p0_w5,
+                            p0_w7,
+                            p0_w9,
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_sum(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_sum_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_temporaries_p0_w1 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: __PbBuffer,
+    pub v2: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_temporaries_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_temporaries_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_temporaries_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_buffer_rows_temporaries_p0_w1] = if p0_w2 == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_buffer_rows_temporaries_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w7: Option<String> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w9: Option<Vec<u8>> = None;
+                        let p0_w5: perftest_flat::OwnedResource = *p0_w5
+                            .expect("active allocation");
+                        p0_w7 = if true {
+                            Some(
+                                ::core::convert::Into::<
+                                    String,
+                                >::into(
+                                    std::str::from_utf8(unsafe { __pb_read(p0_w8)? })
+                                        .map_err(|_| "invalid UTF-8")?,
+                                ),
+                            )
+                        } else {
+                            None
+                        };
+                        p0_w9 = if true {
+                            Some(
+                                ::core::convert::Into::<
+                                    Vec<u8>,
+                                >::into(unsafe { __pb_read(p0_w10)? }),
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w4: i64 = perftest_flat::buffer_row_temporary(
+                            p0_w5,
+                            p0_w7.as_ref().expect("active value"),
+                            p0_w9.as_ref().expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_temporaries(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_temporaries_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_buffer_rows_views_p0_w1 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: i32,
+    pub v2: __PbBuffer,
+    pub v3: i32,
+    pub v4: __PbBuffer,
+}
+#[repr(C)]
+pub struct perftest_buffer_rows_views_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_rows_views(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_rows_views_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_buffer_rows_views_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if (p0_w8) != 0 && (p0_w8) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
+                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut perftest_flat::OwnedResource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if (p0_w8) != 0 && (p0_w8) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                            return Err("invalid option presence".into());
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w9: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w13: Option<&[u8]> = None;
+                        let p0_w5: perftest_flat::OwnedResource = *p0_w5
+                            .expect("active allocation");
+                        let p0_w7 = if (p0_w8) == 1i32 {
+                            p0_w9 = if (p0_w8) == 1i32 {
+                                Some(
+                                    std::str::from_utf8(unsafe { __pb_read(p0_w10)? })
+                                        .map_err(|_| "invalid UTF-8")?,
+                                )
+                            } else {
+                                None
+                            };
+                            Some(
+                                ::core::convert::AsRef::<
+                                    str,
+                                >::as_ref(p0_w9.as_ref().expect("active value")),
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w11 = if (p0_w12) == 1i32 {
+                            p0_w13 = if (p0_w12) == 1i32 {
+                                Some(unsafe { __pb_read(p0_w14)? })
+                            } else {
+                                None
+                            };
+                            Some(
+                                ::core::convert::AsRef::<
+                                    [u8],
+                                >::as_ref(p0_w13.as_ref().expect("active value")),
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w4: i64 = perftest_flat::buffer_row_optional_views(
+                            p0_w5,
+                            p0_w7,
+                            p0_w11,
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::buffer_rows_views(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_buffer_rows_views_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
 }
 #[repr(C)]
 pub struct perftest_buffer_views_address_result {
@@ -11670,19 +13891,28 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
                     p0_w1.data as *const __PbRow_collection_bytes_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_bytes_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_bytes_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_bytes_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    #[allow(unused_variables)]
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<u8>,
                         String,
                     > {
-                        let p0_w4 = if true {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w4: Option<&[u8]> = None;
+                        p0_w4 = if true {
                             Some(unsafe { __pb_read(p0_w5)? })
                         } else {
                             None
@@ -11810,19 +14040,28 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
                     p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_bytes_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    #[allow(unused_variables)]
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<u8>,
                         String,
                     > {
-                        let p0_w4 = if true {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w4: Option<&[u8]> = None;
+                        p0_w4 = if true {
                             Some(unsafe { __pb_read(p0_w5)? })
                         } else {
                             None
@@ -18669,19 +20908,28 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
                     p0_w1.data as *const __PbRow_collection_text_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_text_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_text_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_text_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    #[allow(unused_variables)]
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         String,
                         String,
                     > {
-                        let p0_w4 = if true {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w4: Option<&str> = None;
+                        p0_w4 = if true {
                             Some(
                                 std::str::from_utf8(unsafe { __pb_read(p0_w5)? })
                                     .map_err(|_| "invalid UTF-8")?,
@@ -18809,19 +21057,28 @@ pub unsafe extern "C" fn perftest_collection_text_each(
                     p0_w1.data as *const __PbRow_collection_text_each_p0_w1,
                     p0_w2,
                 )?;
+                let p0_w1_rows: &[__PbRow_collection_text_each_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_collection_text_each_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_text_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    #[allow(unused_variables)]
+                    let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         String,
                         String,
                     > {
-                        let p0_w4 = if true {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w4: Option<&str> = None;
+                        p0_w4 = if true {
                             Some(
                                 std::str::from_utf8(unsafe { __pb_read(p0_w5)? })
                                     .map_err(|_| "invalid UTF-8")?,
@@ -32298,6 +34555,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BorrowPacket > () != 0,
     "flat object `BorrowPacket` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BufferInputRow > () != 0,
+    "flat object `BufferInputRow` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CDropError > () != 0,

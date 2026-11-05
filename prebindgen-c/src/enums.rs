@@ -230,6 +230,19 @@ impl Codec for EnumCodec<'_> {
         }
         Ok(plan)
     }
+    fn input_row_leaf(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<CWire>> {
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
+        Ok(plan)
+    }
     fn output_leaf(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,

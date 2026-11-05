@@ -434,6 +434,43 @@ fn main() {
             ),
         )
         .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
+        .function(fun!(buffer_rows_sum))
+        .function(fun!(buffer_rows_optional))
+        .function(
+            fun!(buffer_rows_borrowed)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_borrow))),
+        )
+        .function(fun!(buffer_rows_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_temporary)),
+        ))
+        .function(fun!(buffer_rows_views).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_views)),
+        ))
+        .function(fun!(buffer_rows_optional_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_temporaries)),
+        ))
+        .function(
+            fun!(buffer_rows_alternatives).expand_param(
+                "rows",
+                expand_param!(i64)
+                    .variant(fun!(buffer_row_optional_views))
+                    .variant(fun!(buffer_row_borrow)),
+            ),
+        )
+        .function(
+            fun!(buffer_rows_enum)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
+        )
+        .function(fun!(buffer_row_reset_counts))
+        .panic()
+        .function(fun!(buffer_row_constructor_calls))
+        .panic()
+        .function(fun!(buffer_row_function_calls))
+        .panic()
         .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error("result_error", pq!(CResultError))
         .error("panic_error", pq!(CPanicError))
@@ -1060,6 +1097,46 @@ fn main() {
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
+    let mut unchecked = prebindgen_c::Cbindgen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .prefix("fast")
+        .set_emit_alias_checks(false)
+        .opaque_ptr("owned_resource", pq!(OwnedResource))
+        .opaque_ptr("alias_handler", pq!(AliasHandler))
+        .opaque_error(pq!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
+        .expand(expand_param!(AliasPair).variant(fun!(alias_pair_new)))
+        .function(fun!(collection_resource_new))
+        .panic()
+        .function(fun!(owned_resource_drops))
+        .panic()
+        .function(fun!(option_resource_id))
+        .panic()
+        .function(fun!(alias_fixed))
+        .panic()
+        .function(fun!(buffer_rows_sum))
+        .function(fun!(buffer_rows_optional))
+        .enum_type("code", pq!(SparseCode))
+        .function(
+            fun!(buffer_rows_enum)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
+        )
+        .function(fun!(alias_nested_sum))
+        .panic()
+        .function(fun!(collection_alias))
+        .alias_checks(true)
+        .panic()
+        .function(fun!(alias_handler_new))
+        .panic()
+        .function(fun!(alias_callback_rows))
+        .function(fun!(alias_handler_call))
+        .alias_checks(true);
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        unchecked = unchecked.opaque_layouts_file(path);
+    }
+    let unchecked = unchecked.build().unwrap();
+    unchecked.write_rust(out.join("unchecked.rs")).unwrap();
+    unchecked.write_header(out.join("unchecked.h")).unwrap();
 }
 
 fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {
