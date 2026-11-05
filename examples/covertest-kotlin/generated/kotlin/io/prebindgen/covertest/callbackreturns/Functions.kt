@@ -1,10 +1,10 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.callbackreturns
 
-public fun callbackReturnWireRowsCatch(callback: io.prebindgen.covertest.VoidToCallbackWireRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnWireRowsCatch(callback: io.prebindgen.covertest.VoidToCallbackWireRowVecCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?>? {
         var callbackCleanupFailure: Throwable? = null
@@ -35,10 +35,10 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnWireRowCatch(callback: io.prebindgen.covertest.VoidToCallbackWireRowCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnWireRowCatch(callback: io.prebindgen.covertest.VoidToCallbackWireRowCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -50,9 +50,9 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
         }
         callbackReturned = callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1.resource) { "null handle" } else null) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.resource?.raw ?: 0L, callback_return_w1.character)
+ try {  io.prebindgen.covertest.withHandleLocks(callback_return_w1.resource) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.resource.raw, callback_return_w1.character)
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-if (true) __pb_consume(callback_return_w1.resource!!)
+__pb_consume(callback_return_w1.resource)
 callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.callbackreturns.CallbackWireRow)?.let { returnedValue0 -> (returnedValue0.resource as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue2 -> returnedHandles.add(returnedValue2); returnedOwners.add(returnedValue2) }
  }
 
@@ -66,10 +66,10 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnI64(callback: io.prebindgen.covertest.i64Toi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnI64(callback: io.prebindgen.covertest.i64Toi64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -96,10 +96,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnI8(callback: io.prebindgen.covertest.i8Toi8Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Byte> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Byte = run {
+public fun callbackReturnI8(callback: io.prebindgen.covertest.i8Toi8Callback, onError: io.prebindgen.covertest.JniErrorHandler<Byte> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Byte = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Byte): Byte {
         var callbackCleanupFailure: Throwable? = null
@@ -126,10 +126,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnI16(callback: io.prebindgen.covertest.i16Toi16Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Short> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Short = run {
+public fun callbackReturnI16(callback: io.prebindgen.covertest.i16Toi16Callback, onError: io.prebindgen.covertest.JniErrorHandler<Short> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Short = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Short): Short {
         var callbackCleanupFailure: Throwable? = null
@@ -156,10 +156,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnF32(callback: io.prebindgen.covertest.f32Tof32Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Float> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Float = run {
+public fun callbackReturnF32(callback: io.prebindgen.covertest.f32Tof32Callback, onError: io.prebindgen.covertest.JniErrorHandler<Float> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Float = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Float): Float {
         var callbackCleanupFailure: Throwable? = null
@@ -186,15 +186,15 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnU128(callback: io.prebindgen.covertest.u128Tou128Callback?, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger = run {
+public fun callbackReturnU128(callback: io.prebindgen.covertest.u128Tou128Callback, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): ByteArray? {
         var callbackCleanupFailure: Throwable? = null
         lateinit var callbackArgument0_0: java.math.BigInteger
-        var callbackReturned: java.math.BigInteger? = null
+        lateinit var callbackReturned: java.math.BigInteger
         try {
             callbackArgument0_0 = java.math.BigInteger(1, raw0 as ByteArray)
         } catch (failure: Throwable) {
@@ -203,7 +203,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
         }
         callbackReturned = callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
-  val callbackReturnWire = callback_return_w1?.toByteArray()
+  val callbackReturnWire = callback_return_w1.toByteArray()
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
@@ -216,10 +216,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnZero(callback: io.prebindgen.covertest.VoidToi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnZero(callback: io.prebindgen.covertest.VoidToi64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -244,10 +244,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnBool(callback: io.prebindgen.covertest.boolToboolCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
+public fun callbackReturnBool(callback: io.prebindgen.covertest.boolToboolCallback, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Boolean): Boolean {
         var callbackCleanupFailure: Throwable? = null
@@ -274,10 +274,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnChar(callback: io.prebindgen.covertest.charTocharCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Int> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Int = run {
+public fun callbackReturnChar(callback: io.prebindgen.covertest.charTocharCallback, onError: io.prebindgen.covertest.JniErrorHandler<Int> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Int = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Int): Int {
         var callbackCleanupFailure: Throwable? = null
@@ -304,10 +304,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnFloat(callback: io.prebindgen.covertest.f64Tof64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Double> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Double = run {
+public fun callbackReturnFloat(callback: io.prebindgen.covertest.f64Tof64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Double> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Double = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Double): Double {
         var callbackCleanupFailure: Throwable? = null
@@ -334,10 +334,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnUnsigned(callback: io.prebindgen.covertest.u64Tou64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+public fun callbackReturnUnsigned(callback: io.prebindgen.covertest.u64Tou64Callback, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -364,15 +364,15 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnWide(callback: io.prebindgen.covertest.i128Toi128Callback?, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger = run {
+public fun callbackReturnWide(callback: io.prebindgen.covertest.i128Toi128Callback, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): ByteArray? {
         var callbackCleanupFailure: Throwable? = null
         lateinit var callbackArgument0_0: java.math.BigInteger
-        var callbackReturned: java.math.BigInteger? = null
+        lateinit var callbackReturned: java.math.BigInteger
         try {
             callbackArgument0_0 = java.math.BigInteger(raw0 as ByteArray)
         } catch (failure: Throwable) {
@@ -381,7 +381,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
         }
         callbackReturned = callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
-  val callbackReturnWire = callback_return_w1?.toByteArray()
+  val callbackReturnWire = callback_return_w1.toByteArray()
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
@@ -394,15 +394,15 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnText(callback: io.prebindgen.covertest.StringToStringCallback?, onError: io.prebindgen.covertest.JniErrorHandler<String> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): String = run {
+public fun callbackReturnText(callback: io.prebindgen.covertest.StringToStringCallback, onError: io.prebindgen.covertest.JniErrorHandler<String> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): String = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: String?): String? {
         var callbackCleanupFailure: Throwable? = null
         lateinit var callbackArgument0_0: String
-        var callbackReturned: String? = null
+        lateinit var callbackReturned: String
         try {
             callbackArgument0_0 = raw0 as String
         } catch (failure: Throwable) {
@@ -424,15 +424,15 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnBytes(callback: io.prebindgen.covertest.u8VecTou8VecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<ByteArray> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ByteArray = run {
+public fun callbackReturnBytes(callback: io.prebindgen.covertest.u8VecTou8VecCallback, onError: io.prebindgen.covertest.JniErrorHandler<ByteArray> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ByteArray = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): ByteArray? {
         var callbackCleanupFailure: Throwable? = null
         lateinit var callbackArgument0_0: ByteArray
-        var callbackReturned: ByteArray? = null
+        lateinit var callbackReturned: ByteArray
         try {
             callbackArgument0_0 = raw0 as ByteArray
         } catch (failure: Throwable) {
@@ -454,10 +454,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnOptional(callback: io.prebindgen.covertest.Optionali64ToOptionali64Callback?, present: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long? = run {
+public fun callbackReturnOptional(callback: io.prebindgen.covertest.Optionali64ToOptionali64Callback, present: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long? = run {
     val returnCapture = io.prebindgen.covertest.Return_Int_Long2_ErrorEmpty_62eb913ef507b63c.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Int, raw1: Long): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -489,10 +489,10 @@ if (returnCapture.s0 == 1) returnCapture.s1 else null
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnVector(callback: io.prebindgen.covertest.i64VecToi64VecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
+public fun callbackReturnVector(callback: io.prebindgen.covertest.i64VecToi64VecCallback, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<Long>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<Long> = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: ByteArray?): Array<Any?>? {
         var callbackCleanupFailure: Throwable? = null
@@ -546,10 +546,10 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnRecord(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnRecordToCallbackReturnRecordCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnRecord(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnRecordToCallbackReturnRecordCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long, raw1: String?): Array<Any?> {
         var callbackCleanupFailure: Throwable? = null
@@ -576,10 +576,10 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnEnum(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnChoiceToCallbackReturnChoiceCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
+public fun callbackReturnEnum(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnChoiceToCallbackReturnChoiceCallback, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Int): Int {
         var callbackCleanupFailure: Throwable? = null
@@ -637,14 +637,14 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnOwned(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnOwned(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Long {
         var callbackCleanupFailure: Throwable? = null
-        var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        lateinit var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackReturnResource
         try {
         } catch (failure: Throwable) {
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
@@ -652,9 +652,9 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
         }
         callbackReturned = callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
+ try {  io.prebindgen.covertest.withHandleLocks(callback_return_w1) { val callbackReturnWire = callback_return_w1.raw
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-if (true) __pb_consume(callback_return_w1!!)
+__pb_consume(callback_return_w1)
 callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue0 -> returnedHandles.add(returnedValue0); returnedOwners.add(returnedValue0) }
 
 val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
@@ -667,16 +667,16 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnTake(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnResourceToCallbackReturnResourceCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnTake(callback: io.prebindgen.covertest.callbackreturns.CallbackReturnResourceToCallbackReturnResourceCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
         var callbackOutput0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
         lateinit var callbackArgument0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource
-        var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        lateinit var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackReturnResource
 var callbackReturnReady = false
         try { var callbackFailure: Throwable? = null
         var callbackReady = false
@@ -703,9 +703,9 @@ var callbackReturnReady = false
 
 val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() } }; throw failure }
 return kotlin.run { val callback_return_w1 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
+ try {  io.prebindgen.covertest.withHandleLocks(callback_return_w1) { val callbackReturnWire = callback_return_w1.raw
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
-if (true) __pb_consume(callback_return_w1!!)
+__pb_consume(callback_return_w1)
 callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue0 -> returnedHandles.add(returnedValue0); returnedOwners.add(returnedValue0) }
 
 val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
@@ -718,10 +718,10 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnOwnedOptional(callback: io.prebindgen.covertest.VoidToOptionalCallbackReturnResourceCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long? = run {
+public fun callbackReturnOwnedOptional(callback: io.prebindgen.covertest.VoidToOptionalCallbackReturnResourceCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long? = run {
     val returnCapture = io.prebindgen.covertest.Return_Int_Long2_ErrorEmpty_62eb913ef507b63c.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -733,7 +733,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
         }
         callbackReturned = callback.run()
 return kotlin.run { val callback_return_w3 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(if (callback_return_w3 != null) if (true) requireNotNull(requireNotNull(callback_return_w3)) { "null handle" } else null else null) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
+ try {  io.prebindgen.covertest.withHandleLocks(if (callback_return_w3 != null) if (true) requireNotNull(callback_return_w3) else null else null) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
 val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 if (callback_return_w3 != null) { if (true) __pb_consume(requireNotNull(callback_return_w3)) }
 callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w3 as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue1 -> returnedHandles.add(returnedValue1); returnedOwners.add(returnedValue1) }
@@ -751,14 +751,14 @@ if (returnCapture.s0 == 1) returnCapture.s1 else null
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnOwnedVector(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnOwnedVector(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?>? {
         var callbackCleanupFailure: Throwable? = null
-        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackReturnResource?>
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackReturnResource>
         try {
         } catch (failure: Throwable) {
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
@@ -784,10 +784,10 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnSpawn(callback: io.prebindgen.covertest.i64Toi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbackreturns.CallbackReturnJob = run {
+public fun callbackReturnSpawn(callback: io.prebindgen.covertest.i64Toi64Callback, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbackreturns.CallbackReturnJob = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -823,12 +823,12 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnJoin(job: io.prebindgen.covertest.callbackreturns.CallbackReturnJob?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnJoin(job: io.prebindgen.covertest.callbackreturns.CallbackReturnJob, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(job) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+val nativeResult = try { run { val handle0 = try { job } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
         val ownership = LongArray(1) { -1L }
-        try { run { val nativeArgument0 = try { job?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_join_64d9e75305501c53(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }; if (true) __pb_consume(job!!) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; if (true) __pb_consume(job!!); handle0?.let { if (it.address in taken) it.markConsumed() } } }
+        try { run { val nativeArgument0 = try { job.raw } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_join_64d9e75305501c53(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }; __pb_consume(job) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; __pb_consume(job); handle0?.let { if (it.address in taken) it.markConsumed() } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -837,10 +837,10 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(job)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnHandlerNew(callback: io.prebindgen.covertest.i64Toi64Callback?, fail: Boolean, onBindingError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnHandler> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.StringMessageHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnHandler>): io.prebindgen.covertest.callbackreturns.CallbackReturnHandler = run {
+public fun callbackReturnHandlerNew(callback: io.prebindgen.covertest.i64Toi64Callback, fail: Boolean, onBindingError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnHandler> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.StringMessageHandler<io.prebindgen.covertest.callbackreturns.CallbackReturnHandler>): io.prebindgen.covertest.callbackreturns.CallbackReturnHandler = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorString1_6b62d91b16305083.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -877,11 +877,11 @@ onError.run(returnCapture.d0 as String) }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnHandlerCall(handler: io.prebindgen.covertest.callbackreturns.CallbackReturnHandler?, `value`: Long, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnHandlerCall(handler: io.prebindgen.covertest.callbackreturns.CallbackReturnHandler, `value`: Long, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(handler) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { handler?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { `value` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_handler_call_1b7a8dd7a35a6f9b(nativeArgument0, nativeArgument1, nativeArgument2) }
+val nativeResult = try { run { val handle0 = try { handler } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { handler.raw } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { `value` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_handler_call_1b7a8dd7a35a6f9b(nativeArgument0, nativeArgument1, nativeArgument2) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -890,10 +890,10 @@ val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(hand
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnCatch(callback: io.prebindgen.covertest.i64Toi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnCatch(callback: io.prebindgen.covertest.i64Toi64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -920,9 +920,9 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnHandlerMany(handlers: kotlin.collections.List<io.prebindgen.covertest.i64Toi64Callback?>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnHandlerMany(handlers: kotlin.collections.List<io.prebindgen.covertest.i64Toi64Callback>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = try { if (true) handlers?.toList()?.let { p0_w1_snapshot -> kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w6 = p0_w1_snapshot[p0_w1_index]
-kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { if (p0_w6 == null) null else object {
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null
@@ -952,10 +952,10 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements } catc
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnCharCatch(callback: io.prebindgen.covertest.VoidTocharCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Int> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Int = run {
+public fun callbackReturnCharCatch(callback: io.prebindgen.covertest.VoidTocharCallback, onError: io.prebindgen.covertest.JniErrorHandler<Int> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Int = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Int {
         var callbackCleanupFailure: Throwable? = null
@@ -980,14 +980,14 @@ callbackReturnWire }
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnOwnedVectorCatch(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnOwnedVectorCatch(callback: io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(): Array<Any?>? {
         var callbackCleanupFailure: Throwable? = null
-        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackReturnResource?>
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackReturnResource>
         try {
         } catch (failure: Throwable) {
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
@@ -1013,10 +1013,10 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnUnit(callback: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+public fun callbackReturnUnit(callback: io.prebindgen.covertest.i64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long) {
         var callbackCleanupFailure: Throwable? = null
@@ -1038,10 +1038,10 @@ val nativeResult = try { run { val nativeArgument0 = try { if (callback == null)
     } finally { returnCapture.release() }
 }
 
-public fun callbackReturnHandlerValue(handler: io.prebindgen.covertest.i64Toi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun callbackReturnHandlerValue(handler: io.prebindgen.covertest.i64Toi64Callback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (handler == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long): Long {
         var callbackCleanupFailure: Throwable? = null

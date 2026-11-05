@@ -415,7 +415,12 @@ impl JniCallback {
         })
     }
 
-    pub(crate) fn adapter(&self, parameter: &str, context: &KotlinContext<'_>) -> Result<String> {
+    pub(crate) fn adapter(
+        &self,
+        parameter: &str,
+        context: &KotlinContext<'_>,
+        nullable: bool,
+    ) -> Result<String> {
         let mut raw = vec![];
         let mut outputs = vec![];
         let mut offset = 0;
@@ -508,7 +513,12 @@ impl JniCallback {
             body
         };
         let body = format!("{body}\n{finish_return}");
-        Ok(format!("if ({parameter} == null) null else object {{\n    @Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\", \"USELESS_CAST\", \"VARIABLE_WITH_REDUNDANT_INITIALIZER\")\n    fun run({}){return_type} {{\n{locals}        {body}\n    }}\n}}", raw.join(", ")))
+        let guard = if nullable {
+            format!("if ({parameter} == null) null else ")
+        } else {
+            String::new()
+        };
+        Ok(format!("{guard}object {{\n    @Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\", \"USELESS_CAST\", \"VARIABLE_WITH_REDUNDANT_INITIALIZER\")\n    fun run({}){return_type} {{\n{locals}        {body}\n    }}\n}}", raw.join(", ")))
     }
 }
 fn has_reference(ty: &syn::Type) -> bool {

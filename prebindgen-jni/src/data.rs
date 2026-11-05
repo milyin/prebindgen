@@ -921,6 +921,7 @@ pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let inner = nodes
         .iter()
@@ -933,7 +934,7 @@ pub(crate) fn input_kotlin(
         "{}: {}{}",
         d.root,
         d.class_name,
-        if d.condition == "true" { "" } else { "?" }
+        if active == "true" { "" } else { "?" }
     ));
     let fields = fields(nodes)?;
     if c.parameters.len() != fields.len() {
@@ -941,7 +942,7 @@ pub(crate) fn input_kotlin(
     }
     for (p, (field, children)) in c.parameters.iter().zip(&fields) {
         let name = p.split_once(": ").unwrap().0;
-        let receiver = if d.condition == "true" {
+        let receiver = if active == "true" {
             d.root.clone()
         } else {
             format!("requireNotNull({})", d.root)

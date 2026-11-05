@@ -47,8 +47,7 @@ fun checkResults() {
     resultFailure<ResultExceptions.Nested>("other error") { resultOther(false, onError = StringMessageHandler { throw ResultExceptions.Nested(it) }) }
     storageTryWithLabel("label").close()
     resultFailure<IllegalStateException>("label must not be empty") { storageTryWithLabel("") }
-    try { storageTryWithLabel(null); error("null input accepted") }
-    catch (_: IllegalArgumentException) {}
+    rejectNullPrecondition { storageTryWithLabel(invalidJavaNull()) }
 
     val start = ownedResourceDrops()
     for (mode in listOf(0, 1, 2, 3)) {
@@ -77,8 +76,10 @@ fun checkResults() {
     check(resultScalar(-17, onError = ResultFailureHandler { code -> -code }) == 17L)
     check(resultUnit(false, onError = ResultFailureHandler { code -> check(code == 1L) }) == Unit)
     val fallback = checkNotNull(optionResourceNew(true))
-    check(resultOwned(null, 0, 65, onError = throwResult,
-        onBindingError = JniErrorHandler { check(it?.contains("null") == true); fallback }) === fallback)
+    var nullBindingCalled = false
+    rejectNullPrecondition { resultOwned(invalidJavaNull(), 0, 65, onError = throwResult,
+        onBindingError = JniErrorHandler { nullBindingCalled = true; fallback }) }
+    check(!nullBindingCalled && !fallback.isClosed)
     val closed = checkNotNull(optionResourceNew(true)); closed.close()
     check(resultOwned(closed, 0, 65, onError = throwResult,
         onBindingError = JniErrorHandler { check(it == "null or misaligned allocation pointer"); fallback }) === fallback)

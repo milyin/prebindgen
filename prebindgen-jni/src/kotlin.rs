@@ -276,7 +276,9 @@ impl KotlinInputConversion for JniInput {
 pub(crate) fn input_leaves(
     wires: &[&Wire<JniWire>],
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
+    let conditional = active != "true";
     let mut kt_params = Vec::new();
     let mut kt_args = Vec::new();
     let mut locks = Vec::new();
@@ -285,41 +287,111 @@ pub(crate) fn input_leaves(
     for w in wires {
         let n = &w.name;
         let (kt, arg) = match &w.kind {
-            JniWire::Callback { callback } => (
-                format!("{}?", callback.fqn()),
-                callback.adapter(&n.to_string(), context)?,
-            ),
-            JniWire::Native128 { primitive: p, condition } => (
-                format!("{}?", scalar::kotlin(*p)),
-                format!("if ({condition}) requireNotNull({n}) {{ \"null 128-bit integer\" }}.toByteArray() else null"),
-            ),
+            JniWire::Callback { callback } => {
+                let adapter = callback.adapter(&n.to_string(), context, conditional)?;
+                (
+                    format!("{}{}", callback.fqn(), if conditional { "?" } else { "" }),
+                    if conditional {
+                        format!("if ({active}) {adapter} else null")
+                    } else {
+                        adapter
+                    },
+                )
+            }
+            JniWire::Native128 { primitive: p, .. }
+            | JniWire::Scalar {
+                primitive: p @ (Primitive::I128 | Primitive::U128),
+                ..
+            } => {
+                let value = if conditional {
+                    format!("requireNotNull({n})")
+                } else {
+                    n.to_string()
+                };
+                let encoded = format!("{value}.toByteArray()");
+                let encoded = if conditional {
+                    format!("if ({active}) {encoded} else null")
+                } else {
+                    encoded
+                };
+                (
+                    format!(
+                        "{}{}",
+                        scalar::kotlin(*p),
+                        if conditional { "?" } else { "" }
+                    ),
+                    encoded,
+                )
+            }
             JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
-            JniWire::Enum { enum_type, .. } => (
-                enum_type.class_name.clone(),
-                format!("{n}.{}", enum_type.value_member()),
-            ),
+            JniWire::Enum { enum_type, .. } => {
+                let member = enum_type.value_member();
+                (
+                    format!(
+                        "{}{}",
+                        enum_type.class_name,
+                        if conditional { "?" } else { "" }
+                    ),
+                    if conditional {
+                        format!("if ({active}) requireNotNull({n}).{member} else 0")
+                    } else {
+                        format!("{n}.{member}")
+                    },
+                )
+            }
             JniWire::Handle {
                 handle, condition, ..
             } => {
-                locks.push(format!(
-                    "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
-                ));
+                let value = if conditional {
+                    format!("requireNotNull({n}) {{ \"null handle\" }}")
+                } else {
+                    n.to_string()
+                };
+                locks.push(if condition == "true" {
+                    value.clone()
+                } else {
+                    format!("if ({condition}) {value} else null")
+                });
                 if handle.access == Access::Move {
-                    consumed.push(format!("if ({condition}) __pb_consume({n}!!)"));
+                    let consume = format!("__pb_consume({value})");
+                    consumed.push(if condition == "true" {
+                        consume
+                    } else {
+                        format!("if ({condition}) {consume}")
+                    });
                 }
                 (
-                    format!("{}?", context.class_name(&handle.ty)?),
-                    format!("{n}?.raw ?: 0L"),
+                    format!(
+                        "{}{}",
+                        context.class_name(&handle.ty)?,
+                        if conditional { "?" } else { "" }
+                    ),
+                    if conditional {
+                        format!("if ({active}) {value}.raw else 0L")
+                    } else {
+                        format!("{n}.raw")
+                    },
                 )
             }
             JniWire::NativeRows { .. } | JniWire::Rows { .. } => {
                 return Err("array carrier requires a sequence node".into())
             }
             JniWire::NativeBuffer { text, .. } => (
-                if *text { "String?" } else { "ByteArray?" }.into(),
+                format!(
+                    "{}{}",
+                    if *text { "String" } else { "ByteArray" },
+                    if conditional { "?" } else { "" }
+                ),
                 n.to_string(),
             ),
-            _ => (w.kind.kotlin_type().into(), n.to_string()),
+            _ => (
+                if conditional {
+                    w.kind.kotlin_type().into()
+                } else {
+                    w.kind.kotlin_type().trim_end_matches('?').into()
+                },
+                n.to_string(),
+            ),
         };
         prepared_arguments.push(match &w.kind {
             JniWire::Handle { condition, .. } if condition != "true" => {
@@ -499,20 +571,30 @@ pub(crate) fn input_handles(node: &JniNode, owned_only: bool) -> bool {
 }
 
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
+    input_kotlin_when(node, context, "true")
+}
+// Availability is local to the exposed value: sequence rows start a new scope,
+// while optional payloads and selector arms can be absent. JNI wire types stay
+// nullable independently of this public Kotlin contract.
+pub(crate) fn input_kotlin_when(
+    node: &JniNode,
+    context: &KotlinContext<'_>,
+    active: &str,
+) -> Result<KotlinInput> {
     let mut out = match node {
-        JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context, active),
         JniNode::Chain {
             meta: JniChain::Bulk(record),
             controls,
             child,
-        } => crate::bulk::input_kotlin(record, controls, child, context),
+        } => crate::bulk::input_kotlin(record, controls, child, context, active),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             children: elements,
             controls,
             ..
         } => {
-            let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
+            let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context, active)?;
             out.parameter_paths = controls
                 .iter()
                 .enumerate()
@@ -525,7 +607,14 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
                 })
                 .collect();
             for (i, arm) in elements.iter().enumerate() {
-                let mut child = input_kotlin(arm, context)?;
+                let selector = controls.first().ok_or("alternatives require a selector")?;
+                let selected = format!("{} == {i}", selector.name);
+                let selected = if active == "true" {
+                    selected
+                } else {
+                    format!("({active}) && ({selected})")
+                };
+                let mut child = input_kotlin_when(arm, context, &selected)?;
                 for path in &mut child.parameter_paths {
                     path.prepend(ComponentSegment::Alternative(i));
                 }
@@ -542,34 +631,34 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
             let [carrier] = controls.as_slice() else {
                 return Err("sequence requires one carrier control".into());
             };
-            crate::sequence::input_list(carrier, metadata, element, context)
+            crate::sequence::input_list(carrier, metadata, element, context, active)
         }
         JniNode::Chain {
             child: element,
             meta: JniChain::Optional(metadata),
             ..
-        } => optional::input_kotlin(element, metadata, context),
+        } => optional::input_kotlin(element, metadata, context, active),
         JniNode::Branch {
             children: elements,
             meta: JniBranch::Group(metadata),
             ..
         } => match metadata {
-            JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context),
+            JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context, active),
             JniGroup::Argument(name) => {
-                let mut out = input_components(elements, context)?;
+                let mut out = input_components_when(elements, context, active)?;
                 for path in &mut out.parameter_paths {
                     path.prepend(ComponentSegment::Argument(name.clone()));
                 }
                 Ok(out)
             }
             JniGroup::Field(name) => {
-                let mut out = input_components(elements, context)?;
+                let mut out = input_components_when(elements, context, active)?;
                 for path in &mut out.parameter_paths {
                     path.prepend(ComponentSegment::Field(name.to_string()));
                 }
                 Ok(out)
             }
-            _ => input_components(elements, context),
+            _ => input_components_when(elements, context, active),
         },
     }?;
     out.complete_parameter_paths()?;
@@ -579,9 +668,16 @@ pub(crate) fn input_components(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
+    input_components_when(nodes, context, "true")
+}
+fn input_components_when(
+    nodes: &[JniNode],
+    context: &KotlinContext<'_>,
+    active: &str,
+) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     for node in nodes {
-        merge_input(&mut out, input_kotlin(node, context)?)?;
+        merge_input(&mut out, input_kotlin_when(node, context, active)?)?;
     }
     Ok(out)
 }
@@ -837,10 +933,13 @@ mod tests {
             scalar.kotlin_type()
         );
         let emitted = input.kotlin(&context).unwrap();
-        assert_eq!(emitted.locks, ["if (isEnabled() && count > 3) requireNotNull(incoming) { \"null handle\" } else null"]);
+        assert_eq!(
+            emitted.locks,
+            ["if (isEnabled() && count > 3) incoming else null"]
+        );
         assert_eq!(
             emitted.consumed,
-            ["if (isEnabled() && count > 3) __pb_consume(incoming!!)"]
+            ["if (isEnabled() && count > 3) __pb_consume(incoming)"]
         );
 
         let plan = JniCodec

@@ -72,11 +72,12 @@ fun checkOptions() {
     catch (_: IllegalArgumentException) {}
     // Call the two reference fixtures directly to check the native ABI and
     // rejection of malformed tags without Kotlin's argument guards. Their
-    // (Int, reference) signatures are unique in this fixture manifest; selecting
-    // by signature keeps the check independent of generated call numbering.
+    // Source-derived prefixes and signatures identify them without depending
+    // on a generated hash or assuming other fixtures cannot use the same ABI.
     for (referenceType in listOf(String::class.java, ByteArray::class.java)) {
+        val fixture = if (referenceType == String::class.java) "option_triple_text" else "option_triple_bytes"
         val native = JNINative::class.java.declaredMethods.single {
-            it.name.startsWith("call") && it.parameterTypes.dropLast(1).toTypedArray().contentEquals(arrayOf(Int::class.javaPrimitiveType, referenceType))
+            it.name.startsWith("call_${fixture}_") && it.parameterTypes.dropLast(1).toTypedArray().contentEquals(arrayOf(Int::class.javaPrimitiveType, referenceType))
         }
         val empty: Any = if (referenceType == String::class.java) "" else byteArrayOf()
         for ((tag, payload) in listOf(-1 to empty, 0 to empty, 1 to null, 1 to empty)) {

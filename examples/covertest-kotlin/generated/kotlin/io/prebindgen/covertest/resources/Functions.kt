@@ -51,10 +51,10 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun projectionPairCallback(callback: io.prebindgen.covertest.resources.ProjectionPairCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+public fun projectionPairCallback(callback: io.prebindgen.covertest.resources.ProjectionPairCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { if (callback == null) null else object {
+val nativeResult = try { run { val nativeArgument0 = try { object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
     fun run(raw0: Long, raw1: Long) {
         var callbackCleanupFailure: Throwable? = null
@@ -290,11 +290,11 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
     } finally { returnCapture.release() }
 }
 
-public fun ownedResourceId(`value`: io.prebindgen.covertest.resources.OwnedResource?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+public fun ownedResourceId(`value`: io.prebindgen.covertest.resources.OwnedResource, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
-val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(`value`) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        run { val nativeArgument0 = try { `value`?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_owned_resource_id_7691bb5261073433(nativeArgument0, nativeArgument1) }
+val nativeResult = try { run { val handle0 = try { `value` } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { `value`.raw } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_owned_resource_id_7691bb5261073433(nativeArgument0, nativeArgument1) }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }

@@ -121,9 +121,9 @@ fun checkPreparedInputs() {
     val chosen = bulkHandleNew(21)
     val other = bulkHandleNew(22)
     var reads = 0
-    val changing = object : AbstractList<List<BulkHandle?>>() {
+    val changing = object : AbstractList<List<BulkHandle>>() {
         override val size: Int get() = 1
-        override fun get(index: Int): List<BulkHandle?> = listOf(if (reads++ == 0) chosen else other)
+        override fun get(index: Int): List<BulkHandle> = listOf(if (reads++ == 0) chosen else other)
     }
     val nested = bulkHandleNested(changing)
     check(reads == 1 && chosen.isClosed && !other.isClosed)

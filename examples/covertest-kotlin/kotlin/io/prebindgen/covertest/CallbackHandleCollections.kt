@@ -51,7 +51,7 @@ fun checkCallbackHandleCollections() {
         delivered = rows
     } })
     check(calls == 1 && rowHandles(delivered).all { it.isClosed })
-    check(callbackRowResourceLive() == 1L && callbackRowResourceId(retained) == 12L)
+    check(callbackRowResourceLive() == 1L && callbackRowResourceId(checkNotNull(retained)) == 12L)
     retained!!.close()
     check(callbackRowResourceLive() == 0L)
     callbackRowsBorrowed({ rows -> inside {
@@ -124,7 +124,7 @@ fun checkCallbackHandleCollections() {
         uniqueOwner = rows[0].resource.take()
     } })
     check(uniqueCalls == 1 && uniqueRows.all { it.resource.isClosed })
-    check(callbackRowResourceLive() == 1L && callbackUniqueResourceId(uniqueOwner) == 101L)
+    check(callbackRowResourceLive() == 1L && callbackUniqueResourceId(checkNotNull(uniqueOwner)) == 101L)
     uniqueOwner!!.close()
     check(callbackRowResourceLive() == 0L)
 

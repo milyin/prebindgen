@@ -86,10 +86,26 @@ Names follow the effective conversion after type-wide defaults and local
 overrides. Ordinary Kotlin identifiers are emitted without backticks. All Kotlin
 keywords, including soft keywords, and names containing characters outside
 Kotlin's identifier grammar are escaped using the same rule everywhere.
+
 Colliding names and names reserved by generated code receive stable hash suffixes derived from their
 source parameter and component path. Existing named calls using wire identifiers
 must adopt these public names; positional argument order is preserved.
 Naming adds no runtime statements and keeps native wire identifiers separate.
+
+Required Kotlin input values are non-null: for example, Rust `&Session`, `&str`
+and `impl Fn()` become `Session`, `String` and a non-null callback interface.
+Actual optional values and reference slots belonging to inactive expansion arms
+remain nullable. `Option<Vec<T>>` makes the list nullable; its elements stay
+non-null unless `T` is itself optional.
+
+Kotlin rejects required null arguments at compile time. Java can still pass null;
+the Kotlin compiler's standard JVM entry check throws `NullPointerException`
+before the wrapper enters JNI or transfers ownership. That precondition failure
+does not invoke the binding-error handler. Generic collection elements are not
+checked by JVM entry assertions; Kotlin's element types enforce their contract
+in source. Non-null closed handles and native conversion failures retain their
+existing binding-error routing. The internal JNI reference carriers remain
+nullable independently of these public declarations.
 
 `ptr_class!(Query).gc_managed()` opts that handle class into automatic cleanup
 of abandoned wrappers through `java.lang.ref.Cleaner` (Java 9 or newer, or a

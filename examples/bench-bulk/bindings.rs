@@ -107,6 +107,8 @@ fn main() {
                     .class(data_class!(HandleRecord))
                     .fun(fun!(input_handle_new))
                     .fun(fun!(input_handle_value))
+                    .fun(fun!(buffer_sizes))
+                    .fun(fun!(selected_handle).expand_param("value", expand_param!(i64).variant_self().variant(fun!(input_handle_value))))
                     .fun(handle_values)
                     .fun(handle_records)
                     .fun(owned_handles)

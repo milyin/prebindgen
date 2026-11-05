@@ -52,7 +52,7 @@ fun checkCallbackReturns() {
     val duplicate = callbackReturnResourceNew(73)
     invalidCallbackReturn { callbackReturnOwnedVector({ listOf(duplicate, duplicate) }) }
     check(duplicate.isClosed && callbackReturnResourceLive() == 0UL)
-    val partial = listOf(callbackReturnResourceNew(74), null, callbackReturnResourceNew(75))
+    val partial = listOf(callbackReturnResourceNew(74), invalidJavaNull<CallbackReturnResource>(), callbackReturnResourceNew(75))
     invalidCallbackReturn { callbackReturnOwnedVector({ partial }) }
     check(partial.filterNotNull().all { it.isClosed } && callbackReturnResourceLive() == 0UL)
 
