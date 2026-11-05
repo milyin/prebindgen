@@ -1514,6 +1514,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         },
         &mut files,
     )?;
+    let parameter_package_roots = parameter_names::package_roots(flat);
     for (source, placement) in functions {
         let source = source.to_string();
         let pkg = &placement.package;
@@ -1703,8 +1704,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 .map(|p| p.name.to_string())
                 .collect::<Vec<_>>(),
             &mut kotlin_inputs,
-            prefix,
-            exception,
+            &parameter_package_roots,
         )?;
         for code in kotlin_inputs {
             kt_params.extend(code.parameters);

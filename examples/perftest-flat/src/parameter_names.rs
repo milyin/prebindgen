@@ -57,3 +57,9 @@ pub fn parameter_record(value: WireNamedFields) -> WireNamedFields {
 pub fn parameter_records(items: Vec<WireNamedFields>) -> Vec<WireNamedFields> {
     items
 }
+
+#[prebindgen]
+pub fn parameter_external(org: i64, com: i64, callback: impl Fn(ParameterPoint)) -> ParameterPoint {
+    callback(ParameterPoint { x: org, y: com });
+    ParameterPoint { x: org, y: com }
+}

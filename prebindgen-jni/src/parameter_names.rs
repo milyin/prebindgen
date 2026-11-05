@@ -13,7 +13,36 @@ fn segment_identity(segment: &ComponentSegment) -> String {
         ComponentSegment::Named(name) => format!("named:{name}"),
     }
 }
-fn reserved(name: &str, package: &str, locals: &BTreeSet<String>) -> bool {
+/// All declared foreign packages, including declarations retained when the native
+/// module is relocated. Those roots remain free references in any function body.
+pub(crate) fn package_roots(flat: &Bindings) -> BTreeSet<String> {
+    let mut names = vec![flat.metadata.package.clone()];
+    for ty in flat.types.values() {
+        if let Some(class) = &ty.metadata.class {
+            names.push(class.pkg.clone());
+        }
+        if let Some(enumeration) = &ty.metadata.enumeration {
+            names.push(enumeration.class_name.clone());
+        }
+        if let Some(exception) = &ty.metadata.error_class {
+            names.push(exception.clone());
+        }
+    }
+    let nodes = crate::metadata::nodes(flat);
+    for wire in prebindgen_flat::wire_definitions(nodes.into_iter().map(|(_, node)| node)) {
+        match &wire.kind {
+            JniWire::Callback { callback } => names.push(callback.fqn()),
+            JniWire::Enum { enum_type, .. } => names.push(enum_type.class_name.clone()),
+            _ => {}
+        }
+    }
+    names
+        .into_iter()
+        .filter_map(|name| name.split('.').next().map(str::to_owned))
+        .collect()
+}
+
+fn reserved(name: &str, roots: &BTreeSet<String>, locals: &BTreeSet<String>) -> bool {
     [
         "onError",
         "onBindingError",
@@ -37,7 +66,7 @@ fn reserved(name: &str, package: &str, locals: &BTreeSet<String>) -> bool {
         "java",
     ]
     .contains(&name)
-        || name == package.split('.').next().unwrap_or("")
+        || roots.contains(name)
         || name.starts_with("__pb")
         || ["handle", "nativeArgument", "output", "errorOutput"]
             .iter()
@@ -56,11 +85,11 @@ fn reserved(name: &str, package: &str, locals: &BTreeSet<String>) -> bool {
 pub(crate) fn apply(
     source: &[String],
     codes: &mut [KotlinInput],
-    package: &str,
-    exception: Option<&str>,
+    roots: &BTreeSet<String>,
 ) -> Result<()> {
     struct Name {
         input: usize,
+        position: usize,
         wire: String,
         public: String,
         identity: Vec<String>,
@@ -73,11 +102,6 @@ pub(crate) fn apply(
     let setup_names = codes
         .iter()
         .flat_map(|code| code.setup.iter().map(|b| b.name.clone()))
-        .chain(
-            exception
-                .and_then(|name| name.split('.').next())
-                .map(str::to_owned),
-        )
         .collect::<BTreeSet<_>>();
     for (input, (source, code)) in source.iter().zip(codes.iter_mut()).enumerate() {
         code.complete_parameter_paths()?;
@@ -134,6 +158,7 @@ pub(crate) fn apply(
             };
             pending.push(Name {
                 input,
+                position: index,
                 wire,
                 public,
                 identity,
@@ -147,12 +172,21 @@ pub(crate) fn apply(
     for name in &pending {
         *counts.entry(name.public.clone()).or_default() += 1;
     }
+    let mut identities = BTreeMap::<Vec<String>, usize>::new();
+    for name in &pending {
+        *identities.entry(name.identity.clone()).or_default() += 1;
+    }
     let mut names = names::Names::default();
     let mut claimed = BTreeSet::new();
     let mut mappings = vec![BTreeMap::new(); codes.len()];
-    for name in pending {
+    for mut name in pending {
+        // Unnamed manual groups can repeat a relative path. Only those ambiguous
+        // identities need a positional discriminator; named paths stay stable.
+        if identities[&name.identity] > 1 {
+            name.identity.push(format!("position:{}", name.position));
+        }
         let mut public = name.public;
-        if counts[&public] > 1 || reserved(&public, package, &input_locals[name.input]) {
+        if counts[&public] > 1 || reserved(&public, roots, &input_locals[name.input]) {
             let parts = name.identity.iter().map(String::as_str).collect::<Vec<_>>();
             public = names
                 .name("param", &public, &parts)?
@@ -409,6 +443,41 @@ mod tests {
                 .unwrap(),
             )
             .set_package_prefix("test")
+    }
+
+    #[test]
+    fn unnamed_repeated_paths_get_distinct_fallback_names() {
+        let path =
+            prebindgen_declarations::ComponentPath(vec![ComponentSegment::Named("value0".into())]);
+        let mut codes = vec![KotlinInput {
+            parameters: vec!["a: Long".into(), "b: Long".into()],
+            parameter_paths: vec![path.clone(), path],
+            arguments: vec!["a".into(), "b".into()],
+            ..Default::default()
+        }];
+        apply(&["input".into()], &mut codes, &BTreeSet::new()).unwrap();
+        assert_ne!(codes[0].parameters[0], codes[0].parameters[1]);
+        for parameter in &codes[0].parameters {
+            assert!(parameter.starts_with("`inputValue0_"));
+        }
+    }
+
+    #[test]
+    fn relocated_runtime_reserves_foreign_class_and_callback_packages() {
+        let source =
+            "pub struct Row{pub value:i64}pub fn call(foreign:i64,callback:impl Fn(Row))->Row{}";
+        let output = builder(source)
+            .set_package_prefix("foreign")
+            .configure(|flat| {
+                flat.metadata.package = "native".into();
+                Ok(())
+            })
+            .package(package!().class(data_class!(Row)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let functions = &output.kotlin["foreign/Functions.kt"];
+        assert!(functions.contains("`foreign_"), "{functions}");
+        assert!(functions.contains("foreign.Row("), "{functions}");
     }
 
     #[test]

@@ -21,5 +21,13 @@
       "updated_sha256": "1abc18d520ff92beb024a453a843f9ea9c3de849982a6f672a7d3c6716bebb56",
       "identical": true
     }
-  ]
+  ],
+  "additional_kotlin_compatibility": {
+    "scope": "Every baseline Kotlin file except public Functions.kt wrappers, including return captures, typed rows, callbacks, classes and runtime helpers.",
+    "files_compared": 251,
+    "digest_method": "SHA-256 over sorted relative paths and bytes, each prefixed with its 64-bit little-endian byte length.",
+    "baseline_sha256": "eefaddf8cefc7bee2ebeee4d8eec73566bcdf2dce4d27f921fd87ede4071d345",
+    "updated_sha256": "eefaddf8cefc7bee2ebeee4d8eec73566bcdf2dce4d27f921fd87ede4071d345",
+    "identical": true
+  }
 }

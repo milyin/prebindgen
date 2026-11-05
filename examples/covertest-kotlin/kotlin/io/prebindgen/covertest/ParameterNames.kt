@@ -21,5 +21,11 @@ fun checkParameterNames() {
         `when` = 5L,
         io_c6e3d58b26b43793 = 6L,
     ) == 654321L)
+    var delivered = false
+    val external = com.prebindgen.paramnames.parameterExternal(3L, 7L, callback = {
+        check(it.x == 3L && it.y == 7L)
+        delivered = true
+    })
+    check(delivered && external.x == 3L && external.y == 7L)
     println("parameter names PASS: named arguments, constructors, local overrides, bulk, options, selectors and wire-like member names")
 }

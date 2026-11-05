@@ -1790,6 +1790,29 @@ fn main() {
         .kotlin
         .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
         .is_some());
+    // Class/function placement survives moving the native runtime to another root.
+    let relocated = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .set_package_prefix("com.prebindgen.paramnames")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .configure(|flat| {
+            flat.metadata.package = "org.prebindgen.paramnames".into();
+            Ok(())
+        })
+        .package(
+            package!()
+                .class(data_class!(ParameterPoint))
+                .fun(fun!(parameter_external)),
+        )
+        .build()
+        .unwrap();
+    jni.rust.push_str(&format!(
+        "\nmod relocated_parameter_names {{ {} }}\n",
+        relocated.rust
+    ));
+    for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
     jni.write_rust("bindings.rs").unwrap();
     std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();
     let kotlin = out.join("kotlin");
