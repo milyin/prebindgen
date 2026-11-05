@@ -55,6 +55,11 @@ pub(crate) fn defer_buffer_decode(
             ),
         };
         let condition = active.rust();
+        debug_assert_eq!(
+            plan.validation.to_string(),
+            quote!(let #var = if #condition {Some(#decode)} else {None};).to_string(),
+            "audit deferred buffer conversion when ordinary validation changes"
+        );
         // C descriptors and their source buffers remain valid through the call,
         // including staged C rows (whose transport has no release operation).
         // Declare storage in the row's acquisition scope, outside Optional or
@@ -91,8 +96,10 @@ pub(crate) fn input(
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
+        let unused =
+            matches!(field.kind, CWire::DeferredBuffer).then(|| quote!(#[allow(unused_variables)]));
         bind.extend(if reread_rows {
-            quote!(let #name=#slice[#index].#member;)
+            quote!(#unused let #name=#slice[#index].#member;)
         } else {
             quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};)
         });

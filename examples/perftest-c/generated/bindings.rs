@@ -3804,11 +3804,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables)]
                     let p0_w16 = p0_w1_rows[p0_w3].v5;
                     let p0_w19 = p0_w1_rows[p0_w3].v6;
+                    #[allow(unused_variables)]
                     let p0_w21 = p0_w1_rows[p0_w3].v7;
+                    #[allow(unused_variables)]
                     let p0_w23 = p0_w1_rows[p0_w3].v8;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -3861,11 +3865,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    #[allow(unused_variables)]
                     let p0_w16 = p0_w1_rows[p0_w3].v5;
                     let p0_w19 = p0_w1_rows[p0_w3].v6;
+                    #[allow(unused_variables)]
                     let p0_w21 = p0_w1_rows[p0_w3].v7;
+                    #[allow(unused_variables)]
                     let p0_w23 = p0_w1_rows[p0_w3].v8;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
@@ -4143,7 +4151,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
                         .begin_group(p1_w2.saturating_mul(1usize));
                     for p1_w3 in 0..p1_w2 {
                         let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
                         let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
                         let p1_w10 = p1_w1_rows[p1_w3].v2;
                         #[allow(unused_variables, clippy::redundant_closure_call)]
                         let checked = (|| {
@@ -4170,7 +4180,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
                     p1_w0.reserve_exact(p1_w2);
                     for p1_w3 in 0..p1_w2 {
                         let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
                         let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
                         let p1_w10 = p1_w1_rows[p1_w3].v2;
                         #[allow(clippy::redundant_closure_call)]
                         let p1_w1_element_built = (|| -> ::core::result::Result<
@@ -4249,7 +4261,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
                     p1_w0.reserve_exact(p1_w2);
                     for p1_w3 in 0..p1_w2 {
                         let p1_w6 = p1_w1_rows[p1_w3].v0;
+                        #[allow(unused_variables)]
                         let p1_w8 = p1_w1_rows[p1_w3].v1;
+                        #[allow(unused_variables)]
                         let p1_w10 = p1_w1_rows[p1_w3].v2;
                         #[allow(clippy::redundant_closure_call)]
                         let p1_w1_element_built = (|| -> ::core::result::Result<
@@ -4693,7 +4707,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
                     .begin_group(p0_w4.saturating_mul(1usize));
                 for p0_w5 in 0..p0_w4 {
                     let p0_w10 = p0_w3_rows[p0_w5].v0;
+                    #[allow(unused_variables)]
                     let p0_w12 = p0_w3_rows[p0_w5].v1;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w3_rows[p0_w5].v2;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -4721,7 +4737,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w10 = p0_w3_rows[p0_w5].v0;
+                    #[allow(unused_variables)]
                     let p0_w12 = p0_w3_rows[p0_w5].v1;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w3_rows[p0_w5].v2;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
@@ -4938,8 +4956,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -4973,8 +4993,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
@@ -5179,7 +5201,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -5206,7 +5230,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
@@ -5397,7 +5423,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -5424,7 +5452,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
@@ -5618,8 +5648,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -5653,8 +5685,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables)]
                     let p0_w14 = p0_w1_rows[p0_w3].v4;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
@@ -13869,6 +13903,7 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
                 };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
+                    #[allow(unused_variables)]
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
@@ -14017,6 +14052,7 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
                 };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
+                    #[allow(unused_variables)]
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
@@ -20884,6 +20920,7 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
                 };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
+                    #[allow(unused_variables)]
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
@@ -21032,6 +21069,7 @@ pub unsafe extern "C" fn perftest_collection_text_each(
                 };
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
+                    #[allow(unused_variables)]
                     let p0_w5 = p0_w1_rows[p0_w3].v0;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<

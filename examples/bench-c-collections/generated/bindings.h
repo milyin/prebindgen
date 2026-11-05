@@ -91,6 +91,23 @@ bench_resource * bench_resource_new(uint64_t p0_w1);
 uint64_t bench_resource_value(const bench_resource * p0_w1);
 typedef struct {
     bench_resource * v0;
+    bench_buffer v1;
+    bench_buffer v2;
+} bench_take_buffers_p0_w1_row;
+typedef struct { bench_take_buffers_p0_w1_row *data; size_t len; } bench_take_buffers_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_buffers(bench_take_buffers_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    bench_buffer v1;
+} bench_take_bytes_p0_w1_row;
+typedef struct { bench_take_bytes_p0_w1_row *data; size_t len; } bench_take_bytes_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_bytes(bench_take_bytes_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
 } bench_take_handles_p0_w1_row;
 typedef struct { bench_take_handles_p0_w1_row *data; size_t len; } bench_take_handles_p0_w1_rows;
 /* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
