@@ -322,6 +322,7 @@ impl CCallback {
             sequence::schemas(&plan.node, &mut schemas);
         }
         CContext {
+            emit_alias_checks: None,
             row_types: schemas
                 .into_iter()
                 .map(|(w, _, _)| {
@@ -481,6 +482,7 @@ impl CCallback {
                 &syn::parse_quote!(()),
             )?;
             if check.to_string() != quote!(()).to_string() {
+                let check = prebindgen_conversions::staged::input_alias_checks(check, quote!(()));
                 body = quote!({let _: () = #check; #body});
             }
             plan.code_fragment_slot(
@@ -507,7 +509,10 @@ impl CCallback {
         if let Some((_, plan)) = &self.returned {
             alias_check.include_parameter(context, &plan.resources)?;
         }
-        let aliases = alias_check.initialize()?;
+        let aliases = prebindgen_conversions::staged::input_alias_checks(
+            alias_check.initialize()?,
+            TokenStream::new(),
+        );
         let mut body = quote!({
             let __pb_callback_consumed=::core::cell::Cell::new(0usize);
             let __prebindgen_input_consumed=&__pb_callback_consumed;

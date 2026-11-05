@@ -1,5 +1,9 @@
 #![allow(non_camel_case_types, unused_variables)]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#[allow(non_camel_case_types, unused_variables)]
+pub mod unchecked {
+    include!(concat!(env!("OUT_DIR"), "/unchecked.rs"));
+}
 #[cfg(test)]
 mod owner_views;
 

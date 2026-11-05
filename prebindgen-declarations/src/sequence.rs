@@ -81,6 +81,23 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
     struct Replace<'a>(&'a std::collections::BTreeMap<String, syn::Expr>);
     impl syn::visit_mut::VisitMut for Replace<'_> {
+        fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+            // Alias scopes remain unresolved while outer sequence fields are
+            // bound. Visit both statement branches so nested JNI row expressions
+            // receive the same substitutions as ordinary Rust statements.
+            if mac.path.segments.len() == 2
+                && mac.path.segments[0].ident == "prebindgen_runtime"
+                && mac.path.segments[1].ident == "__prebindgen_alias_checks"
+            {
+                let branches = mac.tokens.clone().into_iter().map(|token| {
+                    let mut block: syn::Block = syn::parse2(token.into_token_stream())
+                        .expect("generated input alias branch");
+                    self.visit_block_mut(&mut block);
+                    block.into_token_stream()
+                });
+                mac.tokens = branches.collect();
+            }
+        }
         fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
             if let syn::Expr::Path(p) = expr {
                 if p.qself.is_none() && p.path.segments.len() == 1 {
@@ -315,7 +332,7 @@ pub(crate) fn input<C: Codec>(
                     #bind
                     #[allow(clippy::redundant_closure_call)]
                     let #element_value=(|| -> ::core::result::Result<#element,String> {
-                        #validation #acquire #statements #argument Ok(#var)
+                        #validation #count #acquire #statements #argument Ok(#var)
                     })();
                     #release
                     let element = #element_value?;
@@ -397,7 +414,7 @@ pub(crate) fn input<C: Codec>(
 
             }
         };
-        if shared_only {
+        let checked = if shared_only {
             quote! {
                 let #var = if __prebindgen_input_aliases.needs_group() {
                     #batch #var
@@ -405,7 +422,8 @@ pub(crate) fn input<C: Codec>(
             }
         } else {
             batch
-        }
+        };
+        prebindgen_conversions::staged::input_alias_checks(checked, direct)
     } else {
         direct
     };

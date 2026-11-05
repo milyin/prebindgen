@@ -1097,6 +1097,43 @@ fn main() {
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
+    let unchecked = prebindgen_c::Cbindgen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .prefix("fast")
+        .set_emit_alias_checks(false)
+        .opaque_ptr("owned_resource", pq!(OwnedResource))
+        .opaque_ptr("alias_handler", pq!(AliasHandler))
+        .opaque_error(pq!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
+        .expand(expand_param!(AliasPair).variant(fun!(alias_pair_new)))
+        .function(fun!(collection_resource_new))
+        .panic()
+        .function(fun!(owned_resource_drops))
+        .panic()
+        .function(fun!(option_resource_id))
+        .panic()
+        .function(fun!(alias_fixed))
+        .panic()
+        .function(fun!(buffer_rows_sum))
+        .function(fun!(buffer_rows_optional))
+        .enum_type("code", pq!(SparseCode))
+        .function(
+            fun!(buffer_rows_enum)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
+        )
+        .function(fun!(alias_nested_sum))
+        .panic()
+        .function(fun!(collection_alias))
+        .alias_checks(true)
+        .panic()
+        .function(fun!(alias_handler_new))
+        .panic()
+        .function(fun!(alias_handler_call))
+        .alias_checks(true)
+        .build()
+        .unwrap();
+    unchecked.write_rust(out.join("unchecked.rs")).unwrap();
+    unchecked.write_header(out.join("unchecked.h")).unwrap();
 }
 
 fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {
