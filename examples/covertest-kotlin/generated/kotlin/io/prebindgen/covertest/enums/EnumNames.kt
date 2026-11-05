@@ -24,7 +24,7 @@ public enum class EnumNames(public val _wireValue: kotlin.Int) {
             22 -> Entries
             24 -> `value`
             25 -> Kotlin
-            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: $_value")
+            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: ${_value}")
         }
     }
 }

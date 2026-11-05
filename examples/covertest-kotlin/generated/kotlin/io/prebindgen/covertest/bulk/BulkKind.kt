@@ -5,10 +5,10 @@ public enum class BulkKind(public val wireValue: kotlin.Int) {
     B(9);
 
     public companion object Companion {
-        public fun fromWire(value: kotlin.Int): BulkKind = when (value) {
+        public fun fromWire(`value`: kotlin.Int): BulkKind = when (`value`) {
             -3 -> A
             9 -> B
-            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: $value")
+            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: ${`value`}")
         }
     }
 }

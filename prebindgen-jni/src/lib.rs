@@ -1331,7 +1331,7 @@ fn kotlin_keyword(name: &str) -> bool {
 /// Render an already validated declaration/component name. Unicode letter and
 /// decimal-digit categories follow Kotlin's identifier grammar, rather than
 /// Rust's broader Unicode identifier rules. All keyword spellings are escaped
-/// everywhere, including soft keywords, to keep this rule independent of context.
+/// by this helper, including soft keywords, to keep the rule independent of context.
 fn kotlin_identifier(name: &str) -> String {
     static PLAIN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"\A[\p{L}_][\p{L}\p{Nd}_]*\z").expect("Kotlin identifier grammar")

@@ -5,10 +5,10 @@ public enum class CallbackReturnChoice(public val wireValue: kotlin.Int) {
     Second(1);
 
     public companion object Companion {
-        public fun fromWire(value: kotlin.Int): CallbackReturnChoice = when (value) {
+        public fun fromWire(`value`: kotlin.Int): CallbackReturnChoice = when (`value`) {
             0 -> First
             1 -> Second
-            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: $value")
+            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: ${`value`}")
         }
     }
 }

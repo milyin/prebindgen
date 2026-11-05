@@ -10,7 +10,7 @@ public enum class Code(public val wireValue: kotlin.Int) {
     Top(2147483647);
 
     public companion object Companion {
-        public fun fromWire(value: kotlin.Int): Code = when (value) {
+        public fun fromWire(`value`: kotlin.Int): Code = when (`value`) {
             -2147483648 -> Bottom
             -2 -> MinusTwo
             -1 -> MinusOne
@@ -18,7 +18,7 @@ public enum class Code(public val wireValue: kotlin.Int) {
             7 -> Seven
             8 -> Eight
             2147483647 -> Top
-            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: $value")
+            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: ${`value`}")
         }
     }
 }

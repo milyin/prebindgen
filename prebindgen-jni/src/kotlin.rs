@@ -171,13 +171,7 @@ impl KotlinOutput {
             .result_types
             .iter()
             .enumerate()
-            .map(|(i, ty)| {
-                if self.result_names.get(i).is_some_and(|name| name.is_some()) {
-                    format!("{}: {ty}", kotlin_identifier(&names[i]))
-                } else {
-                    format!("{}: {ty}", names[i])
-                }
-            })
+            .map(|(i, ty)| format!("{}: {ty}", kotlin_identifier(&names[i])))
             .collect::<Vec<_>>()
             .join(", "))
     }

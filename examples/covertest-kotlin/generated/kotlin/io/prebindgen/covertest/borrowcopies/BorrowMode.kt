@@ -5,10 +5,10 @@ public enum class BorrowMode(public val wireValue: kotlin.Int) {
     Idle(1);
 
     public companion object Companion {
-        public fun fromWire(value: kotlin.Int): BorrowMode = when (value) {
+        public fun fromWire(`value`: kotlin.Int): BorrowMode = when (`value`) {
             0 -> Ready
             1 -> Idle
-            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: $value")
+            else -> throw kotlin.IllegalArgumentException("invalid enum discriminant: ${`value`}")
         }
     }
 }

@@ -162,11 +162,11 @@ impl JniEnum {
                 kotlin_identifier(&name)
             ));
         }
-        let member = self.value_member();
-        let decode = self.decode_member();
-        let companion = self.member("Companion");
-        let parameter = self.member("value");
-        Ok(format!("package {}\n\npublic enum class {}(public val {member}: kotlin.Int) {{\n{};\n\n    public companion object {companion} {{\n        public fun {decode}({parameter}: kotlin.Int): {} = when ({parameter}) {{\n{}\n            else -> throw kotlin.IllegalArgumentException(\"invalid enum discriminant: ${parameter}\")\n        }}\n    }}\n}}\n",class.pkg,class.name,entries.join(",\n"),class.name,cases.join("\n")))
+        let member = kotlin_identifier(&self.value_member());
+        let decode = kotlin_identifier(&self.decode_member());
+        let companion = kotlin_identifier(&self.member("Companion"));
+        let parameter = kotlin_identifier(&self.member("value"));
+        Ok(format!("package {}\n\npublic enum class {}(public val {member}: kotlin.Int) {{\n{};\n\n    public companion object {companion} {{\n        public fun {decode}({parameter}: kotlin.Int): {} = when ({parameter}) {{\n{}\n            else -> throw kotlin.IllegalArgumentException(\"invalid enum discriminant: ${{{parameter}}}\")\n        }}\n    }}\n}}\n",class.pkg,class.name,entries.join(",\n"),class.name,cases.join("\n")))
     }
 }
 
@@ -192,6 +192,9 @@ mod tests {
         let enumeration = &generated.kotlin["test/codes/Code.kt"];
         assert!(enumeration.contains("B(-1)"));
         assert!(enumeration.contains("C(7)"));
+        assert!(enumeration.contains("fromWire(`value`: kotlin.Int)"));
+        assert!(enumeration.contains("when (`value`)"));
+        assert!(enumeration.contains("invalid enum discriminant: ${`value`}"));
         assert!(enumeration.contains("else -> throw kotlin.IllegalArgumentException"));
         let record = &generated.kotlin["test/records/Record.kt"];
         assert!(record.contains("test.codes.Code"));
