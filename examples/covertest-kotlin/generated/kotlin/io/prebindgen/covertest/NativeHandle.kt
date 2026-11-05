@@ -6,7 +6,7 @@ public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseab
         private set
     internal val address: Long = raw
     public val isClosed: Boolean get() = raw == 0L || raw and 1L != 0L
-    internal fun markConsumed() { raw = raw or 1L }
+    internal open fun markConsumed() { raw = raw or 1L }
     protected abstract fun freeNative(raw: Long)
     final override fun close() = synchronized(this) {
         if (!isClosed) {

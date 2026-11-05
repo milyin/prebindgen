@@ -1065,6 +1065,7 @@ mod group_tests {
             data: true,
             enumeration: false,
             has_handles: false,
+            gc_managed: false,
             variant_names: vec![],
         }));
         prepare(&mut flat).unwrap();

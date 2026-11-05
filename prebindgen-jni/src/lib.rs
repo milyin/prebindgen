@@ -4,7 +4,9 @@
 //! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
+use prebindgen_flat::{
+    type_key, Conversion, Flat, InputConversion, OutputConversion, Result, WireKind,
+};
 
 pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
 mod bulk;
@@ -88,13 +90,36 @@ pub struct PtrClassDecl {
     pub ty: syn::Type,
     /// Literal Kotlin class name; absent means the last segment of the source type.
     pub name: Option<String>,
+    /// Release abandoned native allocations with a JVM Cleaner; disabled by default.
+    pub gc_managed: bool,
 }
 impl PtrClassDecl {
     /// Declare a handle class with a name derived from the source type.
     ///
     /// `ty` is the source type the class owns, as written in the source crate.
     pub fn new(ty: syn::Type) -> Self {
-        Self { ty, name: None }
+        Self {
+            ty,
+            name: None,
+            gc_managed: false,
+        }
+    }
+    /// Release this class's abandoned native handles with `java.lang.ref.Cleaner`.
+    ///
+    /// Explicit `close()` still releases immediately. `take()` and consuming
+    /// native calls cancel cleanup on the old wrapper because ownership moved.
+    /// Cleanup is asynchronous and is not guaranteed before JVM exit; use
+    /// `close()` when timely release matters. Requires a JVM/runtime providing
+    /// `java.lang.ref.Cleaner` (Java 9 or newer).
+    ///
+    /// This opt-in adds an atomic release state and Cleaner registration per
+    /// wrapper. Borrowed calls retain the existing raw pointer reads and locks;
+    /// classes without this option do not register cleanup actions.
+    /// Callback-return constructors must move these handles: borrowed constructor
+    /// inputs cannot keep their Kotlin owner alive after the callback returns.
+    pub fn gc_managed(mut self) -> Self {
+        self.gc_managed = true;
+        self
     }
     /// Override the Kotlin short class name with `name`, validated during build.
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -478,6 +503,7 @@ impl JniGenBuilder {
                     data: matches!(c, ClassDecl::Data(_)),
                     enumeration: matches!(c, ClassDecl::Enum(_)),
                     has_handles: false,
+                    gc_managed: matches!(&c, ClassDecl::Ptr(c) if c.gc_managed),
                     variant_names: match c {
                         ClassDecl::Enum(c) => c.variant_names,
                         _ => Vec::new(),
@@ -635,6 +661,7 @@ pub(crate) struct Class {
     enumeration: bool,
     variant_names: Vec<(String, String)>,
     has_handles: bool,
+    gc_managed: bool,
 }
 impl Class {
     fn fqn(&self) -> String {
@@ -1229,6 +1256,8 @@ fn validate_class_name(name: &str) -> Result<()> {
         "JNINative",
         "Functions",
         "NativeHandle",
+        "GcNativeHandle",
+        "NativeCleaner",
         "JniErrorHandler",
         "HandleValidationFailure",
         "BulkRuntime",
@@ -1407,20 +1436,32 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
     }
+    let gc_managed = classes.values().any(|(_, c)| c.gc_managed);
     files.insert(
         format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
-        native_handle(prefix),
+        native_handle(prefix, gc_managed),
     );
+    if gc_managed {
+        files.insert(
+            format!("{}/GcNativeHandle.kt", prefix.replace('.', "/")),
+            include_str!("gc_native_handle.kt").replace("PACKAGE", prefix),
+        );
+    }
     let mut names = names::Names::default();
     let mut row_captures = BTreeSet::new();
     let mut capacity_registered = false;
     for (ty, c) in classes.values() {
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
-        rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
+        rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
+        let base = if c.gc_managed {
+            format!("{prefix}.GcNativeHandle(raw, {{ {prefix}.JNINative.{method}(it) }})")
+        } else {
+            format!("{prefix}.NativeHandle(raw)")
+        };
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {base} {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -1620,6 +1661,16 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let mut lock_groups = Vec::new();
         let mut setup = String::new();
         let mut consumed = Vec::new();
+        let lock_function = if f.input_conversions()?.iter().any(|input| {
+            prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
+                matches!(&wire.kind, JniWire::Handle { handle, .. }
+                    if classes.get(&type_key(&handle.ty)).is_some_and(|(_, c)| c.gc_managed))
+            })
+        }) {
+            "withGcHandleLocks"
+        } else {
+            "withHandleLocks"
+        };
         for w in crate::group::function_parameters(f)? {
             let n = &w.name;
             let rt = w.kind.rust_type();
@@ -1972,12 +2023,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 write!(locals, "val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ").expect("writing to a String");
             }
             format!(
-                "run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}",
+                "run {{ {locals}{prefix}.{lock_function}({}) {{\n        {call}\n    }} }}",
                 names.join(", ")
             )
         } else {
             let all_locks = kotlin::lock_list(&locks, &lock_groups);
-            format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
+            format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.{lock_function}(handles) {{\n        {call}\n    }} }}")
         };
         let call = if callback_cleanup {
             format!("try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}")
@@ -2073,6 +2124,14 @@ fn kotlin_condition(condition: &prebindgen_declarations::Condition) -> String {
         .collect::<Vec<_>>()
         .join(" && ")
 }
-fn native_handle(prefix: &str) -> String {
-    include_str!("native_handle.kt").replace("PACKAGE", prefix)
+fn native_handle(prefix: &str, gc_managed: bool) -> String {
+    let source = include_str!("native_handle.kt").replace("PACKAGE", prefix);
+    if gc_managed {
+        source.replace(
+            "internal fun markConsumed()",
+            "internal open fun markConsumed()",
+        )
+    } else {
+        source
+    }
 }

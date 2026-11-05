@@ -76,6 +76,23 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_c
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
+`ptr_class!(Query).gc_managed()` opts that handle class into automatic cleanup
+of abandoned wrappers through `java.lang.ref.Cleaner` (Java 9 or newer, or a
+runtime providing that API). Explicit `close()` still releases immediately;
+`take()` transfers ownership to a new wrapper, and consuming native calls cancel
+cleanup on the consumed wrapper. The Cleaner action retains only a separate
+atomic release state and the generated native destructor, never the wrapper.
+This policy also applies to handles delivered through callbacks and collections.
+Registration allocates additional JVM objects per opted-in wrapper. Borrowed
+calls keep the existing pointer reads and handle locks; ordinary classes do not
+register Cleaner actions. Automatic cleanup is asynchronous and is not
+guaranteed before JVM exit, so use explicit `close()` for timely release.
+Destruction runs on a shared Cleaner thread, so a blocking destructor delays
+other automatic cleanup. Callback-return constructors may move managed handles,
+but cannot borrow them: the current raw callback-return protocol does not retain
+the Kotlin owner while Rust constructs the result. Such configurations produce
+a generation error; plain explicitly managed handles retain their existing API.
+
 The declaration layer also supports `expand_param!` constructor/identity variants,
 `expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
 output overrides, and per-function overrides. These build converters directly

@@ -181,6 +181,25 @@ pub(crate) fn input(
             &configuration.return_value,
             &(),
         )?;
+        // A borrowed constructor input is used by Rust after the Kotlin callback
+        // has returned its raw fields. That wire protocol retains no JVM owner
+        // until construction finishes, so a temporary Cleaner-managed wrapper
+        // could disappear while Rust still borrows it. Moving the handle disarms
+        // cleanup and does not have this problem.
+        for wire in prebindgen_flat::wire_definitions(std::iter::once(input.input_node())) {
+            if let JniWire::Handle { handle, .. } = &wire.kind {
+                if handle.access != prebindgen_conversions::Access::Move
+                    && flat
+                        .type_info(&handle.ty)?
+                        .metadata
+                        .class
+                        .as_ref()
+                        .is_some_and(|class| class.gc_managed)
+                {
+                    return Err("callback return constructors cannot borrow gc-managed handles: the raw return protocol does not retain the Kotlin owner during Rust construction; move the handle or leave its class explicitly managed".into());
+                }
+            }
+        }
         Some(CallbackReturn {
             package: flat.metadata.package.clone(),
             source_type: signature.return_type,

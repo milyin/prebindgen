@@ -12,6 +12,101 @@ fn flat(source: &str) -> Bindings {
 }
 
 #[test]
+fn gc_managed_is_opt_in_and_preserves_native_call_generation() {
+    let generate_handle = |managed: bool| {
+        let class = ptr_class!(Handle).name("Resource");
+        let class = if managed { class.gc_managed() } else { class };
+        JniGen::builder()
+            .flat(flat("pub type Handle=String;pub fn make()->Handle{}pub fn read(v:&Handle)->u64{}pub fn consume(v:Handle)->u64{}"))
+            .set_package_prefix("example")
+            .package(package!("objects").class(class))
+            .package(package!().fun(fun!(make)).fun(fun!(read)).fun(fun!(consume)))
+            .prepare().unwrap()
+    };
+    let plain = generate(&generate_handle(false)).unwrap();
+    let managed_flat = generate_handle(true);
+    let managed = generate(&managed_flat.clone()).unwrap();
+    assert_eq!(plain.rust, managed.rust);
+    assert_eq!(
+        plain.kotlin["example/Functions.kt"],
+        managed.kotlin["example/Functions.kt"].replace("withGcHandleLocks", "withHandleLocks")
+    );
+    assert_eq!(
+        plain.kotlin["example/NativeHandle.kt"],
+        managed.kotlin["example/NativeHandle.kt"].replace(
+            "internal open fun markConsumed()",
+            "internal fun markConsumed()"
+        )
+    );
+    assert!(!plain
+        .kotlin
+        .keys()
+        .any(|p| p.ends_with("/GcNativeHandle.kt")));
+    assert!(!plain
+        .kotlin
+        .values()
+        .any(|s| s.contains("java.lang.ref.Cleaner")));
+    assert!(plain.kotlin["example/objects/Resource.kt"].contains("example.NativeHandle(raw)"));
+    assert!(managed.kotlin["example/objects/Resource.kt"]
+        .contains("example.GcNativeHandle(raw, { example.JNINative.drop"));
+    let helper = &managed.kotlin["example/GcNativeHandle.kt"];
+    assert!(helper.contains("register(this, release)"));
+    assert!(helper.contains("internal class Release(raw: Long"));
+    assert!(!helper.contains("inner class"));
+    assert!(helper.contains("release.disarm()"));
+    assert!(helper.contains("cleanable?.clean()"));
+}
+
+#[test]
+fn gc_support_class_names_are_reserved() {
+    for name in ["GcNativeHandle", "NativeCleaner"] {
+        let error = JniGen::builder()
+            .flat(flat("pub type Handle=String;"))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle).name(name)))
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reserved"), "{name}: {error}");
+    }
+}
+
+#[test]
+fn gc_managed_callback_returns_reject_borrowed_constructor_inputs() {
+    use crate::callback;
+    for managed in [false, true] {
+        let class = ptr_class!(Handle);
+        let class = if managed { class.gc_managed() } else { class };
+        let generated = JniGen::builder()
+            .flat(flat("pub type Handle=String;pub type Produced=String;pub fn construct(h:&Handle)->Produced{}pub fn call(cb:impl Fn()->Produced){}"))
+            .set_package_prefix("test")
+            .package(package!().class(class).fun(fun!(call).expand_param("cb",
+                callback!(impl Fn()->Produced).expand_return(expand_param!(Produced).variant(fun!(construct))))))
+            .build();
+        if managed {
+            assert!(generated
+                .err()
+                .unwrap()
+                .contains("cannot borrow gc-managed handles"));
+        } else {
+            generated.unwrap();
+        }
+    }
+}
+
+#[test]
+fn gc_managed_handles_in_borrowed_collection_constructors_are_kept_reachable() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub type Item=String;pub fn item(value:&Handle)->Item{}pub fn read(values:Vec<Item>)->u64{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle).gc_managed())
+            .fun(fun!(read).expand_param("values", expand_param!(Item).variant(fun!(item)))))
+        .build().unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("withGcHandleLocks(handles)"));
+    assert!(!generated.kotlin["test/Functions.kt"].contains("markConsumed"));
+}
+
+#[test]
 fn mutable_reference_returns_never_fall_back_to_cloned_jni_handles() {
     for returned in ["&mut Child", "Option<&mut Child>", "Result<&mut Child,i64>"] {
         let source=format!("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->{returned}{{}}");

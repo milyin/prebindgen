@@ -45,6 +45,8 @@ jobs:
       - run: python3 examples/check.py
         env:
           KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc
+          # The full generated covertest includes wide argument/failure paths.
+          JAVA_OPTS: -Xms128m -Xmx1g
           SANITIZE: "1"
 
   opaque-layouts:

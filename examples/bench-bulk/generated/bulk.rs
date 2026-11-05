@@ -1,5 +1,5 @@
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1Handler_1bb814c4111561dda(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
@@ -13,7 +13,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1Handler_1bb814c411
     }
 }
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1InputHandle_17cc67535bbd4a8ee(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
@@ -27,7 +27,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1InputHandle_17cc67
     }
 }
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1RowReturnHandler_10972ff7cb1556afa(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
@@ -41,7 +41,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1RowReturnHandler_1
     }
 }
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_drop_1WideRowReturnHandler_1ed750f04931eb9ca(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
