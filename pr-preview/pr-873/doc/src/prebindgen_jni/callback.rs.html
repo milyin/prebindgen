@@ -749,224 +749,227 @@
 <a href=#749 id=749 data-nosnippet>749</a>        } =&gt; {
 <a href=#750 id=750 data-nosnippet>750</a>            <span class="kw">let </span><span class="kw-2">mut </span>body = String::new();
 <a href=#751 id=751 data-nosnippet>751</a>            <span class="kw">for </span>(field, child) <span class="kw">in </span><span class="kw">crate</span>::data::fields(children)<span class="question-mark">? </span>{
-<a href=#752 id=752 data-nosnippet>752</a>                <span class="kw">let </span>expr = <span class="macro">format!</span>(<span class="string">"{local}.`{}`"</span>, field.to_string().trim_start_matches(<span class="string">"r#"</span>));
-<a href=#753 id=753 data-nosnippet>753</a>                body.push_str(<span class="kw-2">&amp;</span>returned_handle_cleanup(child, <span class="kw-2">&amp;</span>expr, prefix, next)<span class="question-mark">?</span>);
-<a href=#754 id=754 data-nosnippet>754</a>            }
-<a href=#755 id=755 data-nosnippet>755</a>            <span class="macro">format!</span>(
-<a href=#756 id=756 data-nosnippet>756</a>                <span class="string">"({value} as? {})?.let {{ {local} -&gt; {body} }}\n"</span>,
-<a href=#757 id=757 data-nosnippet>757</a>                data.class_name
-<a href=#758 id=758 data-nosnippet>758</a>            )
-<a href=#759 id=759 data-nosnippet>759</a>        }
-<a href=#760 id=760 data-nosnippet>760</a>        WireNode::Branch { children, .. } =&gt; {
-<a href=#761 id=761 data-nosnippet>761</a>            <span class="kw">let </span><span class="kw-2">mut </span>body = String::new();
-<a href=#762 id=762 data-nosnippet>762</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
-<a href=#763 id=763 data-nosnippet>763</a>                body.push_str(<span class="kw-2">&amp;</span>returned_handle_cleanup(child, value, prefix, next)<span class="question-mark">?</span>);
-<a href=#764 id=764 data-nosnippet>764</a>            }
-<a href=#765 id=765 data-nosnippet>765</a>            body
-<a href=#766 id=766 data-nosnippet>766</a>        }
-<a href=#767 id=767 data-nosnippet>767</a>    })
-<a href=#768 id=768 data-nosnippet>768</a>}
-<a href=#769 id=769 data-nosnippet>769</a>
-<a href=#770 id=770 data-nosnippet>770</a><span class="kw">fn </span>mentions_value(code: <span class="kw-2">&amp;</span>TokenStream, name: <span class="kw-2">&amp;</span>syn::Ident) -&gt; bool {
-<a href=#771 id=771 data-nosnippet>771</a>    code.clone().into_iter().any(|token| <span class="kw">match </span>token {
-<a href=#772 id=772 data-nosnippet>772</a>        proc_macro2::TokenTree::Ident(value) =&gt; value == <span class="kw-2">*</span>name,
-<a href=#773 id=773 data-nosnippet>773</a>        proc_macro2::TokenTree::Group(group) =&gt; mentions_value(<span class="kw-2">&amp;</span>group.stream(), name),
-<a href=#774 id=774 data-nosnippet>774</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-<a href=#775 id=775 data-nosnippet>775</a>    })
-<a href=#776 id=776 data-nosnippet>776</a>}
-<a href=#777 id=777 data-nosnippet>777</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>receive_return_owners(
-<a href=#778 id=778 data-nosnippet>778</a>    node: <span class="kw-2">&amp;</span>kotlin::JniNode,
-<a href=#779 id=779 data-nosnippet>779</a>    context: <span class="kw-2">&amp;</span>JniContext,
-<a href=#780 id=780 data-nosnippet>780</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#781 id=781 data-nosnippet>781</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
-<a href=#782 id=782 data-nosnippet>782</a>        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} =&gt; <span class="kw">crate</span>::bulk::scan_bulk(layout,controls,child,context)<span class="question-mark">?</span>,
-<a href=#783 id=783 data-nosnippet>783</a>        WireNode::Chain {meta:JniChain::Sequence(JniSequence::Bulk),controls,child} =&gt; <span class="kw">crate</span>::bulk::scan_rows(controls,child,context)<span class="question-mark">?</span>,
-<a href=#784 id=784 data-nosnippet>784</a>        WireNode::Leaf(fields)=&gt;fields.iter().filter_map(|field| {
-<a href=#785 id=785 data-nosnippet>785</a>            <span class="kw">if let </span>JniWire::Handle {handle,..}=<span class="kw-2">&amp;</span>field.kind {
-<a href=#786 id=786 data-nosnippet>786</a>                <span class="kw">if </span>handle.access==Access::Move {<span class="kw">let </span>name=<span class="kw-2">&amp;</span>field.name;<span class="kw">let </span>ty=<span class="kw-2">&amp;</span>handle.ty;<span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw">unsafe </span>{callback_return_owners.receive(#name <span class="kw">as </span><span class="kw-2">*mut </span>::prebindgen_jni_runtime::Allocation&lt;#ty&gt;);}));}
-<a href=#787 id=787 data-nosnippet>787</a>            }
-<a href=#788 id=788 data-nosnippet>788</a>            <span class="prelude-val">None
-<a href=#789 id=789 data-nosnippet>789</a>        </span>}).collect(),
-<a href=#790 id=790 data-nosnippet>790</a>        WireNode::Chain { meta:JniChain::Optional(optional),child,..}=&gt; {
-<a href=#791 id=791 data-nosnippet>791</a>            <span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;
-<a href=#792 id=792 data-nosnippet>792</a>            <span class="kw">if </span>scan.is_empty(){<span class="kw">return </span><span class="prelude-val">Ok</span>(scan);}
-<a href=#793 id=793 data-nosnippet>793</a>            <span class="kw">let </span>name=optional.discriminator();
-<a href=#794 id=794 data-nosnippet>794</a>            <span class="kw">let </span>present=<span class="kw">if let </span><span class="prelude-val">Some</span>(niche)=optional.niche(){<span class="kw">let </span>field=group::argument_parameters(child).find(|w|w.name==<span class="kw-2">*</span>name).ok_or(<span class="string">"missing callback return optional discriminator"</span>)<span class="question-mark">?</span>; niche.present(<span class="kw-2">&amp;</span>field.kind,<span class="macro">quote!</span>(#name))} <span class="kw">else </span>{<span class="macro">quote!</span>(#name==<span class="number">1</span>)};
-<a href=#795 id=795 data-nosnippet>795</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#present {#scan})
-<a href=#796 id=796 data-nosnippet>796</a>        }
-<a href=#797 id=797 data-nosnippet>797</a>        WireNode::Chain {meta:JniChain::Sequence(<span class="kw">_</span>),controls,child}=&gt; {
-<a href=#798 id=798 data-nosnippet>798</a>            <span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;
-<a href=#799 id=799 data-nosnippet>799</a>            <span class="kw">if </span>scan.is_empty(){<span class="kw">return </span><span class="prelude-val">Ok</span>(scan);}
-<a href=#800 id=800 data-nosnippet>800</a>            <span class="kw">let </span>carrier=<span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;<span class="kw">let </span>row=<span class="macro">format_ident!</span>(<span class="string">"{carrier}_ownership_row"</span>);
-<a href=#801 id=801 data-nosnippet>801</a>            <span class="kw">let </span>fields=group::argument_parameters(child).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();<span class="kw">let </span>count=fields.len();<span class="kw">let </span>capacity=i32::try_from(count+<span class="number">8</span>).map_err(|<span class="kw">_</span>|<span class="string">"too many returned fields"</span>)<span class="question-mark">?</span>;
-<a href=#802 id=802 data-nosnippet>802</a>            <span class="kw">let </span>reads=fields.into_iter().enumerate().filter(|(<span class="kw">_</span>,field)|mentions_value(<span class="kw-2">&amp;</span>scan,<span class="kw-2">&amp;</span>field.name)).map(|(index,field)|{<span class="kw">let </span>name=<span class="kw-2">&amp;</span>field.name;<span class="kw">let </span>read=field.kind.read_array_element(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#row),index);<span class="macro">quote!</span>(<span class="kw">let </span>#name=#read<span class="question-mark">?</span>;)});
-<a href=#803 id=803 data-nosnippet>803</a>            <span class="kw">let </span>env=<span class="kw-2">&amp;</span>context.environment;
-<a href=#804 id=804 data-nosnippet>804</a>            <span class="kw">let </span>code=<span class="macro">quote!</span>(<span class="kw">if </span>!#carrier.is_null() {<span class="kw">let </span>length=#env.get_array_length(<span class="kw-2">&amp;</span>#carrier).map_err(|e|e.to_string())<span class="question-mark">? </span><span class="kw">as </span>usize;<span class="kw">for </span>index <span class="kw">in </span><span class="number">0</span>..length {
-<a href=#805 id=805 data-nosnippet>805</a>                <span class="kw">let </span>frame=<span class="kw">unsafe </span>{::prebindgen_jni_runtime::LocalFrame::new(<span class="kw-2">&amp;</span>#env,#capacity)}<span class="question-mark">?</span>;
-<a href=#806 id=806 data-nosnippet>806</a>                <span class="kw">let </span>#row=::prebindgen_jni_runtime::row(<span class="kw-2">&amp;mut </span>#env,<span class="kw-2">&amp;</span>#carrier,index,#count)<span class="question-mark">?</span>;
-<a href=#807 id=807 data-nosnippet>807</a>                #(#reads)* #scan drop(frame);
-<a href=#808 id=808 data-nosnippet>808</a>            }});
-<a href=#809 id=809 data-nosnippet>809</a>            context.render(<span class="kw-2">&amp;</span>code)<span class="question-mark">?
-<a href=#810 id=810 data-nosnippet>810</a>        </span>}
-<a href=#811 id=811 data-nosnippet>811</a>        WireNode::Branch {meta:JniBranch::Alternatives,controls,children}=&gt; {
-<a href=#812 id=812 data-nosnippet>812</a>            <span class="kw">let </span>selector=<span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;<span class="kw">let </span>scans=children.iter().enumerate().map(|(i,child)|{<span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;<span class="kw">let </span>i=i <span class="kw">as </span>i32;<span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">if </span>#selector==#i {#scan}))}).collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;<span class="macro">quote!</span>(#(#scans)<span class="kw-2">*</span>)
-<a href=#813 id=813 data-nosnippet>813</a>        }
-<a href=#814 id=814 data-nosnippet>814</a>        WireNode::Branch {children,..}=&gt;children.iter().map(|child|receive_return_owners(child,context)).collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>.into_iter().collect(),
-<a href=#815 id=815 data-nosnippet>815</a>    })
-<a href=#816 id=816 data-nosnippet>816</a>}
-<a href=#817 id=817 data-nosnippet>817</a><span class="kw">fn </span>render(context: <span class="kw-2">&amp;</span>JniContext, code: <span class="kw-2">&amp;</span>TokenStream, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#818 id=818 data-nosnippet>818</a>    <span class="kw">let </span>code = prebindgen_conversions::render_template(code, <span class="kw-2">&amp;</span>|name| {
-<a href=#819 id=819 data-nosnippet>819</a>        <span class="prelude-val">Ok</span>(<span class="kw">if </span>name == <span class="string">"source_result" </span>{
-<a href=#820 id=820 data-nosnippet>820</a>            <span class="macro">quote!</span>(#source)
-<a href=#821 id=821 data-nosnippet>821</a>        } <span class="kw">else </span>{
-<a href=#822 id=822 data-nosnippet>822</a>            prebindgen_conversions::template_parameter(name)
-<a href=#823 id=823 data-nosnippet>823</a>        })
-<a href=#824 id=824 data-nosnippet>824</a>    })<span class="question-mark">?</span>;
-<a href=#825 id=825 data-nosnippet>825</a>    context.render(<span class="kw-2">&amp;</span>code)
-<a href=#826 id=826 data-nosnippet>826</a>}
-<a href=#827 id=827 data-nosnippet>827</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>files(
-<a href=#828 id=828 data-nosnippet>828</a>    flat: <span class="kw-2">&amp;</span>Bindings,
-<a href=#829 id=829 data-nosnippet>829</a>    classes: <span class="kw-2">&amp;</span>BTreeMap&lt;String, KotlinClass&gt;,
-<a href=#830 id=830 data-nosnippet>830</a>    files: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, String&gt;,
-<a href=#831 id=831 data-nosnippet>831</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#832 id=832 data-nosnippet>832</a>    <span class="kw">let </span><span class="kw-2">mut </span>ownership_by_name = BTreeMap::new();
-<a href=#833 id=833 data-nosnippet>833</a>    <span class="kw">let </span><span class="kw-2">mut </span>wires = Vec::new();
-<a href=#834 id=834 data-nosnippet>834</a>    <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>flat.metadata.callbacks {
-<a href=#835 id=835 data-nosnippet>835</a>        wires.extend(prebindgen_flat::wire_definitions(std::iter::once(
-<a href=#836 id=836 data-nosnippet>836</a>            input.input_node(),
-<a href=#837 id=837 data-nosnippet>837</a>        )));
-<a href=#838 id=838 data-nosnippet>838</a>    }
-<a href=#839 id=839 data-nosnippet>839</a>    <span class="kw">for </span>function <span class="kw">in </span>flat.functions.values().filter(|f| f.metadata.is_some()) {
-<a href=#840 id=840 data-nosnippet>840</a>        wires.extend(function.input_wire_definitions()<span class="question-mark">?</span>);
+<a href=#752 id=752 data-nosnippet>752</a>                <span class="kw">let </span>expr = <span class="macro">format!</span>(
+<a href=#753 id=753 data-nosnippet>753</a>                    <span class="string">"{local}.{}"</span>,
+<a href=#754 id=754 data-nosnippet>754</a>                    kotlin_identifier(field.to_string().trim_start_matches(<span class="string">"r#"</span>))
+<a href=#755 id=755 data-nosnippet>755</a>                );
+<a href=#756 id=756 data-nosnippet>756</a>                body.push_str(<span class="kw-2">&amp;</span>returned_handle_cleanup(child, <span class="kw-2">&amp;</span>expr, prefix, next)<span class="question-mark">?</span>);
+<a href=#757 id=757 data-nosnippet>757</a>            }
+<a href=#758 id=758 data-nosnippet>758</a>            <span class="macro">format!</span>(
+<a href=#759 id=759 data-nosnippet>759</a>                <span class="string">"({value} as? {})?.let {{ {local} -&gt; {body} }}\n"</span>,
+<a href=#760 id=760 data-nosnippet>760</a>                data.class_name
+<a href=#761 id=761 data-nosnippet>761</a>            )
+<a href=#762 id=762 data-nosnippet>762</a>        }
+<a href=#763 id=763 data-nosnippet>763</a>        WireNode::Branch { children, .. } =&gt; {
+<a href=#764 id=764 data-nosnippet>764</a>            <span class="kw">let </span><span class="kw-2">mut </span>body = String::new();
+<a href=#765 id=765 data-nosnippet>765</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
+<a href=#766 id=766 data-nosnippet>766</a>                body.push_str(<span class="kw-2">&amp;</span>returned_handle_cleanup(child, value, prefix, next)<span class="question-mark">?</span>);
+<a href=#767 id=767 data-nosnippet>767</a>            }
+<a href=#768 id=768 data-nosnippet>768</a>            body
+<a href=#769 id=769 data-nosnippet>769</a>        }
+<a href=#770 id=770 data-nosnippet>770</a>    })
+<a href=#771 id=771 data-nosnippet>771</a>}
+<a href=#772 id=772 data-nosnippet>772</a>
+<a href=#773 id=773 data-nosnippet>773</a><span class="kw">fn </span>mentions_value(code: <span class="kw-2">&amp;</span>TokenStream, name: <span class="kw-2">&amp;</span>syn::Ident) -&gt; bool {
+<a href=#774 id=774 data-nosnippet>774</a>    code.clone().into_iter().any(|token| <span class="kw">match </span>token {
+<a href=#775 id=775 data-nosnippet>775</a>        proc_macro2::TokenTree::Ident(value) =&gt; value == <span class="kw-2">*</span>name,
+<a href=#776 id=776 data-nosnippet>776</a>        proc_macro2::TokenTree::Group(group) =&gt; mentions_value(<span class="kw-2">&amp;</span>group.stream(), name),
+<a href=#777 id=777 data-nosnippet>777</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#778 id=778 data-nosnippet>778</a>    })
+<a href=#779 id=779 data-nosnippet>779</a>}
+<a href=#780 id=780 data-nosnippet>780</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>receive_return_owners(
+<a href=#781 id=781 data-nosnippet>781</a>    node: <span class="kw-2">&amp;</span>kotlin::JniNode,
+<a href=#782 id=782 data-nosnippet>782</a>    context: <span class="kw-2">&amp;</span>JniContext,
+<a href=#783 id=783 data-nosnippet>783</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#784 id=784 data-nosnippet>784</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
+<a href=#785 id=785 data-nosnippet>785</a>        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} =&gt; <span class="kw">crate</span>::bulk::scan_bulk(layout,controls,child,context)<span class="question-mark">?</span>,
+<a href=#786 id=786 data-nosnippet>786</a>        WireNode::Chain {meta:JniChain::Sequence(JniSequence::Bulk),controls,child} =&gt; <span class="kw">crate</span>::bulk::scan_rows(controls,child,context)<span class="question-mark">?</span>,
+<a href=#787 id=787 data-nosnippet>787</a>        WireNode::Leaf(fields)=&gt;fields.iter().filter_map(|field| {
+<a href=#788 id=788 data-nosnippet>788</a>            <span class="kw">if let </span>JniWire::Handle {handle,..}=<span class="kw-2">&amp;</span>field.kind {
+<a href=#789 id=789 data-nosnippet>789</a>                <span class="kw">if </span>handle.access==Access::Move {<span class="kw">let </span>name=<span class="kw-2">&amp;</span>field.name;<span class="kw">let </span>ty=<span class="kw-2">&amp;</span>handle.ty;<span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw">unsafe </span>{callback_return_owners.receive(#name <span class="kw">as </span><span class="kw-2">*mut </span>::prebindgen_jni_runtime::Allocation&lt;#ty&gt;);}));}
+<a href=#790 id=790 data-nosnippet>790</a>            }
+<a href=#791 id=791 data-nosnippet>791</a>            <span class="prelude-val">None
+<a href=#792 id=792 data-nosnippet>792</a>        </span>}).collect(),
+<a href=#793 id=793 data-nosnippet>793</a>        WireNode::Chain { meta:JniChain::Optional(optional),child,..}=&gt; {
+<a href=#794 id=794 data-nosnippet>794</a>            <span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;
+<a href=#795 id=795 data-nosnippet>795</a>            <span class="kw">if </span>scan.is_empty(){<span class="kw">return </span><span class="prelude-val">Ok</span>(scan);}
+<a href=#796 id=796 data-nosnippet>796</a>            <span class="kw">let </span>name=optional.discriminator();
+<a href=#797 id=797 data-nosnippet>797</a>            <span class="kw">let </span>present=<span class="kw">if let </span><span class="prelude-val">Some</span>(niche)=optional.niche(){<span class="kw">let </span>field=group::argument_parameters(child).find(|w|w.name==<span class="kw-2">*</span>name).ok_or(<span class="string">"missing callback return optional discriminator"</span>)<span class="question-mark">?</span>; niche.present(<span class="kw-2">&amp;</span>field.kind,<span class="macro">quote!</span>(#name))} <span class="kw">else </span>{<span class="macro">quote!</span>(#name==<span class="number">1</span>)};
+<a href=#798 id=798 data-nosnippet>798</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#present {#scan})
+<a href=#799 id=799 data-nosnippet>799</a>        }
+<a href=#800 id=800 data-nosnippet>800</a>        WireNode::Chain {meta:JniChain::Sequence(<span class="kw">_</span>),controls,child}=&gt; {
+<a href=#801 id=801 data-nosnippet>801</a>            <span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;
+<a href=#802 id=802 data-nosnippet>802</a>            <span class="kw">if </span>scan.is_empty(){<span class="kw">return </span><span class="prelude-val">Ok</span>(scan);}
+<a href=#803 id=803 data-nosnippet>803</a>            <span class="kw">let </span>carrier=<span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;<span class="kw">let </span>row=<span class="macro">format_ident!</span>(<span class="string">"{carrier}_ownership_row"</span>);
+<a href=#804 id=804 data-nosnippet>804</a>            <span class="kw">let </span>fields=group::argument_parameters(child).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();<span class="kw">let </span>count=fields.len();<span class="kw">let </span>capacity=i32::try_from(count+<span class="number">8</span>).map_err(|<span class="kw">_</span>|<span class="string">"too many returned fields"</span>)<span class="question-mark">?</span>;
+<a href=#805 id=805 data-nosnippet>805</a>            <span class="kw">let </span>reads=fields.into_iter().enumerate().filter(|(<span class="kw">_</span>,field)|mentions_value(<span class="kw-2">&amp;</span>scan,<span class="kw-2">&amp;</span>field.name)).map(|(index,field)|{<span class="kw">let </span>name=<span class="kw-2">&amp;</span>field.name;<span class="kw">let </span>read=field.kind.read_array_element(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#row),index);<span class="macro">quote!</span>(<span class="kw">let </span>#name=#read<span class="question-mark">?</span>;)});
+<a href=#806 id=806 data-nosnippet>806</a>            <span class="kw">let </span>env=<span class="kw-2">&amp;</span>context.environment;
+<a href=#807 id=807 data-nosnippet>807</a>            <span class="kw">let </span>code=<span class="macro">quote!</span>(<span class="kw">if </span>!#carrier.is_null() {<span class="kw">let </span>length=#env.get_array_length(<span class="kw-2">&amp;</span>#carrier).map_err(|e|e.to_string())<span class="question-mark">? </span><span class="kw">as </span>usize;<span class="kw">for </span>index <span class="kw">in </span><span class="number">0</span>..length {
+<a href=#808 id=808 data-nosnippet>808</a>                <span class="kw">let </span>frame=<span class="kw">unsafe </span>{::prebindgen_jni_runtime::LocalFrame::new(<span class="kw-2">&amp;</span>#env,#capacity)}<span class="question-mark">?</span>;
+<a href=#809 id=809 data-nosnippet>809</a>                <span class="kw">let </span>#row=::prebindgen_jni_runtime::row(<span class="kw-2">&amp;mut </span>#env,<span class="kw-2">&amp;</span>#carrier,index,#count)<span class="question-mark">?</span>;
+<a href=#810 id=810 data-nosnippet>810</a>                #(#reads)* #scan drop(frame);
+<a href=#811 id=811 data-nosnippet>811</a>            }});
+<a href=#812 id=812 data-nosnippet>812</a>            context.render(<span class="kw-2">&amp;</span>code)<span class="question-mark">?
+<a href=#813 id=813 data-nosnippet>813</a>        </span>}
+<a href=#814 id=814 data-nosnippet>814</a>        WireNode::Branch {meta:JniBranch::Alternatives,controls,children}=&gt; {
+<a href=#815 id=815 data-nosnippet>815</a>            <span class="kw">let </span>selector=<span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;<span class="kw">let </span>scans=children.iter().enumerate().map(|(i,child)|{<span class="kw">let </span>scan=receive_return_owners(child,context)<span class="question-mark">?</span>;<span class="kw">let </span>i=i <span class="kw">as </span>i32;<span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">if </span>#selector==#i {#scan}))}).collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;<span class="macro">quote!</span>(#(#scans)<span class="kw-2">*</span>)
+<a href=#816 id=816 data-nosnippet>816</a>        }
+<a href=#817 id=817 data-nosnippet>817</a>        WireNode::Branch {children,..}=&gt;children.iter().map(|child|receive_return_owners(child,context)).collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>.into_iter().collect(),
+<a href=#818 id=818 data-nosnippet>818</a>    })
+<a href=#819 id=819 data-nosnippet>819</a>}
+<a href=#820 id=820 data-nosnippet>820</a><span class="kw">fn </span>render(context: <span class="kw-2">&amp;</span>JniContext, code: <span class="kw-2">&amp;</span>TokenStream, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#821 id=821 data-nosnippet>821</a>    <span class="kw">let </span>code = prebindgen_conversions::render_template(code, <span class="kw-2">&amp;</span>|name| {
+<a href=#822 id=822 data-nosnippet>822</a>        <span class="prelude-val">Ok</span>(<span class="kw">if </span>name == <span class="string">"source_result" </span>{
+<a href=#823 id=823 data-nosnippet>823</a>            <span class="macro">quote!</span>(#source)
+<a href=#824 id=824 data-nosnippet>824</a>        } <span class="kw">else </span>{
+<a href=#825 id=825 data-nosnippet>825</a>            prebindgen_conversions::template_parameter(name)
+<a href=#826 id=826 data-nosnippet>826</a>        })
+<a href=#827 id=827 data-nosnippet>827</a>    })<span class="question-mark">?</span>;
+<a href=#828 id=828 data-nosnippet>828</a>    context.render(<span class="kw-2">&amp;</span>code)
+<a href=#829 id=829 data-nosnippet>829</a>}
+<a href=#830 id=830 data-nosnippet>830</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>files(
+<a href=#831 id=831 data-nosnippet>831</a>    flat: <span class="kw-2">&amp;</span>Bindings,
+<a href=#832 id=832 data-nosnippet>832</a>    classes: <span class="kw-2">&amp;</span>BTreeMap&lt;String, KotlinClass&gt;,
+<a href=#833 id=833 data-nosnippet>833</a>    files: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, String&gt;,
+<a href=#834 id=834 data-nosnippet>834</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#835 id=835 data-nosnippet>835</a>    <span class="kw">let </span><span class="kw-2">mut </span>ownership_by_name = BTreeMap::new();
+<a href=#836 id=836 data-nosnippet>836</a>    <span class="kw">let </span><span class="kw-2">mut </span>wires = Vec::new();
+<a href=#837 id=837 data-nosnippet>837</a>    <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>flat.metadata.callbacks {
+<a href=#838 id=838 data-nosnippet>838</a>        wires.extend(prebindgen_flat::wire_definitions(std::iter::once(
+<a href=#839 id=839 data-nosnippet>839</a>            input.input_node(),
+<a href=#840 id=840 data-nosnippet>840</a>        )));
 <a href=#841 id=841 data-nosnippet>841</a>    }
-<a href=#842 id=842 data-nosnippet>842</a>    <span class="kw">for </span>wire <span class="kw">in </span>wires {
-<a href=#843 id=843 data-nosnippet>843</a>        <span class="kw">let </span>JniWire::Callback { callback } = <span class="kw-2">&amp;</span>wire.kind <span class="kw">else </span>{
-<a href=#844 id=844 data-nosnippet>844</a>            <span class="kw">continue</span>;
-<a href=#845 id=845 data-nosnippet>845</a>        };
-<a href=#846 id=846 data-nosnippet>846</a>        <span class="kw">let </span>context = KotlinContext {
-<a href=#847 id=847 data-nosnippet>847</a>            package: <span class="kw-2">&amp;</span>flat.metadata.package,
-<a href=#848 id=848 data-nosnippet>848</a>            classes,
-<a href=#849 id=849 data-nosnippet>849</a>            result: <span class="string">"parts"</span>,
-<a href=#850 id=850 data-nosnippet>850</a>            failure: <span class="string">"failure"</span>,
-<a href=#851 id=851 data-nosnippet>851</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#852 id=852 data-nosnippet>852</a>            output_prefix: <span class="string">"output"</span>,
-<a href=#853 id=853 data-nosnippet>853</a>        };
-<a href=#854 id=854 data-nosnippet>854</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = <span class="macro">vec!</span>[];
-<a href=#855 id=855 data-nosnippet>855</a>        <span class="kw">let </span><span class="kw-2">mut </span>names = BTreeSet::new();
-<a href=#856 id=856 data-nosnippet>856</a>        <span class="kw">for </span>(i, arg) <span class="kw">in </span>callback.arguments.iter().enumerate() {
-<a href=#857 id=857 data-nosnippet>857</a>            <span class="kw">let </span>output = arg.output.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<a href=#858 id=858 data-nosnippet>858</a>            output.callback_parameter_declarations()<span class="question-mark">?</span>;
-<a href=#859 id=859 data-nosnippet>859</a>            <span class="kw">for </span>(j, ty) <span class="kw">in </span>output.result_types.iter().enumerate() {
-<a href=#860 id=860 data-nosnippet>860</a>                <span class="kw">let </span><span class="kw-2">mut </span>name = output
-<a href=#861 id=861 data-nosnippet>861</a>                    .result_names
-<a href=#862 id=862 data-nosnippet>862</a>                    .get(j)
-<a href=#863 id=863 data-nosnippet>863</a>                    .and_then(|n| n.clone())
-<a href=#864 id=864 data-nosnippet>864</a>                    .unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">"arg{i}_{j}"</span>));
-<a href=#865 id=865 data-nosnippet>865</a>                <span class="kw">while </span>!names.insert(name.clone()) {
-<a href=#866 id=866 data-nosnippet>866</a>                    name.push(<span class="string">'_'</span>);
-<a href=#867 id=867 data-nosnippet>867</a>                }
-<a href=#868 id=868 data-nosnippet>868</a>                params.push(<span class="macro">format!</span>(<span class="string">"`{name}`: {ty}"</span>));
-<a href=#869 id=869 data-nosnippet>869</a>            }
-<a href=#870 id=870 data-nosnippet>870</a>        }
-<a href=#871 id=871 data-nosnippet>871</a>        <span class="kw">let </span>return_type = callback
-<a href=#872 id=872 data-nosnippet>872</a>            .return_value
-<a href=#873 id=873 data-nosnippet>873</a>            .as_ref()
-<a href=#874 id=874 data-nosnippet>874</a>            .map(|r| r.kotlin_type(<span class="kw-2">&amp;</span>context).map(|ty| <span class="macro">format!</span>(<span class="string">": {ty}"</span>)))
-<a href=#875 id=875 data-nosnippet>875</a>            .transpose()<span class="question-mark">?
-<a href=#876 id=876 data-nosnippet>876</a>            </span>.unwrap_or_default();
-<a href=#877 id=877 data-nosnippet>877</a>        <span class="kw">let </span>contract = <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = <span class="kw-2">&amp;</span>callback.return_value {
-<a href=#878 id=878 data-nosnippet>878</a>            <span class="kw">let </span>ownership = <span class="kw">if </span>result.input.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.consumed.is_empty() {
-<a href=#879 id=879 data-nosnippet>879</a>                <span class="string">""
-<a href=#880 id=880 data-nosnippet>880</a>            </span>} <span class="kw">else </span>{
-<a href=#881 id=881 data-nosnippet>881</a>                <span class="string">" Returned handles transfer ownership to Rust."
-<a href=#882 id=882 data-nosnippet>882</a>            </span>};
-<a href=#883 id=883 data-nosnippet>883</a>            <span class="macro">format!</span>(<span class="string">" Failure to invoke or convert the returned value raises a Rust panic on the invoking thread; an uncaught worker panic terminates that worker.{ownership}"</span>)
-<a href=#884 id=884 data-nosnippet>884</a>        } <span class="kw">else </span>{
-<a href=#885 id=885 data-nosnippet>885</a>            String::new()
-<a href=#886 id=886 data-nosnippet>886</a>        };
-<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>ownership = callback
-<a href=#888 id=888 data-nosnippet>888</a>            .arguments
-<a href=#889 id=889 data-nosnippet>889</a>            .iter()
-<a href=#890 id=890 data-nosnippet>890</a>            .map(|arg| {
-<a href=#891 id=891 data-nosnippet>891</a>                <span class="kw">let </span>handles = prebindgen_flat::wire_definitions(std::iter::once(
-<a href=#892 id=892 data-nosnippet>892</a>                    <span class="kw-2">&amp;</span>arg.output.output_outcomes().success,
-<a href=#893 id=893 data-nosnippet>893</a>                ))
-<a href=#894 id=894 data-nosnippet>894</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::Handle { .. }));
-<a href=#895 id=895 data-nosnippet>895</a>                handles &amp;&amp; !arg.scoped
-<a href=#896 id=896 data-nosnippet>896</a>            })
-<a href=#897 id=897 data-nosnippet>897</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#898 id=898 data-nosnippet>898</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(previous) = ownership_by_name.insert(callback.fqn(), ownership.clone()) {
-<a href=#899 id=899 data-nosnippet>899</a>            <span class="kw">if </span>previous != ownership {
-<a href=#900 id=900 data-nosnippet>900</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"callback interface ownership collision for `{}`; use callback!(...).name(...) for a distinct interface"</span>, callback.fqn()));
-<a href=#901 id=901 data-nosnippet>901</a>            }
-<a href=#902 id=902 data-nosnippet>902</a>        }
-<a href=#903 id=903 data-nosnippet>903</a>        <span class="kw">let </span>text = <span class="macro">format!</span>(<span class="string">"package {}\n\n/** Invoked by Rust, possibly from a native worker thread.{contract} */\npublic fun interface {} {{\n    public fun run({}){return_type}\n}}\n"</span>, callback.package, callback.name, params.join(<span class="string">", "</span>));
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">let </span>path = <span class="macro">format!</span>(
-<a href=#905 id=905 data-nosnippet>905</a>            <span class="string">"{}/{}.kt"</span>,
-<a href=#906 id=906 data-nosnippet>906</a>            callback.package.replace(<span class="string">'.'</span>, <span class="string">"/"</span>),
-<a href=#907 id=907 data-nosnippet>907</a>            callback.name
-<a href=#908 id=908 data-nosnippet>908</a>        );
-<a href=#909 id=909 data-nosnippet>909</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing) = files.get(<span class="kw-2">&amp;</span>path) {
-<a href=#910 id=910 data-nosnippet>910</a>            <span class="kw">if </span>existing != <span class="kw-2">&amp;</span>text {
-<a href=#911 id=911 data-nosnippet>911</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback interface signature collision; use callback!(...).name(...) for a distinct interface"</span>.into());
-<a href=#912 id=912 data-nosnippet>912</a>            }
-<a href=#913 id=913 data-nosnippet>913</a>        } <span class="kw">else </span>{
-<a href=#914 id=914 data-nosnippet>914</a>            files.insert(path, text);
-<a href=#915 id=915 data-nosnippet>915</a>        }
-<a href=#916 id=916 data-nosnippet>916</a>    }
-<a href=#917 id=917 data-nosnippet>917</a>    <span class="prelude-val">Ok</span>(())
-<a href=#918 id=918 data-nosnippet>918</a>}
-<a href=#919 id=919 data-nosnippet>919</a>
-<a href=#920 id=920 data-nosnippet>920</a><span class="kw">fn </span>subject_type(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; <span class="kw-2">&amp;</span>syn::Type {
-<a href=#921 id=921 data-nosnippet>921</a>    <span class="kw">match </span>ty {
-<a href=#922 id=922 data-nosnippet>922</a>        syn::Type::Reference(r) =&gt; subject_type(<span class="kw-2">&amp;</span>r.elem),
-<a href=#923 id=923 data-nosnippet>923</a>        <span class="kw">_ </span>=&gt; prebindgen_flat::option_inner(ty)
-<a href=#924 id=924 data-nosnippet>924</a>            .map(subject_type)
-<a href=#925 id=925 data-nosnippet>925</a>            .unwrap_or(ty),
-<a href=#926 id=926 data-nosnippet>926</a>    }
-<a href=#927 id=927 data-nosnippet>927</a>}
-<a href=#928 id=928 data-nosnippet>928</a><span class="kw">fn </span>subject_name(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; String {
-<a href=#929 id=929 data-nosnippet>929</a>    <span class="kw">match </span>ty {
-<a href=#930 id=930 data-nosnippet>930</a>        syn::Type::Reference(r) =&gt; subject_name(<span class="kw-2">&amp;</span>r.elem),
-<a href=#931 id=931 data-nosnippet>931</a>        syn::Type::Slice(s) =&gt; <span class="macro">format!</span>(<span class="string">"{}List"</span>, subject_name(<span class="kw-2">&amp;</span>s.elem)),
-<a href=#932 id=932 data-nosnippet>932</a>        <span class="kw">_ </span>=&gt; {
-<a href=#933 id=933 data-nosnippet>933</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_flat::option_inner(ty) {
-<a href=#934 id=934 data-nosnippet>934</a>                <span class="kw">return </span><span class="macro">format!</span>(<span class="string">"Optional{}"</span>, subject_name(inner));
-<a href=#935 id=935 data-nosnippet>935</a>            }
-<a href=#936 id=936 data-nosnippet>936</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_flat::vec_inner(ty) {
-<a href=#937 id=937 data-nosnippet>937</a>                <span class="kw">return </span><span class="macro">format!</span>(<span class="string">"{}Vec"</span>, subject_name(inner));
+<a href=#842 id=842 data-nosnippet>842</a>    <span class="kw">for </span>function <span class="kw">in </span>flat.functions.values().filter(|f| f.metadata.is_some()) {
+<a href=#843 id=843 data-nosnippet>843</a>        wires.extend(function.input_wire_definitions()<span class="question-mark">?</span>);
+<a href=#844 id=844 data-nosnippet>844</a>    }
+<a href=#845 id=845 data-nosnippet>845</a>    <span class="kw">for </span>wire <span class="kw">in </span>wires {
+<a href=#846 id=846 data-nosnippet>846</a>        <span class="kw">let </span>JniWire::Callback { callback } = <span class="kw-2">&amp;</span>wire.kind <span class="kw">else </span>{
+<a href=#847 id=847 data-nosnippet>847</a>            <span class="kw">continue</span>;
+<a href=#848 id=848 data-nosnippet>848</a>        };
+<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">let </span>context = KotlinContext {
+<a href=#850 id=850 data-nosnippet>850</a>            package: <span class="kw-2">&amp;</span>flat.metadata.package,
+<a href=#851 id=851 data-nosnippet>851</a>            classes,
+<a href=#852 id=852 data-nosnippet>852</a>            result: <span class="string">"parts"</span>,
+<a href=#853 id=853 data-nosnippet>853</a>            failure: <span class="string">"failure"</span>,
+<a href=#854 id=854 data-nosnippet>854</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#855 id=855 data-nosnippet>855</a>            output_prefix: <span class="string">"output"</span>,
+<a href=#856 id=856 data-nosnippet>856</a>        };
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = <span class="macro">vec!</span>[];
+<a href=#858 id=858 data-nosnippet>858</a>        <span class="kw">let </span><span class="kw-2">mut </span>names = BTreeSet::new();
+<a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">for </span>(i, arg) <span class="kw">in </span>callback.arguments.iter().enumerate() {
+<a href=#860 id=860 data-nosnippet>860</a>            <span class="kw">let </span>output = arg.output.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
+<a href=#861 id=861 data-nosnippet>861</a>            output.callback_parameter_declarations()<span class="question-mark">?</span>;
+<a href=#862 id=862 data-nosnippet>862</a>            <span class="kw">for </span>(j, ty) <span class="kw">in </span>output.result_types.iter().enumerate() {
+<a href=#863 id=863 data-nosnippet>863</a>                <span class="kw">let </span><span class="kw-2">mut </span>name = output
+<a href=#864 id=864 data-nosnippet>864</a>                    .result_names
+<a href=#865 id=865 data-nosnippet>865</a>                    .get(j)
+<a href=#866 id=866 data-nosnippet>866</a>                    .and_then(|n| n.clone())
+<a href=#867 id=867 data-nosnippet>867</a>                    .unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">"arg{i}_{j}"</span>));
+<a href=#868 id=868 data-nosnippet>868</a>                <span class="kw">while </span>!names.insert(name.clone()) {
+<a href=#869 id=869 data-nosnippet>869</a>                    name.push(<span class="string">'_'</span>);
+<a href=#870 id=870 data-nosnippet>870</a>                }
+<a href=#871 id=871 data-nosnippet>871</a>                params.push(<span class="macro">format!</span>(<span class="string">"{}: {ty}"</span>, kotlin_identifier(<span class="kw-2">&amp;</span>name)));
+<a href=#872 id=872 data-nosnippet>872</a>            }
+<a href=#873 id=873 data-nosnippet>873</a>        }
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>return_type = callback
+<a href=#875 id=875 data-nosnippet>875</a>            .return_value
+<a href=#876 id=876 data-nosnippet>876</a>            .as_ref()
+<a href=#877 id=877 data-nosnippet>877</a>            .map(|r| r.kotlin_type(<span class="kw-2">&amp;</span>context).map(|ty| <span class="macro">format!</span>(<span class="string">": {ty}"</span>)))
+<a href=#878 id=878 data-nosnippet>878</a>            .transpose()<span class="question-mark">?
+<a href=#879 id=879 data-nosnippet>879</a>            </span>.unwrap_or_default();
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="kw">let </span>contract = <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = <span class="kw-2">&amp;</span>callback.return_value {
+<a href=#881 id=881 data-nosnippet>881</a>            <span class="kw">let </span>ownership = <span class="kw">if </span>result.input.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.consumed.is_empty() {
+<a href=#882 id=882 data-nosnippet>882</a>                <span class="string">""
+<a href=#883 id=883 data-nosnippet>883</a>            </span>} <span class="kw">else </span>{
+<a href=#884 id=884 data-nosnippet>884</a>                <span class="string">" Returned handles transfer ownership to Rust."
+<a href=#885 id=885 data-nosnippet>885</a>            </span>};
+<a href=#886 id=886 data-nosnippet>886</a>            <span class="macro">format!</span>(<span class="string">" Failure to invoke or convert the returned value raises a Rust panic on the invoking thread; an uncaught worker panic terminates that worker.{ownership}"</span>)
+<a href=#887 id=887 data-nosnippet>887</a>        } <span class="kw">else </span>{
+<a href=#888 id=888 data-nosnippet>888</a>            String::new()
+<a href=#889 id=889 data-nosnippet>889</a>        };
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">let </span>ownership = callback
+<a href=#891 id=891 data-nosnippet>891</a>            .arguments
+<a href=#892 id=892 data-nosnippet>892</a>            .iter()
+<a href=#893 id=893 data-nosnippet>893</a>            .map(|arg| {
+<a href=#894 id=894 data-nosnippet>894</a>                <span class="kw">let </span>handles = prebindgen_flat::wire_definitions(std::iter::once(
+<a href=#895 id=895 data-nosnippet>895</a>                    <span class="kw-2">&amp;</span>arg.output.output_outcomes().success,
+<a href=#896 id=896 data-nosnippet>896</a>                ))
+<a href=#897 id=897 data-nosnippet>897</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::Handle { .. }));
+<a href=#898 id=898 data-nosnippet>898</a>                handles &amp;&amp; !arg.scoped
+<a href=#899 id=899 data-nosnippet>899</a>            })
+<a href=#900 id=900 data-nosnippet>900</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(previous) = ownership_by_name.insert(callback.fqn(), ownership.clone()) {
+<a href=#902 id=902 data-nosnippet>902</a>            <span class="kw">if </span>previous != ownership {
+<a href=#903 id=903 data-nosnippet>903</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"callback interface ownership collision for `{}`; use callback!(...).name(...) for a distinct interface"</span>, callback.fqn()));
+<a href=#904 id=904 data-nosnippet>904</a>            }
+<a href=#905 id=905 data-nosnippet>905</a>        }
+<a href=#906 id=906 data-nosnippet>906</a>        <span class="kw">let </span>text = <span class="macro">format!</span>(<span class="string">"package {}\n\n/** Invoked by Rust, possibly from a native worker thread.{contract} */\npublic fun interface {} {{\n    public fun run({}){return_type}\n}}\n"</span>, callback.package, callback.name, params.join(<span class="string">", "</span>));
+<a href=#907 id=907 data-nosnippet>907</a>        <span class="kw">let </span>path = <span class="macro">format!</span>(
+<a href=#908 id=908 data-nosnippet>908</a>            <span class="string">"{}/{}.kt"</span>,
+<a href=#909 id=909 data-nosnippet>909</a>            callback.package.replace(<span class="string">'.'</span>, <span class="string">"/"</span>),
+<a href=#910 id=910 data-nosnippet>910</a>            callback.name
+<a href=#911 id=911 data-nosnippet>911</a>        );
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing) = files.get(<span class="kw-2">&amp;</span>path) {
+<a href=#913 id=913 data-nosnippet>913</a>            <span class="kw">if </span>existing != <span class="kw-2">&amp;</span>text {
+<a href=#914 id=914 data-nosnippet>914</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback interface signature collision; use callback!(...).name(...) for a distinct interface"</span>.into());
+<a href=#915 id=915 data-nosnippet>915</a>            }
+<a href=#916 id=916 data-nosnippet>916</a>        } <span class="kw">else </span>{
+<a href=#917 id=917 data-nosnippet>917</a>            files.insert(path, text);
+<a href=#918 id=918 data-nosnippet>918</a>        }
+<a href=#919 id=919 data-nosnippet>919</a>    }
+<a href=#920 id=920 data-nosnippet>920</a>    <span class="prelude-val">Ok</span>(())
+<a href=#921 id=921 data-nosnippet>921</a>}
+<a href=#922 id=922 data-nosnippet>922</a>
+<a href=#923 id=923 data-nosnippet>923</a><span class="kw">fn </span>subject_type(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; <span class="kw-2">&amp;</span>syn::Type {
+<a href=#924 id=924 data-nosnippet>924</a>    <span class="kw">match </span>ty {
+<a href=#925 id=925 data-nosnippet>925</a>        syn::Type::Reference(r) =&gt; subject_type(<span class="kw-2">&amp;</span>r.elem),
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">_ </span>=&gt; prebindgen_flat::option_inner(ty)
+<a href=#927 id=927 data-nosnippet>927</a>            .map(subject_type)
+<a href=#928 id=928 data-nosnippet>928</a>            .unwrap_or(ty),
+<a href=#929 id=929 data-nosnippet>929</a>    }
+<a href=#930 id=930 data-nosnippet>930</a>}
+<a href=#931 id=931 data-nosnippet>931</a><span class="kw">fn </span>subject_name(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; String {
+<a href=#932 id=932 data-nosnippet>932</a>    <span class="kw">match </span>ty {
+<a href=#933 id=933 data-nosnippet>933</a>        syn::Type::Reference(r) =&gt; subject_name(<span class="kw-2">&amp;</span>r.elem),
+<a href=#934 id=934 data-nosnippet>934</a>        syn::Type::Slice(s) =&gt; <span class="macro">format!</span>(<span class="string">"{}List"</span>, subject_name(<span class="kw-2">&amp;</span>s.elem)),
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="kw">_ </span>=&gt; {
+<a href=#936 id=936 data-nosnippet>936</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_flat::option_inner(ty) {
+<a href=#937 id=937 data-nosnippet>937</a>                <span class="kw">return </span><span class="macro">format!</span>(<span class="string">"Optional{}"</span>, subject_name(inner));
 <a href=#938 id=938 data-nosnippet>938</a>            }
-<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">match </span>ty {
-<a href=#940 id=940 data-nosnippet>940</a>                syn::Type::Path(p) =&gt; p.path.segments.last().unwrap().ident.to_string(),
-<a href=#941 id=941 data-nosnippet>941</a>                <span class="kw">_ </span>=&gt; <span class="string">"Unit"</span>.into(),
-<a href=#942 id=942 data-nosnippet>942</a>            }
-<a href=#943 id=943 data-nosnippet>943</a>        }
-<a href=#944 id=944 data-nosnippet>944</a>    }
-<a href=#945 id=945 data-nosnippet>945</a>}
-<a href=#946 id=946 data-nosnippet>946</a>
-<a href=#947 id=947 data-nosnippet>947</a><span class="kw">fn </span>contains_result(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; bool {
-<a href=#948 id=948 data-nosnippet>948</a>    prebindgen_flat::result_parts(ty).is_some()
-<a href=#949 id=949 data-nosnippet>949</a>        || prebindgen_flat::option_inner(ty).is_some_and(contains_result)
-<a href=#950 id=950 data-nosnippet>950</a>        || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, <span class="kw">_</span>)| contains_result(ty))
-<a href=#951 id=951 data-nosnippet>951</a>        || <span class="macro">matches!</span>(ty,syn::Type::Reference(r) <span class="kw">if </span>contains_result(<span class="kw-2">&amp;</span>r.elem))
-<a href=#952 id=952 data-nosnippet>952</a>}
-<a href=#953 id=953 data-nosnippet>953</a><span class="kw">fn </span>argument_local(name: <span class="kw-2">&amp;</span>str, ty: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#954 id=954 data-nosnippet>954</a>    <span class="kw">let </span>default = <span class="kw">if </span>ty.ends_with(<span class="string">'?'</span>) {
-<a href=#955 id=955 data-nosnippet>955</a>        <span class="prelude-val">Some</span>(<span class="string">"null"</span>)
-<a href=#956 id=956 data-nosnippet>956</a>    } <span class="kw">else </span>{
-<a href=#957 id=957 data-nosnippet>957</a>        <span class="kw">let </span>kotlin_type = ty.strip_prefix(<span class="string">"kotlin."</span>).unwrap_or(ty);
-<a href=#958 id=958 data-nosnippet>958</a>        <span class="kw">crate</span>::wire::jvm::primitive_local_default(kotlin_type).or(<span class="kw">match </span>kotlin_type {
-<a href=#959 id=959 data-nosnippet>959</a>            <span class="string">"UByte" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUByte()"</span>),
-<a href=#960 id=960 data-nosnippet>960</a>            <span class="string">"UShort" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUShort()"</span>),
-<a href=#961 id=961 data-nosnippet>961</a>            <span class="string">"UInt" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0U"</span>),
-<a href=#962 id=962 data-nosnippet>962</a>            <span class="string">"ULong" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0UL"</span>),
-<a href=#963 id=963 data-nosnippet>963</a>            <span class="string">"Char" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"'\\u0000'"</span>),
-<a href=#964 id=964 data-nosnippet>964</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#965 id=965 data-nosnippet>965</a>        })
-<a href=#966 id=966 data-nosnippet>966</a>    };
-<a href=#967 id=967 data-nosnippet>967</a>    <span class="kw">match </span>default {
-<a href=#968 id=968 data-nosnippet>968</a>        <span class="prelude-val">Some</span>(default) =&gt; <span class="macro">format!</span>(<span class="string">"        var {name}: {ty} = {default}\n"</span>),
-<a href=#969 id=969 data-nosnippet>969</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"        lateinit var {name}: {ty}\n"</span>),
-<a href=#970 id=970 data-nosnippet>970</a>    }
-<a href=#971 id=971 data-nosnippet>971</a>}
+<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_flat::vec_inner(ty) {
+<a href=#940 id=940 data-nosnippet>940</a>                <span class="kw">return </span><span class="macro">format!</span>(<span class="string">"{}Vec"</span>, subject_name(inner));
+<a href=#941 id=941 data-nosnippet>941</a>            }
+<a href=#942 id=942 data-nosnippet>942</a>            <span class="kw">match </span>ty {
+<a href=#943 id=943 data-nosnippet>943</a>                syn::Type::Path(p) =&gt; p.path.segments.last().unwrap().ident.to_string(),
+<a href=#944 id=944 data-nosnippet>944</a>                <span class="kw">_ </span>=&gt; <span class="string">"Unit"</span>.into(),
+<a href=#945 id=945 data-nosnippet>945</a>            }
+<a href=#946 id=946 data-nosnippet>946</a>        }
+<a href=#947 id=947 data-nosnippet>947</a>    }
+<a href=#948 id=948 data-nosnippet>948</a>}
+<a href=#949 id=949 data-nosnippet>949</a>
+<a href=#950 id=950 data-nosnippet>950</a><span class="kw">fn </span>contains_result(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; bool {
+<a href=#951 id=951 data-nosnippet>951</a>    prebindgen_flat::result_parts(ty).is_some()
+<a href=#952 id=952 data-nosnippet>952</a>        || prebindgen_flat::option_inner(ty).is_some_and(contains_result)
+<a href=#953 id=953 data-nosnippet>953</a>        || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, <span class="kw">_</span>)| contains_result(ty))
+<a href=#954 id=954 data-nosnippet>954</a>        || <span class="macro">matches!</span>(ty,syn::Type::Reference(r) <span class="kw">if </span>contains_result(<span class="kw-2">&amp;</span>r.elem))
+<a href=#955 id=955 data-nosnippet>955</a>}
+<a href=#956 id=956 data-nosnippet>956</a><span class="kw">fn </span>argument_local(name: <span class="kw-2">&amp;</span>str, ty: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#957 id=957 data-nosnippet>957</a>    <span class="kw">let </span>default = <span class="kw">if </span>ty.ends_with(<span class="string">'?'</span>) {
+<a href=#958 id=958 data-nosnippet>958</a>        <span class="prelude-val">Some</span>(<span class="string">"null"</span>)
+<a href=#959 id=959 data-nosnippet>959</a>    } <span class="kw">else </span>{
+<a href=#960 id=960 data-nosnippet>960</a>        <span class="kw">let </span>kotlin_type = ty.strip_prefix(<span class="string">"kotlin."</span>).unwrap_or(ty);
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">crate</span>::wire::jvm::primitive_local_default(kotlin_type).or(<span class="kw">match </span>kotlin_type {
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="string">"UByte" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUByte()"</span>),
+<a href=#963 id=963 data-nosnippet>963</a>            <span class="string">"UShort" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUShort()"</span>),
+<a href=#964 id=964 data-nosnippet>964</a>            <span class="string">"UInt" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0U"</span>),
+<a href=#965 id=965 data-nosnippet>965</a>            <span class="string">"ULong" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0UL"</span>),
+<a href=#966 id=966 data-nosnippet>966</a>            <span class="string">"Char" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"'\\u0000'"</span>),
+<a href=#967 id=967 data-nosnippet>967</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#968 id=968 data-nosnippet>968</a>        })
+<a href=#969 id=969 data-nosnippet>969</a>    };
+<a href=#970 id=970 data-nosnippet>970</a>    <span class="kw">match </span>default {
+<a href=#971 id=971 data-nosnippet>971</a>        <span class="prelude-val">Some</span>(default) =&gt; <span class="macro">format!</span>(<span class="string">"        var {name}: {ty} = {default}\n"</span>),
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"        lateinit var {name}: {ty}\n"</span>),
+<a href=#973 id=973 data-nosnippet>973</a>    }
+<a href=#974 id=974 data-nosnippet>974</a>}
 </code></pre></div></section></main></body></html>

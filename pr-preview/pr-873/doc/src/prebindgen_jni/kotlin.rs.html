@@ -156,7 +156,7 @@
 <a href=#156 id=156 data-nosnippet>156</a>            .enumerate()
 <a href=#157 id=157 data-nosnippet>157</a>            .map(|(i, ty)| {
 <a href=#158 id=158 data-nosnippet>158</a>                <span class="kw">if </span><span class="self">self</span>.result_names.get(i).is_some_and(|name| name.is_some()) {
-<a href=#159 id=159 data-nosnippet>159</a>                    <span class="macro">format!</span>(<span class="string">"`{}`: {ty}"</span>, names[i])
+<a href=#159 id=159 data-nosnippet>159</a>                    <span class="macro">format!</span>(<span class="string">"{}: {ty}"</span>, kotlin_identifier(<span class="kw-2">&amp;</span>names[i]))
 <a href=#160 id=160 data-nosnippet>160</a>                } <span class="kw">else </span>{
 <a href=#161 id=161 data-nosnippet>161</a>                    ty.clone()
 <a href=#162 id=162 data-nosnippet>162</a>                }
@@ -173,7 +173,7 @@
 <a href=#173 id=173 data-nosnippet>173</a>            .enumerate()
 <a href=#174 id=174 data-nosnippet>174</a>            .map(|(i, ty)| {
 <a href=#175 id=175 data-nosnippet>175</a>                <span class="kw">if </span><span class="self">self</span>.result_names.get(i).is_some_and(|name| name.is_some()) {
-<a href=#176 id=176 data-nosnippet>176</a>                    <span class="macro">format!</span>(<span class="string">"`{}`: {ty}"</span>, names[i])
+<a href=#176 id=176 data-nosnippet>176</a>                    <span class="macro">format!</span>(<span class="string">"{}: {ty}"</span>, kotlin_identifier(<span class="kw-2">&amp;</span>names[i]))
 <a href=#177 id=177 data-nosnippet>177</a>                } <span class="kw">else </span>{
 <a href=#178 id=178 data-nosnippet>178</a>                    <span class="macro">format!</span>(<span class="string">"{}: {ty}"</span>, names[i])
 <a href=#179 id=179 data-nosnippet>179</a>                }
