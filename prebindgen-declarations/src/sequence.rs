@@ -79,12 +79,38 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
             ))
         })
         .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
-    struct Replace<'a>(&'a std::collections::BTreeMap<String, syn::Expr>);
+    struct Replace<'a> {
+        values: &'a std::collections::BTreeMap<String, syn::Expr>,
+        error: Option<String>,
+    }
     impl syn::visit_mut::VisitMut for Replace<'_> {
+        fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+            // Alias scopes remain unresolved while outer sequence fields are
+            // bound. Visit both statement branches so nested JNI row expressions
+            // receive the same substitutions as ordinary Rust statements.
+            if mac.path.segments.len() == 2
+                && mac.path.segments[0].ident == "prebindgen_runtime"
+                && mac.path.segments[1].ident == "__prebindgen_alias_checks"
+            {
+                let mut branches = TokenStream::new();
+                for token in mac.tokens.clone() {
+                    let mut block: syn::Block = match syn::parse2(token.into_token_stream()) {
+                        Ok(block) => block,
+                        Err(error) => {
+                            self.error = Some(format!("invalid input alias branch: {error}"));
+                            return;
+                        }
+                    };
+                    self.visit_block_mut(&mut block);
+                    branches.extend(block.into_token_stream());
+                }
+                mac.tokens = branches;
+            }
+        }
         fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
             if let syn::Expr::Path(p) = expr {
                 if p.qself.is_none() && p.path.segments.len() == 1 {
-                    if let Some(value) = self.0.get(&p.path.segments[0].ident.to_string()) {
+                    if let Some(value) = self.values.get(&p.path.segments[0].ident.to_string()) {
                         *expr = value.clone();
                         return;
                     }
@@ -113,7 +139,14 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         }
     }
     let mut expr: syn::Expr = syn::parse2(quote!({ #code })).map_err(|e| e.to_string())?;
-    syn::visit_mut::VisitMut::visit_expr_mut(&mut Replace(&replacements), &mut expr);
+    let mut visitor = Replace {
+        values: &replacements,
+        error: None,
+    };
+    syn::visit_mut::VisitMut::visit_expr_mut(&mut visitor, &mut expr);
+    if let Some(error) = visitor.error {
+        return Err(error);
+    }
     let syn::Expr::Block(block) = expr else {
         unreachable!()
     };
@@ -315,7 +348,7 @@ pub(crate) fn input<C: Codec>(
                     #bind
                     #[allow(clippy::redundant_closure_call)]
                     let #element_value=(|| -> ::core::result::Result<#element,String> {
-                        #validation #acquire #statements #argument Ok(#var)
+                        #validation #count #acquire #statements #argument Ok(#var)
                     })();
                     #release
                     let element = #element_value?;
@@ -397,7 +430,7 @@ pub(crate) fn input<C: Codec>(
 
             }
         };
-        if shared_only {
+        let checked = if shared_only {
             quote! {
                 let #var = if __prebindgen_input_aliases.needs_group() {
                     #batch #var
@@ -405,7 +438,8 @@ pub(crate) fn input<C: Codec>(
             }
         } else {
             batch
-        }
+        };
+        prebindgen_conversions::staged::input_alias_checks(checked, direct)
     } else {
         direct
     };
@@ -601,5 +635,29 @@ mod tests {
         .unwrap();
         assert!(code.to_string().contains(&quote!(&(*pointer)).to_string()));
         assert!(code.to_string().contains("consume (cached , value)"));
+    }
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use super::*;
+    #[test]
+    fn wire_substitution_visits_both_policy_branches_and_reports_bad_syntax() {
+        let choice = prebindgen_conversions::staged::input_alias_checks(
+            quote!(let v=wire;),
+            quote!(let v=wire+1;),
+        );
+        let values = vec![(syn::parse_quote!(wire), quote!(42))];
+        let replaced = replace(&choice, &values).unwrap();
+        for checked in [true, false] {
+            let selected = prebindgen_conversions::render_input_alias_checks(&replaced, checked)
+                .unwrap()
+                .to_string();
+            assert!(selected.contains("42") && !selected.contains("wire"));
+        }
+        let malformed = quote!(::prebindgen_runtime::__prebindgen_alias_checks! {not_a_block});
+        assert!(replace(&malformed, &values)
+            .unwrap_err()
+            .contains("invalid input alias branch"));
     }
 }

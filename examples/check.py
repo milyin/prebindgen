@@ -33,7 +33,7 @@ for name in ["example-cbindgen", "perftest-c"]:
     subprocess.run(cc + ["-I" + str(outputs[name]), f"examples/{name}/c/smoke.c", "-L" + str(lib), "-l" + name.replace("-", "_"), "-Wl,-rpath," + str(lib), "-o", str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
 # Public headers remain usable from C++, including aligned inline owners.
-for name, header in [("example-cbindgen","bindings.h"),("perftest-c","bindings.h"),("perftest-c","owners.h")]:
+for name, header in [("example-cbindgen","bindings.h"),("perftest-c","bindings.h"),("perftest-c","owners.h"),("perftest-c","unchecked.h")]:
     subprocess.run([os.environ.get("CXX","c++"),"-std=c++11","-Wall","-Wextra","-Werror","-fsyntax-only","-x","c++","-include",str(outputs[name]/header),"/dev/null"],check=True)
 # Borrowed views cannot be passed to the owning buffer destructor.
 wrong_view=build/"wrong-view-drop.c"

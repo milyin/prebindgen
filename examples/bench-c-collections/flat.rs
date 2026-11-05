@@ -72,3 +72,12 @@ pub fn buffers_new(resource:Resource,text:String,bytes:Vec<u8>)->BuffersInput {B
 pub fn take_buffers(values:Vec<BuffersInput>)->u64 {values.iter().map(|v|v.resource.0+v.text.len() as u64+bytes_score(&v.bytes)).sum()}
 #[prebindgen]
 pub fn take_numbers(values:Vec<u64>)->u64 {values.iter().sum()}
+
+#[prebindgen]
+pub fn fixed_borrow(first:&Resource,second:&mut Resource)->u64 {std::hint::black_box(first.0+second.0)}
+#[prebindgen]
+pub fn fixed_move(first:Resource,second:Resource)->u64 {std::hint::black_box(first.0+second.0)}
+#[prebindgen]
+pub fn callback_fixed(callback:impl Fn()->Record)->u64 {let v=callback();v.first.0+v.tag+v.second.0}
+#[prebindgen]
+pub fn callback_many(callback:impl Fn()->Vec<Resource>)->u64 {callback().iter().map(|v|v.0).sum()}

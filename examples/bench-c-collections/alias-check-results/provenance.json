@@ -1,0 +1,425 @@
+{
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "affinity": [
+    0
+  ],
+  "loader_environment": {},
+  "builds": {
+    "count": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout": "46f75616c97faf5718d55719518bae79d52e4af2"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout",
+        "count_allocations": true,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-ad1b3c557246b944/out",
+          "-L/tmp/c-alias-checked-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-checked-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-checked-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-alias-checked-count/frozen/libc_collection_bench.so",
+        "library_sha256": "4b1923f3469a703f5aaf6b7f171878e0bd165279fb45436612b57f03243c9992",
+        "driver": "/tmp/c-alias-checked-count/driver",
+        "driver_sha256": "5a09918fb478e3717742521e1e26fa42e1b79b3284a505ca50ac4eb3384bf9e5",
+        "input_driver": "/tmp/c-alias-checked-count/input-driver",
+        "input_driver_sha256": "4b4013076610cd3c8e7e62776361175e5ccd8da212f311c6494df24bc0c9068c",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-ad1b3c557246b944/out",
+          "-L/tmp/c-alias-checked-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-checked-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-checked-count/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0bfbfa3122152c32d5aeb951e6b3453a53bd54e98ebf62796ee6d284c835857b"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout": "46f75616c97faf5718d55719518bae79d52e4af2"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout",
+        "count_allocations": true,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-ad1b3c557246b944/out",
+          "-L/tmp/c-alias-unchecked-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-unchecked-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-unchecked-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-alias-unchecked-count/frozen/libc_collection_bench.so",
+        "library_sha256": "96fb7be63603dd05f9ea7932685de0ee93c93b1eaf8a45bd2205251ba68889ab",
+        "driver": "/tmp/c-alias-unchecked-count/driver",
+        "driver_sha256": "56f1e3e1ee3dbe550b2a725fa49e6a0aa879ef60d1b3d69dd71dfc1024017920",
+        "input_driver": "/tmp/c-alias-unchecked-count/input-driver",
+        "input_driver_sha256": "56ecb26c19fd97ba997c4b986e11513beeb765a01720d7ac76eaec15115beafe",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-ad1b3c557246b944/out",
+          "-L/tmp/c-alias-unchecked-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-unchecked-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-unchecked-count/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "9ac00f9aca922f9a8a7ce02c5562f8fbb3286b26571b5fe8bd49ffcba3d6e466"
+      }
+    },
+    "time": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout": "46f75616c97faf5718d55719518bae79d52e4af2"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout",
+        "count_allocations": false,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-5e9bd01ef3c90070/out",
+          "-L/tmp/c-alias-checked-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-checked-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-checked-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-alias-checked-time/frozen/libc_collection_bench.so",
+        "library_sha256": "9e1c97631a8480be4560344be0d45803323a0c5cb68e8187039f4f3bc9f2ac3b",
+        "driver": "/tmp/c-alias-checked-time/driver",
+        "driver_sha256": "bf17b82380e390de354a80a0fb13f59a950f4bda912e758bc2f2a4cc6fc192f2",
+        "input_driver": "/tmp/c-alias-checked-time/input-driver",
+        "input_driver_sha256": "50971c2d890f4c14777787ed4e45032345a855436c84866ca2b711e2f86d3bd6",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-5e9bd01ef3c90070/out",
+          "-L/tmp/c-alias-checked-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-checked-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-checked-time/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0bfbfa3122152c32d5aeb951e6b3453a53bd54e98ebf62796ee6d284c835857b"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout": "46f75616c97faf5718d55719518bae79d52e4af2"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout",
+        "count_allocations": false,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-5e9bd01ef3c90070/out",
+          "-L/tmp/c-alias-unchecked-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-unchecked-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-unchecked-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-alias-unchecked-time/frozen/libc_collection_bench.so",
+        "library_sha256": "d69888a97c4e7696a901be41a73b1933174fd628d508e2e5ccc1c25e54fcb99e",
+        "driver": "/tmp/c-alias-unchecked-time/driver",
+        "driver_sha256": "687ede7965160544c639312464b567f7771261ff3e2ef4fc692f6f2b69b0839a",
+        "input_driver": "/tmp/c-alias-unchecked-time/input-driver",
+        "input_driver_sha256": "6a02739676e05075b9b78d61af170a8296f18a3fbfaa3b5f4458a7adddd87dd8",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-check-optout/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-5e9bd01ef3c90070/out",
+          "-L/tmp/c-alias-unchecked-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-alias-unchecked-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-alias-unchecked-time/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "9ac00f9aca922f9a8a7ce02c5562f8fbb3286b26571b5fe8bd49ffcba3d6e466"
+      }
+    }
+  },
+  "runs": {
+    "counts": {
+      "settings": {
+        "before": "/tmp/c-alias-checked-count",
+        "after": "/tmp/c-alias-unchecked-count",
+        "output": "/tmp/c-alias-count-results",
+        "kind": "count",
+        "forks": 2,
+        "same_build": null,
+        "smoke": false,
+        "cases": "handles,records,wide,text,bytes,buffers,text_large,bytes_large,buffers_large,numbers,control,fixed_move,fixed_borrow,callback_fixed,callback_many",
+        "sizes": "0,1,64,512,4096",
+        "batches": null,
+        "target_ms": 20
+      },
+      "samples_sha256": "136c9b3fc8cbbbae3e5c33f8ea4089535af9c13e93409a71e2283cc69b58ad7e",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "timings": {
+      "settings": {
+        "before": "/tmp/c-alias-checked-time",
+        "after": "/tmp/c-alias-unchecked-time",
+        "output": "/tmp/c-alias-time-results",
+        "kind": "time",
+        "forks": 4,
+        "same_build": null,
+        "smoke": false,
+        "cases": "handles,records,wide,text,bytes,buffers,text_large,bytes_large,buffers_large,numbers,control,fixed_move,fixed_borrow,callback_fixed,callback_many",
+        "sizes": "0,1,64,512",
+        "batches": 8,
+        "target_ms": 10
+      },
+      "samples_sha256": "56981279f07d6d2302309838beaedeedcd53e3ae9d965aab50ed088c7e6d542a",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "identical-library": {
+      "settings": {
+        "before": "/tmp/c-alias-checked-time",
+        "after": "/tmp/c-alias-unchecked-time",
+        "output": "/tmp/c-alias-aa-results",
+        "kind": "time",
+        "forks": 4,
+        "same_build": "before",
+        "smoke": false,
+        "cases": "handles,records,buffers,callback_many,fixed_borrow,fixed_move,callback_fixed,numbers,control",
+        "sizes": "1,512",
+        "batches": 8,
+        "target_ms": 10
+      },
+      "samples_sha256": "c2d3bb017c191b9c9812c6d7a0392ee81ff25046ff565fb90bd5100eb8862770",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "large-payloads": {
+      "settings": {
+        "before": "/tmp/c-alias-checked-time",
+        "after": "/tmp/c-alias-unchecked-time",
+        "output": "/tmp/c-alias-large-results",
+        "kind": "time",
+        "forks": 6,
+        "same_build": null,
+        "smoke": false,
+        "cases": "text_large,bytes_large,buffers_large",
+        "sizes": "64,512",
+        "batches": 12,
+        "target_ms": 20
+      },
+      "samples_sha256": "c7a36541e7a147bc4c5ac34ccbac29b508a2872ab645755ee954ff6c4cf6e041",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "large-identical-library": {
+      "settings": {
+        "before": "/tmp/c-alias-checked-time",
+        "after": "/tmp/c-alias-unchecked-time",
+        "output": "/tmp/c-alias-large-aa",
+        "kind": "time",
+        "forks": 4,
+        "same_build": "before",
+        "smoke": false,
+        "cases": "text_large,bytes_large,buffers_large",
+        "sizes": "64,512",
+        "batches": 12,
+        "target_ms": 20
+      },
+      "samples_sha256": "8f1e8b61a102a4587f141ba259d7c0423cb763044f1e32e48444b9b3f1787eda",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    }
+  }
+}

@@ -967,6 +967,36 @@ released after decoding each row, and are never retained for construction.
 Shared-only calls need no alias history. Other calls keep checked addresses so
 later parameters and collections can reject conflicts with earlier inputs.
 
+C bindings can omit input-handle conflict checks globally or per function:
+
+```rust
+let bindings = Cbindgen::builder()
+    .set_emit_alias_checks(false)
+    .function(fun!(fast_path)).panic()
+    .function(fun!(checked_path)).alias_checks(true).panic();
+```
+
+Checks remain enabled by default. `.alias_checks(false)` also opts out a single
+function under the checked project default. Local overrides take precedence
+regardless of setter order. The setting also applies to return values from
+callbacks registered by that function, even if a callback is retained and invoked
+later by a different function. With checks disabled, C must uphold Rust's ownership
+and aliasing rules: moved or exclusively borrowed allocations must not overlap
+another active input. Violations can cause undefined behavior. Pointer/length,
+UTF-8, presence and selector validation, ownership receipts and failure cleanup
+remain active. Collection inputs construct rows in one traversal without alias
+history or the alias-validation staging buffer. Callback-return ownership scans
+needed to reclaim unread owners on failure remain active.
+
+Low-level generators constructing `CContext`, `CModule` or `CFunction` directly
+must supply the new `emit_alias_checks` field (or use their metadata defaults).
+Stored plans may contain reserved input-alias scope macros until wrapper emission.
+Custom code that rewrites stored Rust syntax should first call
+`prebindgen_conversions::render_input_alias_checks(code, enabled)`; the normal C
+and JNI emitters do this automatically. Custom template contexts that leave the
+scopes unresolved need the matching `prebindgen-runtime` revision for its checked
+fallback macro. All generator/runtime crates should come from the same revision.
+
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level
 state until address encoding under the existing locks. Bulk handle inputs pack

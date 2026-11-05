@@ -16,6 +16,8 @@ impl prebindgen_flat::Schema for CSchema {
 /// Settings applying to the whole generated C module.
 #[derive(Clone, Debug)]
 pub struct CModule {
+    /// Default generation of input-handle alias conflict checks.
+    pub emit_alias_checks: bool,
     /// Prefix of generated symbols and declarations.
     pub prefix: String,
     /// Generated source accessors callable by expansion recipes.
@@ -26,6 +28,7 @@ pub struct CModule {
 impl Default for CModule {
     fn default() -> Self {
         Self {
+            emit_alias_checks: true,
             prefix: "pb".into(),
             helpers: Vec::new(),
             opaque_layouts: Default::default(),
@@ -36,6 +39,8 @@ impl Default for CModule {
 /// Export decisions belonging to one function binding.
 #[derive(Clone, Debug, Default)]
 pub struct CFunction {
+    /// Override the module's input-alias checks for this binding and its callbacks.
+    pub emit_alias_checks: Option<bool>,
     /// Whether conversion failure deliberately aborts this non-Result binding.
     pub abort_on_failure: bool,
     /// Whether these conversions can fail outside a Result error channel.

@@ -12,6 +12,14 @@ pub use callback::{CallbackReturnAllocations, TransferredBox, TransferredOwner};
 /// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;
 
+// Custom contexts keep the checked policy unless their adapter selects a branch
+// during generation. C and JNI remove this marker before emitting Rust.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __prebindgen_alias_checks {
+    ({$($checked:tt)*} {$($unchecked:tt)*}) => { $($checked)* };
+}
+
 /// Report a contained callback failure through the application's tracing subscriber.
 ///
 /// Called only on failure. Successful callbacks need no diagnostic work.

@@ -23,7 +23,8 @@ pub struct JniContext {
 }
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        render_template(code, &|name| match name {
+        let code = prebindgen_conversions::render_input_alias_checks(code, true)?;
+        render_template(&code, &|name| match name {
             "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),
             "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),

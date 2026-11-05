@@ -1647,10 +1647,20 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
             };
             if resource.access == prebindgen_conversions::Access::Move {
-                register.extend(quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}));
+                let unchecked_count = match &resource.identity {
+                    prebindgen_conversions::ResourceIdentity::Single(_) => quote!(1usize),
+                    prebindgen_conversions::ResourceIdentity::Many(_) => {
+                        quote!((#addresses).count())
+                    }
+                };
+                register.extend(prebindgen_conversions::staged::input_alias_checks(
+                    quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}),
+                    quote!(let #count=if #condition {#unchecked_count} else {0usize};),
+                ));
                 transferred.extend(quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);));
             } else {
-                register.extend(quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}));
+                register.extend(prebindgen_conversions::staged::input_alias_checks(
+                    quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}),TokenStream::new()));
             }
             resource.registered = true;
         }

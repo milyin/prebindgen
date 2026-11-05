@@ -66,3 +66,13 @@ timing. Native decoding, required owned copies, alias checks, construction and
 destruction remain timed. `--same-build` uses the selected `--cases` and `--sizes`
 for an identical-library control. Per-run console logs stay in the selected
 output directory; only compact summaries need to be committed for PR review.
+
+Use `build.py --disable-alias-checks` to freeze the same generator without C
+input alias-conflict checks. The default remains checked; C callers must supply
+valid, nonconflicting owners in both builds. `input-compare.py` also measures
+`fixed_move`, `fixed_borrow`, `callback_fixed` and `callback_many`. Fixed and
+callback-record cases use two handles; callback-array cases use the requested
+size. Preparation and C storage allocation are outside the timed interval;
+Rust conversion, failure-cleanup bookkeeping, construction and destruction are
+inside. The borrowed fixed case reuses its two live handles, freeing them after
+timing and allocation counting stop. Its steady-state call performs no allocation.
