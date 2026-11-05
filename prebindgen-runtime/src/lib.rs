@@ -7,7 +7,9 @@ pub use output::OutputRows;
 mod callback;
 #[cfg(test)]
 mod diagnostics_tests;
-pub use callback::{CallbackReturnAllocations, TransferredBox, TransferredOwner};
+pub use callback::{
+    CallbackReturnAllocations, FixedCallbackReturnAllocations, TransferredBox, TransferredOwner,
+};
 
 /// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;

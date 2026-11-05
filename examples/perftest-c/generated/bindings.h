@@ -253,6 +253,19 @@ typedef struct {
     void (*drop)(void *context);
 } perftest_callback_a4bc3153f04892c6;
 typedef struct {
+    perftest_owned_resource * v0;
+    uint32_t v1;
+    perftest_buffer v2;
+    perftest_owned_resource * v3;
+} perftest_callback_a7558edd85392388_result;
+/* Rust signature: ()->perftest_flat :: FixedCleanupRecord. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_callback_a7558edd85392388_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const perftest_callback_a7558edd85392388_result *result);
+} perftest_callback_a7558edd85392388;
+typedef struct {
     int64_t v0;
 } perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_row;
 typedef struct { perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_row *data; size_t len; } perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows;
@@ -430,6 +443,8 @@ typedef perftest_callback_af8866ae3e4d0e12 perftest_callback_return_wide_callbac
 typedef perftest_int128 perftest_callback_return_wide_callback_return;
 typedef perftest_callback_80df196c35a25faa perftest_callback_return_zero_callback;
 typedef int64_t perftest_callback_return_zero_callback_return;
+typedef perftest_callback_a7558edd85392388 perftest_fixed_cleanup_call_callback;
+typedef perftest_callback_a7558edd85392388_result perftest_fixed_cleanup_call_callback_return;
 typedef struct {
     int64_t code;
     perftest_owned_string message;
@@ -1407,6 +1422,10 @@ perftest_enum_payload * perftest_enum_payload_new(double p0_w1);
 /* Field return.code: *out1. */
 /* Option option1: *out1 == -3 means None; other values encode Some and must be valid payloads. */
 perftest_priority perftest_enum_record_echo(perftest_priority p0_w2, perftest_code p0_w6, perftest_code *out1);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_fixed_cleanup_call(perftest_callback_a7558edd85392388 p0_callback, int64_t *out0, size_t *ownership, char * *error);
 /* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 perftest_buffer_view perftest_getter_child_name(const perftest_getter_child * p0_w1);
 int64_t perftest_getter_child_number(const perftest_getter_child * p0_w1);

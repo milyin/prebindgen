@@ -38,3 +38,33 @@ pub fn alias_callback_rows(
 ) -> Result<i64, ResultFailure> {
     Ok(callback().iter().map(owned_resource_id).sum())
 }
+
+#[prebindgen]
+pub struct FixedCleanupRecord {
+    pub first: OwnedResource,
+    pub marker: char,
+    pub text: String,
+    pub second: Option<OwnedResource>,
+}
+#[prebindgen]
+pub fn fixed_cleanup_new(
+    first: OwnedResource,
+    marker: char,
+    text: String,
+    second: Option<OwnedResource>,
+) -> FixedCleanupRecord {
+    assert_ne!(marker, 'p', "fixed callback constructor panic");
+    FixedCleanupRecord {
+        first,
+        marker,
+        text,
+        second,
+    }
+}
+#[prebindgen]
+pub fn fixed_cleanup_call(callback: impl Fn() -> FixedCleanupRecord) -> Result<i64, ResultFailure> {
+    let value = callback();
+    Ok(owned_resource_id(&value.first)
+        + value.second.as_ref().map_or(0, owned_resource_id)
+        + value.text.len() as i64)
+}
