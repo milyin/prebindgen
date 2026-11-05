@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>prebindgen docs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; color: #222; }
+  h1 { margin-bottom: 0.2rem; }
+  p.tagline { color: #555; margin-top: 0; }
+  ul { list-style: none; padding: 0; }
+  li { margin: 0.9rem 0; }
+  a.crate { font-weight: 600; font-size: 1.05rem; text-decoration: none; }
+  a.crate:hover { text-decoration: underline; }
+  .desc { color: #444; display: block; font-size: 0.92rem; }
+  footer { margin-top: 3rem; color: #888; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<h1>prebindgen</h1>
+<p class="tagline">Generate idiomatic multi-language FFI bindings (C, Kotlin/JNI, …) from a single annotated Rust source.</p>
+
+<ul>
+  <li><a class="crate" href="doc/prebindgen/index.html">prebindgen</a>
+    <span class="desc">Separate FFI implementation and language-specific binding into different crates</span></li>
+  <li><a class="crate" href="doc/prebindgen_proc_macro/index.html">prebindgen-proc-macro</a>
+    <span class="desc">Procedural macros for prebindgen - export FFI definitions for binding generation</span></li>
+  <li><a class="crate" href="doc/prebindgen_flat/index.html">prebindgen-flat</a>
+    <span class="desc">Source model, wire descriptions and generator-defined conversion requests</span></li>
+  <li><a class="crate" href="doc/prebindgen_conversions/index.html">prebindgen-conversions</a>
+    <span class="desc">Reusable conversions, prepared plans and optional staged call assembly</span></li>
+  <li><a class="crate" href="doc/prebindgen_reprc/index.html">prebindgen-reprc</a>
+    <span class="desc">Shared C-representation records and target-measured layouts</span></li>
+  <li><a class="crate" href="doc/prebindgen_declarations/index.html">prebindgen-declarations</a>
+    <span class="desc">Declaration language, defaults, overrides and composition into conversion slots</span></li>
+  <li><a class="crate" href="doc/prebindgen_c/index.html">prebindgen-c</a>
+    <span class="desc">Generate Rust wrappers and C declarations from conversion slots</span></li>
+  <li><a class="crate" href="doc/prebindgen_jni/index.html">prebindgen-jni</a>
+    <span class="desc">Generate Rust/JNI wrappers and Kotlin bindings from conversion slots</span></li>
+  <li><a class="crate" href="doc/prebindgen_runtime/index.html">prebindgen-runtime</a>
+    <span class="desc">Panic containment and pointer validation for generated bindings</span></li>
+  <li><a class="crate" href="doc/prebindgen_jni_runtime/index.html">prebindgen-jni-runtime</a>
+    <span class="desc">String, byte, integer and allocation operations used by generated JNI bindings</span></li>
+</ul>
+
+<footer>Built from <a href="https://github.com/milyin/prebindgen">github.com/milyin/prebindgen</a></footer>
+</body>
+</html>
