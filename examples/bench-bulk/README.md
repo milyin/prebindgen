@@ -59,6 +59,7 @@ The matrix includes batches of 0, 1, 8, 64 and 512 elements:
 | `owned_handle_records_roundtrip` | Consume and return records containing an owned handle and scalar tag | Measures grouped ownership validation and conversion; the next call reuses the returned owners. |
 | `owned_buffer_records_roundtrip` | Consume and return records containing an owned handle, a 64-byte string and 64-byte array | Adds text/byte conversion to the ownership case. |
 | `callback_owned_records` | Kotlin callback returns owned handle/tag records; Rust returns the decoded records | Exercises callback-result input conversion with the same bulk row representation. |
+| `callback_owned_record` | Kotlin callback returns one owned handle/tag record; Rust returns the decoded record | Measures callback-result cleanup tracking without a collection. |
 | `records_output` | Rust constructs records; Kotlin materializes a list and sums fields | Bulk can avoid native-side per-row object arrays and primitive boxing. |
 | `records_roundtrip` | Kotlin list to Rust `Vec<Row>` and back, then checksum | Measures conversion in both directions. |
 | `callback_records` | Fire a pre-registered Rust callback with a record batch; Kotlin sums it | Both registration and handler destruction are outside the timed path. |

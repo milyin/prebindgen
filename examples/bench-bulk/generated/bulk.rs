@@ -2276,208 +2276,210 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                                 }
                                                 Ok(())
                                             });
-                                            let callback_return_decoded = ({
-                                                let callback_return_w1_bytes = if true {
-                                                    Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                                } else {
-                                                    ::core::default::Default::default()
-                                                };
-                                                let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                    &callback_return_w1_bytes,
-                                                );
-                                                if callback_return_w1_bytes.len()
-                                                    < ::core::mem::size_of::<__PbBulk_Range_71300b84e922dbba>()
-                                                {
-                                                    return Err("truncated bulk root record".into());
-                                                }
-                                                let callback_return_w3 = if true {
-                                                    callback_return_w1_reader
-                                                        .range(
-                                                            ::core::mem::offset_of!(__PbBulk_Range_71300b84e922dbba, v0),
-                                                        )?
-                                                } else {
-                                                    None
-                                                };
-                                                let mut callback_return_w2: Vec<bench_flat::HandleRecord> = Vec::new();
-                                                if true {
-                                                    let (callback_return_w3_start, callback_return_w4) = callback_return_w1_reader
-                                                        .rows(
-                                                            callback_return_w3,
-                                                            ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
-                                                        )?;
-                                                    let mut callback_return_w3_accesses = __prebindgen_input_aliases
-                                                        .begin_group(callback_return_w4.saturating_mul(1usize));
-                                                    for callback_return_w5 in 0..callback_return_w4 {
-                                                        let callback_return_w7_f0 = callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                (callback_return_w3_start
-                                                                    + callback_return_w5
-                                                                        * ::core::mem::size_of::<
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                        >())
-                                                                    + ::core::mem::offset_of!(
-                                                                        __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                                                    ),
-                                                            )?;
-                                                        let callback_return_w7_f1 = callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                (callback_return_w3_start
-                                                                    + callback_return_w5
-                                                                        * ::core::mem::size_of::<
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                        >())
-                                                                    + ::core::mem::offset_of!(
-                                                                        __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
-                                                                    ),
-                                                            )?;
-                                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                                        let checked = (|| {
-                                                            let callback_return_w7_f0_pointer = if true {
-                                                                (callback_return_w7_f0)
-                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                        bench_flat::InputHandle,
-                                                                    >
-                                                            } else {
-                                                                ::core::ptr::null_mut()
-                                                            };
-                                                            if true {
-                                                                ::prebindgen_runtime::validate_pointer(
-                                                                    callback_return_w7_f0_pointer,
-                                                                )?;
-                                                            }
-                                                            let callback_return_w6_f1 = if true {
-                                                                Some(callback_return_w7_f1)
-                                                            } else {
-                                                                None
-                                                            };
-                                                            if true {
-                                                                for address in ::core::iter::once(
-                                                                    (callback_return_w7_f0_pointer.addr()) as usize,
-                                                                ) {
-                                                                    callback_return_w3_accesses.push((address, true));
-                                                                }
-                                                            }
-                                                            Ok::<_, String>(())
-                                                        })();
-                                                        checked?;
+                                            {
+                                                let callback_return_decoded = ({
+                                                    let callback_return_w1_bytes = if true {
+                                                        Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
+                                                    } else {
+                                                        ::core::default::Default::default()
+                                                    };
+                                                    let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                                        &callback_return_w1_bytes,
+                                                    );
+                                                    if callback_return_w1_bytes.len()
+                                                        < ::core::mem::size_of::<__PbBulk_Range_71300b84e922dbba>()
+                                                    {
+                                                        return Err("truncated bulk root record".into());
                                                     }
-                                                    __prebindgen_input_aliases
-                                                        .accept_group(callback_return_w3_accesses)?;
-                                                    callback_return_w2.reserve_exact(callback_return_w4);
-                                                    for callback_return_w5 in 0..callback_return_w4 {
-                                                        let callback_return_w7_f0 = callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                (callback_return_w3_start
-                                                                    + callback_return_w5
-                                                                        * ::core::mem::size_of::<
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                        >())
-                                                                    + ::core::mem::offset_of!(
-                                                                        __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                                                    ),
+                                                    let callback_return_w3 = if true {
+                                                        callback_return_w1_reader
+                                                            .range(
+                                                                ::core::mem::offset_of!(__PbBulk_Range_71300b84e922dbba, v0),
+                                                            )?
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let mut callback_return_w2: Vec<bench_flat::HandleRecord> = Vec::new();
+                                                    if true {
+                                                        let (callback_return_w3_start, callback_return_w4) = callback_return_w1_reader
+                                                            .rows(
+                                                                callback_return_w3,
+                                                                ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
                                                             )?;
-                                                        let callback_return_w7_f1 = callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                (callback_return_w3_start
-                                                                    + callback_return_w5
-                                                                        * ::core::mem::size_of::<
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                        >())
-                                                                    + ::core::mem::offset_of!(
-                                                                        __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
-                                                                    ),
-                                                            )?;
-                                                        #[allow(clippy::redundant_closure_call)]
-                                                        let callback_return_w3_element_built = (|| -> ::core::result::Result<
-                                                            bench_flat::HandleRecord,
-                                                            String,
-                                                        > {
-                                                            let callback_return_w7_f0_pointer = if true {
-                                                                (callback_return_w7_f0)
-                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                        bench_flat::InputHandle,
-                                                                    >
-                                                            } else {
-                                                                ::core::ptr::null_mut()
-                                                            };
-                                                            if true {
-                                                                ::prebindgen_runtime::validate_pointer(
-                                                                    callback_return_w7_f0_pointer,
+                                                        let mut callback_return_w3_accesses = __prebindgen_input_aliases
+                                                            .begin_group(callback_return_w4.saturating_mul(1usize));
+                                                        for callback_return_w5 in 0..callback_return_w4 {
+                                                            let callback_return_w7_f0 = callback_return_w1_reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    (callback_return_w3_start
+                                                                        + callback_return_w5
+                                                                            * ::core::mem::size_of::<
+                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
+                                                                            >())
+                                                                        + ::core::mem::offset_of!(
+                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
+                                                                        ),
                                                                 )?;
+                                                            let callback_return_w7_f1 = callback_return_w1_reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    (callback_return_w3_start
+                                                                        + callback_return_w5
+                                                                            * ::core::mem::size_of::<
+                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
+                                                                            >())
+                                                                        + ::core::mem::offset_of!(
+                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
+                                                                        ),
+                                                                )?;
+                                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                                            let checked = (|| {
+                                                                let callback_return_w7_f0_pointer = if true {
+                                                                    (callback_return_w7_f0)
+                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                            bench_flat::InputHandle,
+                                                                        >
+                                                                } else {
+                                                                    ::core::ptr::null_mut()
+                                                                };
+                                                                if true {
+                                                                    ::prebindgen_runtime::validate_pointer(
+                                                                        callback_return_w7_f0_pointer,
+                                                                    )?;
+                                                                }
+                                                                let callback_return_w6_f1 = if true {
+                                                                    Some(callback_return_w7_f1)
+                                                                } else {
+                                                                    None
+                                                                };
+                                                                if true {
+                                                                    for address in ::core::iter::once(
+                                                                        (callback_return_w7_f0_pointer.addr()) as usize,
+                                                                    ) {
+                                                                        callback_return_w3_accesses.push((address, true));
+                                                                    }
+                                                                }
+                                                                Ok::<_, String>(())
+                                                            })();
+                                                            checked?;
+                                                        }
+                                                        __prebindgen_input_aliases
+                                                            .accept_group(callback_return_w3_accesses)?;
+                                                        callback_return_w2.reserve_exact(callback_return_w4);
+                                                        for callback_return_w5 in 0..callback_return_w4 {
+                                                            let callback_return_w7_f0 = callback_return_w1_reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    (callback_return_w3_start
+                                                                        + callback_return_w5
+                                                                            * ::core::mem::size_of::<
+                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
+                                                                            >())
+                                                                        + ::core::mem::offset_of!(
+                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
+                                                                        ),
+                                                                )?;
+                                                            let callback_return_w7_f1 = callback_return_w1_reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    (callback_return_w3_start
+                                                                        + callback_return_w5
+                                                                            * ::core::mem::size_of::<
+                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
+                                                                            >())
+                                                                        + ::core::mem::offset_of!(
+                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
+                                                                        ),
+                                                                )?;
+                                                            #[allow(clippy::redundant_closure_call)]
+                                                            let callback_return_w3_element_built = (|| -> ::core::result::Result<
+                                                                bench_flat::HandleRecord,
+                                                                String,
+                                                            > {
+                                                                let callback_return_w7_f0_pointer = if true {
+                                                                    (callback_return_w7_f0)
+                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                            bench_flat::InputHandle,
+                                                                        >
+                                                                } else {
+                                                                    ::core::ptr::null_mut()
+                                                                };
+                                                                if true {
+                                                                    ::prebindgen_runtime::validate_pointer(
+                                                                        callback_return_w7_f0_pointer,
+                                                                    )?;
+                                                                }
+                                                                let callback_return_w6_f1 = if true {
+                                                                    Some(callback_return_w7_f1)
+                                                                } else {
+                                                                    None
+                                                                };
+                                                                if true {
+                                                                    __prebindgen_input_consumed
+                                                                        .set(
+                                                                            __prebindgen_input_consumed.get()
+                                                                                + (::core::iter::once(
+                                                                                    (callback_return_w7_f0_pointer.addr()) as usize,
+                                                                                ))
+                                                                                    .count(),
+                                                                        );
+                                                                }
+                                                                let callback_return_w6_f0 = if true {
+                                                                    Some(unsafe {
+                                                                        Box::from_raw(callback_return_w7_f0_pointer)
+                                                                    })
+                                                                } else {
+                                                                    None
+                                                                };
+                                                                let callback_return_w6_f0: bench_flat::InputHandle = callback_return_w6_f0
+                                                                    .expect("active allocation")
+                                                                    .value;
+                                                                let callback_return_w6_f1: i64 = ::core::convert::Into::into(
+                                                                    callback_return_w6_f1.expect("active value"),
+                                                                );
+                                                                let callback_return_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                                                                    handle: callback_return_w6_f0,
+                                                                    tag: callback_return_w6_f1,
+                                                                };
+                                                                let callback_return_w2 = callback_return_w6;
+                                                                Ok(callback_return_w2)
+                                                            })();
+                                                            let element = callback_return_w3_element_built?;
+                                                            #[allow(clippy::zst_offset)]
+                                                            unsafe {
+                                                                let initialized = callback_return_w2.len();
+                                                                callback_return_w2
+                                                                    .as_mut_ptr()
+                                                                    .add(initialized)
+                                                                    .write(element);
+                                                                callback_return_w2.set_len(initialized + 1);
                                                             }
-                                                            let callback_return_w6_f1 = if true {
-                                                                Some(callback_return_w7_f1)
-                                                            } else {
-                                                                None
-                                                            };
-                                                            if true {
-                                                                __prebindgen_input_consumed
-                                                                    .set(
-                                                                        __prebindgen_input_consumed.get()
-                                                                            + (::core::iter::once(
-                                                                                (callback_return_w7_f0_pointer.addr()) as usize,
-                                                                            ))
-                                                                                .count(),
-                                                                    );
-                                                            }
-                                                            let callback_return_w6_f0 = if true {
-                                                                Some(unsafe {
-                                                                    Box::from_raw(callback_return_w7_f0_pointer)
-                                                                })
-                                                            } else {
-                                                                None
-                                                            };
-                                                            let callback_return_w6_f0: bench_flat::InputHandle = callback_return_w6_f0
-                                                                .expect("active allocation")
-                                                                .value;
-                                                            let callback_return_w6_f1: i64 = ::core::convert::Into::into(
-                                                                callback_return_w6_f1.expect("active value"),
-                                                            );
-                                                            let callback_return_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
-                                                                handle: callback_return_w6_f0,
-                                                                tag: callback_return_w6_f1,
-                                                            };
-                                                            let callback_return_w2 = callback_return_w6;
-                                                            Ok(callback_return_w2)
-                                                        })();
-                                                        let element = callback_return_w3_element_built?;
-                                                        #[allow(clippy::zst_offset)]
-                                                        unsafe {
-                                                            let initialized = callback_return_w2.len();
-                                                            callback_return_w2
-                                                                .as_mut_ptr()
-                                                                .add(initialized)
-                                                                .write(element);
-                                                            callback_return_w2.set_len(initialized + 1);
                                                         }
                                                     }
-                                                }
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w2_built = if true {
-                                                    Some(callback_return_w2)
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w0_built = if true {
-                                                    Some(callback_return_w2_built.expect("active input"))
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_value = callback_return_w0_built
-                                                    .expect("active input");
-                                                Ok::<_, String>(callback_return_value)
-                                            })?;
-                                            callback_return_cleanup.commit();
-                                            Ok::<_, String>(callback_return_decoded)
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w2_built = if true {
+                                                        Some(callback_return_w2)
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_built = if true {
+                                                        Some(callback_return_w2_built.expect("active input"))
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_value = callback_return_w0_built
+                                                        .expect("active input");
+                                                    Ok::<_, String>(callback_return_value)
+                                                })?;
+                                                callback_return_cleanup.commit();
+                                                Ok::<_, String>(callback_return_decoded)
+                                            }
                                         }
                                     }
                                 },
@@ -2732,131 +2734,133 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                                 }
                                                 Ok(())
                                             });
-                                            let callback_return_decoded = ({
-                                                let callback_return_w1_bytes = if true {
-                                                    Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                                } else {
-                                                    ::core::default::Default::default()
-                                                };
-                                                let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                    &callback_return_w1_bytes,
-                                                );
-                                                if callback_return_w1_bytes.len()
-                                                    < ::core::mem::size_of::<
-                                                        __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                    >()
-                                                {
-                                                    return Err("truncated bulk root record".into());
-                                                }
-                                                let callback_return_w3_f0 = if true {
-                                                    callback_return_w1_reader
-                                                        .read::<
-                                                            i64,
-                                                        >(
-                                                            ::core::mem::offset_of!(
-                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                                            ),
-                                                        )?
-                                                } else {
-                                                    0
-                                                };
-                                                let callback_return_w3_f1 = if true {
-                                                    callback_return_w1_reader
-                                                        .read::<
-                                                            i64,
-                                                        >(
-                                                            ::core::mem::offset_of!(
-                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
-                                                            ),
-                                                        )?
-                                                } else {
-                                                    0
-                                                };
-                                                let callback_return_w3_f0_pointer = if true {
-                                                    callback_return_w3_f0
-                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                            bench_flat::InputHandle,
-                                                        >
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w3_f0_pointer,
-                                                    )?;
-                                                }
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w2_f0_built = if true {
-                                                    let mut callback_return_w2_f0_built_transferred_0 = 0usize;
-                                                    if true {
-                                                        for address in ::core::iter::once(
-                                                            (callback_return_w3_f0_pointer.addr()) as usize,
-                                                        ) {
-                                                            __prebindgen_input_aliases.access(address, true)?;
-                                                            callback_return_w2_f0_built_transferred_0 += 1;
-                                                        }
+                                            {
+                                                let callback_return_decoded = ({
+                                                    let callback_return_w1_bytes = if true {
+                                                        Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
+                                                    } else {
+                                                        ::core::default::Default::default()
+                                                    };
+                                                    let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                                        &callback_return_w1_bytes,
+                                                    );
+                                                    if callback_return_w1_bytes.len()
+                                                        < ::core::mem::size_of::<
+                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c,
+                                                        >()
+                                                    {
+                                                        return Err("truncated bulk root record".into());
                                                     }
-                                                    let callback_return_w2_f0 = if true {
-                                                        Some(unsafe {
-                                                            Box::from_raw(callback_return_w3_f0_pointer)
+                                                    let callback_return_w3_f0 = if true {
+                                                        callback_return_w1_reader
+                                                            .read::<
+                                                                i64,
+                                                            >(
+                                                                ::core::mem::offset_of!(
+                                                                    __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
+                                                                ),
+                                                            )?
+                                                    } else {
+                                                        0
+                                                    };
+                                                    let callback_return_w3_f1 = if true {
+                                                        callback_return_w1_reader
+                                                            .read::<
+                                                                i64,
+                                                            >(
+                                                                ::core::mem::offset_of!(
+                                                                    __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
+                                                                ),
+                                                            )?
+                                                    } else {
+                                                        0
+                                                    };
+                                                    let callback_return_w3_f0_pointer = if true {
+                                                        callback_return_w3_f0
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                bench_flat::InputHandle,
+                                                            >
+                                                    } else {
+                                                        ::core::ptr::null_mut()
+                                                    };
+                                                    if true {
+                                                        ::prebindgen_runtime::validate_pointer(
+                                                            callback_return_w3_f0_pointer,
+                                                        )?;
+                                                    }
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w2_f0_built = if true {
+                                                        let mut callback_return_w2_f0_built_transferred_0 = 0usize;
+                                                        if true {
+                                                            for address in ::core::iter::once(
+                                                                (callback_return_w3_f0_pointer.addr()) as usize,
+                                                            ) {
+                                                                __prebindgen_input_aliases.access(address, true)?;
+                                                                callback_return_w2_f0_built_transferred_0 += 1;
+                                                            }
+                                                        }
+                                                        let callback_return_w2_f0 = if true {
+                                                            Some(unsafe {
+                                                                Box::from_raw(callback_return_w3_f0_pointer)
+                                                            })
+                                                        } else {
+                                                            None
+                                                        };
+                                                        __prebindgen_input_consumed
+                                                            .set(
+                                                                __prebindgen_input_consumed.get()
+                                                                    + callback_return_w2_f0_built_transferred_0,
+                                                            );
+                                                        Some({
+                                                            let callback_return_w2_f0: bench_flat::InputHandle = callback_return_w2_f0
+                                                                .expect("active allocation")
+                                                                .value;
+                                                            callback_return_w2_f0
                                                         })
                                                     } else {
                                                         None
                                                     };
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + callback_return_w2_f0_built_transferred_0,
-                                                        );
-                                                    Some({
-                                                        let callback_return_w2_f0: bench_flat::InputHandle = callback_return_w2_f0
-                                                            .expect("active allocation")
-                                                            .value;
-                                                        callback_return_w2_f0
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w2_f1 = if true {
-                                                    Some(callback_return_w3_f1)
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w2_f1_built = if true {
-                                                    Some({
-                                                        let callback_return_w2_f1: i64 = ::core::convert::Into::into(
-                                                            callback_return_w2_f1.expect("active value"),
-                                                        );
-                                                        callback_return_w2_f1
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w2_built = if true {
-                                                    Some({
-                                                        let callback_return_w2: bench_flat::HandleRecord = bench_flat::HandleRecord {
-                                                            handle: callback_return_w2_f0_built.expect("active input"),
-                                                            tag: callback_return_w2_f1_built.expect("active input"),
-                                                        };
-                                                        callback_return_w2
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w0_built = if true {
-                                                    Some(callback_return_w2_built.expect("active input"))
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_value = callback_return_w0_built
-                                                    .expect("active input");
-                                                Ok::<_, String>(callback_return_value)
-                                            })?;
-                                            callback_return_cleanup.commit();
-                                            Ok::<_, String>(callback_return_decoded)
+                                                    let callback_return_w2_f1 = if true {
+                                                        Some(callback_return_w3_f1)
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w2_f1_built = if true {
+                                                        Some({
+                                                            let callback_return_w2_f1: i64 = ::core::convert::Into::into(
+                                                                callback_return_w2_f1.expect("active value"),
+                                                            );
+                                                            callback_return_w2_f1
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w2_built = if true {
+                                                        Some({
+                                                            let callback_return_w2: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                                                                handle: callback_return_w2_f0_built.expect("active input"),
+                                                                tag: callback_return_w2_f1_built.expect("active input"),
+                                                            };
+                                                            callback_return_w2
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_built = if true {
+                                                        Some(callback_return_w2_built.expect("active input"))
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_value = callback_return_w0_built
+                                                        .expect("active input");
+                                                    Ok::<_, String>(callback_return_value)
+                                                })?;
+                                                callback_return_cleanup.commit();
+                                                Ok::<_, String>(callback_return_decoded)
+                                            }
                                         }
                                     }
                                 },
@@ -5035,275 +5039,272 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1handl
                                         } else {
                                             Vec::new()
                                         };
-                                        let callback_return_decoded = ({
-                                            let callback_return_w1_bytes = if true {
-                                                Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                            } else {
-                                                ::core::default::Default::default()
-                                            };
-                                            let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                &callback_return_w1_bytes,
-                                            );
-                                            if callback_return_w1_bytes.len()
-                                                < ::core::mem::size_of::<
-                                                    __PbBulk_i64_i64_789cd54eb117685f,
-                                                >()
-                                            {
-                                                return Err("truncated bulk root record".into());
-                                            }
-                                            let callback_return_w3_f0 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v0
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f1 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v1
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f2 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v2
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f3 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v3
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f4 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v4
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f5 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v5
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f6 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v6
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f7 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_789cd54eb117685f, v7
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w2_f0 = if true {
-                                                Some(callback_return_w3_f0)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f0_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f0: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f0.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f0
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f1 = if true {
-                                                Some(callback_return_w3_f1)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f1_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f1: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f1.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f1
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f2 = if true {
-                                                Some(callback_return_w3_f2)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f2_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f2: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f2.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f2
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f3 = if true {
-                                                Some(callback_return_w3_f3)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f3_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f3: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f3.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f3
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f4 = if true {
-                                                Some(callback_return_w3_f4)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f4_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f4: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f4.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f4
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f5 = if true {
-                                                Some(callback_return_w3_f5)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f5_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f5: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f5.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f5
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f6 = if true {
-                                                Some(callback_return_w3_f6)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f6_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f6: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f6.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f6
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f7 = if true {
-                                                Some(callback_return_w3_f7)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f7_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f7: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f7.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f7
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_built = if true {
-                                                Some({
-                                                    let callback_return_w2: bench_flat::Row = bench_flat::Row {
-                                                        a: callback_return_w2_f0_built.expect("active input"),
-                                                        b: callback_return_w2_f1_built.expect("active input"),
-                                                        c: callback_return_w2_f2_built.expect("active input"),
-                                                        d: callback_return_w2_f3_built.expect("active input"),
-                                                        e: callback_return_w2_f4_built.expect("active input"),
-                                                        f: callback_return_w2_f5_built.expect("active input"),
-                                                        g: callback_return_w2_f6_built.expect("active input"),
-                                                        h: callback_return_w2_f7_built.expect("active input"),
-                                                    };
-                                                    callback_return_w2
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w0_built = if true {
-                                                Some(callback_return_w2_built.expect("active input"))
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_value = callback_return_w0_built
-                                                .expect("active input");
-                                            Ok::<_, String>(callback_return_value)
-                                        })?;
-                                        Ok::<_, String>(callback_return_decoded)
+                                        let callback_return_w1_bytes = if true {
+                                            Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
+                                        } else {
+                                            ::core::default::Default::default()
+                                        };
+                                        let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                            &callback_return_w1_bytes,
+                                        );
+                                        if callback_return_w1_bytes.len()
+                                            < ::core::mem::size_of::<
+                                                __PbBulk_i64_i64_789cd54eb117685f,
+                                            >()
+                                        {
+                                            return Err("truncated bulk root record".into());
+                                        }
+                                        let callback_return_w3_f0 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v0
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f1 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v1
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f2 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v2
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f3 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v3
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f4 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v4
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f5 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v5
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f6 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v6
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f7 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_789cd54eb117685f, v7
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w2_f0 = if true {
+                                            Some(callback_return_w3_f0)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f0_built = if true {
+                                            Some({
+                                                let callback_return_w2_f0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f0.expect("active value"),
+                                                );
+                                                callback_return_w2_f0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f1 = if true {
+                                            Some(callback_return_w3_f1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f1_built = if true {
+                                            Some({
+                                                let callback_return_w2_f1: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f1.expect("active value"),
+                                                );
+                                                callback_return_w2_f1
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f2 = if true {
+                                            Some(callback_return_w3_f2)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f2_built = if true {
+                                            Some({
+                                                let callback_return_w2_f2: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f2.expect("active value"),
+                                                );
+                                                callback_return_w2_f2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f3 = if true {
+                                            Some(callback_return_w3_f3)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f3_built = if true {
+                                            Some({
+                                                let callback_return_w2_f3: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f3.expect("active value"),
+                                                );
+                                                callback_return_w2_f3
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f4 = if true {
+                                            Some(callback_return_w3_f4)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f4_built = if true {
+                                            Some({
+                                                let callback_return_w2_f4: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f4.expect("active value"),
+                                                );
+                                                callback_return_w2_f4
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f5 = if true {
+                                            Some(callback_return_w3_f5)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f5_built = if true {
+                                            Some({
+                                                let callback_return_w2_f5: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f5.expect("active value"),
+                                                );
+                                                callback_return_w2_f5
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f6 = if true {
+                                            Some(callback_return_w3_f6)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f6_built = if true {
+                                            Some({
+                                                let callback_return_w2_f6: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f6.expect("active value"),
+                                                );
+                                                callback_return_w2_f6
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f7 = if true {
+                                            Some(callback_return_w3_f7)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f7_built = if true {
+                                            Some({
+                                                let callback_return_w2_f7: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f7.expect("active value"),
+                                                );
+                                                callback_return_w2_f7
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_built = if true {
+                                            Some({
+                                                let callback_return_w2: bench_flat::Row = bench_flat::Row {
+                                                    a: callback_return_w2_f0_built.expect("active input"),
+                                                    b: callback_return_w2_f1_built.expect("active input"),
+                                                    c: callback_return_w2_f2_built.expect("active input"),
+                                                    d: callback_return_w2_f3_built.expect("active input"),
+                                                    e: callback_return_w2_f4_built.expect("active input"),
+                                                    f: callback_return_w2_f5_built.expect("active input"),
+                                                    g: callback_return_w2_f6_built.expect("active input"),
+                                                    h: callback_return_w2_f7_built.expect("active input"),
+                                                };
+                                                callback_return_w2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some(callback_return_w2_built.expect("active input"))
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok::<_, String>(callback_return_value)
                                     }
                                 },
                             )
@@ -5457,971 +5458,968 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
                                         } else {
                                             Vec::new()
                                         };
-                                        let callback_return_decoded = ({
-                                            let callback_return_w1_bytes = if true {
-                                                Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                            } else {
-                                                ::core::default::Default::default()
-                                            };
-                                            let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                &callback_return_w1_bytes,
-                                            );
-                                            if callback_return_w1_bytes.len()
-                                                < ::core::mem::size_of::<
-                                                    __PbBulk_i64_i64_633c6cf82d3acfc1,
-                                                >()
-                                            {
-                                                return Err("truncated bulk root record".into());
-                                            }
-                                            let callback_return_w3_f0 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v0
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f1 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v1
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f2 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v2
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f3 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v3
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f4 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v4
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f5 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v5
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f6 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v6
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f7 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v7
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f8 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v8
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f9 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v9
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f10 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v10
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f11 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v11
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f12 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v12
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f13 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v13
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f14 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v14
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f15 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v15
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f16 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v16
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f17 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v17
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f18 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v18
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f19 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v19
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f20 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v20
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f21 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v21
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f22 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v22
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f23 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v23
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f24 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v24
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f25 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v25
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f26 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v26
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f27 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v27
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f28 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v28
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f29 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v29
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f30 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v30
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w3_f31 = if true {
-                                                callback_return_w1_reader
-                                                    .read::<
-                                                        i64,
-                                                    >(
-                                                        ::core::mem::offset_of!(
-                                                            __PbBulk_i64_i64_633c6cf82d3acfc1, v31
-                                                        ),
-                                                    )?
-                                            } else {
-                                                0
-                                            };
-                                            let callback_return_w2_f0 = if true {
-                                                Some(callback_return_w3_f0)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f0_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f0: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f0.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f0
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f1 = if true {
-                                                Some(callback_return_w3_f1)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f1_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f1: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f1.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f1
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f2 = if true {
-                                                Some(callback_return_w3_f2)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f2_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f2: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f2.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f2
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f3 = if true {
-                                                Some(callback_return_w3_f3)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f3_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f3: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f3.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f3
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f4 = if true {
-                                                Some(callback_return_w3_f4)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f4_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f4: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f4.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f4
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f5 = if true {
-                                                Some(callback_return_w3_f5)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f5_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f5: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f5.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f5
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f6 = if true {
-                                                Some(callback_return_w3_f6)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f6_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f6: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f6.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f6
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f7 = if true {
-                                                Some(callback_return_w3_f7)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f7_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f7: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f7.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f7
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f8 = if true {
-                                                Some(callback_return_w3_f8)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f8_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f8: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f8.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f8
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f9 = if true {
-                                                Some(callback_return_w3_f9)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f9_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f9: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f9.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f9
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f10 = if true {
-                                                Some(callback_return_w3_f10)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f10_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f10: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f10.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f10
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f11 = if true {
-                                                Some(callback_return_w3_f11)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f11_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f11: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f11.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f11
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f12 = if true {
-                                                Some(callback_return_w3_f12)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f12_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f12: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f12.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f12
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f13 = if true {
-                                                Some(callback_return_w3_f13)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f13_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f13: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f13.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f13
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f14 = if true {
-                                                Some(callback_return_w3_f14)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f14_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f14: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f14.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f14
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f15 = if true {
-                                                Some(callback_return_w3_f15)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f15_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f15: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f15.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f15
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f16 = if true {
-                                                Some(callback_return_w3_f16)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f16_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f16: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f16.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f16
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f17 = if true {
-                                                Some(callback_return_w3_f17)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f17_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f17: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f17.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f17
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f18 = if true {
-                                                Some(callback_return_w3_f18)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f18_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f18: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f18.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f18
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f19 = if true {
-                                                Some(callback_return_w3_f19)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f19_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f19: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f19.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f19
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f20 = if true {
-                                                Some(callback_return_w3_f20)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f20_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f20: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f20.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f20
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f21 = if true {
-                                                Some(callback_return_w3_f21)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f21_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f21: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f21.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f21
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f22 = if true {
-                                                Some(callback_return_w3_f22)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f22_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f22: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f22.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f22
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f23 = if true {
-                                                Some(callback_return_w3_f23)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f23_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f23: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f23.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f23
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f24 = if true {
-                                                Some(callback_return_w3_f24)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f24_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f24: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f24.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f24
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f25 = if true {
-                                                Some(callback_return_w3_f25)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f25_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f25: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f25.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f25
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f26 = if true {
-                                                Some(callback_return_w3_f26)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f26_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f26: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f26.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f26
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f27 = if true {
-                                                Some(callback_return_w3_f27)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f27_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f27: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f27.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f27
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f28 = if true {
-                                                Some(callback_return_w3_f28)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f28_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f28: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f28.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f28
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f29 = if true {
-                                                Some(callback_return_w3_f29)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f29_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f29: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f29.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f29
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f30 = if true {
-                                                Some(callback_return_w3_f30)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f30_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f30: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f30.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f30
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w2_f31 = if true {
-                                                Some(callback_return_w3_f31)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_f31_built = if true {
-                                                Some({
-                                                    let callback_return_w2_f31: i64 = ::core::convert::Into::into(
-                                                        callback_return_w2_f31.expect("active value"),
-                                                    );
-                                                    callback_return_w2_f31
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w2_built = if true {
-                                                Some({
-                                                    let callback_return_w2: bench_flat::WideRow = bench_flat::WideRow {
-                                                        f0: callback_return_w2_f0_built.expect("active input"),
-                                                        f1: callback_return_w2_f1_built.expect("active input"),
-                                                        f2: callback_return_w2_f2_built.expect("active input"),
-                                                        f3: callback_return_w2_f3_built.expect("active input"),
-                                                        f4: callback_return_w2_f4_built.expect("active input"),
-                                                        f5: callback_return_w2_f5_built.expect("active input"),
-                                                        f6: callback_return_w2_f6_built.expect("active input"),
-                                                        f7: callback_return_w2_f7_built.expect("active input"),
-                                                        f8: callback_return_w2_f8_built.expect("active input"),
-                                                        f9: callback_return_w2_f9_built.expect("active input"),
-                                                        f10: callback_return_w2_f10_built.expect("active input"),
-                                                        f11: callback_return_w2_f11_built.expect("active input"),
-                                                        f12: callback_return_w2_f12_built.expect("active input"),
-                                                        f13: callback_return_w2_f13_built.expect("active input"),
-                                                        f14: callback_return_w2_f14_built.expect("active input"),
-                                                        f15: callback_return_w2_f15_built.expect("active input"),
-                                                        f16: callback_return_w2_f16_built.expect("active input"),
-                                                        f17: callback_return_w2_f17_built.expect("active input"),
-                                                        f18: callback_return_w2_f18_built.expect("active input"),
-                                                        f19: callback_return_w2_f19_built.expect("active input"),
-                                                        f20: callback_return_w2_f20_built.expect("active input"),
-                                                        f21: callback_return_w2_f21_built.expect("active input"),
-                                                        f22: callback_return_w2_f22_built.expect("active input"),
-                                                        f23: callback_return_w2_f23_built.expect("active input"),
-                                                        f24: callback_return_w2_f24_built.expect("active input"),
-                                                        f25: callback_return_w2_f25_built.expect("active input"),
-                                                        f26: callback_return_w2_f26_built.expect("active input"),
-                                                        f27: callback_return_w2_f27_built.expect("active input"),
-                                                        f28: callback_return_w2_f28_built.expect("active input"),
-                                                        f29: callback_return_w2_f29_built.expect("active input"),
-                                                        f30: callback_return_w2_f30_built.expect("active input"),
-                                                        f31: callback_return_w2_f31_built.expect("active input"),
-                                                    };
-                                                    callback_return_w2
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w0_built = if true {
-                                                Some(callback_return_w2_built.expect("active input"))
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_value = callback_return_w0_built
-                                                .expect("active input");
-                                            Ok::<_, String>(callback_return_value)
-                                        })?;
-                                        Ok::<_, String>(callback_return_decoded)
+                                        let callback_return_w1_bytes = if true {
+                                            Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
+                                        } else {
+                                            ::core::default::Default::default()
+                                        };
+                                        let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                            &callback_return_w1_bytes,
+                                        );
+                                        if callback_return_w1_bytes.len()
+                                            < ::core::mem::size_of::<
+                                                __PbBulk_i64_i64_633c6cf82d3acfc1,
+                                            >()
+                                        {
+                                            return Err("truncated bulk root record".into());
+                                        }
+                                        let callback_return_w3_f0 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v0
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f1 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v1
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f2 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v2
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f3 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v3
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f4 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v4
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f5 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v5
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f6 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v6
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f7 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v7
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f8 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v8
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f9 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v9
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f10 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v10
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f11 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v11
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f12 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v12
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f13 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v13
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f14 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v14
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f15 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v15
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f16 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v16
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f17 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v17
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f18 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v18
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f19 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v19
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f20 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v20
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f21 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v21
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f22 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v22
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f23 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v23
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f24 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v24
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f25 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v25
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f26 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v26
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f27 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v27
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f28 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v28
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f29 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v29
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f30 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v30
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w3_f31 = if true {
+                                            callback_return_w1_reader
+                                                .read::<
+                                                    i64,
+                                                >(
+                                                    ::core::mem::offset_of!(
+                                                        __PbBulk_i64_i64_633c6cf82d3acfc1, v31
+                                                    ),
+                                                )?
+                                        } else {
+                                            0
+                                        };
+                                        let callback_return_w2_f0 = if true {
+                                            Some(callback_return_w3_f0)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f0_built = if true {
+                                            Some({
+                                                let callback_return_w2_f0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f0.expect("active value"),
+                                                );
+                                                callback_return_w2_f0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f1 = if true {
+                                            Some(callback_return_w3_f1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f1_built = if true {
+                                            Some({
+                                                let callback_return_w2_f1: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f1.expect("active value"),
+                                                );
+                                                callback_return_w2_f1
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f2 = if true {
+                                            Some(callback_return_w3_f2)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f2_built = if true {
+                                            Some({
+                                                let callback_return_w2_f2: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f2.expect("active value"),
+                                                );
+                                                callback_return_w2_f2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f3 = if true {
+                                            Some(callback_return_w3_f3)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f3_built = if true {
+                                            Some({
+                                                let callback_return_w2_f3: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f3.expect("active value"),
+                                                );
+                                                callback_return_w2_f3
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f4 = if true {
+                                            Some(callback_return_w3_f4)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f4_built = if true {
+                                            Some({
+                                                let callback_return_w2_f4: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f4.expect("active value"),
+                                                );
+                                                callback_return_w2_f4
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f5 = if true {
+                                            Some(callback_return_w3_f5)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f5_built = if true {
+                                            Some({
+                                                let callback_return_w2_f5: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f5.expect("active value"),
+                                                );
+                                                callback_return_w2_f5
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f6 = if true {
+                                            Some(callback_return_w3_f6)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f6_built = if true {
+                                            Some({
+                                                let callback_return_w2_f6: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f6.expect("active value"),
+                                                );
+                                                callback_return_w2_f6
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f7 = if true {
+                                            Some(callback_return_w3_f7)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f7_built = if true {
+                                            Some({
+                                                let callback_return_w2_f7: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f7.expect("active value"),
+                                                );
+                                                callback_return_w2_f7
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f8 = if true {
+                                            Some(callback_return_w3_f8)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f8_built = if true {
+                                            Some({
+                                                let callback_return_w2_f8: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f8.expect("active value"),
+                                                );
+                                                callback_return_w2_f8
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f9 = if true {
+                                            Some(callback_return_w3_f9)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f9_built = if true {
+                                            Some({
+                                                let callback_return_w2_f9: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f9.expect("active value"),
+                                                );
+                                                callback_return_w2_f9
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f10 = if true {
+                                            Some(callback_return_w3_f10)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f10_built = if true {
+                                            Some({
+                                                let callback_return_w2_f10: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f10.expect("active value"),
+                                                );
+                                                callback_return_w2_f10
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f11 = if true {
+                                            Some(callback_return_w3_f11)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f11_built = if true {
+                                            Some({
+                                                let callback_return_w2_f11: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f11.expect("active value"),
+                                                );
+                                                callback_return_w2_f11
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f12 = if true {
+                                            Some(callback_return_w3_f12)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f12_built = if true {
+                                            Some({
+                                                let callback_return_w2_f12: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f12.expect("active value"),
+                                                );
+                                                callback_return_w2_f12
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f13 = if true {
+                                            Some(callback_return_w3_f13)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f13_built = if true {
+                                            Some({
+                                                let callback_return_w2_f13: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f13.expect("active value"),
+                                                );
+                                                callback_return_w2_f13
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f14 = if true {
+                                            Some(callback_return_w3_f14)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f14_built = if true {
+                                            Some({
+                                                let callback_return_w2_f14: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f14.expect("active value"),
+                                                );
+                                                callback_return_w2_f14
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f15 = if true {
+                                            Some(callback_return_w3_f15)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f15_built = if true {
+                                            Some({
+                                                let callback_return_w2_f15: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f15.expect("active value"),
+                                                );
+                                                callback_return_w2_f15
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f16 = if true {
+                                            Some(callback_return_w3_f16)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f16_built = if true {
+                                            Some({
+                                                let callback_return_w2_f16: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f16.expect("active value"),
+                                                );
+                                                callback_return_w2_f16
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f17 = if true {
+                                            Some(callback_return_w3_f17)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f17_built = if true {
+                                            Some({
+                                                let callback_return_w2_f17: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f17.expect("active value"),
+                                                );
+                                                callback_return_w2_f17
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f18 = if true {
+                                            Some(callback_return_w3_f18)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f18_built = if true {
+                                            Some({
+                                                let callback_return_w2_f18: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f18.expect("active value"),
+                                                );
+                                                callback_return_w2_f18
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f19 = if true {
+                                            Some(callback_return_w3_f19)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f19_built = if true {
+                                            Some({
+                                                let callback_return_w2_f19: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f19.expect("active value"),
+                                                );
+                                                callback_return_w2_f19
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f20 = if true {
+                                            Some(callback_return_w3_f20)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f20_built = if true {
+                                            Some({
+                                                let callback_return_w2_f20: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f20.expect("active value"),
+                                                );
+                                                callback_return_w2_f20
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f21 = if true {
+                                            Some(callback_return_w3_f21)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f21_built = if true {
+                                            Some({
+                                                let callback_return_w2_f21: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f21.expect("active value"),
+                                                );
+                                                callback_return_w2_f21
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f22 = if true {
+                                            Some(callback_return_w3_f22)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f22_built = if true {
+                                            Some({
+                                                let callback_return_w2_f22: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f22.expect("active value"),
+                                                );
+                                                callback_return_w2_f22
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f23 = if true {
+                                            Some(callback_return_w3_f23)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f23_built = if true {
+                                            Some({
+                                                let callback_return_w2_f23: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f23.expect("active value"),
+                                                );
+                                                callback_return_w2_f23
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f24 = if true {
+                                            Some(callback_return_w3_f24)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f24_built = if true {
+                                            Some({
+                                                let callback_return_w2_f24: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f24.expect("active value"),
+                                                );
+                                                callback_return_w2_f24
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f25 = if true {
+                                            Some(callback_return_w3_f25)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f25_built = if true {
+                                            Some({
+                                                let callback_return_w2_f25: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f25.expect("active value"),
+                                                );
+                                                callback_return_w2_f25
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f26 = if true {
+                                            Some(callback_return_w3_f26)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f26_built = if true {
+                                            Some({
+                                                let callback_return_w2_f26: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f26.expect("active value"),
+                                                );
+                                                callback_return_w2_f26
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f27 = if true {
+                                            Some(callback_return_w3_f27)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f27_built = if true {
+                                            Some({
+                                                let callback_return_w2_f27: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f27.expect("active value"),
+                                                );
+                                                callback_return_w2_f27
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f28 = if true {
+                                            Some(callback_return_w3_f28)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f28_built = if true {
+                                            Some({
+                                                let callback_return_w2_f28: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f28.expect("active value"),
+                                                );
+                                                callback_return_w2_f28
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f29 = if true {
+                                            Some(callback_return_w3_f29)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f29_built = if true {
+                                            Some({
+                                                let callback_return_w2_f29: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f29.expect("active value"),
+                                                );
+                                                callback_return_w2_f29
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f30 = if true {
+                                            Some(callback_return_w3_f30)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f30_built = if true {
+                                            Some({
+                                                let callback_return_w2_f30: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f30.expect("active value"),
+                                                );
+                                                callback_return_w2_f30
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_w2_f31 = if true {
+                                            Some(callback_return_w3_f31)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_f31_built = if true {
+                                            Some({
+                                                let callback_return_w2_f31: i64 = ::core::convert::Into::into(
+                                                    callback_return_w2_f31.expect("active value"),
+                                                );
+                                                callback_return_w2_f31
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w2_built = if true {
+                                            Some({
+                                                let callback_return_w2: bench_flat::WideRow = bench_flat::WideRow {
+                                                    f0: callback_return_w2_f0_built.expect("active input"),
+                                                    f1: callback_return_w2_f1_built.expect("active input"),
+                                                    f2: callback_return_w2_f2_built.expect("active input"),
+                                                    f3: callback_return_w2_f3_built.expect("active input"),
+                                                    f4: callback_return_w2_f4_built.expect("active input"),
+                                                    f5: callback_return_w2_f5_built.expect("active input"),
+                                                    f6: callback_return_w2_f6_built.expect("active input"),
+                                                    f7: callback_return_w2_f7_built.expect("active input"),
+                                                    f8: callback_return_w2_f8_built.expect("active input"),
+                                                    f9: callback_return_w2_f9_built.expect("active input"),
+                                                    f10: callback_return_w2_f10_built.expect("active input"),
+                                                    f11: callback_return_w2_f11_built.expect("active input"),
+                                                    f12: callback_return_w2_f12_built.expect("active input"),
+                                                    f13: callback_return_w2_f13_built.expect("active input"),
+                                                    f14: callback_return_w2_f14_built.expect("active input"),
+                                                    f15: callback_return_w2_f15_built.expect("active input"),
+                                                    f16: callback_return_w2_f16_built.expect("active input"),
+                                                    f17: callback_return_w2_f17_built.expect("active input"),
+                                                    f18: callback_return_w2_f18_built.expect("active input"),
+                                                    f19: callback_return_w2_f19_built.expect("active input"),
+                                                    f20: callback_return_w2_f20_built.expect("active input"),
+                                                    f21: callback_return_w2_f21_built.expect("active input"),
+                                                    f22: callback_return_w2_f22_built.expect("active input"),
+                                                    f23: callback_return_w2_f23_built.expect("active input"),
+                                                    f24: callback_return_w2_f24_built.expect("active input"),
+                                                    f25: callback_return_w2_f25_built.expect("active input"),
+                                                    f26: callback_return_w2_f26_built.expect("active input"),
+                                                    f27: callback_return_w2_f27_built.expect("active input"),
+                                                    f28: callback_return_w2_f28_built.expect("active input"),
+                                                    f29: callback_return_w2_f29_built.expect("active input"),
+                                                    f30: callback_return_w2_f30_built.expect("active input"),
+                                                    f31: callback_return_w2_f31_built.expect("active input"),
+                                                };
+                                                callback_return_w2
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some(callback_return_w2_built.expect("active input"))
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok::<_, String>(callback_return_value)
                                     }
                                 },
                             )
@@ -9116,28 +9114,25 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handler_1new_1916a
                                         let callback_return_w1 = callback_result
                                             .j()
                                             .map_err(|e| e.to_string())?;
-                                        let callback_return_decoded = ({
-                                            let callback_return_w0 = if true {
-                                                Some(callback_return_w1)
-                                            } else {
-                                                None
-                                            };
-                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                            let callback_return_w0_built = if true {
-                                                Some({
-                                                    let callback_return_w0: i64 = ::core::convert::Into::into(
-                                                        callback_return_w0.expect("active value"),
-                                                    );
-                                                    callback_return_w0
-                                                })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_value = callback_return_w0_built
-                                                .expect("active input");
-                                            Ok::<_, String>(callback_return_value)
-                                        })?;
-                                        Ok::<_, String>(callback_return_decoded)
+                                        let callback_return_w0 = if true {
+                                            Some(callback_return_w1)
+                                        } else {
+                                            None
+                                        };
+                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                        let callback_return_w0_built = if true {
+                                            Some({
+                                                let callback_return_w0: i64 = ::core::convert::Into::into(
+                                                    callback_return_w0.expect("active value"),
+                                                );
+                                                callback_return_w0
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let callback_return_value = callback_return_w0_built
+                                            .expect("active input");
+                                        Ok::<_, String>(callback_return_value)
                                     }
                                 },
                             )
