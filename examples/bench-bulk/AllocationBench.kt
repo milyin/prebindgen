@@ -94,6 +94,12 @@ private fun makeBulk(kind: String, size: Int): Measured {
     }
 }
 fun main(args:Array<String>) {
+    if (args.contentEquals(arrayOf("--probe-instrumentation"))) {
+        val enabled=Counters.start()
+        Counters.stop()
+        println("NATIVE_ALLOCATIONS,$enabled")
+        return
+    }
     val mode=args[0]; val kind=args[1]; val size=args[2].toInt()
     require(mode=="plain" || mode=="bulk")
     val operation=if(mode=="plain") makePlain(kind,size) else makeBulk(kind,size)
