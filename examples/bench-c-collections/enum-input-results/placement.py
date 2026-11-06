@@ -46,15 +46,35 @@ def inspect(directory):
     section = re.search(r'\]\s+\.text\s+PROGBITS\s+([a-f0-9]+)\s+([a-f0-9]+)', sections)
     text_address, file_offset = (int(s, 16) for s in section.groups())
     start = file_offset + address - text_address
-    code = bytearray(library.read_bytes()[start:start + size])
+    image = library.read_bytes()
+    code = bytearray(image[start:start + size])
     assert code[0x8d:0x8f] == b'\xff\x15'
+    deallocation_slot = address + 0x93 + int.from_bytes(code[0x8f:0x93], 'little', signed=True)
     code[0x8f:0x93] = bytes(4)  # The sole RIP-relative deallocation call.
     assert hashlib.sha256(code).hexdigest() == SHAPE, 'Unsupported native sum instruction shape'
     # Find the native-function pointer actually used by the numbers converter.
     relocations = output('readelf', '-rW', str(library))
-    slots = {int(m[0], 16) for m in re.findall(
+    relative = {int(m[0], 16): int(m[1], 16) for m in re.findall(
         r'^([0-9a-f]+)\s+[0-9a-f]+\s+R_X86_64_RELATIVE\s+([0-9a-f]+)\s*$',
-        relocations, re.M) if int(m[1], 16) == address}
+        relocations, re.M)}
+    slots = {slot for slot, target in relative.items() if target == address}
+    # Cloned variants share the baseline deallocator. Accept only the benchmark's
+    # System allocator forwarding chain, ending at the same imported libc free.
+    def function(name, length):
+        symbol = next(s.split(maxsplit=3) for s in symbols if s.endswith(' ' + name))
+        location = int(symbol[0], 16)
+        assert int(symbol[1], 16) == length
+        offset = file_offset + location - text_address
+        return location, image[offset:offset + length]
+    dealloc, forwarding = function('__rustc::__rust_dealloc', 5)
+    system, release = function('__rustc::__rdl_dealloc', 6)
+    assert relative[deallocation_slot] == dealloc and forwarding[0] == 0xe9
+    assert dealloc + 5 + int.from_bytes(forwarding[1:], 'little', signed=True) == system
+    assert release[:2] == b'\xff\x25'
+    free_slot = system + 6 + int.from_bytes(release[2:], 'little', signed=True)
+    assert any(int(m, 16) == free_slot for m in re.findall(
+        r'^([0-9a-f]+)\s+[0-9a-f]+\s+R_X86_64_GLOB_DAT\s+[0-9a-f]+\s+free(?:@\S+)?\s',
+        relocations, re.M)), 'Unsupported allocator: expected System/libc free'
     begin, length = int(boundary[0], 16), int(boundary[1], 16)
     assembly = output('objdump', '-d', f'--start-address={begin}',
                       f'--stop-address={begin + length}', str(library))
@@ -68,7 +88,8 @@ def inspect(directory):
     low, length = (int(s, 16) for s in relro.groups())
     assert low <= (slot & ~4095) and (slot & ~4095) + 4096 <= low + length
     return dict(library=str(library), library_sha256=sha(library),
-                native=address, native_size=size, numbers_got=slot, shape_sha256=SHAPE)
+                native=address, native_size=size, numbers_got=slot, shape_sha256=SHAPE,
+                allocator='System/libc free')
 
 
 def main():

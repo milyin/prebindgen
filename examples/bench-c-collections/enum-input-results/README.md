@@ -153,18 +153,22 @@ consumes and destroys its own final Rust vector. No handles are reused.
 
 Both frozen libraries are loaded into one process with local symbol scopes and
 receive the same C input addresses. A separate untimed allocator probe confirms
-one native allocation per 512-row call and the same destination address for
-both versions, in both single-array and streaming modes. Source-offset sweeps
-also reproduced the slowdown. Thus different input/allocator addresses and
-short batches do not explain it.
+one destination-sized `malloc` call per 512-row call and the same destination address for
+both versions, in both single-array and streaming modes. Thus different input/allocator addresses and short batches do not explain it.
 
 To control placement directly, the isolated diagnostic copies the verified
 152-byte native sum function to executable pages at chosen offsets. It repairs
 its sole relative deallocation call, keeping that target fixed across the cloned
-variants, and redirects only the native sum call through the process's function
-pointer table. The generated converters, native data, instructions and allocation
+variants, and redirects the relocated function-pointer slot used by the numbers converter.
+A merged alias could share that slot; no other workload is invoked in this
+experiment. The generated converters, native data, instructions and allocation
 policy remain fixed. Separate function copies avoid requiring both versions to
-share a call target. Library files are never changed. This experiment is not
+share a call target. Both counter-free benchmark libraries use `System` over the same libc; the
+preflight checks trace each deallocation call through `__rust_dealloc` and
+`__rdl_dealloc` to imported libc `free`. This is why a clone can free the other
+library's final vector through the baseline library. This diagnostic does not
+support arbitrary custom allocators. Library files stay immutable throughout
+the experiment. This experiment is not
 part of generated bindings or the runtime library.
 
 Eight fresh processes/configuration use eight paired batches each, alternate
@@ -175,26 +179,32 @@ single array and a fixed 2 MiB streaming pool are measured. The table below uses
 the streaming pool; all configurations and paired process scores are retained
 in `placement-summary.json`.
 
-| Native function offsets modulo 64, before / after | Rows | Before, ns/call | After, ns/call | Change |
-|---|---:|---:|---:|---:|
-| Original binaries: 0 / 48 | 512 | 189.72 | 222.65 | +17.4% |
-| Original binaries: 0 / 48 | 4,096 | 1288.57 | 1600.43 | +24.2% |
-| Both copied: 0 / 0 | 512 | 198.48 | 189.25 | -4.7% |
-| Both copied: 0 / 0 | 4,096 | 1284.90 | 1271.31 | -1.1% |
-| Both copied: 48 / 48 | 512 | 242.26 | 231.00 | -4.6% |
-| Both copied: 48 / 48 | 4,096 | 1590.41 | 1611.13 | +1.3% |
-| Reproduce placement: 0 / 48 | 512 | 194.66 | 226.72 | +16.5% |
-| Reproduce placement: 0 / 48 | 4,096 | 1255.27 | 1533.12 | +22.1% |
-| Swap placement: 48 / 0 | 512 | 235.09 | 186.17 | -20.8% |
-| Swap placement: 48 / 0 | 4,096 | 1514.85 | 1244.12 | -17.9% |
+| Native function offsets modulo 64, before / after | Rows | Before, ns/call | After, ns/call | Ratio-of-medians change | Median paired change |
+|---|---:|---:|---:|---:|---:|
+| Original binaries: 0 / 48 | 512 | 206.53 | 226.88 | +9.9% | +13.1% |
+| Original binaries: 0 / 48 | 4,096 | 1301.32 | 1571.12 | +20.7% | +21.7% |
+| Both copied: 0 / 0 | 512 | 204.85 | 191.31 | -6.6% | -5.4% |
+| Both copied: 0 / 0 | 4,096 | 1383.78 | 1357.43 | -1.9% | -2.7% |
+| Both copied: 16 / 16 | 512 | 202.38 | 188.96 | -6.6% | -5.3% |
+| Both copied: 16 / 16 | 4,096 | 1314.63 | 1292.43 | -1.7% | -1.6% |
+| Both copied: 32 / 32 | 512 | 199.65 | 183.74 | -8.0% | -5.4% |
+| Both copied: 32 / 32 | 4,096 | 1377.46 | 1334.04 | -3.2% | -4.6% |
+| Both copied: 48 / 48 | 512 | 236.41 | 229.10 | -3.1% | -4.1% |
+| Both copied: 48 / 48 | 4,096 | 1663.64 | 1626.45 | -2.2% | -1.8% |
+| Reproduce placement: 0 / 48 | 512 | 187.44 | 220.23 | +17.5% | +17.0% |
+| Reproduce placement: 0 / 48 | 4,096 | 1378.69 | 1658.67 | +20.3% | +19.2% |
+| Swap placement: 48 / 0 | 512 | 233.30 | 185.27 | -20.6% | -21.6% |
+| Swap placement: 48 / 0 | 4,096 | 1619.70 | 1287.97 | -20.5% | -20.7% |
 
-Matching the function placement removes the slowdown: the 512-row case measures
-4.7% lower latency after the change with both copies aligned to offset zero.
-Recreating the original offset difference reproduces a 16.5% slowdown; swapping
-the offsets reverses it to a 20.8% improvement. The 4,096-row results show the
-same direction. Moving the same instructions is enough to produce and reverse
-the large timing gap. The extra enum support does not introduce primitive-row
-conversion work; the compiled program's layout changes its execution time.
+Matching function placement removes the large slowdown. For 512 rows, the
+matched offset-zero case measures -6.6% by the ratio of medians;
+recreating the original offset difference yields +17.5%, and swapping it yields
+-20.6%. Paired process changes agree on the direction for reproduction and
+swapping. Offsets 16 and 32 also avoid the large penalty observed at offset 48.
+The 4,096-row results show the same large-gap pattern. These interventions
+identify function placement as a dominant cause on this host. They do not
+establish an intrinsic converter speedup for the small residual differences
+under matched placement, which are near variation between configurations.
 
 The original binaries still have their measured slowdown. This investigation
 explains a dominant cause, rather than erasing the result or guaranteeing that
@@ -206,6 +216,7 @@ Reproduce using the existing checked, counter-free frozen build directories:
 
 ```sh
 python3 examples/bench-c-collections/enum-input-results/placement.py --before /tmp/before --after /tmp/after --output /tmp/placement --probe-allocations
+python3 examples/bench-c-collections/enum-input-results/summarize-placement.py /tmp/placement --output /tmp/placement-summary.json
 ```
 
 `placement.py` verifies library hashes, discovers function/table offsets from ELF
@@ -217,6 +228,11 @@ shape. It needs `cc`, `nm`, `readelf`, `objdump` and `taskset`; use `--cpu` to s
 an available core. `--smoke` runs checksum/protocol checks without useful latency
 statistics. New compiler code shapes require a separate audit rather than a
 silent change to the relocation assumptions.
+
+`summarize-placement.py` creates the committed summary schema directly from the
+run directory, including the allocation-address probe. The summary preserves
+source hashes of the measured tool, allocator checks, all paired process scores
+and both the ratio-of-medians and median-paired changes.
 
 The full run passed all checksum assertions. The smoke run and GNU libc address
 probe also pass; a deliberately modified native function is rejected during
