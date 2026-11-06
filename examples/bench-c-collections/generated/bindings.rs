@@ -2606,6 +2606,7 @@ pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
@@ -2632,6 +2633,7 @@ pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
@@ -2765,6 +2767,7 @@ pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
                     .begin_group(p0_w2.saturating_mul(1usize));
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
@@ -2795,6 +2798,7 @@ pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    #[allow(unused_variables)]
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
