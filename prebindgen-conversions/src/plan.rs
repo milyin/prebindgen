@@ -23,7 +23,7 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     pub validation: TokenStream,
     /// Acquire this leaf after validation and alias checks. Acquisition must be
     /// infallible unless each moved resource records its own successful transfer
-    /// through [`Resource::records_consumption`]. Empty for eagerly built recipes.
+    /// through `Resource::records_consumption`. Empty for eagerly built recipes.
     pub acquire: TokenStream,
     /// Active foreign resources whose identities must be checked across all arguments.
     pub resources: Vec<Resource>,
