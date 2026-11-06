@@ -412,7 +412,7 @@ fn enum_handle_inputs_omit_prepared_row_storage() {
 #[test]
 fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
     use super::inline_owners as ffi;
-    let _getters = super::GETTER_TESTS
+    let _owners = super::INLINE_OWNER_TESTS
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     for size in [0usize, 1, 8, 64, 512, 4096] {

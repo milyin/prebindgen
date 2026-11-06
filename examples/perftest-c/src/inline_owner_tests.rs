@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    static OWNERS: std::sync::Mutex<()> = std::sync::Mutex::new(());
     unsafe extern "C" fn echo_packet(
         _: *mut core::ffi::c_void,
         packet: __PbOwned_packet,
@@ -29,7 +28,7 @@ mod tests {
     }
     #[test]
     fn grouped_rows_move_inline_storage_before_deriving_its_pointer() {
-        let _guard = OWNERS.lock().unwrap();
+        let _guard = crate::INLINE_OWNER_TESTS.lock().unwrap();
         unsafe {
             let before = owner_inline_packet_drops();
             let mut rows: Vec<_> = (0..32).map(|i| __PbRow_callback_805117dbed50edfb_callback_return_w1 {
@@ -46,7 +45,7 @@ mod tests {
     }
     #[test]
     fn padded_native_owners_survive_wire_moves_callbacks_and_rollback() {
-        let _guard = OWNERS.lock().unwrap();
+        let _guard = crate::INLINE_OWNER_TESTS.lock().unwrap();
         unsafe {
             let mut capacity = 0;
             let mut bytes = owner_inline_bytes_mutable(&mut capacity);
