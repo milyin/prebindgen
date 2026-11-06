@@ -496,3 +496,65 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
         );
     }
 }
+
+#[test]
+fn collection_callback_results_allocate_only_the_final_rust_vector() {
+    use super::unchecked;
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    type Row = unchecked::__PbRow_callback_8735da2fee137b57_callback_return_w1;
+    struct Input {
+        rows: Vec<Row>,
+        next: usize,
+    }
+    unsafe extern "C" fn run(context: *mut core::ffi::c_void) -> unchecked::__PbRows {
+        let input = unsafe { &mut *context.cast::<Input>() };
+        let offset = input.next;
+        input.next += 512;
+        unchecked::__PbRows {
+            data: unsafe { input.rows.as_ptr().add(offset) }.cast(),
+            len: 512,
+        }
+    }
+    let mut input = Input {
+        rows: (0..(32 * 512))
+            .map(|i| Row {
+                v0: unsafe { unchecked::fast_collection_resource_new((i % 512) as i64) },
+            })
+            .collect(),
+        next: 0,
+    };
+    let count = allocations(|| {
+        for _ in 0..32 {
+            let mut result = 0;
+            let mut accepted = 0;
+            let mut error = core::ptr::null_mut();
+            unsafe {
+                assert!(unchecked::fast_alias_callback_rows(
+                    unchecked::fast_callback_8735da2fee137b57 {
+                        run: Some(run),
+                        context: (&mut input as *mut Input).cast(),
+                        drop: None,
+                        release_result: None
+                    },
+                    &mut result,
+                    &mut accepted,
+                    &mut error
+                ));
+            }
+            assert_eq!(result, 511 * 512 / 2);
+            assert_eq!(accepted, 1);
+            assert!(error.is_null());
+        }
+    });
+    assert_eq!(
+        count, 32,
+        "one final Vec per callback; no ownership-tracker allocation or growth"
+    );
+    assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+    assert_eq!(
+        ALLOCATED_BYTES.with(Cell::get),
+        32 * 512 * core::mem::size_of::<perftest_flat::OwnedResource>()
+    );
+}

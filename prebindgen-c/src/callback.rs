@@ -407,13 +407,29 @@ impl CCallback {
                 return Ok((guards, commits));
             }
         }
-        let scan =
-            receive_return_owners(&plan.node, context, &self.return_owners, &BTreeMap::new())?;
+        let fixed_count = fixed_return_owner_count(&plan.node, &self.return_owners);
+        let scan = receive_return_owners(
+            &plan.node,
+            context,
+            &self.return_owners,
+            &BTreeMap::new(),
+            fixed_count.is_none(),
+        )?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
+        if fixed_count.is_none() {
+            return Ok((
+                quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
+                    let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
+                    #scan
+                    callback_return_owners.check()
+                });),
+                quote!(callback_return_cleanup.commit();),
+            ));
+        }
         // Bound trampoline stack use even for unusually wide result records.
-        let guard = match fixed_return_owner_count(&plan.node, &self.return_owners) {
+        let guard = match fixed_count {
             Some(count) if count <= 32 => {
                 quote!(::prebindgen_runtime::FixedCallbackReturnAllocations::<#count>)
             }
@@ -483,7 +499,6 @@ impl CCallback {
                 },
                 &expected,
             )?;
-            body = quote!({#commit_owners #body});
             let check = plan.code_fragment_slot(
                 InputFragment::CheckInternalAliases { context },
                 &syn::parse_quote!(()),
@@ -501,6 +516,11 @@ impl CCallback {
             )?
         } else {
             quote!(Ok(()))
+        };
+        let result = if commit_owners.is_empty() {
+            result
+        } else {
+            quote!({let callback_outcome: ::prebindgen_runtime::Result<_> = #result; let callback_decoded=callback_outcome?; #commit_owners Ok(callback_decoded)})
         };
         let names = values
             .iter()
@@ -651,6 +671,7 @@ fn receive_return_owners(
     context: &CContext,
     owners: &BTreeMap<String, syn::Type>,
     locations: &BTreeMap<String, TokenStream>,
+    cleanup_only: bool,
 ) -> Result<TokenStream> {
     Ok(match node {
         WireNode::Leaf(fields) => fields
@@ -679,7 +700,7 @@ fn receive_return_owners(
             child,
             ..
         } => {
-            let scan = receive_return_owners(child, context, owners, locations)?;
+            let scan = receive_return_owners(child, context, owners, locations, cleanup_only)?;
             if scan.is_empty() {
                 return Ok(scan);
             }
@@ -699,14 +720,21 @@ fn receive_return_owners(
             let row = &context.row_types[&carrier.to_string()];
             let mut row_locations=locations.clone();
             for (i,w) in group::row_fields(child).enumerate(){let field=format_ident!("v{i}");row_locations.insert(w.name.to_string(),quote!(::core::ptr::addr_of!((*((#carrier.data as *const #row).add(index))).#field)));}
-            let scan = receive_return_owners(child, context, owners, &row_locations)?;
+            let scan = receive_return_owners(child, context, owners, &row_locations, cleanup_only)?;
             if scan.is_empty() {return Ok(scan);}
             let reads = group::row_fields(child).enumerate().map(|(i, w)| {
                 let name = &w.name;
                 let field = format_ident!("v{i}");
                 quote!(let #name=unsafe {(*((#carrier.data as *const #row).add(index))).#field};)
             });
-            quote!(::prebindgen_runtime::validate_slice(#carrier.data as *const #row,#carrier.len)?;for index in 0..#carrier.len {#(#reads)* #scan})
+            if cleanup_only {
+                quote!(match ::prebindgen_runtime::validate_slice(#carrier.data as *const #row,#carrier.len) {
+                    Ok(()) => {for index in 0..#carrier.len {#(#reads)* #scan}},
+                    Err(error) => ::prebindgen_runtime::report_callback_cleanup_error(&error),
+                })
+            } else {
+                quote!(::prebindgen_runtime::validate_slice(#carrier.data as *const #row,#carrier.len)?;for index in 0..#carrier.len {#(#reads)* #scan})
+            }
         }
         WireNode::Branch {
             meta: CBranch::Alternatives,
@@ -718,7 +746,7 @@ fn receive_return_owners(
                 .iter()
                 .enumerate()
                 .map(|(i, child)| {
-                    let scan = receive_return_owners(child, context, owners, locations)?;
+                    let scan = receive_return_owners(child, context, owners, locations, cleanup_only)?;
                     let i = i as i32;
                     Ok(quote!(if #selector==#i {#scan}))
                 })
@@ -727,7 +755,7 @@ fn receive_return_owners(
         }
         WireNode::Branch { children, .. } => children
             .iter()
-            .map(|child| receive_return_owners(child, context, owners, locations))
+            .map(|child| receive_return_owners(child, context, owners, locations, cleanup_only))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .collect(),

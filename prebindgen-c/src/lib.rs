@@ -2897,10 +2897,14 @@ mod generation_tests {
                 );
             }
             assert!(body("pb_names_cb").contains("FixedCallbackReturnAllocations :: < 1usize"));
+            assert!(body("pb_nested_cb").contains("CallbackReturnCleanup :: new"));
+            assert!(body("pb_nested_cb").contains("callback_return_cleanup . commit"));
+            assert!(!body("pb_wide_cb").contains("CallbackReturnCleanup"));
             for name in ["pb_nested_cb", "pb_wide_cb"] {
                 assert!(!body(name).contains("FixedCallbackReturnAllocations"));
                 assert!(body(name).contains("CallbackReturnAllocations :: tracking"));
             }
+            assert!(body("pb_many").contains("CallbackReturnCleanup :: new"));
             assert!(!body("pb_many").contains("FixedCallbackReturnAllocations"));
             assert!(body("pb_many").contains("CallbackReturnAllocations :: tracking"));
             assert!(!body("pb_scalar").contains("CallbackReturnAllocations"));

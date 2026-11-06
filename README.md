@@ -985,8 +985,16 @@ and aliasing rules: moved or exclusively borrowed allocations must not overlap
 another active input. Violations can cause undefined behavior. Pointer/length,
 UTF-8, presence and selector validation, ownership receipts and failure cleanup
 remain active. Collection inputs construct rows in one traversal without alias
-history or the alias-validation staging buffer. Callback-return ownership scans
-needed to reclaim unread owners on failure remain active.
+history or the alias-validation staging buffer. Ownership cleanup remains active. Handle-bearing C callback collections defer
+ownership scans until decoding fails or unwinds. Successful decoding allocates no
+cleanup vector and performs no ownership pre-scan. On failure, a stack-held guard
+rescans the existing returned rows, skips owned values already acquired by Rust,
+and deduplicates aliases before destroying unread owners. This scan validates
+collection descriptors before reading rows; an invalid container does not prevent
+cleanup of valid sibling fields. Cleanup may allocate and traverse rows again on
+the error path. Returned descriptors must remain live and unchanged until both
+decoding and owner cleanup finish; `release_result` runs afterward, also on failure.
+The final decoded Rust collection and enabled alias checks retain their storage.
 For C callback results with a fixed maximum of up to 32 returned owners, cleanup
 bookkeeping uses stack storage sized during generation, including optional fields
 and alternative constructors. Scalar and single-handle results retain their
