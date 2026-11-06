@@ -1646,7 +1646,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
             };
-            if resource.access == prebindgen_conversions::Access::Move {
+            if resource.access == prebindgen_conversions::Access::Move
+                && !resource.records_consumption
+            {
                 let unchecked_count = match &resource.identity {
                     prebindgen_conversions::ResourceIdentity::Single(_) => quote!(1usize),
                     prebindgen_conversions::ResourceIdentity::Many(_) => {

@@ -91,6 +91,10 @@ pub(crate) fn input(
                 | CWire::Pointer { .. }
                 | CWire::DeferredBuffer
                 | CWire::Enum { .. }
+                | CWire::Owned {
+                    by_value: false,
+                    ..
+                }
         )
     });
     let slice = format_ident!("{wire}_rows");
@@ -110,7 +114,8 @@ pub(crate) fn input(
     }
     // These leaves validate only Copy scalars and raw pointers. Buffer/enum decoding
     // runs during construction, once the complete handle group has been checked.
-    // Inline-owner, callback and nested-row conversions keep their prepared
+    // Inline owners replace their source only during acquisition, recording
+    // successful moves themselves. By-value owners, callbacks and nested rows keep prepared
     // state until their validation effects have been audited separately.
     let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {

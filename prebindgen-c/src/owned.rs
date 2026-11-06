@@ -141,6 +141,7 @@ pub(crate) fn input(
     var: syn::Ident,
     active: &Condition,
     by_value: bool,
+    defer_empty: bool,
 ) -> InputPlan<CWire> {
     let access = match ty {
         syn::Type::Reference(r) if r.mutability.is_none() => Access::Shared,
@@ -210,13 +211,19 @@ pub(crate) fn input(
         validation: if by_value {
             quote!(#storage)
         } else {
-            quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare_empty)
+            let prepare = (!defer_empty).then_some(&prepare_empty);
+            quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare)
         },
-        acquire,
+        acquire: if defer_empty {
+            quote!(#prepare_empty #acquire)
+        } else {
+            acquire
+        },
         statements,
         argument,
         resources: vec![prebindgen_conversions::Resource {
             registered: by_value,
+            records_consumption: by_value,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#pointer.addr())),
             active: condition,
             access,

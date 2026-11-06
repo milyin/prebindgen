@@ -1,6 +1,7 @@
 //! Explicit enum declarations and the enum-aware C conversion codec.
 use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
+use prebindgen_flat::WireNode;
 
 /// C conversions read representation and error declarations from Flat.
 #[derive(Default)]
@@ -215,7 +216,7 @@ impl Codec for EnumCodec<'_> {
         }
         if self.return_owners.is_some() {
             if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
-                return Ok(owned::input(owner, ty, w, v, active, true));
+                return Ok(owned::input(owner, ty, w, v, active, true, false));
             }
         }
         let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
@@ -240,6 +241,28 @@ impl Codec for EnumCodec<'_> {
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
         let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        if let WireNode::Leaf(wires) = &plan.node {
+            if let [Wire {
+                kind:
+                    CWire::Owned {
+                        owner,
+                        by_value: false,
+                        ..
+                    },
+                ..
+            }] = wires.as_slice()
+            {
+                plan = owned::input(
+                    owner.clone(),
+                    ty,
+                    wire.clone(),
+                    var.clone(),
+                    active,
+                    false,
+                    true,
+                );
+            }
+        }
         if let Some((_, mapping)) = self.mapping(flat, ty) {
             let native = &mapping.ty;
             let condition = active.rust();
@@ -258,6 +281,25 @@ impl Codec for EnumCodec<'_> {
             plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
         }
         sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
+        // A row can contain several moves and a panicking empty-owner factory.
+        // Acknowledge each successful leaf acquisition in wire order, keeping
+        // its alias descriptor available to the enclosing grouped check.
+        for resource in &mut plan.resources {
+            if !resource.registered
+                && !resource.records_consumption
+                && resource.access == Access::Move
+            {
+                if !matches!(
+                    resource.identity,
+                    prebindgen_conversions::ResourceIdentity::Single(_)
+                ) {
+                    return Err("C row leaf acquisition requires one resource identity".into());
+                }
+                let condition = &resource.active;
+                plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); }));
+                resource.records_consumption = true;
+            }
+        }
         Ok(plan)
     }
     fn output_leaf(

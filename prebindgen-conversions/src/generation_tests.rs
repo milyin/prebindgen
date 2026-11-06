@@ -597,12 +597,14 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
     let code = validate_resources(&[
         Resource {
             registered: false,
+            records_consumption: false,
             identity: crate::ResourceIdentity::Single(quote!(left)),
             access: Access::Move,
             active: quote!(enabled && count > 0),
         },
         Resource {
             registered: false,
+            records_consumption: false,
             identity: crate::ResourceIdentity::Single(quote!(
                 right.expect("inactive identity must not be evaluated")
             )),
@@ -624,12 +626,14 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             let pair = validate_resources(&[
                 Resource {
                     registered: false,
+                    records_consumption: false,
                     identity: crate::ResourceIdentity::Single(quote!(left)),
                     access: first,
                     active: quote!(true),
                 },
                 Resource {
                     registered: false,
+                    records_consumption: false,
                     identity: crate::ResourceIdentity::Single(quote!(right)),
                     access: second,
                     active: quote!(true),
@@ -901,12 +905,14 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
 fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
     let single = |access| Resource {
         registered: false,
+        records_consumption: false,
         identity: ResourceIdentity::Single(quote!(left)),
         access,
         active: quote!(enabled),
     };
     let many = |access| Resource {
         registered: false,
+        records_consumption: false,
         // Dynamic-set scratch storage must not shadow this validation local.
         identity: ResourceIdentity::Many(quote!(__prebindgen_resources.iter().copied())),
         access,
@@ -1048,6 +1054,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                         &(),
                         &[Resource {
                             registered: false,
+                            records_consumption: false,
                             identity: ResourceIdentity::Single(
                                 quote!(__prebindgen_alias_0[#index]),
                             ),
@@ -1103,6 +1110,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                     &(),
                     &[Resource {
                         registered: false,
+                        records_consumption: false,
                         identity: ResourceIdentity::Single(quote!(__prebindgen_resources[#index])),
                         active: quote!(true),
                         access: if index == 2 {
@@ -1186,6 +1194,7 @@ fn eager_resource_conversions_reject_deferred_resource_neighbors() {
         let mut plan = Input(index).plan();
         plan.resources.push(Resource {
             registered: index == 0,
+            records_consumption: false,
             identity: ResourceIdentity::Single(quote!(8usize)),
             access: Access::Move,
             active: quote!(true),

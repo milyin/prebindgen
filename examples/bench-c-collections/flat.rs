@@ -96,3 +96,26 @@ pub fn fixed_move(first:Resource,second:Resource)->u64 {std::hint::black_box(fir
 pub fn callback_fixed(callback:impl Fn()->Record)->u64 {let v=callback();v.first.0+v.tag+v.second.0}
 #[prebindgen]
 pub fn callback_many(callback:impl Fn()->Vec<Resource>)->u64 {callback().iter().map(|v|v.0).sum()}
+
+// Native inline owners retain both payload allocations during C input conversion.
+#[prebindgen]
+#[derive(Default)]
+pub struct NativePacket {pub bytes:Vec<u8>,pub text:String,pub id:u64}
+#[prebindgen]
+pub fn native_packet_new(id:u64)->NativePacket {
+    let mut bytes=Vec::with_capacity(64);bytes.extend_from_slice(b"abc");
+    let mut text=String::with_capacity(64);text.push_str("abc");
+    NativePacket{bytes,text,id}
+}
+#[prebindgen]
+pub fn take_native(values:Vec<NativePacket>)->u64 {
+    values.iter().map(|v|v.id+v.bytes.len() as u64+v.text.len() as u64).sum()
+}
+#[prebindgen]
+pub struct NativeMixed {pub first:Resource,pub packet:NativePacket,pub last:Resource}
+#[prebindgen]
+pub fn native_mixed_new(first:Resource,packet:NativePacket,last:Resource)->NativeMixed {NativeMixed{first,packet,last}}
+#[prebindgen]
+pub fn take_native_mixed(values:Vec<NativeMixed>)->u64 {
+    values.iter().map(|v|v.first.0+v.packet.id+v.packet.bytes.len() as u64+v.packet.text.len() as u64+v.last.0).sum()
+}

@@ -21,8 +21,9 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Validate this value before using it. Compiled recipes also acquire and
     /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Infallible acquisition of this leaf after its validation and alias checks.
-    /// Empty for compiled recipes that already prepare their values eagerly.
+    /// Acquire this leaf after validation and alias checks. Acquisition must be
+    /// infallible unless each moved resource records its own successful transfer
+    /// through [`Resource::records_consumption`]. Empty for eagerly built recipes.
     pub acquire: TokenStream,
     /// Active foreign resources whose identities must be checked across all arguments.
     pub resources: Vec<Resource>,
@@ -81,6 +82,11 @@ pub struct Resource {
     /// This access has already been registered during input preparation.
     /// Its identity then describes cardinality for call setup, not a later read.
     pub registered: bool,
+    /// Acquisition updates `__prebindgen_input_consumed` after each successful
+    /// ownership transfer. The compiler must not also count this resource.
+    /// Use this for acquisition that can fail or unwind between transfers.
+    /// This does not register or suppress alias checks. Ignored for borrows.
+    pub records_consumption: bool,
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
     /// All identities compared within a call must share an equality-compatible domain.
     pub identity: ResourceIdentity,

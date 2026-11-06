@@ -410,6 +410,64 @@ fn enum_handle_inputs_omit_prepared_row_storage() {
 }
 
 #[test]
+fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
+    use super::inline_owners as ffi;
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    for size in [0usize, 1, 8, 64, 512, 4096] {
+        for checked in [true, false] {
+            let mut owners: Vec<_> = (0..size)
+                .map(|_| unsafe { ffi::owner_inline_packet_new() })
+                .collect();
+            let rows: Vec<_> = owners
+                .iter_mut()
+                .map(|owner| ffi::__PbRow_inline_inputs_packets_p0_w1 { v0: owner })
+                .collect();
+            let mut result = usize::MAX;
+            let mut consumed = usize::MAX;
+            let mut error = core::ptr::null_mut();
+            perftest_flat::inline_inputs_reset(0, 0);
+            let count = allocations(|| unsafe {
+                let rows = ffi::__PbRows {
+                    data: rows.as_ptr().cast(),
+                    len: size,
+                };
+                let ok = if checked {
+                    ffi::owner_inline_inputs_packets(rows, &mut result, &mut consumed, &mut error)
+                } else {
+                    ffi::owner_inline_inputs_packets_fast(
+                        rows,
+                        &mut result,
+                        &mut consumed,
+                        &mut error,
+                    )
+                };
+                assert!(ok);
+            });
+            assert_eq!(count, (1 + usize::from(checked)) * usize::from(size != 0));
+            assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+            if !checked {
+                assert_eq!(
+                    ALLOCATED_BYTES.with(Cell::get),
+                    size * core::mem::size_of::<perftest_flat::InlinePacket>()
+                );
+            }
+            assert_eq!(result, 3 * size);
+            assert_eq!(consumed, size);
+            assert!(error.is_null());
+            assert_eq!(perftest_flat::inline_inputs_empty_calls(), size);
+            for owner in &mut owners {
+                unsafe {
+                    assert_eq!(ffi::owner_inline_packet_len(owner), 0);
+                    ffi::owner_drop_packet(owner);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
     for size in [0usize, 1, 65536] {
         unsafe {

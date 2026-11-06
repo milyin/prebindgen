@@ -14,14 +14,14 @@ static uint64_t now(clockid_t clock) { struct timespec t; assert(clock_gettime(c
 static volatile uint64_t sink;
 static uint8_t large_text[4096], large_bytes[4096];
 struct fixed_pair {bench_resource *first, *second;};
-struct batch {void *rows; size_t n, iterations; int kind;};
+struct batch {void *owners; void *rows; size_t n, iterations; int kind;};
 static struct batch prepare(int kind,size_t n,size_t iterations) {
-    if(kind==5)return (struct batch){NULL,n,iterations,kind};
+    if(kind==5)return (struct batch){NULL,NULL,n,iterations,kind};
     if(kind>=11 && kind<=13) {
         size_t count=kind==12 ? 1 : iterations;
         struct fixed_pair *rows=malloc(sizeof(*rows)*count);assert(rows);
         for(size_t j=0;j<count;++j)rows[j]=(struct fixed_pair){bench_resource_new(0),bench_resource_new(1)};
-        return (struct batch){rows,1,iterations,kind};
+        return (struct batch){NULL,rows,1,iterations,kind};
     }
     size_t stride=sizeof(bench_take_handles_p0_w1_row);
     if(kind==1)stride=sizeof(bench_take_records_p0_w1_row);
@@ -32,6 +32,10 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
     if(kind==9 || kind==10)stride=sizeof(bench_take_buffers_p0_w1_row);
     if(kind==15)stride=sizeof(bench_take_tagged_p0_w1_row);
     if(kind==16)stride=sizeof(bench_take_tagged_buffers_p0_w1_row);
+    if(kind==17)stride=sizeof(bench_take_native_p0_w1_row);
+    if(kind==18)stride=sizeof(bench_take_native_mixed_p0_w1_row);
+    bench_native_packet *owners=(kind==17 || kind==18) && n ? malloc(sizeof(*owners)*n*iterations) : NULL;
+    assert(!(kind==17 || kind==18) || !n || owners);
     void *rows=n ? malloc(stride*n*iterations) : NULL; assert(!n || rows);
     for(size_t j=0;j<iterations;++j)for(size_t i=0;i<n;++i) {
         size_t k=j*n+i;
@@ -49,10 +53,12 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
         case 10: ((bench_take_buffers_p0_w1_row *)rows)[k]=(bench_take_buffers_p0_w1_row){bench_resource_new(i),{large_text,sizeof(large_text)},{large_bytes,sizeof(large_bytes)}}; break;
         case 15: ((bench_take_tagged_p0_w1_row *)rows)[k]=(bench_take_tagged_p0_w1_row){bench_resource_new(i),i%3==0 ? bench_input_tag_Low : i%3==1 ? bench_input_tag_Normal : bench_input_tag_High}; break;
         case 16: ((bench_take_tagged_buffers_p0_w1_row *)rows)[k]=(bench_take_tagged_buffers_p0_w1_row){bench_resource_new(i),i%3==0 ? bench_input_tag_Low : i%3==1 ? bench_input_tag_Normal : bench_input_tag_High,{(const uint8_t *)"abc",3},{(const uint8_t *)"abc",3}}; break;
+        case 17: owners[k]=bench_native_packet_new(i); ((bench_take_native_p0_w1_row *)rows)[k]=(bench_take_native_p0_w1_row){&owners[k]}; break;
+        case 18: owners[k]=bench_native_packet_new(i); ((bench_take_native_mixed_p0_w1_row *)rows)[k]=(bench_take_native_mixed_p0_w1_row){bench_resource_new(i),&owners[k],bench_resource_new(i+1)}; break;
         default: break;
         }
     }
-    return (struct batch){rows,n,iterations,kind};
+    return (struct batch){owners,rows,n,iterations,kind};
 }
 struct callback_input {struct batch batch; size_t next;};
 static bench_callback_fixed_callback_return callback_fixed_run(void *context) {
@@ -86,6 +92,8 @@ static uint64_t run(struct batch b) {
         case 9: case 10: total+=bench_take_buffers((bench_take_buffers_p0_w1_rows){b.rows ? (bench_take_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 15: total+=bench_take_tagged((bench_take_tagged_p0_w1_rows){b.rows ? (bench_take_tagged_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 16: total+=bench_take_tagged_buffers((bench_take_tagged_buffers_p0_w1_rows){b.rows ? (bench_take_tagged_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 17: total+=bench_take_native((bench_take_native_p0_w1_rows){b.rows ? (bench_take_native_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 18: total+=bench_take_native_mixed((bench_take_native_mixed_p0_w1_rows){b.rows ? (bench_take_native_mixed_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         default: total+=bench_control(b.n); break;
         }
     }
@@ -100,12 +108,12 @@ static struct score measure(int kind,size_t n,size_t iterations,bool counts,uint
     wall=now(CLOCK_MONOTONIC)-wall;cpu=now(CLOCK_THREAD_CPUTIME_ID)-cpu;
     if(counts)bench_counter_stop(allocations);
     if(kind==12) {struct fixed_pair pair=*(struct fixed_pair *)b.rows;bench_drop_resource(pair.first);bench_drop_resource(pair.second);}
-    free(b.rows);return (struct score){wall,cpu,sum};
+    free(b.owners);free(b.rows);return (struct score){wall,cpu,sum};
 }
 int main(int argc,char **argv) {
     assert(argc==6);bool counts=strcmp(argv[1],"count")==0;assert(counts || strcmp(argv[1],"time")==0);assert(bench_counter_enabled()==counts);
-    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many","tagged","tagged_buffers"};int kind=-1;
-    for(int i=0;i<17;++i)if(strcmp(argv[2],names[i])==0)kind=i;
+    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many","tagged","tagged_buffers","native","native_mixed"};int kind=-1;
+    for(int i=0;i<19;++i)if(strcmp(argv[2],names[i])==0)kind=i;
     // 1365 Euro signs plus one ASCII byte: valid UTF-8 exercises the scan as
     // well as copying. All source payload storage is prepared outside timing.
     for(size_t i=0;i+2<sizeof(large_text);i+=3) {large_text[i]=0xe2;large_text[i+1]=0x82;large_text[i+2]=0xac;}
@@ -125,6 +133,8 @@ int main(int argc,char **argv) {
     if(kind==10)expected+=(sizeof(large_text)+sizeof(large_bytes)+2*0x5a)*n;
     if(kind==15 || kind==16)for(size_t i=0;i<n;++i)expected+=i%3+1;
     if(kind==16)expected+=(3+3+'a'+'c')*n;
+    if(kind==17)expected+=6*n;
+    if(kind==18)expected=3*expected+7*n;
     Dl_info library;assert(dladdr((void *)bench_control,&library));printf("LIBRARY,%s\n",library.dli_fname);
     if(counts) {
         for(int j=0;j<10;++j)assert(measure(kind,n,1,false,NULL).sum==expected);
