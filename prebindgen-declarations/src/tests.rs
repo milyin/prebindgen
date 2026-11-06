@@ -1182,6 +1182,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         child.acknowledgement = Some(ack);
         child.resources.push(Resource {
             registered: false,
+            records_consumption: false,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#index)),
             access: Access::Move,
             active: quote!(selected),

@@ -170,6 +170,7 @@ pub fn inline_rows_catch(callback: impl Fn() -> Vec<InlineReturn>) -> bool {
 
 #[prebindgen]
 pub fn inline_packet_empty() -> InlinePacket {
+    crate::inline_inputs::empty_event();
     InlinePacket {
         tag: 0,
         #[cfg(feature = "layout-wide")]

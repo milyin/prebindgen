@@ -77,6 +77,57 @@ pub(crate) fn defer_buffer_decode(
     }
 }
 
+/// Prepare C row leaves once, independently of the enum-aware declaration codec.
+pub(crate) fn prepare_input_leaf(
+    plan: &mut InputPlan<CWire>,
+    ty: &syn::Type,
+    wire: &syn::Ident,
+    var: &syn::Ident,
+    active: &prebindgen_declarations::Condition,
+) -> Result<()> {
+    if let WireNode::Leaf(wires) = &plan.node {
+        if let [Wire {
+            kind:
+                CWire::Owned {
+                    owner,
+                    by_value: false,
+                    ..
+                },
+            ..
+        }] = wires.as_slice()
+        {
+            *plan = owned::input(
+                owner.clone(),
+                ty,
+                wire.clone(),
+                var.clone(),
+                active,
+                false,
+                true,
+            );
+        }
+    }
+    defer_buffer_decode(plan, ty, wire, var, active);
+    // A row can contain several moves and a panicking empty-owner factory.
+    // Acknowledge each successful leaf acquisition in wire order, keeping
+    // its alias descriptor available to the enclosing grouped check.
+    for resource in &mut plan.resources {
+        if !resource.registered && !resource.records_consumption && resource.access == Access::Move
+        {
+            if !matches!(
+                resource.identity,
+                prebindgen_conversions::ResourceIdentity::Single(_)
+            ) {
+                return Err("C row leaf acquisition requires one resource identity".into());
+            }
+            let condition = &resource.active;
+            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); }));
+            resource.records_consumption = true;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
@@ -91,6 +142,10 @@ pub(crate) fn input(
                 | CWire::Pointer { .. }
                 | CWire::DeferredBuffer
                 | CWire::Enum { .. }
+                | CWire::Owned {
+                    by_value: false,
+                    ..
+                }
         )
     });
     let slice = format_ident!("{wire}_rows");
@@ -110,7 +165,8 @@ pub(crate) fn input(
     }
     // These leaves validate only Copy scalars and raw pointers. Buffer/enum decoding
     // runs during construction, once the complete handle group has been checked.
-    // Inline-owner, callback and nested-row conversions keep their prepared
+    // Inline owners replace their source only during acquisition, recording
+    // successful moves themselves. By-value owners, callbacks and nested rows keep prepared
     // state until their validation effects have been audited separately.
     let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {
@@ -284,7 +340,7 @@ pub(crate) fn emit_schemas(
             "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
         ));
         if !is_output {
-            header.push_str("/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */\n");
+            header.push_str("/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */\n");
         }
         if is_output {
             header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));

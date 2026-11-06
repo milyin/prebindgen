@@ -300,7 +300,7 @@ impl Codec for CCodec {
             return Err("resolve Optional operations before leaf compilation".into());
         }
         if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
-            return Ok(owned::input(owner, ty, w, v, active, false));
+            return Ok(owned::input(owner, ty, w, v, active, false, false));
         }
         if owned::pointer_declared(_flat, ty) {
             return prebindgen_conversions::boxed::input(
@@ -347,7 +347,7 @@ impl Codec for CCodec {
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
         let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
-        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
+        sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
         Ok(plan)
     }
     fn output_leaf(
@@ -3000,6 +3000,59 @@ mod generation_tests {
             .validation
             .to_string();
         assert!(!code.contains("_prepared"));
+    }
+
+    #[test]
+    fn pointer_inline_owner_rows_prepare_empty_only_after_group_check() {
+        use prebindgen_declarations::{expand_param, fun};
+        let mut flat = Cbindgen::new(error_model("pub struct Owner{} pub type Handle=String; pub fn empty()->Owner{} pub fn row(first:Handle,owner:Owner,last:Handle)->i64{} pub fn rows(values:Vec<i64>)->i64{} pub fn direct(values:Vec<Owner>)->i64{}"))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .opaque_owned_struct_with_empty("owner", syn::parse_quote!(Owner), OpaqueLayout::auto::<u64>(), fun!(empty))
+            .expand(expand_param!(i64).variant(fun!(row)))
+            .function(fun!(rows)).panic().function(fun!(direct)).panic().prepare().unwrap();
+        let plan = flat.function("rows").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap();
+        let code = prebindgen_conversions::render_input_alias_checks(&plan.validation, true)
+            .unwrap()
+            .to_string();
+        assert!(!code.contains("_prepared"), "{code}");
+        assert_eq!(code.matches(":: empty (").count(), 1, "{code}");
+        assert_eq!(code.matches(":: row (").count(), 1, "{code}");
+        assert!(
+            code.find("accept_group").unwrap() < code.find(":: empty (").unwrap(),
+            "{code}"
+        );
+        assert_eq!(
+            code.matches("__prebindgen_input_consumed . set").count(),
+            3,
+            "{code}"
+        );
+        prebindgen_declarations::bind_input(
+            &mut flat,
+            &CCodec,
+            "direct",
+            "values",
+            &prebindgen_declarations::Input::auto(),
+            &(),
+        )
+        .unwrap();
+        let plan = flat.function("direct").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap();
+        let code = prebindgen_conversions::render_input_alias_checks(&plan.validation, true)
+            .unwrap()
+            .to_string();
+        assert!(!code.contains("_prepared"), "{code}");
+        assert_eq!(code.matches(":: empty (").count(), 1, "{code}");
+        assert!(
+            code.find("accept_group").unwrap() < code.find(":: empty (").unwrap(),
+            "{code}"
+        );
     }
 
     #[test]

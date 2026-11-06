@@ -215,7 +215,7 @@ impl Codec for EnumCodec<'_> {
         }
         if self.return_owners.is_some() {
             if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
-                return Ok(owned::input(owner, ty, w, v, active, true));
+                return Ok(owned::input(owner, ty, w, v, active, true, false));
             }
         }
         let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
@@ -257,7 +257,7 @@ impl Codec for EnumCodec<'_> {
             let statements = std::mem::take(&mut plan.statements);
             plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
         }
-        sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
+        sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
         Ok(plan)
     }
     fn output_leaf(

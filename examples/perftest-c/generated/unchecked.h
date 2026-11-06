@@ -59,7 +59,7 @@ typedef struct {
     fast_owned_resource * v3;
 } fast_callback_0605b38a2f053a56_callback_return_w3_row;
 typedef struct { fast_callback_0605b38a2f053a56_callback_return_w3_row *data; size_t len; } fast_callback_0605b38a2f053a56_callback_return_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int32_t v0;
     fast_callback_0605b38a2f053a56_callback_return_w3_rows v1;
@@ -88,12 +88,12 @@ typedef struct {
     fast_owned_resource * v3;
 } fast_callback_5b6f807c27356f4b_callback_return_w8_row;
 typedef struct { fast_callback_5b6f807c27356f4b_callback_return_w8_row *data; size_t len; } fast_callback_5b6f807c27356f4b_callback_return_w8_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     fast_callback_5b6f807c27356f4b_callback_return_w8_rows v0;
 } fast_callback_5b6f807c27356f4b_callback_return_w4_row;
 typedef struct { fast_callback_5b6f807c27356f4b_callback_return_w4_row *data; size_t len; } fast_callback_5b6f807c27356f4b_callback_return_w4_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     fast_owned_resource * v0;
     fast_callback_5b6f807c27356f4b_callback_return_w4_rows v1;
@@ -110,7 +110,7 @@ typedef struct {
     fast_owned_resource * v0;
 } fast_callback_8735da2fee137b57_callback_return_w1_row;
 typedef struct { fast_callback_8735da2fee137b57_callback_return_w1_row *data; size_t len; } fast_callback_8735da2fee137b57_callback_return_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Rust signature: ()->Vec < perftest_flat :: OwnedResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     fast_callback_8735da2fee137b57_callback_return_w1_rows (*run)(void *context);
@@ -145,12 +145,12 @@ typedef struct {
     fast_owned_resource * v0;
 } fast_alias_nested_sum_p0_w5_row;
 typedef struct { fast_alias_nested_sum_p0_w5_row *data; size_t len; } fast_alias_nested_sum_p0_w5_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     fast_alias_nested_sum_p0_w5_rows v0;
 } fast_alias_nested_sum_p0_w1_row;
 typedef struct { fast_alias_nested_sum_p0_w1_row *data; size_t len; } fast_alias_nested_sum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Collection values[]: p0_w5 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
@@ -164,7 +164,7 @@ typedef struct {
     fast_buffer v5;
 } fast_buffer_rows_enum_p0_w1_row;
 typedef struct { fast_buffer_rows_enum_p0_w1_row *data; size_t len; } fast_buffer_rows_enum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection rows: p0_w1 carries rows of 6 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v2: 0 = None, 1 = Some; other active flags are errors. */
@@ -179,7 +179,7 @@ typedef struct {
     fast_buffer v2;
 } fast_buffer_rows_optional_p0_w3_row;
 typedef struct { fast_buffer_rows_optional_p0_w3_row *data; size_t len; } fast_buffer_rows_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection rows: p0_w3 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
@@ -194,7 +194,7 @@ typedef struct {
     fast_buffer v2;
 } fast_buffer_rows_sum_p0_w1_row;
 typedef struct { fast_buffer_rows_sum_p0_w1_row *data; size_t len; } fast_buffer_rows_sum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection rows: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
@@ -215,7 +215,7 @@ typedef struct {
     fast_owned_resource * v0;
 } fast_collection_alias_p0_w1_row;
 typedef struct { fast_collection_alias_p0_w1_row *data; size_t len; } fast_collection_alias_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t fast_collection_alias(fast_collection_alias_p0_w1_rows p0_w1, const fast_owned_resource * p1_w1);
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
@@ -228,7 +228,7 @@ typedef struct {
     fast_input_tag v4;
 } fast_enum_inputs_alternatives_p0_w1_row;
 typedef struct { fast_enum_inputs_alternatives_p0_w1_row *data; size_t len; } fast_enum_inputs_alternatives_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v4 == -1 means None; other values encode Some and must be valid payloads. */
@@ -241,7 +241,7 @@ typedef struct {
     fast_input_tag v1;
 } fast_enum_inputs_borrow_p1_w1_row;
 typedef struct { fast_enum_inputs_borrow_p1_w1_row *data; size_t len; } fast_enum_inputs_borrow_p1_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection rows: p1_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v1 == -1 means None; other values encode Some and must be valid payloads. */
@@ -257,7 +257,7 @@ typedef struct {
     fast_input_tag v1;
 } fast_enum_inputs_optional_p0_w3_row;
 typedef struct { fast_enum_inputs_optional_p0_w3_row *data; size_t len; } fast_enum_inputs_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection rows: p0_w3 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
@@ -274,7 +274,7 @@ typedef struct {
     fast_input_tag v1;
 } fast_enum_inputs_take_p0_w1_row;
 typedef struct { fast_enum_inputs_take_p0_w1_row *data; size_t len; } fast_enum_inputs_take_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Collection rows: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */

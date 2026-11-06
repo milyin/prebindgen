@@ -4013,19 +4013,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
                         if (p0_w5) == 1i32 {
                             ::prebindgen_runtime::validate_pointer(p0_w19_pointer)?;
                         }
-                        if (p0_w5) == 0i32 {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w8_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w7 = if (p0_w5) == 0i32 {
                             Some(unsafe { Box::from_raw(p0_w8_pointer) })
                         } else {
                             None
                         };
+                        if (p0_w5) == 0i32 {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w11: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -4619,19 +4615,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         if (p0_w14) != 0 && (p0_w14) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<perftest_flat::SparseCode> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -4878,19 +4870,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
                         if p0_w7 == 1i32 {
                             ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
                         }
-                        if p0_w7 == 1i32 {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w10_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w9 = if p0_w7 == 1i32 {
                             Some(unsafe { Box::from_raw(p0_w10_pointer) })
                         } else {
                             None
                         };
+                        if p0_w7 == 1i32 {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w11: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -5137,19 +5125,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                         if (p0_w12) != 0 && (p0_w12) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w9: Option<String> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -5370,19 +5354,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -5589,19 +5569,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<String> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -5829,19 +5805,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
                         if (p0_w12) != 0 && (p0_w12) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w9: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -11396,21 +11368,15 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                                         callback_return_w5_pointer,
                                                     )?;
                                                 }
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + (::core::iter::once(
-                                                                    (callback_return_w5_pointer.addr()) as usize,
-                                                                ))
-                                                                    .count(),
-                                                        );
-                                                }
                                                 let callback_return_w4 = if true {
                                                     Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
                                                 } else {
                                                     None
                                                 };
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
                                                 let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
                                                     .expect("active allocation");
                                                 let callback_return_w0 = callback_return_w4;
@@ -11649,21 +11615,15 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                                         callback_return_w5_pointer,
                                                     )?;
                                                 }
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + (::core::iter::once(
-                                                                    (callback_return_w5_pointer.addr()) as usize,
-                                                                ))
-                                                                    .count(),
-                                                        );
-                                                }
                                                 let callback_return_w4 = if true {
                                                     Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
                                                 } else {
                                                     None
                                                 };
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
                                                 let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
                                                     .expect("active allocation");
                                                 let callback_return_w0 = callback_return_w4;
@@ -13816,31 +13776,15 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                                                     callback_return_w21_pointer,
                                                                 )?;
                                                             }
-                                                            if true {
-                                                                __prebindgen_input_consumed
-                                                                    .set(
-                                                                        __prebindgen_input_consumed.get()
-                                                                            + (::core::iter::once(
-                                                                                (callback_return_w13_pointer.addr()) as usize,
-                                                                            ))
-                                                                                .count(),
-                                                                    );
-                                                            }
-                                                            if callback_return_w19 == 1i32 {
-                                                                __prebindgen_input_consumed
-                                                                    .set(
-                                                                        __prebindgen_input_consumed.get()
-                                                                            + (::core::iter::once(
-                                                                                (callback_return_w21_pointer.addr()) as usize,
-                                                                            ))
-                                                                                .count(),
-                                                                    );
-                                                            }
                                                             let callback_return_w12 = if true {
                                                                 Some(unsafe { Box::from_raw(callback_return_w13_pointer) })
                                                             } else {
                                                                 None
                                                             };
+                                                            if true {
+                                                                __prebindgen_input_consumed
+                                                                    .set(__prebindgen_input_consumed.get() + 1);
+                                                            }
                                                             #[allow(unused_mut, unused_assignments)]
                                                             let mut callback_return_w16: Option<&str> = None;
                                                             let callback_return_w20 = if callback_return_w19 == 1i32 {
@@ -13848,6 +13792,10 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                                             } else {
                                                                 None
                                                             };
+                                                            if callback_return_w19 == 1i32 {
+                                                                __prebindgen_input_consumed
+                                                                    .set(__prebindgen_input_consumed.get() + 1);
+                                                            }
                                                             let callback_return_w12: perftest_flat::OwnedResource = *callback_return_w12
                                                                 .expect("active allocation");
                                                             let callback_return_w14: char = ::core::convert::Into::into(
@@ -14349,33 +14297,15 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                                         callback_return_w18_pointer,
                                                     )?;
                                                 }
-                                                if callback_return_w7 == 1i32 {
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + (::core::iter::once(
-                                                                    (callback_return_w10_pointer.addr()) as usize,
-                                                                ))
-                                                                    .count(),
-                                                        );
-                                                }
-                                                if (callback_return_w7 == 1i32)
-                                                    && (callback_return_w16 == 1i32)
-                                                {
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + (::core::iter::once(
-                                                                    (callback_return_w18_pointer.addr()) as usize,
-                                                                ))
-                                                                    .count(),
-                                                        );
-                                                }
                                                 let callback_return_w9 = if callback_return_w7 == 1i32 {
                                                     Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
                                                 } else {
                                                     None
                                                 };
+                                                if callback_return_w7 == 1i32 {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
                                                 #[allow(unused_mut, unused_assignments)]
                                                 let mut callback_return_w13: Option<&str> = None;
                                                 let callback_return_w17 = if (callback_return_w7 == 1i32)
@@ -14385,6 +14315,12 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                                 } else {
                                                     None
                                                 };
+                                                if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
                                                 let callback_return_w6 = if callback_return_w7 == 1i32 {
                                                     let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
                                                         .expect("active allocation");
@@ -14628,19 +14564,15 @@ pub unsafe extern "C" fn perftest_collection_alias(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
                         let p0_w0 = p0_w4;
@@ -15450,19 +15382,15 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
                         let p0_w4: perftest_flat::CollectionItem = perftest_flat::collection_construct(
@@ -16022,19 +15950,15 @@ pub unsafe extern "C" fn perftest_collection_handles(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
                         let p0_w0 = p0_w4;
@@ -16316,19 +16240,15 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
                         let p0_w0 = p0_w4;
@@ -18321,19 +18241,15 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                                     if true {
                                         ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
                                     }
-                                    if true {
-                                        __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w9_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
-                                    }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
                                     } else {
                                         None
                                     };
+                                    if true {
+                                        __prebindgen_input_consumed
+                                            .set(__prebindgen_input_consumed.get() + 1);
+                                    }
                                     let p0_w8: perftest_flat::OwnedResource = *p0_w8
                                         .expect("active allocation");
                                     let p0_w4 = p0_w8;
@@ -18640,19 +18556,15 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                                     if true {
                                         ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
                                     }
-                                    if true {
-                                        __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w9_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
-                                    }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
                                     } else {
                                         None
                                     };
+                                    if true {
+                                        __prebindgen_input_consumed
+                                            .set(__prebindgen_input_consumed.get() + 1);
+                                    }
                                     let p0_w8: perftest_flat::OwnedResource = *p0_w8
                                         .expect("active allocation");
                                     let p0_w4 = p0_w8;
@@ -19345,19 +19257,15 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w7_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w6: perftest_flat::OwnedResource = *p0_w6
                             .expect("active allocation");
                         let p0_w2 = p0_w6;
@@ -19595,19 +19503,15 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w7_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w6: perftest_flat::OwnedResource = *p0_w6
                             .expect("active allocation");
                         let p0_w2 = p0_w6;
@@ -21420,19 +21324,15 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
                         let p0_w0 = p0_w4;
@@ -21732,19 +21632,15 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
                         let p0_w0 = p0_w4;
@@ -22504,19 +22400,15 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
                         let p0_w4: perftest_flat::CollectionItem = perftest_flat::collection_construct(
@@ -22909,19 +22801,15 @@ pub unsafe extern "C" fn perftest_enum_inputs_alternatives(
                             ::prebindgen_runtime::validate_pointer(p0_w13_pointer)?;
                         }
                         let p0_w15: i32 = i32::from((p0_w17) != -1);
-                        if (p0_w5) == 0i32 {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w8_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w7 = if (p0_w5) == 0i32 {
                             Some(unsafe { Box::from_raw(p0_w8_pointer) })
                         } else {
                             None
                         };
+                        if (p0_w5) == 0i32 {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w9: Option<perftest_flat::InputTag> = None;
                         #[allow(unused_mut, unused_assignments)]
@@ -23538,19 +23426,15 @@ pub unsafe extern "C" fn perftest_enum_inputs_optional(
                             ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
                         }
                         let p0_w12: i32 = i32::from((p0_w14) != -1);
-                        if p0_w7 == 1i32 {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w10_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w9 = if p0_w7 == 1i32 {
                             Some(unsafe { Box::from_raw(p0_w10_pointer) })
                         } else {
                             None
                         };
+                        if p0_w7 == 1i32 {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w13: Option<perftest_flat::InputTag> = None;
                         let p0_w6 = if p0_w7 == 1i32 {
@@ -23802,19 +23686,15 @@ pub unsafe extern "C" fn perftest_enum_inputs_take(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
                             None
                         };
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(__prebindgen_input_consumed.get() + 1);
+                        }
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<perftest_flat::InputTag> = None;
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5

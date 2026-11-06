@@ -295,7 +295,8 @@ pub(crate) fn input<C: Codec>(
             &quote!(if #condition {for address in #addresses {#group.push((address,#exclusive));}}),
             &transport.prepared_values,
         )?);
-        if resource.access == prebindgen_conversions::Access::Move {
+        if resource.access == prebindgen_conversions::Access::Move && !resource.records_consumption
+        {
             count.extend(prepared(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#addresses).count());}), &transport.prepared_values)?);
         }
     }
@@ -304,6 +305,7 @@ pub(crate) fn input<C: Codec>(
         .into_iter()
         .map(|resource| Resource {
             registered: true,
+            records_consumption: true,
             // Runtime addresses are checked while each row is alive. This descriptor
             // retains dynamic cardinality for choosing the enclosing call's history.
             identity: ResourceIdentity::Many(quote!(::core::iter::empty::<usize>())),

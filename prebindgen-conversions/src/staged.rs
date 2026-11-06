@@ -43,6 +43,7 @@ impl ParameterAliasCheck {
             .map(|resource| {
                 Ok(Resource {
                     registered: resource.registered,
+                    records_consumption: resource.records_consumption,
                     active: context.render(&resource.active)?,
                     access: resource.access,
                     identity: if resource.registered {
@@ -505,7 +506,8 @@ where
         return Err("cannot mix deferred resource conversions with eagerly constructed inputs; prepare all resource-bearing inputs through the declaration compiler".into());
     }
     let early_receipt = eager
-        || (acknowledge.is_some() && check.resources.iter().any(|r| r.access == Access::Move));
+        || ((acknowledge.is_some() || check.resources.iter().any(|r| r.records_consumption))
+            && check.resources.iter().any(|r| r.access == Access::Move));
     let setup = if early_receipt {
         let counter = context_counter(context)?;
         let aliases = if eager {
@@ -526,7 +528,7 @@ where
         let counts = check
             .resources
             .iter()
-            .filter(|r| r.access == Access::Move)
+            .filter(|r| r.access == Access::Move && !r.records_consumption)
             .map(|r| {
                 let active = &r.active;
                 let count = match &r.identity {

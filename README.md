@@ -687,6 +687,14 @@ shared borrows are allowed; an exclusive borrow or move conflicts with every
 other active use of that allocation. Inactive selector arms neither validate nor
 acquire their inputs.
 
+Low-level adapters constructing `prebindgen_conversions::Resource` use
+`records_consumption: false` for compiler-managed ownership counts. Set it to
+`true` when acquisition updates `__prebindgen_input_consumed` after each successful
+move, so failures between transfers preserve the exact consumed prefix. This is
+independent of `registered`, which tracks alias checking. Existing external
+adapter struct literals need the new field; ordinary binding declarations do not
+change.
+
 Consuming C Result calls return an ownership count through `size_t *ownership`.
 The count identifies the consumed prefix of active owned wire values in argument,
 row and field order, including on failure. A callback context counts as one value.
@@ -943,7 +951,8 @@ Byte inputs and JNI byte collections retain their byte-buffer transport.
 Collection inputs without handle conflicts reserve their row count and fill
 final native storage directly, including custom constructors. Resource-bearing
 rows retain decoded state when decoding cannot safely be repeated. With alias checks enabled, flat C input
-rows made only of scalar fields, fieldless enum tags, opaque handles and text/byte buffer descriptors use two traversals:
+rows made only of scalar fields, fieldless enum tags, opaque handles, pointers to
+inline owners and text/byte buffer descriptors use two traversals:
 validate and check the complete address group, then reread the rows and construct
 the final Rust vector directly. This omits the prepared-row closure buffer.
 Constructors still run once, after the grouped check. Enum decoding, buffer decoding, UTF-8
@@ -953,7 +962,12 @@ constructor finishes. Invalid later enum tags or buffers may fail after earlier 
 the current row's handles have been consumed. Rust drops the constructed prefix
 and acquired values; ownership receipts identify the consumed prefix, and unread
 owners remain with the caller. Direct function parameter decoding is unchanged.
-Inline-owner and callback rows retain prepared storage; flat C rows in that
+For inline owners, Rust creates the empty replacement immediately before moving
+each native value out of its C storage. Successful moves update the ownership
+receipt individually. If an empty factory panics midway through a row, the
+receipt includes earlier moved fields but excludes that owner and later fields.
+Native String/Vec buffers keep their original addresses and capacities.
+By-value inline owners (callback return carriers) and callback rows retain prepared storage; flat C rows in that
 fallback also defer their enum and buffer decoding until construction, with the
 same consumption-prefix error behavior.
 Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged

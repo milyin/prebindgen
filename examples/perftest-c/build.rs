@@ -1001,6 +1001,52 @@ fn main() {
         .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
         .error_mapper(pq!(String), fun!(inline_packet_error));
     let mut owners = owners
+        .opaque_ptr("resource", pq!(OwnedResource))
+        .function(fun!(collection_resource_new))
+        .panic()
+        .function(fun!(owned_resource_id))
+        .panic()
+        .function(fun!(owned_resource_drops))
+        .panic()
+        .function(fun!(inline_inputs_reset))
+        .panic()
+        .function(fun!(inline_inputs_empty_calls))
+        .panic()
+        .function(fun!(inline_inputs_constructor_calls))
+        .panic()
+        .function(fun!(inline_inputs_calls))
+        .panic()
+        .function(
+            fun!(inline_inputs_mixed)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
+        )
+        .function(
+            fun!(inline_inputs_mixed_fast)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
+        )
+        .alias_checks(false)
+        .function(
+            fun!(inline_inputs_pair)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_pair))),
+        )
+        .function(
+            fun!(inline_inputs_pair_fast)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_pair))),
+        )
+        .alias_checks(false)
+        .function(
+            fun!(inline_inputs_optional)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
+        )
+        .function(fun!(inline_inputs_borrow).expand_param(
+            "rows",
+            expand_param!(usize).variant(fun!(inline_input_borrowed)),
+        ))
+        .function(fun!(inline_inputs_packets))
+        .function(fun!(inline_inputs_packets_fast))
+        .alias_checks(false)
+        .function(fun!(inline_inputs_bytes))
+        .function(fun!(inline_inputs_texts))
         .enum_type("input_tag", pq!(InputTag))
         .function(
             fun!(enum_inputs_inline)
@@ -1026,6 +1072,7 @@ fn main() {
         fun!(inline_numbers_take),
         fun!(inline_bytes_alias),
         fun!(inline_packet_new),
+        fun!(inline_packet_len),
         fun!(inline_packet_ref),
         fun!(inline_child_id),
         fun!(inline_packet_take),

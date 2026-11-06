@@ -19,6 +19,7 @@ static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4
 #include "fixed_callback_cleanup.h"
 #include "collection_cleanup.h"
 #include "enum_inputs.h"
+#include "inline_inputs.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -606,6 +607,7 @@ int main(void) {
     check_collections();
     check_buffer_inputs();
     check_enum_inputs();
+    check_inline_inputs();
     check_alias_options();
     check_fixed_callback_cleanup();
     check_collection_cleanup();
