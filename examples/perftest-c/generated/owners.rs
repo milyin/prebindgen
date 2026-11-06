@@ -1973,7 +1973,7 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                                             }
                                         };
                                         let mut callback_return_w3_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w4.saturating_mul(3usize));
+                                            .begin_group(callback_return_w4.saturating_mul(2usize));
                                         for callback_return_w5 in 0..callback_return_w4 {
                                             let callback_return_w10 = callback_return_w3_rows[callback_return_w5]
                                                 .v0;
@@ -2474,7 +2474,7 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                             }
                                         };
                                         let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w2.saturating_mul(3usize));
+                                            .begin_group(callback_return_w2.saturating_mul(2usize));
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
                                                 .v0;
@@ -5639,7 +5639,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                             }
                                         };
                                         let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w2.saturating_mul(2usize));
+                                            .begin_group(callback_return_w2.saturating_mul(1usize));
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
                                                 .v0;
