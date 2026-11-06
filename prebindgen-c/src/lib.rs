@@ -3073,6 +3073,7 @@ mod generation_tests {
             .unwrap();
         syn::parse_file(&generation.rust).unwrap();
         assert!(!generation.rust.contains("_prepared"));
+        assert_eq!(generation.rust.matches("for callback_return_").count(), 2);
         assert!(generation.rust.contains("accept_group"));
         assert!(generation.rust.contains("addr_of!"));
     }
