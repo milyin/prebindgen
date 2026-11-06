@@ -157,7 +157,7 @@ pub(crate) fn input(
     let truncated = active.and(quote!(#bytes.len()<::core::mem::size_of::<#ty>()));
     child.validation = quote! {
         let #bytes=if #condition {#read?}else{Vec::new()};
-        let #reader=::prebindgen_jni_runtime::bulk::Reader::new(&#bytes);
+        let #reader=&::prebindgen_jni_runtime::bulk::Reader::new(&#bytes);
         if #truncated{return Err("truncated bulk root record".into());}
         #bind #validation
     };
@@ -238,7 +238,20 @@ pub(crate) fn sequence_input(
         values.push((name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
-        reread_rows: false,
+        // The enclosing bulk frame is cached once in native memory. These
+        // fields are Copy native values; buffer/enum decoding is deferred by
+        // the row leaf hook. Nested rows and callbacks retain their transport.
+        reread_rows: crate::group::row_fields(element).all(|w| {
+            matches!(
+                w.kind,
+                JniWire::Scalar { .. }
+                    | JniWire::Selector { .. }
+                    | JniWire::Handle { .. }
+                    | JniWire::Enum { .. }
+                    | JniWire::NativeBuffer { .. }
+                    | JniWire::Native128 { .. }
+            )
+        }),
         controls: vec![Wire {
             name: wire.clone(),
             kind: JniWire::NativeRows {
@@ -308,6 +321,61 @@ pub(crate) fn sequence_output(
     })
 }
 
+fn decode_buffer(text: bool, wire: &syn::Ident) -> TokenStream {
+    let reader = parameter("bulk_reader");
+    if text {
+        quote!(::core::str::from_utf8(#reader.buffer_range(#wire)?.ok_or("null bulk text")?).map_err(|_|"invalid UTF-8 in bulk text")?)
+    } else {
+        quote!(#reader.buffer_range(#wire)?.ok_or("null bulk bytes")?)
+    }
+}
+
+/// Keep potentially owning/borrowed row temporaries out of repeated validation.
+pub(crate) fn prepare_row_leaf(
+    plan: &mut InputPlan<JniWire>,
+    ty: &syn::Type,
+    wire: &syn::Ident,
+    var: &syn::Ident,
+    active: &Condition,
+) {
+    let WireNode::Leaf(wires) = &plan.node else {
+        return;
+    };
+    let [field] = wires.as_slice() else {
+        return;
+    };
+    let (storage, decode) = match &field.kind {
+        JniWire::NativeBuffer { text } => {
+            let decode = decode_buffer(*text, wire);
+            match ty {
+                syn::Type::Reference(r)
+                    if !matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]") =>
+                {
+                    let owned = &r.elem;
+                    (
+                        quote!(#owned),
+                        quote!(::core::convert::Into::<#owned>::into(#decode)),
+                    )
+                }
+                _ => (if *text { quote!(&str) } else { quote!(&[u8]) }, decode),
+            }
+        }
+        JniWire::Enum { enum_type, .. } => {
+            let native = &enum_type.mapping.ty;
+            (quote!(#native), enum_type.mapping.decode(quote!(#wire)))
+        }
+        _ => return,
+    };
+    let condition = active.rust();
+    let statements = std::mem::take(&mut plan.statements);
+    plan.validation = TokenStream::new();
+    // The option lives outside Optional/Selector blocks, through construction.
+    plan.acquire.extend(
+        quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#storage> = None;),
+    );
+    plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
+}
+
 pub(crate) fn input_leaf(
     flat: &Bindings,
     ty: &syn::Type,
@@ -318,12 +386,7 @@ pub(crate) fn input_leaf(
     match Value::of(ty) {
         Some(Value::Text) | Some(Value::Bytes) => {
             let text = Value::of(ty) == Some(Value::Text);
-            let reader = parameter("bulk_reader");
-            let decode = if text {
-                quote!(::core::str::from_utf8(#reader.buffer_range(#w)?.ok_or("null bulk text")?).map_err(|_|"invalid UTF-8 in bulk text")?)
-            } else {
-                quote!(#reader.buffer_range(#w)?.ok_or("null bulk bytes")?)
-            };
+            let decode = decode_buffer(text, &w);
             prebindgen_conversions::value::input(
                 ty,
                 w,

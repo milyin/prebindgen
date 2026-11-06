@@ -95,6 +95,13 @@ fn main() {
         } else {
             (owned_handles.callback_return(), nested_owners.callback_return())
         };
+        let callback_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2])));
+        let callback_input=if bulk {callback_input.bulk()} else {callback_input};
+        let callback_records=fun!(callback_owned_records).expand_param("callback",callback!(impl Fn()->Vec<HandleRecord>).name("OwnedRecordsCallback").expand_return(callback_input));
+        let callback_records=if bulk {callback_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {callback_records};
+        let buffer_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;3])));
+        let buffers=fun!(owned_buffer_records_echo).expand_param("values",if bulk {buffer_input.bulk()}else{buffer_input});
+        let buffers=if bulk {buffers.expand_return(expand_return!(BufferRecord).field_self_into().bulk())}else{buffers};
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
@@ -105,6 +112,7 @@ fn main() {
                 package!()
                     .class(ptr_class!(InputHandle))
                     .class(data_class!(HandleRecord))
+                    .class(data_class!(BufferRecord))
                     .fun(fun!(input_handle_new))
                     .fun(fun!(input_handle_value))
                     .fun(fun!(buffer_sizes))
@@ -113,6 +121,8 @@ fn main() {
                     .fun(handle_records)
                     .fun(owned_handles)
                     .fun(owned_records)
+                    .fun(callback_records)
+                    .fun(buffers)
                     .fun(nested_owners)
                     .class(data_class!(Row))
                     .class(data_class!(WideRow))

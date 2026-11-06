@@ -12,6 +12,37 @@ fn flat(source: &str) -> Bindings {
 }
 
 #[test]
+fn bulk_resource_rows_replay_while_object_rows_decode_once() {
+    let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
+    let recipe = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4])));
+    for bulk in [false, true] {
+        let input = if bulk {
+            recipe.clone().bulk()
+        } else {
+            recipe.clone()
+        };
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Row))
+                    .class(enum_class!(Kind))
+                    .fun(fun!(rows).expand_param("values", input)),
+            )
+            .build()
+            .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert_eq!(generated.rust.contains("_prepared"), !bulk);
+        if bulk {
+            assert_eq!(generated.rust.matches("for p0_w").count(), 2);
+            assert!(generated.rust.contains("accept_group"));
+        }
+    }
+}
+
+#[test]
 fn gc_managed_is_opt_in_and_preserves_native_call_generation() {
     let generate_handle = |managed: bool| {
         let class = ptr_class!(Handle).name("Resource");

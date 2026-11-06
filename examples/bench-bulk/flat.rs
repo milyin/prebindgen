@@ -286,3 +286,10 @@ pub fn buffer_sizes(text: &str, bytes: &[u8]) -> i64 { (text.len() + bytes.len()
 
 #[prebindgen]
 pub fn selected_handle(value: i64) -> i64 { value }
+
+#[prebindgen]
+pub fn callback_owned_records(callback:impl Fn()->Vec<HandleRecord>)->Vec<HandleRecord> {callback()}
+#[prebindgen]
+pub struct BufferRecord {pub handle:InputHandle,pub text:String,pub bytes:Vec<u8>}
+#[prebindgen]
+pub fn owned_buffer_records_echo(values:Vec<BufferRecord>)->Vec<BufferRecord> {std::hint::black_box(values)}

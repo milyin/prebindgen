@@ -469,3 +469,86 @@ pub fn bulk_nested_envelope(values: Vec<BulkInputEnvelope>) -> i64 {
 pub fn bulk_input_envelope_new(values: Vec<Vec<i64>>) -> BulkInputEnvelope {
     BulkInputEnvelope { values }
 }
+
+// Row-local borrowed conversions used to verify bulk replay lifetimes and cleanup.
+thread_local! {
+    static REPLAY_TEXTS: std::cell::Cell<usize> = const {std::cell::Cell::new(0)};
+    static REPLAY_BYTES: std::cell::Cell<usize> = const {std::cell::Cell::new(0)};
+    static REPLAY_KINDS: std::cell::Cell<usize> = const {std::cell::Cell::new(0)};
+    static REPLAY_CALLS: std::cell::Cell<usize> = const {std::cell::Cell::new(0)};
+    static REPLAY_FAIL: std::cell::Cell<usize> = const {std::cell::Cell::new(0)};
+}
+#[prebindgen]
+pub struct BulkReplayRow {
+    pub first: BulkHandle,
+    pub text: Option<String>,
+    pub bytes: Option<Vec<u8>>,
+    pub kind: Option<BulkKind>,
+    pub last: BulkHandle,
+}
+#[prebindgen]
+pub fn bulk_replay_text(value: &String) -> String {
+    let call = REPLAY_TEXTS.with(|n| {
+        n.set(n.get() + 1);
+        n.get()
+    });
+    assert!(
+        !REPLAY_FAIL.with(|n| n.get() == call),
+        "expected bulk row constructor panic"
+    );
+    value.clone()
+}
+#[prebindgen]
+pub fn bulk_replay_bytes(value: &Vec<u8>) -> Vec<u8> {
+    REPLAY_BYTES.with(|n| n.set(n.get() + 1));
+    value.clone()
+}
+#[prebindgen]
+pub fn bulk_replay_kind(value: &BulkKind) -> BulkKind {
+    REPLAY_KINDS.with(|n| n.set(n.get() + 1));
+    match value {
+        BulkKind::A => BulkKind::A,
+        BulkKind::B => BulkKind::B,
+    }
+}
+#[prebindgen]
+pub fn bulk_replay_rows(rows: Vec<BulkReplayRow>) -> usize {
+    REPLAY_CALLS.with(|n| n.set(n.get() + 1));
+    rows.iter()
+        .map(|r| {
+            r.first.value as usize
+                + r.last.value as usize
+                + r.text.as_ref().map_or(0, String::len)
+                + r.bytes.as_ref().map_or(0, Vec::len)
+                + r.kind.as_ref().map_or(0, |v| match v {
+                    BulkKind::A => 1,
+                    BulkKind::B => 2,
+                })
+        })
+        .sum()
+}
+#[prebindgen]
+pub fn bulk_replay_callback(callback: impl Fn() -> Vec<BulkReplayRow>) -> usize {
+    bulk_replay_rows(callback())
+}
+#[prebindgen]
+pub fn bulk_replay_reset(fail_text: usize) {
+    REPLAY_TEXTS.with(|n| n.set(0));
+    REPLAY_BYTES.with(|n| n.set(0));
+    REPLAY_KINDS.with(|n| n.set(0));
+    REPLAY_CALLS.with(|n| n.set(0));
+    REPLAY_FAIL.with(|n| n.set(fail_text));
+}
+#[prebindgen]
+pub fn bulk_replay_count(which: usize) -> usize {
+    match which {
+        0 => REPLAY_TEXTS.with(std::cell::Cell::get),
+        1 => REPLAY_BYTES.with(std::cell::Cell::get),
+        2 => REPLAY_KINDS.with(std::cell::Cell::get),
+        _ => REPLAY_CALLS.with(std::cell::Cell::get),
+    }
+}
+#[prebindgen]
+pub fn bulk_replay_staged_rows(rows: Vec<BulkReplayRow>) -> usize {
+    bulk_replay_rows(rows)
+}
