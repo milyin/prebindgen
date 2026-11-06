@@ -31,6 +31,10 @@ typedef int32_t perftest_enum_names;
 #define perftest_enum_names_entries ((perftest_enum_names)(22))
 #define perftest_enum_names_value ((perftest_enum_names)(24))
 #define perftest_enum_names_kotlin ((perftest_enum_names)(25))
+typedef int32_t perftest_input_tag;
+#define perftest_input_tag_Low ((perftest_input_tag)(-3))
+#define perftest_input_tag_Normal ((perftest_input_tag)(0))
+#define perftest_input_tag_High ((perftest_input_tag)(17))
 typedef int32_t perftest_priority;
 #define perftest_priority_Low ((perftest_priority)(0))
 #define perftest_priority_Normal ((perftest_priority)(1))
@@ -1471,6 +1475,60 @@ void perftest_collection_try_make_items_ret_w2_rows_free(perftest_collection_try
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool perftest_collection_try_make_items(perftest_collection_try_make_items_ret_w2_rows *out0, char * *error);
+typedef struct {
+    int32_t v0;
+    perftest_owned_resource * v1;
+    perftest_input_tag v2;
+    const perftest_owned_resource * v3;
+    perftest_input_tag v4;
+} perftest_enum_inputs_alternatives_p0_w1_row;
+typedef struct { perftest_enum_inputs_alternatives_p0_w1_row *data; size_t len; } perftest_enum_inputs_alternatives_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v4 == -1 means None; other values encode Some and must be valid payloads. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_enum_inputs_alternatives(perftest_enum_inputs_alternatives_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    const perftest_owned_resource * v0;
+    perftest_input_tag v1;
+} perftest_enum_inputs_borrow_p1_w1_row;
+typedef struct { perftest_enum_inputs_borrow_p1_w1_row *data; size_t len; } perftest_enum_inputs_borrow_p1_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p1_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v1 == -1 means None; other values encode Some and must be valid payloads. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_enum_inputs_borrow(perftest_owned_resource * p0_w1, perftest_enum_inputs_borrow_p1_w1_rows p1_w1, int64_t *out0, char * *error);
+uintptr_t perftest_enum_inputs_calls(void);
+uintptr_t perftest_enum_inputs_constructors(void);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_input_tag v1;
+} perftest_enum_inputs_optional_p0_w3_row;
+typedef struct { perftest_enum_inputs_optional_p0_w3_row *data; size_t len; } perftest_enum_inputs_optional_p0_w3_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
+/* Collection rows: p0_w3 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option1: row.v0 == NULL means None; non-null means Some; only when option0 is present. */
+/* Option option2: row.v1 == -1 means None; other values encode Some and must be valid payloads; only when option0 and option1 is present. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_enum_inputs_optional(int32_t p0_w1, perftest_enum_inputs_optional_p0_w3_rows p0_w3, int64_t *out0, size_t *ownership, char * *error);
+void perftest_enum_inputs_reset(void);
+typedef struct {
+    perftest_owned_resource * v0;
+    perftest_input_tag v1;
+} perftest_enum_inputs_take_p0_w1_row;
+typedef struct { perftest_enum_inputs_take_p0_w1_row *data; size_t len; } perftest_enum_inputs_take_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_enum_inputs_take(perftest_enum_inputs_take_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
 perftest_enum_names perftest_enum_names_echo(perftest_enum_names p0_w1);
 perftest_enum_payload * perftest_enum_payload_new(double p0_w1);
 /* Option option0: p0_w6 == -3 means None; other values encode Some and must be valid payloads. */

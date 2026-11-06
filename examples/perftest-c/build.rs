@@ -1001,6 +1001,15 @@ fn main() {
         .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
         .error_mapper(pq!(String), fun!(inline_packet_error));
     let mut owners = owners
+        .enum_type("input_tag", pq!(InputTag))
+        .function(
+            fun!(enum_inputs_inline)
+                .expand_param("rows", expand_param!(i64).variant(fun!(enum_input_inline))),
+        )
+        .function(fun!(enum_inputs_reset))
+        .panic()
+        .function(fun!(enum_inputs_constructors))
+        .panic()
         .expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)))
         .expand(expand_param!(InlineMixed).variant(fun!(inline_mixed_new)));
     for f in [

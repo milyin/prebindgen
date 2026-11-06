@@ -597,6 +597,275 @@ pub struct owner_callback_f5d26722508e30c3 {
     >,
 }
 #[repr(C)]
+pub struct owner_enum_inputs_constructors_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn owner_enum_inputs_constructors() -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        owner_enum_inputs_constructors_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::enum_inputs_constructors();
+            let ret_w0 = source_value;
+            let result = owner_enum_inputs_constructors_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_enum_inputs_inline_p0_w1 {
+    pub v0: *mut __PbOwned_packet,
+    pub v1: i32,
+}
+#[repr(C)]
+pub struct owner_enum_inputs_inline_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn owner_enum_inputs_inline(
+    p0_w1: __PbRows,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<owner_enum_inputs_inline_result>::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<i64> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1,
+                    p0_w2,
+                )?;
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                let mut p0_w1_prepared = Vec::with_capacity(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w8 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1)
+                            .add(p0_w3)))
+                            .v1
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let prepared = (|| {
+                        let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        let p0_w6_empty = if true {
+                            Some(perftest_flat::inline_packet_empty())
+                        } else {
+                            None
+                        };
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<
+                            _,
+                            String,
+                        >(move || -> ::core::result::Result<i64, String> {
+                            if true {
+                                __prebindgen_input_consumed
+                                    .set(
+                                        __prebindgen_input_consumed.get()
+                                            + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                                .count(),
+                                    );
+                            }
+                            let p0_w5 = if true {
+                                Some(unsafe {
+                                    ::core::ptr::replace(
+                                        p0_w6_pointer,
+                                        p0_w6_empty.expect("prepared empty owner"),
+                                    )
+                                })
+                            } else {
+                                None
+                            };
+                            #[allow(unused_mut, unused_assignments)]
+                            let mut p0_w7: Option<perftest_flat::InputTag> = None;
+                            let p0_w5: perftest_flat::InlinePacket = p0_w5
+                                .expect("active inline owner");
+                            p0_w7 = if true {
+                                Some(
+                                    match p0_w8 {
+                                        -3i32 => perftest_flat::InputTag::Low,
+                                        0i32 => perftest_flat::InputTag::Normal,
+                                        17i32 => perftest_flat::InputTag::High,
+                                        _ => return Err("invalid enum discriminant".into()),
+                                    },
+                                )
+                            } else {
+                                None
+                            };
+                            let p0_w7 = p0_w7.expect("active enum");
+                            let p0_w4: i64 = perftest_flat::enum_input_inline(
+                                p0_w5,
+                                p0_w7,
+                            );
+                            let p0_w0 = p0_w4;
+                            Ok(p0_w0)
+                        })
+                    })();
+                    p0_w1_prepared.push(prepared?);
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for build in p0_w1_prepared {
+                    let element = build()?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::enum_inputs_inline(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::inline_packet_error(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = owner_enum_inputs_inline_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct owner_enum_inputs_reset_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn owner_enum_inputs_reset() {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<owner_enum_inputs_reset_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::enum_inputs_reset();
+            let result = owner_enum_inputs_reset_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
 pub struct owner_inline_boxed_numbers_len_result {
     pub v0: usize,
 }
@@ -3459,4 +3728,20 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::InlineReturn > () != 0,
     "flat object `InlineReturn` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::InputTag > () != 0,
+    "flat object `InputTag` must have nonzero size"
+);
+const _: () = assert!(
+    perftest_flat::InputTag::Low as i128 == - 3i32 as i128,
+    "enum discriminant differs from captured source"
+);
+const _: () = assert!(
+    perftest_flat::InputTag::Normal as i128 == 0i32 as i128,
+    "enum discriminant differs from captured source"
+);
+const _: () = assert!(
+    perftest_flat::InputTag::High as i128 == 17i32 as i128,
+    "enum discriminant differs from captured source"
 );

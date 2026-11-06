@@ -1,5 +1,5 @@
 //! C collection enum decoding and constructors run once, after alias checks.
-use crate::{owned_resource_id, OwnedResource, ResultFailure};
+use crate::{owned_resource_id, InlinePacket, OwnedResource, ResultFailure};
 use prebindgen_proc_macro::prebindgen;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -61,6 +61,15 @@ pub fn enum_inputs_optional(rows: Option<Vec<Option<i64>>>) -> Result<i64, Resul
 #[prebindgen]
 pub fn enum_inputs_alternatives(rows: Vec<i64>) -> Result<i64, ResultFailure> {
     CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(rows.iter().sum())
+}
+#[prebindgen]
+pub fn enum_input_inline(packet: InlinePacket, tag: InputTag) -> i64 {
+    CONSTRUCTORS.fetch_add(1, Ordering::SeqCst);
+    crate::inline_packet_take(packet) as i64 + score(&tag)
+}
+#[prebindgen]
+pub fn enum_inputs_inline(rows: Vec<i64>) -> Result<i64, String> {
     Ok(rows.iter().sum())
 }
 #[prebindgen]

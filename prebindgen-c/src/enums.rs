@@ -241,11 +241,7 @@ impl Codec for EnumCodec<'_> {
     ) -> Result<InputPlan<CWire>> {
         let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
         if let Some((_, mapping)) = self.mapping(flat, ty) {
-            let native = if let syn::Type::Reference(reference) = ty {
-                reference.elem.as_ref()
-            } else {
-                ty
-            };
+            let native = &mapping.ty;
             let condition = active.rust();
             let decode = mapping.decode(quote!(#wire));
             debug_assert_eq!(

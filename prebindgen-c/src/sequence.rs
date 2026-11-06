@@ -99,8 +99,8 @@ pub(crate) fn input(
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        let unused =
-            matches!(field.kind, CWire::DeferredBuffer).then(|| quote!(#[allow(unused_variables)]));
+        let unused = matches!(field.kind, CWire::DeferredBuffer | CWire::Enum { .. })
+            .then(|| quote!(#[allow(unused_variables)]));
         bind.extend(if reread_rows {
             quote!(#unused let #name=#slice[#index].#member;)
         } else {

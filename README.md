@@ -942,7 +942,7 @@ Byte inputs and JNI byte collections retain their byte-buffer transport.
 
 Collection inputs without handle conflicts reserve their row count and fill
 final native storage directly, including custom constructors. Resource-bearing
-rows retain decoded state when decoding cannot safely be repeated. Flat C input
+rows retain decoded state when decoding cannot safely be repeated. With alias checks enabled, flat C input
 rows made only of scalar fields, fieldless enum tags, opaque handles and text/byte buffer descriptors use two traversals:
 validate and check the complete address group, then reread the rows and construct
 the final Rust vector directly. This omits the prepared-row closure buffer.
@@ -954,7 +954,8 @@ the current row's handles have been consumed. Rust drops the constructed prefix
 and acquired values; ownership receipts identify the consumed prefix, and unread
 owners remain with the caller. Direct function parameter decoding is unchanged.
 Inline-owner and callback rows retain prepared storage; flat C rows in that
-fallback also defer their buffer decoding until construction.
+fallback also defer their enum and buffer decoding until construction, with the
+same consumption-prefix error behavior.
 Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
 throughout the call, including source constructor invocations; neither reentrant
 code nor another thread may mutate the wire rows or descriptors. This applies to

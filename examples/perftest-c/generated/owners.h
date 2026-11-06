@@ -17,6 +17,10 @@ static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs
 #else
 _Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
 #endif
+typedef int32_t owner_input_tag;
+#define owner_input_tag_Low ((owner_input_tag)(-3))
+#define owner_input_tag_Normal ((owner_input_tag)(0))
+#define owner_input_tag_High ((owner_input_tag)(17))
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
@@ -140,6 +144,19 @@ typedef owner_callback_f5d26722508e30c3_callback_return_w1_rows owner_inline_row
 typedef owner_callback_f5d26722508e30c3_callback_return_w1_row owner_inline_rows_catch_callback_return_row;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
+uintptr_t owner_enum_inputs_constructors(void);
+typedef struct {
+    owner_packet * v0;
+    owner_input_tag v1;
+} owner_enum_inputs_inline_p0_w1_row;
+typedef struct { owner_enum_inputs_inline_p0_w1_row *data; size_t len; } owner_enum_inputs_inline_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection rows: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool owner_enum_inputs_inline(owner_enum_inputs_inline_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+void owner_enum_inputs_reset(void);
 uintptr_t owner_inline_boxed_numbers_len(const owner_boxed_numbers * p0_w1);
 owner_boxed_numbers * owner_inline_boxed_numbers_new(void);
 int32_t owner_inline_boxed_numbers_take(owner_boxed_numbers * p0_w1);

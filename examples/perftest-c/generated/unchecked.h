@@ -17,6 +17,10 @@ static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs
 #else
 _Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
 #endif
+typedef int32_t fast_input_tag;
+#define fast_input_tag_Low ((fast_input_tag)(-3))
+#define fast_input_tag_Normal ((fast_input_tag)(0))
+#define fast_input_tag_High ((fast_input_tag)(17))
 typedef int32_t fast_code;
 #define fast_code_Bottom ((fast_code)(INT32_MIN))
 #define fast_code_MinusTwo ((fast_code)(-2))
@@ -216,6 +220,67 @@ typedef struct { fast_collection_alias_p0_w1_row *data; size_t len; } fast_colle
 int64_t fast_collection_alias(fast_collection_alias_p0_w1_rows p0_w1, const fast_owned_resource * p1_w1);
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 fast_owned_resource * fast_collection_resource_new(int64_t p0_w1);
+typedef struct {
+    int32_t v0;
+    fast_owned_resource * v1;
+    fast_input_tag v2;
+    const fast_owned_resource * v3;
+    fast_input_tag v4;
+} fast_enum_inputs_alternatives_p0_w1_row;
+typedef struct { fast_enum_inputs_alternatives_p0_w1_row *data; size_t len; } fast_enum_inputs_alternatives_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v4 == -1 means None; other values encode Some and must be valid payloads. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_enum_inputs_alternatives(fast_enum_inputs_alternatives_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+typedef struct {
+    const fast_owned_resource * v0;
+    fast_input_tag v1;
+} fast_enum_inputs_borrow_p1_w1_row;
+typedef struct { fast_enum_inputs_borrow_p1_w1_row *data; size_t len; } fast_enum_inputs_borrow_p1_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Collection rows: p1_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option0: row.v1 == -1 means None; other values encode Some and must be valid payloads. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_enum_inputs_borrow(fast_owned_resource * p0_w1, fast_enum_inputs_borrow_p1_w1_rows p1_w1, int64_t *out0, char * *error);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+uintptr_t fast_enum_inputs_calls(void);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+uintptr_t fast_enum_inputs_constructors(void);
+typedef struct {
+    fast_owned_resource * v0;
+    fast_input_tag v1;
+} fast_enum_inputs_optional_p0_w3_row;
+typedef struct { fast_enum_inputs_optional_p0_w3_row *data; size_t len; } fast_enum_inputs_optional_p0_w3_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
+/* Collection rows: p0_w3 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Option option1: row.v0 == NULL means None; non-null means Some; only when option0 is present. */
+/* Option option2: row.v1 == -1 means None; other values encode Some and must be valid payloads; only when option0 and option1 is present. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_enum_inputs_optional(int32_t p0_w1, fast_enum_inputs_optional_p0_w3_rows p0_w3, int64_t *out0, size_t *ownership, char * *error);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+void fast_enum_inputs_reset(void);
+typedef struct {
+    fast_owned_resource * v0;
+    fast_input_tag v1;
+} fast_enum_inputs_take_p0_w1_row;
+typedef struct { fast_enum_inputs_take_p0_w1_row *data; size_t len; } fast_enum_inputs_take_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Collection rows: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_enum_inputs_take(fast_enum_inputs_take_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
 /* Option option0: p0_w3 == NULL means None; non-null means Some. */
 int64_t fast_option_resource_id(const fast_owned_resource * p0_w3);
