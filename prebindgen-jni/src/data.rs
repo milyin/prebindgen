@@ -432,6 +432,19 @@ impl Class {
 }
 
 impl Codec for DataCodec<'_> {
+    fn input_bulk_row_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        let mut plan = self.input_bulk_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        crate::bulk::prepare_row_leaf(&mut plan, ty, &wire, &var, active);
+        Ok(plan)
+    }
     fn input_bulk_leaf(
         &self,
         flat: &Bindings,

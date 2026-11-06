@@ -6,12 +6,13 @@ internal object JNINative {
     @JvmStatic external fun drop_InputHandle_7cc67535bbd4a8ee(id: Long)
     @JvmStatic external fun drop_RowReturnHandler_0972ff7cb1556afa(id: Long)
     @JvmStatic external fun drop_WideRowReturnHandler_ed750f04931eb9ca(id: Long)
+    internal class SequenceRow_Long_Long_2_c3e8677e51c52ca2(@JvmField val c0: Long, @JvmField val c1: Long)
     internal class SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a(@JvmField val c0: Long, @JvmField val c1: Long, @JvmField val c2: Long, @JvmField val c3: Long, @JvmField val c4: Long, @JvmField val c5: Long, @JvmField val c6: Long, @JvmField val c7: Long)
     internal class SequenceRow_Array_Any___1_00f39593b4ea53ea(@JvmField val c0: Array<Any?>?)
     internal class SequenceRow_Long_1_127a3c24b600dbe0(@JvmField val c0: Long)
-    internal class SequenceRow_Long_Long_2_c3e8677e51c52ca2(@JvmField val c0: Long, @JvmField val c1: Long)
+    internal class SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: ByteArray?)
     @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
-    init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java)) }
+    init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java)) }
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_input_handle_value_9dacbaa67102b1db(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_buffer_sizes_09330eed51da0791(p0_w1: String?, p1_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
@@ -20,6 +21,8 @@ internal object JNINative {
     @JvmStatic external fun call_handle_records_sum_cabe62d5ee2df7d3(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_owned_handles_echo_951038e1201850d3(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_owned_handle_records_echo_afd2d16618028a6f(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_callback_owned_records_d83c514a055c27ec(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_owned_buffer_records_echo_d2839a0a4452a203(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_nested_owned_handles_echo_47d054d07c837967(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_row_make_bcd43e7b136151dd(p0_w1: Long, returns: Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509): Unit
     @JvmStatic external fun call_wide_row_make_1dbd8ca2fd4616ac(p0_w1: Long, returns: Return_Long_Long_Long32_ErrorEmpty_6fba61a9625e2221): Unit

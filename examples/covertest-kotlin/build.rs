@@ -130,6 +130,47 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
+fn bulk_replay_input_with(
+    staged: bool,
+    bulk_rows: bool,
+) -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+    use prebindgen_declarations::Input;
+    let borrowed = |function: &str| {
+        Input::Optional(Box::new(Input::Constructor {
+            function: function.into(),
+            args: vec![Input::Leaf],
+        }))
+    };
+    let buffer = |function: &str| {
+        let input = borrowed(function);
+        if bulk_rows {
+            input
+        } else {
+            input.bulk()
+        }
+    };
+    let input = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Leaf,
+        if staged || !bulk_rows {
+            borrowed("bulk_replay_text").bulk()
+        } else {
+            borrowed("bulk_replay_text")
+        },
+        buffer("bulk_replay_bytes"),
+        borrowed("bulk_replay_kind"),
+        Input::Leaf,
+    ])));
+    if bulk_rows {
+        input.bulk()
+    } else {
+        input
+    }
+}
+
+fn bulk_replay_input() -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+    bulk_replay_input_with(false, true)
+}
+
 fn main() {
     use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
     let ordinary_rows = |element| Output::Sequence {
@@ -220,6 +261,12 @@ fn main() {
             .class(data_class!(BulkNative)).class(data_class!(BulkExpanded))
             .class(ptr_class!(BulkHandle))
             .class(data_class!(BulkHandleText)).class(data_class!(BulkPairText))
+            .class(data_class!(BulkReplayRow))
+            .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
+            .fun(fun!(bulk_replay_staged_rows).expand_param("rows",bulk_replay_input_with(true, true)))
+            .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
+            .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
+            .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
             .fun(fun!(bulk_patch_rows).expand_param("row",Input::Constructor{function:"bulk_patch_row_new".into(),args:vec![
                 Input::Optional(Box::new(Input::Leaf)),
                 Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))))),

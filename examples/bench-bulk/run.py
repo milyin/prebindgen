@@ -15,7 +15,7 @@ import tempfile
 FIXTURE = Path(__file__).resolve().parent
 MODES = ("plain", "bulk")
 SINGLE_CASES = ("control", "scalar", "handle_input", "buffer_input", "selected_handle_input", "inactive_handle_input", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
-KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip", "owned_handle_records_roundtrip", "nested_owned_handles_roundtrip")
+KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip", "owned_handle_records_roundtrip", "nested_owned_handles_roundtrip", "callback_owned_records", "owned_buffer_records_roundtrip")
 
 
 def command_version(command, cwd=None):
@@ -55,7 +55,7 @@ def cargo_configs(project):
     return {str(path): digest(path) for path in paths if path.is_file()}
 
 
-def build(checkout, output, kotlinc, record, check, fetch, native_allocations=False):
+def build(checkout, output, kotlinc, record, check, fetch, native_allocations=False, target_dir=None):
     project = output / "fixture"
     (project / "flat/src").mkdir(parents=True)
     (project / "src").mkdir()
@@ -96,7 +96,7 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     shutil.copyfile(FIXTURE / "native_allocations.rs", project / "src/native_allocations.rs")
     seed = FIXTURE / "Cargo.lock.snapshot"
     shutil.copyfile(seed, project / "Cargo.lock")
-    env = dict(os.environ, CARGO_TARGET_DIR=str(output / "target"))
+    env = dict(os.environ, CARGO_TARGET_DIR=str(target_dir.resolve() if target_dir else output / "target"))
     if fetch:
         subprocess.run(["cargo", "fetch", "--locked"], cwd=project, env=env, check=True)
     rustc = command_version([os.environ.get("RUSTC", "rustc"), "-vV"], cwd=project)
@@ -113,8 +113,11 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         raise RuntimeError(f"unexpected native benchmark profile: {cdylib['profile']}")
     jar = output / "bench.jar"
     subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), str(FIXTURE / "AllocationBench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
-    libraries = [output / "target/release" / name for name in ("libbulk_bench.so", "libbulk_bench.dylib", "bulk_bench.dll")]
-    library, = [p for p in libraries if p.is_file()]
+    libraries = [Path(name) for name in cdylib["filenames"] if Path(name).name in ("libbulk_bench.so", "libbulk_bench.dylib", "bulk_bench.dll")]
+    built_library, = libraries
+    (output / "native").mkdir()
+    library = output / "native" / built_library.name
+    shutil.copyfile(built_library, library)
     if record or check:
         destination = FIXTURE / "generated"
         files = {Path("kotlin") / path.relative_to(out / "kotlin"): path.read_bytes() for path in (out / "kotlin").rglob("*.kt")}
@@ -141,6 +144,7 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "native_allocations": native_allocations,
         "kotlin": command_version([kotlinc, "-version"]),
         "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "AllocationBench.kt", "native_allocations.rs", "run.py", "Cargo.lock.snapshot")},
+        "kotlin_sources_sha256": {str(p.relative_to(out / "kotlin")): digest(p) for p in sorted((out / "kotlin").rglob("*.kt"))},
         "jar": str(jar), "library": str(library),
         "jar_sha256": digest(jar), "native_sha256": digest(library),
     }
@@ -162,6 +166,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkout", type=Path, default=FIXTURE.parents[1])
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--target-dir", type=Path, help="optional shared Cargo cache; native library is frozen into each output directory")
     parser.add_argument("--prepared", type=Path, help="reuse build.json/JAR/library from an earlier run")
     parser.add_argument("--jvms", type=int, default=4, help="fresh JVMs per mode; even for balanced order")
     parser.add_argument("--warmup", type=int, default=5)
@@ -201,7 +206,7 @@ def main():
         parser.error("use a new empty output directory to preserve earlier results")
     output.mkdir(parents=True, exist_ok=True)
     kotlinc = os.environ.get("KOTLINC", "kotlinc")
-    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch, args.native_allocations)
+    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch, args.native_allocations, args.target_dir)
     jar, library = Path(info["jar"]), Path(info["library"])
     if digest(jar) != info["jar_sha256"] or digest(library) != info["native_sha256"]:
         raise RuntimeError("prepared benchmark artifact changed")

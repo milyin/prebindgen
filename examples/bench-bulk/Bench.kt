@@ -116,6 +116,17 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
                 if (nested[0][1].isEmpty()) 0L else bench.plain.inputHandleValue(nested[0][1][0])+nested[0][1].size
             }))
     }
+    for (size in sizes) {
+        val callbackRows=arrayOf(List(size) {bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE+it),it.toLong())})
+        val callback=bench.plain.OwnedRecordsCallback {callbacks[0]++;callbackRows[0]}
+        cycleCleanup.add(AutoCloseable {callbackRows[0].forEach {it.handle.close()}})
+        cases.add(Case("callback_owned_records",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->callbackRows[0]=bench.plain.callbackOwnedRecords(callback);if(size==0)0L else bench.plain.inputHandleValue(callbackRows[0][0].handle)+size},true))
+        val buffers=arrayOf(List(size) {bench.plain.BufferRecord(bench.plain.inputHandleNew(BASE+it),"x".repeat(64),ByteArray(64))})
+        cycleCleanup.add(AutoCloseable {buffers[0].forEach {it.handle.close()}})
+        cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->buffers[0]=bench.plain.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.plain.inputHandleValue(buffers[0][0].handle)+size}))
+    }
     for (size in payloads) {
         val packet = bench.plain.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256
@@ -230,6 +241,17 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
                 nested[0]=bench.bulk.nestedOwnedHandlesEcho(nested[0])
                 if (nested[0][1].isEmpty()) 0L else bench.bulk.inputHandleValue(nested[0][1][0])+nested[0][1].size
             }))
+    }
+    for (size in sizes) {
+        val callbackRows=arrayOf(List(size) {bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE+it),it.toLong())})
+        val callback=bench.bulk.OwnedRecordsCallback {callbacks[0]++;callbackRows[0]}
+        cycleCleanup.add(AutoCloseable {callbackRows[0].forEach {it.handle.close()}})
+        cases.add(Case("callback_owned_records",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->callbackRows[0]=bench.bulk.callbackOwnedRecords(callback);if(size==0)0L else bench.bulk.inputHandleValue(callbackRows[0][0].handle)+size},true))
+        val buffers=arrayOf(List(size) {bench.bulk.BufferRecord(bench.bulk.inputHandleNew(BASE+it),"x".repeat(64),ByteArray(64))})
+        cycleCleanup.add(AutoCloseable {buffers[0].forEach {it.handle.close()}})
+        cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->buffers[0]=bench.bulk.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.bulk.inputHandleValue(buffers[0][0].handle)+size}))
     }
     for (size in payloads) {
         val packet = bench.bulk.Packet(one, ByteArray(size) { (it and 255).toByte() })

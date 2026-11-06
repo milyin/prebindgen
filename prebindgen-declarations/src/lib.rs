@@ -637,6 +637,22 @@ pub trait Codec {
     ) -> Result<CodecInput<Self>> {
         Err("bulk inputs are unsupported by this codec".into())
     }
+    /// Convert a bulk leaf in a flat sequence row whose construction is deferred.
+    /// Like `input_row_leaf`, this lets an adapter create row-local borrowed
+    /// temporaries during construction while retaining resource validation for
+    /// the grouped check. The default uses ordinary bulk leaf conversion.
+    #[allow(clippy::too_many_arguments)]
+    fn input_bulk_row_leaf(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        self.input_bulk_leaf(flat, ty, extra, wire, var, active)
+    }
     /// Prepare a native leaf for a bulk output without per-field foreign allocations.
     #[allow(clippy::too_many_arguments)]
     fn output_bulk_leaf(
@@ -1548,6 +1564,9 @@ struct Compiler<'a, C: Codec> {
     // of borrowed leaves, without changing conversions of owned getter results.
     copy_borrowed: std::cell::Cell<bool>,
     grouped_input: std::cell::Cell<bool>,
+    // Row temporaries may borrow only the enclosing sequence's cached frame,
+    // never a separate bulk field decoded inside an ordinary JVM object row.
+    bulk_input_row: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
@@ -1562,6 +1581,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             bulk: std::cell::Cell::new(false),
             copy_borrowed: std::cell::Cell::new(false),
             grouped_input: std::cell::Cell::new(false),
+            bulk_input_row: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
@@ -1716,7 +1736,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let wire = self.name();
                 self.bulk.set(true);
+                let previous_row = self.bulk_input_row.replace(false);
                 let child = self.input_named(ty, inner, extra, active, names);
+                self.bulk_input_row.set(previous_row);
                 self.bulk.set(false);
                 return self
                     .codec
@@ -1767,7 +1789,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let previous = self
                     .grouped_input
                     .replace(!contains_sequence(element_recipe));
+                let previous_bulk_row = self.bulk_input_row.replace(self.bulk.get());
                 let child = self.input(element, element_recipe, extra, &Condition::default());
+                self.bulk_input_row.set(previous_bulk_row);
                 self.grouped_input.set(previous);
                 let child = child?;
                 // An exhaustive recipe check keeps future validation-time
@@ -1820,7 +1844,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                return if self.bulk.get() {
+                return if self.bulk_input_row.get() && self.grouped_input.get() {
+                    self.codec
+                        .input_bulk_row_leaf(self.flat, ty, extra, w, var, active)
+                } else if self.bulk.get() {
                     self.codec
                         .input_bulk_leaf(self.flat, ty, extra, w, var, active)
                 } else if self.grouped_input.get() {

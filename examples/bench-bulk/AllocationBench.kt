@@ -15,6 +15,15 @@ private fun makePlain(kind: String, size: Int): Measured {
             var rows=List(size) { bench.plain.HandleRecord(bench.plain.inputHandleNew(it.toLong()),it.toLong()) }
             Measured({ rows=bench.plain.ownedHandleRecordsEcho(rows); rows.size.toLong() }, { rows.forEach { it.handle.close() } })
         }
+        "callback_records" -> {
+            var rows=List(size) {bench.plain.HandleRecord(bench.plain.inputHandleNew(it.toLong()),it.toLong())}
+            val callback=bench.plain.OwnedRecordsCallback {rows}
+            Measured({rows=bench.plain.callbackOwnedRecords(callback);rows.size.toLong()},{rows.forEach {it.handle.close()}})
+        }
+        "buffers" -> {
+            var rows=List(size) {bench.plain.BufferRecord(bench.plain.inputHandleNew(it.toLong()),"x".repeat(64),ByteArray(64))}
+            Measured({rows=bench.plain.ownedBufferRecordsEcho(rows);check(rows.all {it.text.length==64 && it.bytes.size==64});rows.size.toLong()},{rows.forEach {it.handle.close()}})
+        }
         "nested", "nested_many" -> {
             var rows=if (kind=="nested") listOf(emptyList(),List(size) {bench.plain.inputHandleNew(it.toLong())},emptyList())
                      else List(size) {listOf(bench.plain.inputHandleNew(it.toLong()))}
@@ -33,6 +42,15 @@ private fun makeBulk(kind: String, size: Int): Measured {
         "records" -> {
             var rows=List(size) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(it.toLong()),it.toLong()) }
             Measured({ rows=bench.bulk.ownedHandleRecordsEcho(rows); rows.size.toLong() }, { rows.forEach { it.handle.close() } })
+        }
+        "callback_records" -> {
+            var rows=List(size) {bench.bulk.HandleRecord(bench.bulk.inputHandleNew(it.toLong()),it.toLong())}
+            val callback=bench.bulk.OwnedRecordsCallback {rows}
+            Measured({rows=bench.bulk.callbackOwnedRecords(callback);rows.size.toLong()},{rows.forEach {it.handle.close()}})
+        }
+        "buffers" -> {
+            var rows=List(size) {bench.bulk.BufferRecord(bench.bulk.inputHandleNew(it.toLong()),"x".repeat(64),ByteArray(64))}
+            Measured({rows=bench.bulk.ownedBufferRecordsEcho(rows);check(rows.all {it.text.length==64 && it.bytes.size==64});rows.size.toLong()},{rows.forEach {it.handle.close()}})
         }
         "nested", "nested_many" -> {
             var rows=if (kind=="nested") listOf(emptyList(),List(size) {bench.bulk.inputHandleNew(it.toLong())},emptyList())
