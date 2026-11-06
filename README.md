@@ -967,10 +967,14 @@ each native value out of its C storage. Successful moves update the ownership
 receipt individually. If an empty factory panics midway through a row, the
 receipt includes earlier moved fields but excludes that owner and later fields.
 Native String/Vec buffers keep their original addresses and capacities.
-By-value inline owners (callback return carriers) and callback rows retain prepared storage; flat C rows in that
-fallback also defer their enum and buffer decoding until construction, with the
-same consumption-prefix error behavior.
-Nested outer rows retain their transport; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
+Mixed callback-result rows containing by-value inline owners and pointer handles
+also use the two traversals. The address check copies only opaque carrier storage;
+acquisition reads each native value from its final row-local carrier, so no
+pointer into temporary preparation storage is retained. Success keeps transferred
+values alive for Rust's caller; failure drops acquired values and reclaims unread
+owners before the C callback's row-storage release hook runs. Rows containing
+callback fields and nested outer collections retain their current conversion
+paths; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
 throughout the call, including source constructor invocations; neither reentrant
 code nor another thread may mutate the wire rows or descriptors. This applies to
 all collection inputs. It describes the wire memory, while pointee liveness and

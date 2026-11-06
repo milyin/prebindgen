@@ -324,6 +324,38 @@ pub struct bench_callback_d4c2b6b7f94cdedf {
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_f1755815cfab1b60_callback_return_w1 {
+    pub v0: *mut c_collection_flat::Resource,
+    pub v1: __PbOwned_native_packet,
+    pub v2: *mut c_collection_flat::Resource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct bench_callback_f1755815cfab1b60 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
+    >,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_fc8e455d100e4602_callback_return_w1 {
+    pub v0: __PbOwned_native_packet,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct bench_callback_fc8e455d100e4602 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> __PbRows>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
+    >,
+}
+#[repr(C)]
 pub struct bench_callback_fixed_result {
     pub v0: u64,
 }
@@ -772,6 +804,564 @@ pub unsafe extern "C" fn bench_callback_many(
             let source_value = c_collection_flat::callback_many(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_callback_many_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_callback_native_result {
+    pub v0: u64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_callback_native(
+    p0_callback: bench_callback_fc8e455d100e4602,
+) -> u64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_callback_native_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(p0_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                let p0_callback_release_result = p0_callback.release_result;
+                let p0_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p0_callback_run = p0_callback_run
+                        .expect("validated active callback");
+                    let p0_callback_owner = p0_callback_owner
+                        .expect("validated active callback");
+                    let p0_callback_value = move || {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let raw_result = unsafe {
+                                p0_callback_run(p0_callback_owner.context())
+                            };
+                            let callback_result = __PbCallbackResult {
+                                value: raw_result,
+                                context: p0_callback_owner.context(),
+                                release: p0_callback_release_result,
+                            };
+                            let raw_result = callback_result.value;
+                            let callback_return_w1 = raw_result;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w1.data
+                                        as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1,
+                                    callback_return_w1.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w1.len {
+                                            let callback_return_w5 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1)
+                                                    .add(index)))
+                                                    .v0
+                                            };
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive_inline(
+                                                        (::core::ptr::addr_of!(
+                                                            (* ((callback_return_w1.data as * const
+                                                            __PbRow_callback_fc8e455d100e4602_callback_return_w1)
+                                                            .add(index))).v0
+                                                        ) as *const __PbOwned_native_packet)
+                                                            .cast::<c_collection_flat::NativePacket>(),
+                                                    );
+                                            }
+                                        }
+                                    }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
+                                }
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let mut callback_return_w0: Vec<
+                                        c_collection_flat::NativePacket,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w2 = callback_return_w1.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1,
+                                            callback_return_w2,
+                                        )?;
+                                        let callback_return_w1_rows: &[__PbRow_callback_fc8e455d100e4602_callback_return_w1] = if callback_return_w2
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w1.data
+                                                        as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1,
+                                                    callback_return_w2,
+                                                )
+                                            }
+                                        };
+                                        callback_return_w0.reserve_exact(callback_return_w2);
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                                c_collection_flat::NativePacket,
+                                                String,
+                                            > {
+                                                #[allow(unused_parens)]
+                                                let callback_return_w5_storage = (callback_return_w5);
+                                                let callback_return_w4 = if true {
+                                                    let callback_return_w5_pointer = ::core::ptr::addr_of!(
+                                                        callback_return_w5_storage
+                                                    )
+                                                        .cast::<c_collection_flat::NativePacket>();
+                                                    let value = unsafe {
+                                                        ::core::ptr::read(callback_return_w5_pointer)
+                                                    };
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                    Some(value)
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w4: c_collection_flat::NativePacket = callback_return_w4
+                                                    .expect("active inline owner");
+                                                let callback_return_w0 = callback_return_w4;
+                                                Ok(callback_return_w0)
+                                            })();
+                                            let element = callback_return_w1_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w0.len();
+                                                callback_return_w0
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w0.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some(callback_return_w0)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
+                                };
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
+                            }
+                        });
+                        result
+                            .unwrap_or_else(|error| {
+                                ::prebindgen_runtime::report_callback_error(
+                                    "bench_callback_fc8e455d100e4602",
+                                    "()->Vec < c_collection_flat :: NativePacket >",
+                                    &error,
+                                );
+                                panic!("callback failed: {}", error)
+                            })
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = c_collection_flat::callback_native(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_callback_native_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_callback_native_mixed_result {
+    pub v0: u64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_callback_native_mixed(
+    p0_callback: bench_callback_f1755815cfab1b60,
+) -> u64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        bench_callback_native_mixed_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(p0_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                let p0_callback_release_result = p0_callback.release_result;
+                let p0_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p0_callback_run = p0_callback_run
+                        .expect("validated active callback");
+                    let p0_callback_owner = p0_callback_owner
+                        .expect("validated active callback");
+                    let p0_callback_value = move || {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let raw_result = unsafe {
+                                p0_callback_run(p0_callback_owner.context())
+                            };
+                            let callback_result = __PbCallbackResult {
+                                value: raw_result,
+                                context: p0_callback_owner.context(),
+                                release: p0_callback_release_result,
+                            };
+                            let raw_result = callback_result.value;
+                            let callback_return_w1 = raw_result;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w1.data
+                                        as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1,
+                                    callback_return_w1.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w1.len {
+                                            let callback_return_w6 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                                    .add(index)))
+                                                    .v0
+                                            };
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                                    .add(index)))
+                                                    .v1
+                                            };
+                                            let callback_return_w10 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                                    .add(index)))
+                                                    .v2
+                                            };
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w6 as *mut c_collection_flat::Resource,
+                                                    );
+                                            }
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive_inline(
+                                                        (::core::ptr::addr_of!(
+                                                            (* ((callback_return_w1.data as * const
+                                                            __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                                            .add(index))).v1
+                                                        ) as *const __PbOwned_native_packet)
+                                                            .cast::<c_collection_flat::NativePacket>(),
+                                                    );
+                                            }
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w10 as *mut c_collection_flat::Resource,
+                                                    );
+                                            }
+                                        }
+                                    }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
+                                }
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let mut callback_return_w0: Vec<
+                                        c_collection_flat::NativeMixed,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w2 = callback_return_w1.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1,
+                                            callback_return_w2,
+                                        )?;
+                                        let callback_return_w1_rows: &[__PbRow_callback_f1755815cfab1b60_callback_return_w1] = if callback_return_w2
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w1.data
+                                                        as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1,
+                                                    callback_return_w2,
+                                                )
+                                            }
+                                        };
+                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
+                                            .begin_group(callback_return_w2.saturating_mul(2usize));
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
+                                                .v1;
+                                            let callback_return_w10 = callback_return_w1_rows[callback_return_w3]
+                                                .v2;
+                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                            let checked = (|| {
+                                                let callback_return_w6_pointer = if true {
+                                                    (callback_return_w6) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w6_pointer,
+                                                    )?;
+                                                }
+                                                #[allow(unused_parens)]
+                                                let callback_return_w8_storage = (callback_return_w8);
+                                                let callback_return_w10_pointer = if true {
+                                                    (callback_return_w10) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w10_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w6_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w1_accesses.push((address, true));
+                                                    }
+                                                }
+                                                if true {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w10_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w1_accesses.push((address, true));
+                                                    }
+                                                }
+                                                Ok::<_, String>(())
+                                            })();
+                                            checked?;
+                                        }
+                                        __prebindgen_input_aliases
+                                            .accept_group(callback_return_w1_accesses)?;
+                                        callback_return_w0.reserve_exact(callback_return_w2);
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
+                                                .v1;
+                                            let callback_return_w10 = callback_return_w1_rows[callback_return_w3]
+                                                .v2;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                                c_collection_flat::NativeMixed,
+                                                String,
+                                            > {
+                                                let callback_return_w6_pointer = if true {
+                                                    (callback_return_w6) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w6_pointer,
+                                                    )?;
+                                                }
+                                                #[allow(unused_parens)]
+                                                let callback_return_w8_storage = (callback_return_w8);
+                                                let callback_return_w10_pointer = if true {
+                                                    (callback_return_w10) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w10_pointer,
+                                                    )?;
+                                                }
+                                                let callback_return_w5 = if true {
+                                                    Some(unsafe { Box::from_raw(callback_return_w6_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
+                                                let callback_return_w7 = if true {
+                                                    let callback_return_w8_pointer = ::core::ptr::addr_of!(
+                                                        callback_return_w8_storage
+                                                    )
+                                                        .cast::<c_collection_flat::NativePacket>();
+                                                    let value = unsafe {
+                                                        ::core::ptr::read(callback_return_w8_pointer)
+                                                    };
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                    Some(value)
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w9 = if true {
+                                                    Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                }
+                                                let callback_return_w5: c_collection_flat::Resource = *callback_return_w5
+                                                    .expect("active allocation");
+                                                let callback_return_w7: c_collection_flat::NativePacket = callback_return_w7
+                                                    .expect("active inline owner");
+                                                let callback_return_w9: c_collection_flat::Resource = *callback_return_w9
+                                                    .expect("active allocation");
+                                                let callback_return_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
+                                                    callback_return_w5,
+                                                    callback_return_w7,
+                                                    callback_return_w9,
+                                                );
+                                                let callback_return_w0 = callback_return_w4;
+                                                Ok(callback_return_w0)
+                                            })();
+                                            let element = callback_return_w1_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w0.len();
+                                                callback_return_w0
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w0.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some(callback_return_w0)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
+                                };
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
+                            }
+                        });
+                        result
+                            .unwrap_or_else(|error| {
+                                ::prebindgen_runtime::report_callback_error(
+                                    "bench_callback_f1755815cfab1b60",
+                                    "()->Vec < c_collection_flat :: NativeMixed >",
+                                    &error,
+                                );
+                                panic!("callback failed: {}", error)
+                            })
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = c_collection_flat::callback_native_mixed(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_callback_native_mixed_result {
                 v0: ret_w0,
             };
             std::ptr::write(output, result);

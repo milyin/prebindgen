@@ -91,6 +91,44 @@ typedef struct {
     void (*drop)(void *context);
 } owner_callback_0c47d5ea09f8970c;
 typedef struct {
+    owner_resource * v0;
+    owner_packet v1;
+    owner_resource * v2;
+    uint32_t v3;
+    uintptr_t v4;
+    uintptr_t v5;
+} owner_callback_37300b78c94d93fa_callback_return_w1_row;
+typedef struct { owner_callback_37300b78c94d93fa_callback_return_w1_row *data; size_t len; } owner_callback_37300b78c94d93fa_callback_return_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+/* Rust signature: ()->Vec < perftest_flat :: InlineCallbackRow >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    owner_callback_37300b78c94d93fa_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const owner_callback_37300b78c94d93fa_callback_return_w1_rows *result);
+} owner_callback_37300b78c94d93fa;
+typedef struct {
+    owner_resource * v0;
+    owner_packet v1;
+    owner_resource * v2;
+    uint32_t v3;
+    uintptr_t v4;
+    uintptr_t v5;
+} owner_callback_70db60a6f9dbbb06_callback_return_w3_row;
+typedef struct { owner_callback_70db60a6f9dbbb06_callback_return_w3_row *data; size_t len; } owner_callback_70db60a6f9dbbb06_callback_return_w3_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+typedef struct {
+    int32_t v0;
+    owner_callback_70db60a6f9dbbb06_callback_return_w3_rows v1;
+} owner_callback_70db60a6f9dbbb06_result;
+/* Rust signature: ()->Option < Vec < Option < perftest_flat :: InlineCallbackRow > > >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    owner_callback_70db60a6f9dbbb06_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const owner_callback_70db60a6f9dbbb06_result *result);
+} owner_callback_70db60a6f9dbbb06;
+typedef struct {
     owner_packet v0;
     owner_child * v1;
 } owner_callback_805117dbed50edfb_callback_return_w1_row;
@@ -134,6 +172,14 @@ typedef struct {
 } owner_callback_f5d26722508e30c3;
 typedef owner_callback_f5757ec9aa1c45d2 owner_inline_bytes_callback_callback;
 typedef owner_bytes owner_inline_bytes_callback_callback_return;
+typedef owner_callback_70db60a6f9dbbb06 owner_inline_callback_optional_callback;
+typedef owner_callback_70db60a6f9dbbb06_result owner_inline_callback_optional_callback_return;
+typedef owner_callback_37300b78c94d93fa owner_inline_callback_rows_callback;
+typedef owner_callback_37300b78c94d93fa_callback_return_w1_rows owner_inline_callback_rows_callback_return;
+typedef owner_callback_37300b78c94d93fa_callback_return_w1_row owner_inline_callback_rows_callback_return_row;
+typedef owner_callback_37300b78c94d93fa owner_inline_callback_rows_fast_callback;
+typedef owner_callback_37300b78c94d93fa_callback_return_w1_rows owner_inline_callback_rows_fast_callback_return;
+typedef owner_callback_37300b78c94d93fa_callback_return_w1_row owner_inline_callback_rows_fast_callback_return_row;
 typedef owner_callback_805117dbed50edfb owner_inline_mixed_rows_sum_callback;
 typedef owner_callback_805117dbed50edfb_callback_return_w1_rows owner_inline_mixed_rows_sum_callback_return;
 typedef owner_callback_805117dbed50edfb_callback_return_w1_row owner_inline_mixed_rows_sum_callback_return_row;
@@ -174,6 +220,19 @@ owner_bytes owner_inline_bytes_mutable(uintptr_t *out1);
 /* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 owner_bytes owner_inline_bytes_new(owner_buffer_view *out1, uintptr_t *out2);
 uintptr_t owner_inline_bytes_take(owner_bytes * p0_w1);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool owner_inline_callback_optional(owner_callback_70db60a6f9dbbb06 p0_callback, int64_t *out0, size_t *ownership, char * *error);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool owner_inline_callback_rows(owner_callback_37300b78c94d93fa p0_callback, int64_t *out0, size_t *ownership, char * *error);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool owner_inline_callback_rows_fast(owner_callback_37300b78c94d93fa p0_callback, int64_t *out0, size_t *ownership, char * *error);
 uint64_t owner_inline_child_id(const owner_child * p0_w1);
 typedef struct {
     const owner_packet * v0;
@@ -296,6 +355,7 @@ owner_numbers owner_inline_numbers(void);
 uintptr_t owner_inline_numbers_capacity(const owner_numbers * p0_w1);
 owner_numbers owner_inline_numbers_new(void);
 int64_t owner_inline_numbers_take(owner_numbers * p0_w1);
+uintptr_t owner_inline_packet_bytes_address(const owner_packet * p0_w1);
 uintptr_t owner_inline_packet_callback(owner_callback_0c47d5ea09f8970c p0_callback);
 uintptr_t owner_inline_packet_drops(void);
 uintptr_t owner_inline_packet_len(const owner_packet * p0_w1);
@@ -308,6 +368,7 @@ const owner_child * owner_inline_packet_ref(const owner_packet * p0_w1);
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool owner_inline_packet_result(owner_packet *out0, uintptr_t *out1, char * *error);
 uintptr_t owner_inline_packet_take(owner_packet * p0_w1);
+uintptr_t owner_inline_packet_text_address(const owner_packet * p0_w1);
 typedef struct {
     owner_packet v0;
 } owner_inline_packets_rows_ret_w3_row;

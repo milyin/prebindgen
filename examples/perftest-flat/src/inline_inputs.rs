@@ -125,3 +125,77 @@ pub fn inline_inputs_constructor_calls() -> usize {
 pub fn inline_inputs_calls() -> usize {
     CALLS.with(Cell::get)
 }
+
+#[prebindgen]
+pub struct InlineCallbackRow {
+    pub first: OwnedResource,
+    pub packet: InlinePacket,
+    pub last: OwnedResource,
+    pub letter: char,
+}
+#[prebindgen]
+pub fn inline_callback_row_new(
+    first: OwnedResource,
+    value: InlinePacket,
+    last: OwnedResource,
+    letter: char,
+    bytes: usize,
+    text: usize,
+) -> InlineCallbackRow {
+    constructor();
+    packet(&value);
+    assert_eq!(value.bytes.as_ptr() as usize, bytes);
+    assert_eq!(value.text.as_ptr() as usize, text);
+    InlineCallbackRow {
+        first,
+        packet: value,
+        last,
+        letter,
+    }
+}
+#[prebindgen]
+pub fn inline_packet_bytes_address(value: &InlinePacket) -> usize {
+    value.bytes.as_ptr() as usize
+}
+#[prebindgen]
+pub fn inline_packet_text_address(value: &InlinePacket) -> usize {
+    value.text.as_ptr() as usize
+}
+#[prebindgen]
+pub fn inline_callback_rows(callback: impl Fn() -> Vec<InlineCallbackRow>) -> Result<i64, String> {
+    let rows = callback();
+    CALLS.with(|n| n.set(n.get() + 1));
+    Ok(rows
+        .iter()
+        .map(|r| {
+            owned_resource_id(&r.first)
+                + packet(&r.packet)
+                + owned_resource_id(&r.last)
+                + r.letter as i64
+        })
+        .sum())
+}
+#[prebindgen]
+pub fn inline_callback_rows_fast(
+    callback: impl Fn() -> Vec<InlineCallbackRow>,
+) -> Result<i64, String> {
+    inline_callback_rows(callback)
+}
+#[prebindgen]
+pub fn inline_callback_optional(
+    callback: impl Fn() -> Option<Vec<Option<InlineCallbackRow>>>,
+) -> Result<i64, String> {
+    let rows = callback();
+    CALLS.with(|n| n.set(n.get() + 1));
+    Ok(rows.map_or(-1, |rows| {
+        rows.into_iter()
+            .flatten()
+            .map(|r| {
+                owned_resource_id(&r.first)
+                    + packet(&r.packet)
+                    + owned_resource_id(&r.last)
+                    + r.letter as i64
+            })
+            .sum()
+    }))
+}

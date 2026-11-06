@@ -27,6 +27,8 @@ fn main() {
         .function(fun!(fixed_move)).panic()
         .function(fun!(callback_fixed)).panic()
         .function(fun!(callback_many)).panic()
+        .function(fun!(callback_native)).panic()
+        .function(fun!(callback_native_mixed)).panic()
         .function(fun!(take_handles)).panic()
         .function(fun!(take_records)).panic()
         .function(fun!(take_wide)).panic()
