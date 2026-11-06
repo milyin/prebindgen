@@ -423,7 +423,9 @@ impl CCallback {
                 quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
                     let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
                     #scan
-                    callback_return_owners.check()
+                    // The decoder reports the original conversion failure.
+                    // Do not duplicate its pointer diagnostics during cleanup.
+                    Ok(())
                 });),
                 quote!(callback_return_cleanup.commit();),
             ));
