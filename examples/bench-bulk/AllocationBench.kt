@@ -7,6 +7,16 @@ internal object Counters {
 private class Measured(val run: () -> Long, val close: () -> Unit)
 private fun makePlain(kind: String, size: Int): Measured {
     return when (kind) {
+        "numbers_input" -> {
+            val rows=List(size) {it.toLong()}
+            val total=size.toLong()*(size-1)/2
+            Measured({check(bench.plain.numbersSum(rows)==total);size.toLong()}, {})
+        }
+        "records_input" -> {
+            val rows=List(size) {i -> val x=i.toLong();bench.plain.Row(x,x,x,x,x,x,x,x)}
+            val total=8*size.toLong()*(size-1)/2
+            Measured({check(bench.plain.rowsSum(rows)==total);size.toLong()}, {})
+        }
         "flat" -> {
             var rows=List(size) { bench.plain.inputHandleNew(it.toLong()) }
             Measured({ rows=bench.plain.ownedHandlesEcho(rows); rows.size.toLong() }, { rows.forEach { it.close() } })
@@ -41,6 +51,16 @@ private fun makePlain(kind: String, size: Int): Measured {
 }
 private fun makeBulk(kind: String, size: Int): Measured {
     return when (kind) {
+        "numbers_input" -> {
+            val rows=List(size) {it.toLong()}
+            val total=size.toLong()*(size-1)/2
+            Measured({check(bench.bulk.numbersSum(rows)==total);size.toLong()}, {})
+        }
+        "records_input" -> {
+            val rows=List(size) {i -> val x=i.toLong();bench.bulk.Row(x,x,x,x,x,x,x,x)}
+            val total=8*size.toLong()*(size-1)/2
+            Measured({check(bench.bulk.rowsSum(rows)==total);size.toLong()}, {})
+        }
         "flat" -> {
             var rows=List(size) { bench.bulk.inputHandleNew(it.toLong()) }
             Measured({ rows=bench.bulk.ownedHandlesEcho(rows); rows.size.toLong() }, { rows.forEach { it.close() } })

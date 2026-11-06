@@ -1,5 +1,72 @@
 //! Checked access to boxed fields of array element rows.
 use super::*;
+use jni::{
+    objects::{GlobalRef, JMethodID},
+    signature::{ReturnType, TypeSignature},
+};
+use std::sync::OnceLock;
+
+// These are JVM built-in classes, independent of application class loaders.
+// Keep global class references alongside method IDs, as in the output-row cache.
+// Only initialization performs name lookup, signature parsing or allocation.
+struct RowClass {
+    name: &'static str,
+    unbox: Option<(&'static str, &'static str)>,
+    cached: OnceLock<CachedRowClass>,
+}
+struct CachedRowClass {
+    class: GlobalRef,
+    unbox: Option<(JMethodID, ReturnType)>,
+}
+impl RowClass {
+    const fn new(name: &'static str, unbox: Option<(&'static str, &'static str)>) -> Self {
+        Self {
+            name,
+            unbox,
+            cached: OnceLock::new(),
+        }
+    }
+    fn get(&self, env: &mut JNIEnv<'_>) -> Result<&CachedRowClass> {
+        if let Some(cached) = self.cached.get() {
+            return Ok(cached);
+        }
+        let class = env.find_class(self.name).map_err(|e| e.to_string())?;
+        let class = env.auto_local(class);
+        let unbox = if let Some((method, signature)) = self.unbox {
+            let parsed = TypeSignature::from_str(signature).map_err(|e| e.to_string())?;
+            if !parsed.args.is_empty() {
+                return Err("row unboxing method must take no arguments".into());
+            }
+            Some((
+                env.get_method_id(&class, method, signature)
+                    .map_err(|e| e.to_string())?,
+                parsed.ret,
+            ))
+        } else {
+            None
+        };
+        let class = env.new_global_ref(&class).map_err(|e| e.to_string())?;
+        // jni-rs 0.21 uses unchecked NewGlobalRef: a null result or pending
+        // exception can arrive inside Ok. Never publish incomplete metadata.
+        if class.as_obj().is_null() || env.exception_check().map_err(|e| e.to_string())? {
+            return Err("could not retain JNI row class".into());
+        }
+        // Racing initializers may each resolve the same bootstrap class. Publish
+        // only complete metadata; failed initialization is retryable. A losing
+        // candidate releases its global reference on this attached thread.
+        let _ = self.cached.set(CachedRowClass { class, unbox });
+        Ok(self.cached.get().expect("row class initialized"))
+    }
+}
+impl CachedRowClass {
+    fn accepts(&self, env: &mut JNIEnv<'_>, value: &JObject<'_>) -> Result<bool> {
+        env.is_instance_of(value, &self.class)
+            .map_err(|e| e.to_string())
+    }
+}
+static ROW_ARRAY_CLASS: RowClass = RowClass::new("[Ljava/lang/Object;", None);
+static STRING_CLASS: RowClass = RowClass::new("java/lang/String", None);
+static BYTE_ARRAY_CLASS: RowClass = RowClass::new("[B", None);
 
 /// Read one array row and verify its exact field count.
 pub fn row<'local>(
@@ -11,11 +78,7 @@ pub fn row<'local>(
     let row = env
         .get_object_array_element(rows, index as i32)
         .map_err(|e| e.to_string())?;
-    if row.is_null()
-        || !env
-            .is_instance_of(&row, "[Ljava/lang/Object;")
-            .map_err(|e| e.to_string())?
-    {
+    if row.is_null() || !ROW_ARRAY_CLASS.get(env)?.accepts(env, &row)? {
         return Err("collection element must be a nonnull Object[] row".into());
     }
     let row = JObjectArray::from(row);
@@ -24,11 +87,10 @@ pub fn row<'local>(
     }
     Ok(row)
 }
-fn object<'local>(
+fn field<'local>(
     env: &mut JNIEnv<'local>,
     row: &JObjectArray<'local>,
     index: usize,
-    class: &str,
     nullable: bool,
 ) -> Result<JObject<'local>> {
     let value = env
@@ -41,10 +103,16 @@ fn object<'local>(
             Err("null collection scalar field".into())
         };
     }
-    if !env
-        .is_instance_of(&value, class)
-        .map_err(|e| e.to_string())?
-    {
+    Ok(value)
+}
+fn object<'local>(
+    env: &mut JNIEnv<'local>,
+    row: &JObjectArray<'local>,
+    index: usize,
+    class: &RowClass,
+) -> Result<JObject<'local>> {
+    let value = field(env, row, index, true)?;
+    if !value.is_null() && !class.get(env)?.accepts(env, &value)? {
         return Err("incorrect collection field type".into());
     }
     Ok(value)
@@ -57,8 +125,20 @@ macro_rules! scalar_reader {
             row: &JObjectArray<'local>,
             index: usize,
         ) -> Result<$ty> {
-            let value = object(env, row, index, $class, false)?;
-            env.call_method(&value, $method, $signature, &[])
+            static CLASS: RowClass = RowClass::new($class, Some(($method, $signature)));
+            let value = field(env, row, index, false)?;
+            let cached = CLASS.get(env)?;
+            if !cached.accepts(env, &value)? {
+                return Err("incorrect collection field type".into());
+            }
+            let (method, result) = cached
+                .unbox
+                .as_ref()
+                .expect("primitive row unboxing method");
+            // The cache resolved this public no-argument method with its exact
+            // descriptor. The receiver's class was checked above, and the
+            // retained global class reference keeps the method ID valid.
+            unsafe { env.call_method_unchecked(&value, *method, result.clone(), &[]) }
                 .and_then(|v| v.$read())
                 .map_err(|e| e.to_string())
         }
@@ -84,7 +164,7 @@ pub fn row_text<'local>(
     row: &JObjectArray<'local>,
     index: usize,
 ) -> Result<JString<'local>> {
-    object(env, row, index, "java/lang/String", true).map(Into::into)
+    object(env, row, index, &STRING_CLASS).map(Into::into)
 }
 /// Read a byte-array reference, preserving null for optional/inactive payloads.
 pub fn row_bytes<'local>(
@@ -92,7 +172,7 @@ pub fn row_bytes<'local>(
     row: &JObjectArray<'local>,
     index: usize,
 ) -> Result<JByteArray<'local>> {
-    object(env, row, index, "[B", true).map(Into::into)
+    object(env, row, index, &BYTE_ARRAY_CLASS).map(Into::into)
 }
 /// Read a nested collection array reference, preserving null.
 pub fn row_rows<'local>(
@@ -100,7 +180,7 @@ pub fn row_rows<'local>(
     row: &JObjectArray<'local>,
     index: usize,
 ) -> Result<JObjectArray<'local>> {
-    object(env, row, index, "[Ljava/lang/Object;", true).map(Into::into)
+    object(env, row, index, &ROW_ARRAY_CLASS).map(Into::into)
 }
 
 /// Owns a JNI local-reference frame, popping it on success, error or unwinding.

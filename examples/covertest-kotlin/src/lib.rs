@@ -111,3 +111,5 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
 mod boundary_faults;
 
 mod buffer_allocations;
+
+mod row_metadata;
