@@ -687,6 +687,14 @@ shared borrows are allowed; an exclusive borrow or move conflicts with every
 other active use of that allocation. Inactive selector arms neither validate nor
 acquire their inputs.
 
+Low-level adapters constructing `prebindgen_conversions::Resource` use
+`records_consumption: false` for compiler-managed ownership counts. Set it to
+`true` when acquisition updates `__prebindgen_input_consumed` after each successful
+move, so failures between transfers preserve the exact consumed prefix. This is
+independent of `registered`, which tracks alias checking. Existing external
+adapter struct literals need the new field; ordinary binding declarations do not
+change.
+
 Consuming C Result calls return an ownership count through `size_t *ownership`.
 The count identifies the consumed prefix of active owned wire values in argument,
 row and field order, including on failure. A callback context counts as one value.
