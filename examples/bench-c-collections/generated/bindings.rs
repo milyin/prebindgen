@@ -37,6 +37,18 @@ fn __pb_owned_owned_vec_c_collection_flat_resource_d71c20b2b8f27a13_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_c_collection_flat_taggedbuffersinput_691f0ce1b29b05f6_len(
+    value: &Vec<c_collection_flat::TaggedBuffersInput>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_c_collection_flat_taggedinput_02dfc659771ede25_len(
+    value: &Vec<c_collection_flat::TaggedInput>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_c_collection_flat_textinput_242aaf40bf165058_len(
     value: &Vec<c_collection_flat::TextInput>,
 ) -> usize {
@@ -2545,6 +2557,355 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct __PbRow_take_tagged_p0_w1 {
+    pub v0: *mut c_collection_flat::Resource,
+    pub v1: i32,
+}
+#[repr(C)]
+pub struct bench_take_tagged_result {
+    pub v0: u64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_take_tagged_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<c_collection_flat::TaggedInput> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_take_tagged_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_take_tagged_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_tagged_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut c_collection_flat::Resource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        c_collection_flat::TaggedInput,
+                        String,
+                    > {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut c_collection_flat::Resource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w7: Option<c_collection_flat::InputTag> = None;
+                        let p0_w5: c_collection_flat::Resource = *p0_w5
+                            .expect("active allocation");
+                        p0_w7 = if true {
+                            Some(
+                                match p0_w8 {
+                                    -3i32 => c_collection_flat::InputTag::Low,
+                                    0i32 => c_collection_flat::InputTag::Normal,
+                                    17i32 => c_collection_flat::InputTag::High,
+                                    _ => return Err("invalid enum discriminant".into()),
+                                },
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w7 = p0_w7.expect("active enum");
+                        let p0_w4: c_collection_flat::TaggedInput = c_collection_flat::tagged_new(
+                            p0_w5,
+                            p0_w7,
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::take_tagged(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = bench_take_tagged_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_take_tagged_buffers_p0_w1 {
+    pub v0: *mut c_collection_flat::Resource,
+    pub v1: i32,
+    pub v2: __PbBuffer,
+    pub v3: __PbBuffer,
+}
+#[repr(C)]
+pub struct bench_take_tagged_buffers_result {
+    pub v0: u64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        bench_take_tagged_buffers_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let _: () = {};
+            let mut p0_w0: Vec<c_collection_flat::TaggedBuffersInput> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_take_tagged_buffers_p0_w1,
+                    p0_w2,
+                )?;
+                let p0_w1_rows: &[__PbRow_take_tagged_buffers_p0_w1] = if p0_w2 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w1.data as *const __PbRow_take_tagged_buffers_p0_w1,
+                            p0_w2,
+                        )
+                    }
+                };
+                let mut p0_w1_accesses = __prebindgen_input_aliases
+                    .begin_group(p0_w2.saturating_mul(1usize));
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(unused_variables, clippy::redundant_closure_call)]
+                    let checked = (|| {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut c_collection_flat::Resource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            for address in ::core::iter::once(
+                                (p0_w6_pointer.addr()) as usize,
+                            ) {
+                                p0_w1_accesses.push((address, true));
+                            }
+                        }
+                        Ok::<_, String>(())
+                    })();
+                    checked?;
+                }
+                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    #[allow(unused_variables)]
+                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    #[allow(unused_variables)]
+                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        c_collection_flat::TaggedBuffersInput,
+                        String,
+                    > {
+                        let p0_w6_pointer = if true {
+                            (p0_w6) as *mut c_collection_flat::Resource
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                        }
+                        if true {
+                            __prebindgen_input_consumed
+                                .set(
+                                    __prebindgen_input_consumed.get()
+                                        + (::core::iter::once((p0_w6_pointer.addr()) as usize))
+                                            .count(),
+                                );
+                        }
+                        let p0_w5 = if true {
+                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
+                        } else {
+                            None
+                        };
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w7: Option<c_collection_flat::InputTag> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w9: Option<&str> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w11: Option<&[u8]> = None;
+                        let p0_w5: c_collection_flat::Resource = *p0_w5
+                            .expect("active allocation");
+                        p0_w7 = if true {
+                            Some(
+                                match p0_w8 {
+                                    -3i32 => c_collection_flat::InputTag::Low,
+                                    0i32 => c_collection_flat::InputTag::Normal,
+                                    17i32 => c_collection_flat::InputTag::High,
+                                    _ => return Err("invalid enum discriminant".into()),
+                                },
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w7 = p0_w7.expect("active enum");
+                        p0_w9 = if true {
+                            Some(
+                                std::str::from_utf8(unsafe { __pb_read(p0_w10)? })
+                                    .map_err(|_| "invalid UTF-8")?,
+                            )
+                        } else {
+                            None
+                        };
+                        let p0_w9: String = ::core::convert::Into::into(
+                            p0_w9.expect("active value"),
+                        );
+                        p0_w11 = if true {
+                            Some(unsafe { __pb_read(p0_w12)? })
+                        } else {
+                            None
+                        };
+                        let p0_w11: Vec<u8> = ::core::convert::Into::into(
+                            p0_w11.expect("active value"),
+                        );
+                        let p0_w4: c_collection_flat::TaggedBuffersInput = c_collection_flat::tagged_buffers_new(
+                            p0_w5,
+                            p0_w7,
+                            p0_w9,
+                            p0_w11,
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::take_tagged_buffers(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_take_tagged_buffers_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_take_text_p0_w1 {
     pub v0: *mut c_collection_flat::Resource,
     pub v1: __PbBuffer,
@@ -2915,6 +3276,10 @@ const _: () = assert!(
     "flat object `BytesInput` must have nonzero size"
 );
 const _: () = assert!(
+    ::core::mem::size_of:: < c_collection_flat::InputTag > () != 0,
+    "flat object `InputTag` must have nonzero size"
+);
+const _: () = assert!(
     ::core::mem::size_of:: < c_collection_flat::Record > () != 0,
     "flat object `Record` must have nonzero size"
 );
@@ -2923,10 +3288,30 @@ const _: () = assert!(
     "flat object `Resource` must have nonzero size"
 );
 const _: () = assert!(
+    ::core::mem::size_of:: < c_collection_flat::TaggedBuffersInput > () != 0,
+    "flat object `TaggedBuffersInput` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < c_collection_flat::TaggedInput > () != 0,
+    "flat object `TaggedInput` must have nonzero size"
+);
+const _: () = assert!(
     ::core::mem::size_of:: < c_collection_flat::TextInput > () != 0,
     "flat object `TextInput` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < c_collection_flat::WideInput > () != 0,
     "flat object `WideInput` must have nonzero size"
+);
+const _: () = assert!(
+    c_collection_flat::InputTag::Low as i128 == - 3i32 as i128,
+    "enum discriminant differs from captured source"
+);
+const _: () = assert!(
+    c_collection_flat::InputTag::Normal as i128 == 0i32 as i128,
+    "enum discriminant differs from captured source"
+);
+const _: () = assert!(
+    c_collection_flat::InputTag::High as i128 == 17i32 as i128,
+    "enum discriminant differs from captured source"
 );
