@@ -24,3 +24,8 @@ reachable correctness bugs. Cache/guard drop order, commit-after-success,
 consumed-alias deduplication, skipped borrows and JNI-free cleanup were reviewed.
 The final generation adjustment preserves ordinary callback decoding and adds
 success-only commit wrapping only when a deferred guard needs it.
+
+The final focused Opus review reported no substantive findings in the exact
+conditional commit wrapping and ordinary callback generation. It confirmed that
+all validation, alias checks, acquisition and construction precede commit, with
+no fallible operation between commit and returning the decoded value.

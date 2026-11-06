@@ -323,3 +323,8 @@ JVM code with different native libraries.
 The [JNI bulk input replay report](jni-input-replay-results/README.md) compares
 native row preparation across generator revisions, including callback results,
 text/byte records and unaffected controls.
+
+The [JNI callback cleanup report](jni-callback-cleanup-results/README.md) compares
+owner-tracking allocations across generator revisions for single records and
+arrays, with ordinary-call controls, longer timing repeats and identical-library
+controls.
