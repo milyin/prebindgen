@@ -1180,7 +1180,7 @@ pub unsafe extern "C" fn bench_callback_native_mixed(
                                             }
                                         };
                                         let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w2.saturating_mul(3usize));
+                                            .begin_group(callback_return_w2.saturating_mul(2usize));
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
                                                 .v0;
