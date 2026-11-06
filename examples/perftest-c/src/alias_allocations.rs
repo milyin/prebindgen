@@ -348,6 +348,68 @@ fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
 }
 
 #[test]
+fn enum_handle_inputs_omit_prepared_row_storage() {
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    macro_rules! check {
+        ($ffi:ident, $row:ident, $make:ident, $take:ident, $checks:expr) => {{
+            for size in [0usize, 1, 8, 64, 512, 4096] {
+                let rows: Vec<_> = (0..size)
+                    .map(|i| $ffi::$row {
+                        v0: unsafe { $ffi::$make(i as i64) },
+                        v1: 17,
+                    })
+                    .collect();
+                let mut result = -1;
+                let mut consumed = usize::MAX;
+                let mut error = core::ptr::null_mut();
+                let count = allocations(|| unsafe {
+                    assert!($ffi::$take(
+                        $ffi::__PbRows {
+                            data: rows.as_ptr().cast(),
+                            len: size
+                        },
+                        &mut result,
+                        &mut consumed,
+                        &mut error,
+                    ));
+                });
+                assert_eq!(count, (1 + usize::from($checks)) * usize::from(size != 0));
+                assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+                if !$checks {
+                    assert_eq!(
+                        ALLOCATED_BYTES.with(Cell::get),
+                        size * core::mem::size_of::<i64>()
+                    );
+                }
+                assert_eq!(
+                    result,
+                    (size * size.saturating_sub(1) / 2 + 17 * size) as i64
+                );
+                assert_eq!(consumed, size);
+                assert!(error.is_null());
+            }
+        }};
+    }
+    use super::unchecked;
+    check!(
+        super,
+        __PbRow_enum_inputs_take_p0_w1,
+        perftest_collection_resource_new,
+        perftest_enum_inputs_take,
+        true
+    );
+    check!(
+        unchecked,
+        __PbRow_enum_inputs_take_p0_w1,
+        fast_collection_resource_new,
+        fast_enum_inputs_take,
+        false
+    );
+}
+
+#[test]
 fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
     for size in [0usize, 1, 65536] {
         unsafe {

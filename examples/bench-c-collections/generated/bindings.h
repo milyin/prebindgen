@@ -17,6 +17,10 @@ static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs
 #else
 _Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
 #endif
+typedef int32_t bench_input_tag;
+#define bench_input_tag_Low ((bench_input_tag)(-3))
+#define bench_input_tag_Normal ((bench_input_tag)(0))
+#define bench_input_tag_High ((bench_input_tag)(17))
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
@@ -161,6 +165,24 @@ typedef struct { bench_take_records_p0_w1_row *data; size_t len; } bench_take_re
 /* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
 /* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_records(bench_take_records_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    bench_input_tag v1;
+} bench_take_tagged_p0_w1_row;
+typedef struct { bench_take_tagged_p0_w1_row *data; size_t len; } bench_take_tagged_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_tagged(bench_take_tagged_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    bench_input_tag v1;
+    bench_buffer v2;
+    bench_buffer v3;
+} bench_take_tagged_buffers_p0_w1_row;
+typedef struct { bench_take_tagged_buffers_p0_w1_row *data; size_t len; } bench_take_tagged_buffers_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Collection values: p0_w1 carries rows of 4 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_tagged_buffers(bench_take_tagged_buffers_p0_w1_rows p0_w1);
 typedef struct {
     bench_resource * v0;
     bench_buffer v1;

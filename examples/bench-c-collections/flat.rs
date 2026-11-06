@@ -71,6 +71,21 @@ pub fn buffers_new(resource:Resource,text:String,bytes:Vec<u8>)->BuffersInput {B
 #[prebindgen]
 pub fn take_buffers(values:Vec<BuffersInput>)->u64 {values.iter().map(|v|v.resource.0+v.text.len() as u64+bytes_score(&v.bytes)).sum()}
 #[prebindgen]
+pub enum InputTag { Low=-3, Normal=0, High=17 }
+fn tag_score(tag:&InputTag)->u64 {match tag {InputTag::Low=>1,InputTag::Normal=>2,InputTag::High=>3}}
+#[prebindgen]
+pub struct TaggedInput {pub resource:Resource,pub tag:InputTag}
+#[prebindgen]
+pub fn tagged_new(resource:Resource,tag:InputTag)->TaggedInput {TaggedInput{resource,tag}}
+#[prebindgen]
+pub fn take_tagged(values:Vec<TaggedInput>)->u64 {values.iter().map(|v|v.resource.0+tag_score(&v.tag)).sum()}
+#[prebindgen]
+pub struct TaggedBuffersInput {pub resource:Resource,pub tag:InputTag,pub text:String,pub bytes:Vec<u8>}
+#[prebindgen]
+pub fn tagged_buffers_new(resource:Resource,tag:InputTag,text:String,bytes:Vec<u8>)->TaggedBuffersInput {TaggedBuffersInput{resource,tag,text,bytes}}
+#[prebindgen]
+pub fn take_tagged_buffers(values:Vec<TaggedBuffersInput>)->u64 {values.iter().map(|v|v.resource.0+tag_score(&v.tag)+v.text.len() as u64+bytes_score(&v.bytes)).sum()}
+#[prebindgen]
 pub fn take_numbers(values:Vec<u64>)->u64 {values.iter().sum()}
 
 #[prebindgen]

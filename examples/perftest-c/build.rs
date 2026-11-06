@@ -1001,6 +1001,15 @@ fn main() {
         .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
         .error_mapper(pq!(String), fun!(inline_packet_error));
     let mut owners = owners
+        .enum_type("input_tag", pq!(InputTag))
+        .function(
+            fun!(enum_inputs_inline)
+                .expand_param("rows", expand_param!(i64).variant(fun!(enum_input_inline))),
+        )
+        .function(fun!(enum_inputs_reset))
+        .panic()
+        .function(fun!(enum_inputs_constructors))
+        .panic()
         .expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)))
         .expand(expand_param!(InlineMixed).variant(fun!(inline_mixed_new)));
     for f in [
@@ -1099,7 +1108,9 @@ fn main() {
     if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
         cbindgen = cbindgen.opaque_layouts_file(path);
     }
-    let generation = cbindgen.build().expect("build supported declarations");
+    let generation = enum_inputs(cbindgen)
+        .build()
+        .expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
     let mut unchecked = prebindgen_c::Cbindgen::builder()
@@ -1143,9 +1154,40 @@ fn main() {
     if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
         unchecked = unchecked.opaque_layouts_file(path);
     }
-    let unchecked = unchecked.build().unwrap();
+    let unchecked = enum_inputs(unchecked).build().unwrap();
     unchecked.write_rust(out.join("unchecked.rs")).unwrap();
     unchecked.write_header(out.join("unchecked.h")).unwrap();
+}
+
+fn enum_inputs(generator: prebindgen_c::Cbindgen) -> prebindgen_c::Cbindgen {
+    generator
+        .enum_type("input_tag", pq!(InputTag))
+        .function(
+            fun!(enum_inputs_take)
+                .expand_param("rows", expand_param!(i64).variant(fun!(enum_input_owned))),
+        )
+        .function(fun!(enum_inputs_borrow).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(enum_input_borrowed)),
+        ))
+        .function(fun!(enum_inputs_optional).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(enum_input_optional)),
+        ))
+        .function(
+            fun!(enum_inputs_alternatives).expand_param(
+                "rows",
+                expand_param!(i64)
+                    .variant(fun!(enum_input_owned))
+                    .variant(fun!(enum_input_borrowed)),
+            ),
+        )
+        .function(fun!(enum_inputs_reset))
+        .panic()
+        .function(fun!(enum_inputs_constructors))
+        .panic()
+        .function(fun!(enum_inputs_calls))
+        .panic()
 }
 
 fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {

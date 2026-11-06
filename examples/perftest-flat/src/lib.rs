@@ -42,7 +42,9 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
 mod bulk;
+mod enum_inputs;
 pub use bulk::*;
+pub use enum_inputs::*;
 mod borrowed_getters;
 mod jni_buffers;
 mod return_results;
