@@ -15,6 +15,12 @@ private fun makePlain(kind: String, size: Int): Measured {
             var rows=List(size) { bench.plain.HandleRecord(bench.plain.inputHandleNew(it.toLong()),it.toLong()) }
             Measured({ rows=bench.plain.ownedHandleRecordsEcho(rows); rows.size.toLong() }, { rows.forEach { it.handle.close() } })
         }
+        "callback_record" -> {
+            require(size==1)
+            var row=bench.plain.HandleRecord(bench.plain.inputHandleNew(1),1L)
+            val callback=bench.plain.OwnedRecordCallback { row }
+            Measured({row=bench.plain.callbackOwnedRecord(callback);1L},{row.handle.close()})
+        }
         "callback_records" -> {
             var rows=List(size) {bench.plain.HandleRecord(bench.plain.inputHandleNew(it.toLong()),it.toLong())}
             val callback=bench.plain.OwnedRecordsCallback {rows}
@@ -42,6 +48,12 @@ private fun makeBulk(kind: String, size: Int): Measured {
         "records" -> {
             var rows=List(size) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(it.toLong()),it.toLong()) }
             Measured({ rows=bench.bulk.ownedHandleRecordsEcho(rows); rows.size.toLong() }, { rows.forEach { it.handle.close() } })
+        }
+        "callback_record" -> {
+            require(size==1)
+            var row=bench.bulk.HandleRecord(bench.bulk.inputHandleNew(1),1L)
+            val callback=bench.bulk.OwnedRecordCallback { row }
+            Measured({row=bench.bulk.callbackOwnedRecord(callback);1L},{row.handle.close()})
         }
         "callback_records" -> {
             var rows=List(size) {bench.bulk.HandleRecord(bench.bulk.inputHandleNew(it.toLong()),it.toLong())}

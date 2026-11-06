@@ -5,6 +5,7 @@ import io.prebindgen.covertest.collections.collectionI64
 
 fun checkPreparedInputs() {
     checkBulkReplay()
+    checkBulkCallbackCleanup()
     // Recomputed positions must preserve the packer's depth-first order across
     // handles before/after nested rows, absent/empty ranges and nullable slots.
     run {

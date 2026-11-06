@@ -160,6 +160,13 @@ rows0Index++
 handleIndex = patchHandle((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.offsets[3], handleIndex)
 }
 }
+internal class Input_i64_i64_8afc2761c446bf98 : BulkHandleWriter(BulkLayouts.r8afc2761c446bf98.size) {
+override fun patchHandles() {
+var handleIndex = 0
+handleIndex = patchHandle((0) + io.prebindgen.covertest.BulkLayouts.r8afc2761c446bf98.offsets[0], handleIndex)
+handleIndex = patchHandle((0) + io.prebindgen.covertest.BulkLayouts.r8afc2761c446bf98.offsets[1], handleIndex)
+}
+}
 internal class Input_i64_i64_fd1551214c82cfe3 : BulkHandleWriter(BulkLayouts.rfd1551214c82cfe3.size) {
 override fun patchHandles() {
 var handleIndex = 0

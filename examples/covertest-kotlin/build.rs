@@ -266,6 +266,12 @@ fn main() {
             .fun(fun!(bulk_replay_staged_rows).expand_param("rows",bulk_replay_input_with(true, true)))
             .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
             .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
+            .fun(fun!(bulk_cleanup_nested_callback).expand_param("callback",
+                callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static).name("BulkCleanupNestedCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))).bulk())))
+            .fun(fun!(bulk_cleanup_pair_callback).expand_param("callback",
+                callback!(impl Fn()->BulkPairText).name("BulkCleanupPairCallback")
+                    .expand_return(Input::Record(vec![Input::Constructor {function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]).bulk())))
             .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
             .fun(fun!(bulk_patch_rows).expand_param("row",Input::Constructor{function:"bulk_patch_row_new".into(),args:vec![
                 Input::Optional(Box::new(Input::Leaf)),

@@ -557,3 +557,30 @@ pub fn bulk_replay_staged_rows(rows: Vec<BulkReplayRow>) -> usize {
 pub fn bulk_replay_object_rows(rows: Vec<BulkReplayRow>) -> usize {
     bulk_replay_rows(rows)
 }
+
+#[prebindgen]
+pub fn bulk_cleanup_nested_callback(
+    callback: impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static,
+    retry: bool,
+    worker: bool,
+) -> Vec<i64> {
+    let call = move || {
+        if retry {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback));
+        }
+        bulk_patch_callback(callback)
+    };
+    if worker {
+        std::thread::spawn(call)
+            .join()
+            .unwrap_or_else(|failure| std::panic::resume_unwind(failure))
+    } else {
+        call()
+    }
+}
+
+#[prebindgen]
+pub fn bulk_cleanup_pair_callback(callback: impl Fn() -> BulkPairText) -> usize {
+    let _ = callback();
+    1
+}

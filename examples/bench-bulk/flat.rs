@@ -293,3 +293,6 @@ pub fn callback_owned_records(callback:impl Fn()->Vec<HandleRecord>)->Vec<Handle
 pub struct BufferRecord {pub handle:InputHandle,pub text:String,pub bytes:Vec<u8>}
 #[prebindgen]
 pub fn owned_buffer_records_echo(values:Vec<BufferRecord>)->Vec<BufferRecord> {std::hint::black_box(values)}
+
+#[prebindgen]
+pub fn callback_owned_record(callback:impl Fn()->HandleRecord)->HandleRecord {callback()}
