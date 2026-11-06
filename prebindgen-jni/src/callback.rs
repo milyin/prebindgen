@@ -716,6 +716,13 @@ impl CallbackReturn {
             },
             &expected,
         )?;
+        if !commit_owners.is_empty() {
+            body = quote!({
+                let callback_return_decoded = (#body)?;
+                #commit_owners
+                Ok::<_,String>(callback_return_decoded)
+            });
+        }
         let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
         alias_check.include_parameter(context, &input.rust.resources)?;
         let aliases = alias_check.initialize()?;
@@ -728,9 +735,7 @@ impl CallbackReturn {
             #cache
             #owners
             #late_decode
-            let callback_return_decoded = (#body)?;
-            #commit_owners
-            Ok::<_,String>(callback_return_decoded)
+            #body
         }))
     }
 }

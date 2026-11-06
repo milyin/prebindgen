@@ -381,6 +381,58 @@ try {         var outputbulkItem_g0_0: bench.bulk.InputHandle? = null
     } finally { returnCapture.release() }
 }
 
+public fun callbackOwnedRecord(callback: bench.bulk.OwnedRecordCallback, onError: bench.bulk.JniErrorHandler<bench.bulk.HandleRecord> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.HandleRecord = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: bench.bulk.HandleRecord
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w3 = callbackReturned
+ try { val callback_return_w1_writer_state = if (true) run { val callback_return_w1_writer = bench.bulk.BulkInputs.Input_i64_i64_b3c08eb92fbbc74c()
+callback_return_w1_writer.handle((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0], bench.bulk.InputValidation.value { callback_return_w3.handle }, true)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[1], bench.bulk.InputValidation.value { callback_return_w3.tag })
+
+callback_return_w1_writer } else null
+ bench.bulk.withHandleLocks((callback_return_w1_writer_state?.handles.orEmpty())) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1_writer_state?.encode(), callback_return_w1_writer_state?.length ?: 0)
+val __pb_consume: (bench.bulk.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_writer_state?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<bench.bulk.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<bench.bulk.NativeHandle>(); (callback_return_w3 as? bench.bulk.HandleRecord)?.let { returnedValue1 -> (returnedValue1.handle as? bench.bulk.NativeHandle)?.let { returnedValue3 -> returnedHandles.add(returnedValue3); returnedOwners.add(returnedValue3) }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_callback_owned_record_990f8f2a11136fc7(nativeArgument0, nativeArgument1) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: bench.bulk.BulkReader? = null
+        var outputg0_0: bench.bulk.InputHandle? = null
+ if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+            try { val owner = outputg0_0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: bench.bulk.BulkReader? = null
+        var outputg0_0: bench.bulk.InputHandle? = null
+        try {
+outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+            outputg0_0 = bench.bulk.InputHandle((requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long)
+            bench.bulk.HandleRecord(requireNotNull(outputg0_0), (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[1])) as Long)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+ }
+            try { val owner = outputg0_0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_InputHandle_7cc67535bbd4a8ee((requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0])) as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
 public fun ownedBufferRecordsEcho(values: kotlin.collections.List<bench.bulk.BufferRecord>, onError: bench.bulk.JniErrorHandler<kotlin.collections.List<bench.bulk.BufferRecord>> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.bulk.BufferRecord> = run {
     val p0_w3_elements = try { if (true) values?.toList() else null } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = bench.bulk.BulkInputs.Input_Range_50871c2a8b72df4b()

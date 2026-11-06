@@ -1866,7 +1866,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                 }
                                             }
                                             callback_return_owners.check()?;
-                                            {
+                                            let callback_return_decoded = ({
                                                 let mut callback_return_w0: Vec<bench_flat::HandleRecord> = Vec::new();
                                                 if true {
                                                     if callback_return_w1.is_null() {
@@ -2011,8 +2011,9 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                 };
                                                 let callback_return_value = callback_return_w0_built
                                                     .expect("active input");
-                                                Ok(callback_return_value)
-                                            }
+                                                Ok::<_, String>(callback_return_value)
+                                            })?;
+                                            Ok::<_, String>(callback_return_decoded)
                                         }
                                     }
                                 },
@@ -2135,6 +2136,249 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                 }
             }
             direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1record_1990f8f2a11136fc7<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "()[Ljava/lang/Object;",
+                "bench.plain.OwnedRecordCallback",
+            )?;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                Some({
+                    #[allow(unused_mut, clippy::collapsible_if)]
+                    let p0_callback_value = move || {
+                        p0_callback_retained
+                            .with_env_result(
+                                19i32,
+                                |callback_environment| {
+                                    let mut callback_environment = callback_environment;
+                                    {
+                                        let arguments = [];
+                                        {
+                                            let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                            let __prebindgen_input_consumed = &__pb_input_consumed;
+                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+                                            let callback_result = unsafe {
+                                                p0_callback_retained
+                                                    .invoke_return(
+                                                        callback_environment,
+                                                        ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                        &arguments,
+                                                    )
+                                            }?;
+                                            let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                                callback_result.l().map_err(|e| e.to_string())?,
+                                            );
+                                            let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                0usize,
+                                            )?;
+                                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                                __prebindgen_input_consumed,
+                                            );
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w1_f0
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                bench_flat::InputHandle,
+                                                            >,
+                                                    );
+                                            }
+                                            callback_return_owners.check()?;
+                                            let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i64(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                1usize,
+                                            )?;
+                                            let callback_return_decoded = ({
+                                                let callback_return_w1_f0_pointer = if true {
+                                                    callback_return_w1_f0
+                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                            bench_flat::InputHandle,
+                                                        >
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w1_f0_pointer,
+                                                    )?;
+                                                }
+                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                let callback_return_w0_f0_built = if true {
+                                                    let mut callback_return_w0_f0_built_transferred_0 = 0usize;
+                                                    if true {
+                                                        for address in ::core::iter::once(
+                                                            (callback_return_w1_f0_pointer.addr()) as usize,
+                                                        ) {
+                                                            __prebindgen_input_aliases.access(address, true)?;
+                                                            callback_return_w0_f0_built_transferred_0 += 1;
+                                                        }
+                                                    }
+                                                    let callback_return_w0_f0 = if true {
+                                                        Some(unsafe {
+                                                            Box::from_raw(callback_return_w1_f0_pointer)
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + callback_return_w0_f0_built_transferred_0,
+                                                        );
+                                                    Some({
+                                                        let callback_return_w0_f0: bench_flat::InputHandle = callback_return_w0_f0
+                                                            .expect("active allocation")
+                                                            .value;
+                                                        callback_return_w0_f0
+                                                    })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w0_f1 = if true {
+                                                    Some(callback_return_w1_f1)
+                                                } else {
+                                                    None
+                                                };
+                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                let callback_return_w0_f1_built = if true {
+                                                    Some({
+                                                        let callback_return_w0_f1: i64 = ::core::convert::Into::into(
+                                                            callback_return_w0_f1.expect("active value"),
+                                                        );
+                                                        callback_return_w0_f1
+                                                    })
+                                                } else {
+                                                    None
+                                                };
+                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                let callback_return_w0_built = if true {
+                                                    Some({
+                                                        let callback_return_w0: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                                                            handle: callback_return_w0_f0_built.expect("active input"),
+                                                            tag: callback_return_w0_f1_built.expect("active input"),
+                                                        };
+                                                        callback_return_w0
+                                                    })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_value = callback_return_w0_built
+                                                    .expect("active input");
+                                                Ok::<_, String>(callback_return_value)
+                                            })?;
+                                            Ok::<_, String>(callback_return_decoded)
+                                        }
+                                    }
+                                },
+                            )
+                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = bench_flat::callback_owned_record(
+                __prebindgen_argument_0,
+            );
+            let ret_w0_record = source_value;
+            let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w0_record.handle,
+            });
+            let ret_w0_f1 = ret_w0_record.tag;
+            static __PB_RETURN_METHOD_0: ::prebindgen_jni_runtime::ReturnCallback = ::prebindgen_jni_runtime::ReturnCallback::new();
+            unsafe {
+                __PB_RETURN_METHOD_0
+                    .invoke(
+                        &mut jni_environment,
+                        &__pb_return,
+                        "success0",
+                        "(JJ)V",
+                        &[
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                j: ((&mut *ret_w0_f0)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        bench_flat::InputHandle,
+                                    >) as i64,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                j: ret_w0_f1,
+                            },
+                        ],
+                    )
+            }?;
+            let _: () = {
+                let _ = Box::into_raw(ret_w0_f0).expose_provenance();
+                success_transferred = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
         }
     }
 }
@@ -3818,155 +4062,158 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
                                             &(callback_result_rows),
                                             7usize,
                                         )?;
-                                        let callback_return_w0_f0 = if true {
-                                            Some(callback_return_w1_f0)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f0_built = if true {
-                                            Some({
-                                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f0.expect("active value"),
-                                                );
-                                                callback_return_w0_f0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f1 = if true {
-                                            Some(callback_return_w1_f1)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f1_built = if true {
-                                            Some({
-                                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f1.expect("active value"),
-                                                );
-                                                callback_return_w0_f1
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f2 = if true {
-                                            Some(callback_return_w1_f2)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f2_built = if true {
-                                            Some({
-                                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f2.expect("active value"),
-                                                );
-                                                callback_return_w0_f2
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f3 = if true {
-                                            Some(callback_return_w1_f3)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f3_built = if true {
-                                            Some({
-                                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f3.expect("active value"),
-                                                );
-                                                callback_return_w0_f3
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f4 = if true {
-                                            Some(callback_return_w1_f4)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f4_built = if true {
-                                            Some({
-                                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f4.expect("active value"),
-                                                );
-                                                callback_return_w0_f4
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f5 = if true {
-                                            Some(callback_return_w1_f5)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f5_built = if true {
-                                            Some({
-                                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f5.expect("active value"),
-                                                );
-                                                callback_return_w0_f5
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f6 = if true {
-                                            Some(callback_return_w1_f6)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f6_built = if true {
-                                            Some({
-                                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f6.expect("active value"),
-                                                );
-                                                callback_return_w0_f6
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f7 = if true {
-                                            Some(callback_return_w1_f7)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f7_built = if true {
-                                            Some({
-                                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f7.expect("active value"),
-                                                );
-                                                callback_return_w0_f7
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_built = if true {
-                                            Some({
-                                                let callback_return_w0: bench_flat::Row = bench_flat::Row {
-                                                    a: callback_return_w0_f0_built.expect("active input"),
-                                                    b: callback_return_w0_f1_built.expect("active input"),
-                                                    c: callback_return_w0_f2_built.expect("active input"),
-                                                    d: callback_return_w0_f3_built.expect("active input"),
-                                                    e: callback_return_w0_f4_built.expect("active input"),
-                                                    f: callback_return_w0_f5_built.expect("active input"),
-                                                    g: callback_return_w0_f6_built.expect("active input"),
-                                                    h: callback_return_w0_f7_built.expect("active input"),
-                                                };
-                                                callback_return_w0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_value = callback_return_w0_built
-                                            .expect("active input");
-                                        Ok(callback_return_value)
+                                        let callback_return_decoded = ({
+                                            let callback_return_w0_f0 = if true {
+                                                Some(callback_return_w1_f0)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f0_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f0: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f0.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f0
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f1 = if true {
+                                                Some(callback_return_w1_f1)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f1_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f1: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f1.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f1
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f2 = if true {
+                                                Some(callback_return_w1_f2)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f2_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f2: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f2.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f2
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f3 = if true {
+                                                Some(callback_return_w1_f3)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f3_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f3: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f3.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f3
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f4 = if true {
+                                                Some(callback_return_w1_f4)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f4_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f4: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f4.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f4
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f5 = if true {
+                                                Some(callback_return_w1_f5)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f5_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f5: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f5.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f5
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f6 = if true {
+                                                Some(callback_return_w1_f6)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f6_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f6: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f6.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f6
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f7 = if true {
+                                                Some(callback_return_w1_f7)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f7_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f7: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f7.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f7
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_built = if true {
+                                                Some({
+                                                    let callback_return_w0: bench_flat::Row = bench_flat::Row {
+                                                        a: callback_return_w0_f0_built.expect("active input"),
+                                                        b: callback_return_w0_f1_built.expect("active input"),
+                                                        c: callback_return_w0_f2_built.expect("active input"),
+                                                        d: callback_return_w0_f3_built.expect("active input"),
+                                                        e: callback_return_w0_f4_built.expect("active input"),
+                                                        f: callback_return_w0_f5_built.expect("active input"),
+                                                        g: callback_return_w0_f6_built.expect("active input"),
+                                                        h: callback_return_w0_f7_built.expect("active input"),
+                                                    };
+                                                    callback_return_w0
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_value = callback_return_w0_built
+                                                .expect("active input");
+                                            Ok::<_, String>(callback_return_value)
+                                        })?;
+                                        Ok::<_, String>(callback_return_decoded)
                                     }
                                 },
                             )
@@ -4261,563 +4508,566 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
                                             &(callback_result_rows),
                                             31usize,
                                         )?;
-                                        let callback_return_w0_f0 = if true {
-                                            Some(callback_return_w1_f0)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f0_built = if true {
-                                            Some({
-                                                let callback_return_w0_f0: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f0.expect("active value"),
-                                                );
-                                                callback_return_w0_f0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f1 = if true {
-                                            Some(callback_return_w1_f1)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f1_built = if true {
-                                            Some({
-                                                let callback_return_w0_f1: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f1.expect("active value"),
-                                                );
-                                                callback_return_w0_f1
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f2 = if true {
-                                            Some(callback_return_w1_f2)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f2_built = if true {
-                                            Some({
-                                                let callback_return_w0_f2: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f2.expect("active value"),
-                                                );
-                                                callback_return_w0_f2
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f3 = if true {
-                                            Some(callback_return_w1_f3)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f3_built = if true {
-                                            Some({
-                                                let callback_return_w0_f3: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f3.expect("active value"),
-                                                );
-                                                callback_return_w0_f3
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f4 = if true {
-                                            Some(callback_return_w1_f4)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f4_built = if true {
-                                            Some({
-                                                let callback_return_w0_f4: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f4.expect("active value"),
-                                                );
-                                                callback_return_w0_f4
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f5 = if true {
-                                            Some(callback_return_w1_f5)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f5_built = if true {
-                                            Some({
-                                                let callback_return_w0_f5: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f5.expect("active value"),
-                                                );
-                                                callback_return_w0_f5
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f6 = if true {
-                                            Some(callback_return_w1_f6)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f6_built = if true {
-                                            Some({
-                                                let callback_return_w0_f6: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f6.expect("active value"),
-                                                );
-                                                callback_return_w0_f6
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f7 = if true {
-                                            Some(callback_return_w1_f7)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f7_built = if true {
-                                            Some({
-                                                let callback_return_w0_f7: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f7.expect("active value"),
-                                                );
-                                                callback_return_w0_f7
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f8 = if true {
-                                            Some(callback_return_w1_f8)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f8_built = if true {
-                                            Some({
-                                                let callback_return_w0_f8: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f8.expect("active value"),
-                                                );
-                                                callback_return_w0_f8
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f9 = if true {
-                                            Some(callback_return_w1_f9)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f9_built = if true {
-                                            Some({
-                                                let callback_return_w0_f9: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f9.expect("active value"),
-                                                );
-                                                callback_return_w0_f9
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f10 = if true {
-                                            Some(callback_return_w1_f10)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f10_built = if true {
-                                            Some({
-                                                let callback_return_w0_f10: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f10.expect("active value"),
-                                                );
-                                                callback_return_w0_f10
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f11 = if true {
-                                            Some(callback_return_w1_f11)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f11_built = if true {
-                                            Some({
-                                                let callback_return_w0_f11: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f11.expect("active value"),
-                                                );
-                                                callback_return_w0_f11
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f12 = if true {
-                                            Some(callback_return_w1_f12)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f12_built = if true {
-                                            Some({
-                                                let callback_return_w0_f12: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f12.expect("active value"),
-                                                );
-                                                callback_return_w0_f12
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f13 = if true {
-                                            Some(callback_return_w1_f13)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f13_built = if true {
-                                            Some({
-                                                let callback_return_w0_f13: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f13.expect("active value"),
-                                                );
-                                                callback_return_w0_f13
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f14 = if true {
-                                            Some(callback_return_w1_f14)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f14_built = if true {
-                                            Some({
-                                                let callback_return_w0_f14: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f14.expect("active value"),
-                                                );
-                                                callback_return_w0_f14
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f15 = if true {
-                                            Some(callback_return_w1_f15)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f15_built = if true {
-                                            Some({
-                                                let callback_return_w0_f15: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f15.expect("active value"),
-                                                );
-                                                callback_return_w0_f15
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f16 = if true {
-                                            Some(callback_return_w1_f16)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f16_built = if true {
-                                            Some({
-                                                let callback_return_w0_f16: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f16.expect("active value"),
-                                                );
-                                                callback_return_w0_f16
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f17 = if true {
-                                            Some(callback_return_w1_f17)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f17_built = if true {
-                                            Some({
-                                                let callback_return_w0_f17: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f17.expect("active value"),
-                                                );
-                                                callback_return_w0_f17
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f18 = if true {
-                                            Some(callback_return_w1_f18)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f18_built = if true {
-                                            Some({
-                                                let callback_return_w0_f18: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f18.expect("active value"),
-                                                );
-                                                callback_return_w0_f18
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f19 = if true {
-                                            Some(callback_return_w1_f19)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f19_built = if true {
-                                            Some({
-                                                let callback_return_w0_f19: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f19.expect("active value"),
-                                                );
-                                                callback_return_w0_f19
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f20 = if true {
-                                            Some(callback_return_w1_f20)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f20_built = if true {
-                                            Some({
-                                                let callback_return_w0_f20: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f20.expect("active value"),
-                                                );
-                                                callback_return_w0_f20
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f21 = if true {
-                                            Some(callback_return_w1_f21)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f21_built = if true {
-                                            Some({
-                                                let callback_return_w0_f21: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f21.expect("active value"),
-                                                );
-                                                callback_return_w0_f21
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f22 = if true {
-                                            Some(callback_return_w1_f22)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f22_built = if true {
-                                            Some({
-                                                let callback_return_w0_f22: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f22.expect("active value"),
-                                                );
-                                                callback_return_w0_f22
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f23 = if true {
-                                            Some(callback_return_w1_f23)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f23_built = if true {
-                                            Some({
-                                                let callback_return_w0_f23: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f23.expect("active value"),
-                                                );
-                                                callback_return_w0_f23
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f24 = if true {
-                                            Some(callback_return_w1_f24)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f24_built = if true {
-                                            Some({
-                                                let callback_return_w0_f24: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f24.expect("active value"),
-                                                );
-                                                callback_return_w0_f24
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f25 = if true {
-                                            Some(callback_return_w1_f25)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f25_built = if true {
-                                            Some({
-                                                let callback_return_w0_f25: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f25.expect("active value"),
-                                                );
-                                                callback_return_w0_f25
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f26 = if true {
-                                            Some(callback_return_w1_f26)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f26_built = if true {
-                                            Some({
-                                                let callback_return_w0_f26: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f26.expect("active value"),
-                                                );
-                                                callback_return_w0_f26
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f27 = if true {
-                                            Some(callback_return_w1_f27)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f27_built = if true {
-                                            Some({
-                                                let callback_return_w0_f27: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f27.expect("active value"),
-                                                );
-                                                callback_return_w0_f27
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f28 = if true {
-                                            Some(callback_return_w1_f28)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f28_built = if true {
-                                            Some({
-                                                let callback_return_w0_f28: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f28.expect("active value"),
-                                                );
-                                                callback_return_w0_f28
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f29 = if true {
-                                            Some(callback_return_w1_f29)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f29_built = if true {
-                                            Some({
-                                                let callback_return_w0_f29: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f29.expect("active value"),
-                                                );
-                                                callback_return_w0_f29
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f30 = if true {
-                                            Some(callback_return_w1_f30)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f30_built = if true {
-                                            Some({
-                                                let callback_return_w0_f30: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f30.expect("active value"),
-                                                );
-                                                callback_return_w0_f30
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_w0_f31 = if true {
-                                            Some(callback_return_w1_f31)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_f31_built = if true {
-                                            Some({
-                                                let callback_return_w0_f31: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0_f31.expect("active value"),
-                                                );
-                                                callback_return_w0_f31
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_built = if true {
-                                            Some({
-                                                let callback_return_w0: bench_flat::WideRow = bench_flat::WideRow {
-                                                    f0: callback_return_w0_f0_built.expect("active input"),
-                                                    f1: callback_return_w0_f1_built.expect("active input"),
-                                                    f2: callback_return_w0_f2_built.expect("active input"),
-                                                    f3: callback_return_w0_f3_built.expect("active input"),
-                                                    f4: callback_return_w0_f4_built.expect("active input"),
-                                                    f5: callback_return_w0_f5_built.expect("active input"),
-                                                    f6: callback_return_w0_f6_built.expect("active input"),
-                                                    f7: callback_return_w0_f7_built.expect("active input"),
-                                                    f8: callback_return_w0_f8_built.expect("active input"),
-                                                    f9: callback_return_w0_f9_built.expect("active input"),
-                                                    f10: callback_return_w0_f10_built.expect("active input"),
-                                                    f11: callback_return_w0_f11_built.expect("active input"),
-                                                    f12: callback_return_w0_f12_built.expect("active input"),
-                                                    f13: callback_return_w0_f13_built.expect("active input"),
-                                                    f14: callback_return_w0_f14_built.expect("active input"),
-                                                    f15: callback_return_w0_f15_built.expect("active input"),
-                                                    f16: callback_return_w0_f16_built.expect("active input"),
-                                                    f17: callback_return_w0_f17_built.expect("active input"),
-                                                    f18: callback_return_w0_f18_built.expect("active input"),
-                                                    f19: callback_return_w0_f19_built.expect("active input"),
-                                                    f20: callback_return_w0_f20_built.expect("active input"),
-                                                    f21: callback_return_w0_f21_built.expect("active input"),
-                                                    f22: callback_return_w0_f22_built.expect("active input"),
-                                                    f23: callback_return_w0_f23_built.expect("active input"),
-                                                    f24: callback_return_w0_f24_built.expect("active input"),
-                                                    f25: callback_return_w0_f25_built.expect("active input"),
-                                                    f26: callback_return_w0_f26_built.expect("active input"),
-                                                    f27: callback_return_w0_f27_built.expect("active input"),
-                                                    f28: callback_return_w0_f28_built.expect("active input"),
-                                                    f29: callback_return_w0_f29_built.expect("active input"),
-                                                    f30: callback_return_w0_f30_built.expect("active input"),
-                                                    f31: callback_return_w0_f31_built.expect("active input"),
-                                                };
-                                                callback_return_w0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_value = callback_return_w0_built
-                                            .expect("active input");
-                                        Ok(callback_return_value)
+                                        let callback_return_decoded = ({
+                                            let callback_return_w0_f0 = if true {
+                                                Some(callback_return_w1_f0)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f0_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f0: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f0.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f0
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f1 = if true {
+                                                Some(callback_return_w1_f1)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f1_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f1: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f1.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f1
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f2 = if true {
+                                                Some(callback_return_w1_f2)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f2_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f2: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f2.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f2
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f3 = if true {
+                                                Some(callback_return_w1_f3)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f3_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f3: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f3.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f3
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f4 = if true {
+                                                Some(callback_return_w1_f4)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f4_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f4: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f4.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f4
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f5 = if true {
+                                                Some(callback_return_w1_f5)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f5_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f5: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f5.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f5
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f6 = if true {
+                                                Some(callback_return_w1_f6)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f6_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f6: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f6.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f6
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f7 = if true {
+                                                Some(callback_return_w1_f7)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f7_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f7: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f7.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f7
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f8 = if true {
+                                                Some(callback_return_w1_f8)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f8_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f8: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f8.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f8
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f9 = if true {
+                                                Some(callback_return_w1_f9)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f9_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f9: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f9.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f9
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f10 = if true {
+                                                Some(callback_return_w1_f10)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f10_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f10: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f10.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f10
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f11 = if true {
+                                                Some(callback_return_w1_f11)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f11_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f11: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f11.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f11
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f12 = if true {
+                                                Some(callback_return_w1_f12)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f12_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f12: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f12.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f12
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f13 = if true {
+                                                Some(callback_return_w1_f13)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f13_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f13: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f13.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f13
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f14 = if true {
+                                                Some(callback_return_w1_f14)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f14_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f14: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f14.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f14
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f15 = if true {
+                                                Some(callback_return_w1_f15)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f15_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f15: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f15.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f15
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f16 = if true {
+                                                Some(callback_return_w1_f16)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f16_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f16: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f16.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f16
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f17 = if true {
+                                                Some(callback_return_w1_f17)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f17_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f17: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f17.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f17
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f18 = if true {
+                                                Some(callback_return_w1_f18)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f18_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f18: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f18.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f18
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f19 = if true {
+                                                Some(callback_return_w1_f19)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f19_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f19: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f19.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f19
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f20 = if true {
+                                                Some(callback_return_w1_f20)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f20_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f20: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f20.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f20
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f21 = if true {
+                                                Some(callback_return_w1_f21)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f21_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f21: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f21.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f21
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f22 = if true {
+                                                Some(callback_return_w1_f22)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f22_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f22: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f22.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f22
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f23 = if true {
+                                                Some(callback_return_w1_f23)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f23_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f23: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f23.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f23
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f24 = if true {
+                                                Some(callback_return_w1_f24)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f24_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f24: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f24.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f24
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f25 = if true {
+                                                Some(callback_return_w1_f25)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f25_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f25: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f25.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f25
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f26 = if true {
+                                                Some(callback_return_w1_f26)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f26_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f26: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f26.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f26
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f27 = if true {
+                                                Some(callback_return_w1_f27)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f27_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f27: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f27.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f27
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f28 = if true {
+                                                Some(callback_return_w1_f28)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f28_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f28: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f28.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f28
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f29 = if true {
+                                                Some(callback_return_w1_f29)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f29_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f29: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f29.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f29
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f30 = if true {
+                                                Some(callback_return_w1_f30)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f30_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f30: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f30.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f30
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_f31 = if true {
+                                                Some(callback_return_w1_f31)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_f31_built = if true {
+                                                Some({
+                                                    let callback_return_w0_f31: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0_f31.expect("active value"),
+                                                    );
+                                                    callback_return_w0_f31
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_built = if true {
+                                                Some({
+                                                    let callback_return_w0: bench_flat::WideRow = bench_flat::WideRow {
+                                                        f0: callback_return_w0_f0_built.expect("active input"),
+                                                        f1: callback_return_w0_f1_built.expect("active input"),
+                                                        f2: callback_return_w0_f2_built.expect("active input"),
+                                                        f3: callback_return_w0_f3_built.expect("active input"),
+                                                        f4: callback_return_w0_f4_built.expect("active input"),
+                                                        f5: callback_return_w0_f5_built.expect("active input"),
+                                                        f6: callback_return_w0_f6_built.expect("active input"),
+                                                        f7: callback_return_w0_f7_built.expect("active input"),
+                                                        f8: callback_return_w0_f8_built.expect("active input"),
+                                                        f9: callback_return_w0_f9_built.expect("active input"),
+                                                        f10: callback_return_w0_f10_built.expect("active input"),
+                                                        f11: callback_return_w0_f11_built.expect("active input"),
+                                                        f12: callback_return_w0_f12_built.expect("active input"),
+                                                        f13: callback_return_w0_f13_built.expect("active input"),
+                                                        f14: callback_return_w0_f14_built.expect("active input"),
+                                                        f15: callback_return_w0_f15_built.expect("active input"),
+                                                        f16: callback_return_w0_f16_built.expect("active input"),
+                                                        f17: callback_return_w0_f17_built.expect("active input"),
+                                                        f18: callback_return_w0_f18_built.expect("active input"),
+                                                        f19: callback_return_w0_f19_built.expect("active input"),
+                                                        f20: callback_return_w0_f20_built.expect("active input"),
+                                                        f21: callback_return_w0_f21_built.expect("active input"),
+                                                        f22: callback_return_w0_f22_built.expect("active input"),
+                                                        f23: callback_return_w0_f23_built.expect("active input"),
+                                                        f24: callback_return_w0_f24_built.expect("active input"),
+                                                        f25: callback_return_w0_f25_built.expect("active input"),
+                                                        f26: callback_return_w0_f26_built.expect("active input"),
+                                                        f27: callback_return_w0_f27_built.expect("active input"),
+                                                        f28: callback_return_w0_f28_built.expect("active input"),
+                                                        f29: callback_return_w0_f29_built.expect("active input"),
+                                                        f30: callback_return_w0_f30_built.expect("active input"),
+                                                        f31: callback_return_w0_f31_built.expect("active input"),
+                                                    };
+                                                    callback_return_w0
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_value = callback_return_w0_built
+                                                .expect("active input");
+                                            Ok::<_, String>(callback_return_value)
+                                        })?;
+                                        Ok::<_, String>(callback_return_decoded)
                                     }
                                 },
                             )
@@ -6814,25 +7064,28 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
                                         let callback_return_w1 = callback_result
                                             .j()
                                             .map_err(|e| e.to_string())?;
-                                        let callback_return_w0 = if true {
-                                            Some(callback_return_w1)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_built = if true {
-                                            Some({
-                                                let callback_return_w0: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0.expect("active value"),
-                                                );
-                                                callback_return_w0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_value = callback_return_w0_built
-                                            .expect("active input");
-                                        Ok(callback_return_value)
+                                        let callback_return_decoded = ({
+                                            let callback_return_w0 = if true {
+                                                Some(callback_return_w1)
+                                            } else {
+                                                None
+                                            };
+                                            #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                            let callback_return_w0_built = if true {
+                                                Some({
+                                                    let callback_return_w0: i64 = ::core::convert::Into::into(
+                                                        callback_return_w0.expect("active value"),
+                                                    );
+                                                    callback_return_w0
+                                                })
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_value = callback_return_w0_built
+                                                .expect("active input");
+                                            Ok::<_, String>(callback_return_value)
+                                        })?;
+                                        Ok::<_, String>(callback_return_decoded)
                                     }
                                 },
                             )
