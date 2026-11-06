@@ -282,7 +282,7 @@ pub(crate) fn input<C: Codec>(
     let staged = format_ident!("{wire}_prepared");
     let mut collect = TokenStream::new();
     let mut count = TokenStream::new();
-    let resource_count = child.resources.len();
+    let resource_count = child.resources.iter().filter(|r| !r.registered).count();
     for resource in child.resources.iter().filter(|r| !r.registered) {
         let condition = &resource.active;
         let addresses = match &resource.identity {

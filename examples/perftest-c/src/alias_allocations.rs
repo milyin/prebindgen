@@ -528,12 +528,16 @@ fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
             });
             assert_eq!(count, (1 + usize::from(checked)) * usize::from(size != 0));
             assert_eq!(REALLOCATIONS.with(Cell::get), 0);
-            if !checked {
-                assert_eq!(
-                    ALLOCATED_BYTES.with(Cell::get),
-                    size * core::mem::size_of::<perftest_flat::InlineCallbackRow>()
-                );
-            }
+            let row_bytes = core::mem::size_of::<perftest_flat::InlineCallbackRow>();
+            let alias_bytes = if checked {
+                2 * core::mem::size_of::<(usize, bool)>()
+            } else {
+                0
+            };
+            assert_eq!(
+                ALLOCATED_BYTES.with(Cell::get),
+                size * (row_bytes + alias_bytes)
+            );
             assert_eq!(result, (size * size.saturating_sub(1) + 100 * size) as i64);
             assert_eq!(consumed, 1);
             assert!(error.is_null());

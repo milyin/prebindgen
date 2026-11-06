@@ -142,7 +142,15 @@ pub(crate) fn input(
                 | CWire::Pointer { .. }
                 | CWire::DeferredBuffer
                 | CWire::Enum { .. }
-                | CWire::Owned { .. }
+                | CWire::Owned {
+                    by_value: false,
+                    ..
+                }
+                | CWire::Owned {
+                    access: Access::Move,
+                    by_value: true,
+                    ..
+                }
         )
     });
     let slice = format_ident!("{wire}_rows");
