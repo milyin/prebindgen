@@ -533,7 +533,7 @@ pub unsafe extern "C" fn bench_callback_many(
                                         ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
