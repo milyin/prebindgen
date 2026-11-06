@@ -99,6 +99,10 @@ fn main() {
         let callback_input=if bulk {callback_input.bulk()} else {callback_input};
         let callback_records=fun!(callback_owned_records).expand_param("callback",callback!(impl Fn()->Vec<HandleRecord>).name("OwnedRecordsCallback").expand_return(callback_input));
         let callback_records=if bulk {callback_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {callback_records};
+        let record_input=Input::Record(vec![Input::Leaf;2]);
+        let record_input=if bulk {record_input.bulk()} else {record_input};
+        let callback_record=fun!(callback_owned_record).expand_param("callback",callback!(impl Fn()->HandleRecord).name("OwnedRecordCallback").expand_return(record_input));
+        let callback_record=if bulk {callback_record.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {callback_record};
         let buffer_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;3])));
         let buffers=fun!(owned_buffer_records_echo).expand_param("values",if bulk {buffer_input.bulk()}else{buffer_input});
         let buffers=if bulk {buffers.expand_return(expand_return!(BufferRecord).field_self_into().bulk())}else{buffers};
@@ -122,6 +126,7 @@ fn main() {
                     .fun(owned_handles)
                     .fun(owned_records)
                     .fun(callback_records)
+                    .fun(callback_record)
                     .fun(buffers)
                     .fun(nested_owners)
                     .class(data_class!(Row))

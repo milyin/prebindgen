@@ -14,7 +14,7 @@ import tempfile
 
 FIXTURE = Path(__file__).resolve().parent
 MODES = ("plain", "bulk")
-SINGLE_CASES = ("control", "scalar", "handle_input", "buffer_input", "selected_handle_input", "inactive_handle_input", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
+SINGLE_CASES = ("callback_owned_record", "control", "scalar", "handle_input", "buffer_input", "selected_handle_input", "inactive_handle_input", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
 KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip", "owned_handle_records_roundtrip", "nested_owned_handles_roundtrip", "callback_owned_records", "owned_buffer_records_roundtrip")
 
 

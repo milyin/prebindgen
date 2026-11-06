@@ -127,6 +127,13 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
         cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
             Operation {_ ->buffers[0]=bench.plain.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.plain.inputHandleValue(buffers[0][0].handle)+size}))
     }
+    var callbackRecord = bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE),1L)
+    val recordCallback = bench.plain.OwnedRecordCallback { callbacks[0]++; callbackRecord }
+    cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
+    cases.add(Case("callback_owned_record",1,BASE+1,0,Operation { _ ->
+        callbackRecord=bench.plain.callbackOwnedRecord(recordCallback)
+        bench.plain.inputHandleValue(callbackRecord.handle)+callbackRecord.tag
+    },true))
     for (size in payloads) {
         val packet = bench.plain.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256
@@ -253,6 +260,13 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
         cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
             Operation {_ ->buffers[0]=bench.bulk.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.bulk.inputHandleValue(buffers[0][0].handle)+size}))
     }
+    var callbackRecord = bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE),1L)
+    val recordCallback = bench.bulk.OwnedRecordCallback { callbacks[0]++; callbackRecord }
+    cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
+    cases.add(Case("callback_owned_record",1,BASE+1,0,Operation { _ ->
+        callbackRecord=bench.bulk.callbackOwnedRecord(recordCallback)
+        bench.bulk.inputHandleValue(callbackRecord.handle)+callbackRecord.tag
+    },true))
     for (size in payloads) {
         val packet = bench.bulk.Packet(one, ByteArray(size) { (it and 255).toByte() })
         val full = size / 256

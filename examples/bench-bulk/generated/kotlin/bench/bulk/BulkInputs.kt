@@ -94,4 +94,10 @@ rows0Index++
 }
 }
 }
+internal class Input_i64_i64_b3c08eb92fbbc74c : BulkHandleWriter(BulkLayouts.rb3c08eb92fbbc74c.size) {
+override fun patchHandles() {
+var handleIndex = 0
+handleIndex = patchHandle((0) + bench.bulk.BulkLayouts.rb3c08eb92fbbc74c.offsets[0], handleIndex)
+}
+}
 }

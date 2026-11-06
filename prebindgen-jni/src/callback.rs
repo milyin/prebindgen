@@ -615,9 +615,21 @@ impl CallbackReturn {
                 }
             }
         }
-        let scan = receive_return_owners(self.input.input_node(), context)?;
+        let node = self.input.input_node();
+        let cleanup_only = cached_return_owners(node, false);
+        let scan = receive_return_owners(node, context, cleanup_only)?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
+        }
+        if cleanup_only {
+            return Ok((
+                quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
+                    let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
+                    #scan
+                    Ok(())
+                });),
+                quote!(callback_return_cleanup.commit();),
+            ));
         }
         Ok((
             quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed); #scan callback_return_owners.check()?;),
@@ -679,7 +691,7 @@ impl CallbackReturn {
             InputFragment::Construct {
                 context,
                 target: &target,
-                next: quote!(Ok(#target)),
+                next: quote!(Ok::<_,String>(#target)),
             },
             &expected,
         )?;
@@ -690,7 +702,6 @@ impl CallbackReturn {
             },
             &expected,
         )?;
-        body = quote!({ #commit_owners #body });
         let checks = input.code_fragment_slot(
             InputFragment::CheckInternalAliases { context },
             &syn::parse_quote!(()),
@@ -705,6 +716,13 @@ impl CallbackReturn {
             },
             &expected,
         )?;
+        if !commit_owners.is_empty() {
+            body = quote!({
+                let callback_return_decoded = (#body)?;
+                #commit_owners
+                Ok::<_,String>(callback_return_decoded)
+            });
+        }
         let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
         alias_check.include_parameter(context, &input.rust.resources)?;
         let aliases = alias_check.initialize()?;
@@ -780,6 +798,40 @@ fn returned_handle_cleanup(
     })
 }
 
+// A native cleanup guard must never rescan mutable JVM rows or borrow JNIEnv
+// while ordinary decoding is using it. Only independently cached bulk roots
+// supply stable native bytes for every returned owner.
+fn cached_return_owners(node: &kotlin::JniNode, cached: bool) -> bool {
+    match node {
+        WireNode::Leaf(fields) => fields.iter().all(|field| {
+            !matches!(&field.kind, JniWire::Handle {handle,..} if handle.access == Access::Move)
+                || cached
+        }),
+        WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            ..
+        } if cached => false,
+        WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            child,
+            ..
+        } => cached_return_owners(child, true),
+        WireNode::Chain {
+            meta: JniChain::Sequence(JniSequence::Bulk),
+            child,
+            ..
+        } if cached => cached_return_owners(child, true),
+        WireNode::Chain {
+            meta: JniChain::Sequence(_),
+            ..
+        } => !kotlin::input_handles(node, true),
+        WireNode::Chain { child, .. } => cached_return_owners(child, cached),
+        WireNode::Branch { children, .. } => children
+            .iter()
+            .all(|child| cached_return_owners(child, cached)),
+    }
+}
+
 fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
     code.clone().into_iter().any(|token| match token {
         proc_macro2::TokenTree::Ident(value) => value == *name,
@@ -790,9 +842,12 @@ fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
 pub(crate) fn receive_return_owners(
     node: &kotlin::JniNode,
     context: &JniContext,
+    cleanup_only: bool,
 ) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} => crate::bulk::scan_bulk(layout,controls,child,context)?,
+        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} => if cleanup_only {
+            crate::bulk::cleanup_cached(layout,controls,child)?
+        } else { crate::bulk::scan_bulk(layout,controls,child,context)? },
         WireNode::Chain {meta:JniChain::Sequence(JniSequence::Bulk),controls,child} => crate::bulk::scan_rows(controls,child,context)?,
         WireNode::Leaf(fields)=>fields.iter().filter_map(|field| {
             if let JniWire::Handle {handle,..}=&field.kind {
@@ -801,14 +856,14 @@ pub(crate) fn receive_return_owners(
             None
         }).collect(),
         WireNode::Chain { meta:JniChain::Optional(optional),child,..}=> {
-            let scan=receive_return_owners(child,context)?;
+            let scan=receive_return_owners(child,context,cleanup_only)?;
             if scan.is_empty(){return Ok(scan);}
             let name=optional.discriminator();
             let present=if let Some(niche)=optional.niche(){let field=group::argument_parameters(child).find(|w|w.name==*name).ok_or("missing callback return optional discriminator")?; niche.present(&field.kind,quote!(#name))} else {quote!(#name==1)};
             quote!(if #present {#scan})
         }
         WireNode::Chain {meta:JniChain::Sequence(_),controls,child}=> {
-            let scan=receive_return_owners(child,context)?;
+            let scan=receive_return_owners(child,context,cleanup_only)?;
             if scan.is_empty(){return Ok(scan);}
             let carrier=&controls[0].name;let row=format_ident!("{carrier}_ownership_row");
             let fields=group::argument_parameters(child).collect::<Vec<_>>();let count=fields.len();let capacity=i32::try_from(count+8).map_err(|_|"too many returned fields")?;
@@ -822,9 +877,9 @@ pub(crate) fn receive_return_owners(
             context.render(&code)?
         }
         WireNode::Branch {meta:JniBranch::Alternatives,controls,children}=> {
-            let selector=&controls[0].name;let scans=children.iter().enumerate().map(|(i,child)|{let scan=receive_return_owners(child,context)?;let i=i as i32;Ok(quote!(if #selector==#i {#scan}))}).collect::<Result<Vec<_>>>()?;quote!(#(#scans)*)
+            let selector=&controls[0].name;let scans=children.iter().enumerate().map(|(i,child)|{let scan=receive_return_owners(child,context,cleanup_only)?;let i=i as i32;Ok(quote!(if #selector==#i {#scan}))}).collect::<Result<Vec<_>>>()?;quote!(#(#scans)*)
         }
-        WireNode::Branch {children,..}=>children.iter().map(|child|receive_return_owners(child,context)).collect::<Result<Vec<_>>>()?.into_iter().collect(),
+        WireNode::Branch {children,..}=>children.iter().map(|child|receive_return_owners(child,context,cleanup_only)).collect::<Result<Vec<_>>>()?.into_iter().collect(),
     })
 }
 fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Result<TokenStream> {
