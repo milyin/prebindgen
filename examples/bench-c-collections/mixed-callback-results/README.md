@@ -39,8 +39,8 @@ C microbenchmarks, not network-throughput measurements.
 
 The final checked path saves 48 KiB per 512-row call: 40 KiB of prepared-row
 storage (80 bytes/row) plus 8 KiB of unused alias reservation (16 bytes/row).
-Remaining storage is the final native vector and enabled alias history. Counts
-and byte sizes are constant across all samples at sizes 0, 1, 8, 64, 512 and 4096.
+Remaining storage is the final native vector and enabled alias history. For each tested size (0, 1, 8, 64, 512 and 4096), allocation counts and requested
+bytes are identical across samples.
 Every measured case has zero reallocations; empty arrays allocate zero times.
 Requested bytes are allocator requests, not peak resident memory or copied bytes.
 
@@ -80,7 +80,7 @@ The paired changes include both signs, and the identical-library comparison also
 moves by a few percent. The initial staging-only implementation measured -4.9%
 at 512 rows and -7.3% at 4096 rows, before trimming alias reservation. Both runs
 remain in the aggregate JSON; they do not establish a consistent large-array
-speedup. The repeat establishes the memory saving independently of timing.
+speedup. Allocation measurements establish the memory saving independently of timing.
 
 The final `callback_native` control, which receives no allocation optimization,
 measured -1.9% at 512 rows and +3.8% at 64 rows. Initial checked 512-row controls
