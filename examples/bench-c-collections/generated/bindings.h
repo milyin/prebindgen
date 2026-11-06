@@ -30,10 +30,20 @@ typedef struct { const uint8_t *data; size_t len; } bench_buffer_view;
 /* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */
 typedef struct { uint8_t *data; size_t len; } bench_buffer_view_mut;
 typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[56];
+} bench_native_packet;
+/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
+void bench_drop_native_packet(bench_native_packet *value);
+typedef struct {
     bench_resource * v0;
 } bench_callback_7fc0734290773f1a_callback_return_w1_row;
 typedef struct { bench_callback_7fc0734290773f1a_callback_return_w1_row *data; size_t len; } bench_callback_7fc0734290773f1a_callback_return_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Rust signature: ()->Vec < c_collection_flat :: Resource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     bench_callback_7fc0734290773f1a_callback_return_w1_rows (*run)(void *context);
@@ -123,6 +133,7 @@ void bench_make_records_ret_w0_rows_free(bench_make_records_ret_w0_rows rows);
 /* Field return[].tag: row.v1. */
 /* Field return[].second: row.v2. */
 bench_make_records_ret_w0_rows bench_make_records(uintptr_t p0_w1);
+bench_native_packet bench_native_packet_new(uint64_t p0_w1);
 bench_resource * bench_resource_new(uint64_t p0_w1);
 uint64_t bench_resource_value(const bench_resource * p0_w1);
 typedef struct {
@@ -131,7 +142,7 @@ typedef struct {
     bench_buffer v2;
 } bench_take_buffers_p0_w1_row;
 typedef struct { bench_take_buffers_p0_w1_row *data; size_t len; } bench_take_buffers_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_buffers(bench_take_buffers_p0_w1_rows p0_w1);
 typedef struct {
@@ -139,21 +150,37 @@ typedef struct {
     bench_buffer v1;
 } bench_take_bytes_p0_w1_row;
 typedef struct { bench_take_bytes_p0_w1_row *data; size_t len; } bench_take_bytes_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_bytes(bench_take_bytes_p0_w1_rows p0_w1);
 typedef struct {
     bench_resource * v0;
 } bench_take_handles_p0_w1_row;
 typedef struct { bench_take_handles_p0_w1_row *data; size_t len; } bench_take_handles_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_handles(bench_take_handles_p0_w1_rows p0_w1);
+typedef struct {
+    bench_native_packet * v0;
+} bench_take_native_p0_w1_row;
+typedef struct { bench_take_native_p0_w1_row *data; size_t len; } bench_take_native_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_native(bench_take_native_p0_w1_rows p0_w1);
+typedef struct {
+    bench_resource * v0;
+    bench_native_packet * v1;
+    bench_resource * v2;
+} bench_take_native_mixed_p0_w1_row;
+typedef struct { bench_take_native_mixed_p0_w1_row *data; size_t len; } bench_take_native_mixed_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+/* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
+uint64_t bench_take_native_mixed(bench_take_native_mixed_p0_w1_rows p0_w1);
 typedef struct {
     uint64_t v0;
 } bench_take_numbers_p0_w1_row;
 typedef struct { bench_take_numbers_p0_w1_row *data; size_t len; } bench_take_numbers_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_numbers(bench_take_numbers_p0_w1_rows p0_w1);
 typedef struct {
@@ -162,7 +189,7 @@ typedef struct {
     bench_resource * v2;
 } bench_take_records_p0_w1_row;
 typedef struct { bench_take_records_p0_w1_row *data; size_t len; } bench_take_records_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_records(bench_take_records_p0_w1_rows p0_w1);
 typedef struct {
@@ -170,7 +197,7 @@ typedef struct {
     bench_input_tag v1;
 } bench_take_tagged_p0_w1_row;
 typedef struct { bench_take_tagged_p0_w1_row *data; size_t len; } bench_take_tagged_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_tagged(bench_take_tagged_p0_w1_rows p0_w1);
 typedef struct {
@@ -180,7 +207,7 @@ typedef struct {
     bench_buffer v3;
 } bench_take_tagged_buffers_p0_w1_row;
 typedef struct { bench_take_tagged_buffers_p0_w1_row *data; size_t len; } bench_take_tagged_buffers_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 4 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_tagged_buffers(bench_take_tagged_buffers_p0_w1_rows p0_w1);
 typedef struct {
@@ -188,7 +215,7 @@ typedef struct {
     bench_buffer v1;
 } bench_take_text_p0_w1_row;
 typedef struct { bench_take_text_p0_w1_row *data; size_t len; } bench_take_text_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_text(bench_take_text_p0_w1_rows p0_w1);
 typedef struct {
@@ -202,7 +229,7 @@ typedef struct {
     uint64_t v7;
 } bench_take_wide_p0_w1_row;
 typedef struct { bench_take_wide_p0_w1_row *data; size_t len; } bench_take_wide_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 8 ABI fields; element-owned fields are released separately from row storage. */
 uint64_t bench_take_wide(bench_take_wide_p0_w1_rows p0_w1);
 #ifdef __cplusplus
