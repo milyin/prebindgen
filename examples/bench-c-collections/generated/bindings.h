@@ -62,15 +62,49 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } bench_callback_d4c2b6b7f94cdedf;
+typedef struct {
+    bench_resource * v0;
+    bench_native_packet v1;
+    bench_resource * v2;
+} bench_callback_f1755815cfab1b60_callback_return_w1_row;
+typedef struct { bench_callback_f1755815cfab1b60_callback_return_w1_row *data; size_t len; } bench_callback_f1755815cfab1b60_callback_return_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+/* Rust signature: ()->Vec < c_collection_flat :: NativeMixed >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    bench_callback_f1755815cfab1b60_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const bench_callback_f1755815cfab1b60_callback_return_w1_rows *result);
+} bench_callback_f1755815cfab1b60;
+typedef struct {
+    bench_native_packet v0;
+} bench_callback_fc8e455d100e4602_callback_return_w1_row;
+typedef struct { bench_callback_fc8e455d100e4602_callback_return_w1_row *data; size_t len; } bench_callback_fc8e455d100e4602_callback_return_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+/* Rust signature: ()->Vec < c_collection_flat :: NativePacket >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    bench_callback_fc8e455d100e4602_callback_return_w1_rows (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const bench_callback_fc8e455d100e4602_callback_return_w1_rows *result);
+} bench_callback_fc8e455d100e4602;
 typedef bench_callback_d4c2b6b7f94cdedf bench_callback_fixed_callback;
 typedef bench_callback_d4c2b6b7f94cdedf_result bench_callback_fixed_callback_return;
 typedef bench_callback_7fc0734290773f1a bench_callback_many_callback;
 typedef bench_callback_7fc0734290773f1a_callback_return_w1_rows bench_callback_many_callback_return;
 typedef bench_callback_7fc0734290773f1a_callback_return_w1_row bench_callback_many_callback_return_row;
+typedef bench_callback_fc8e455d100e4602 bench_callback_native_callback;
+typedef bench_callback_fc8e455d100e4602_callback_return_w1_rows bench_callback_native_callback_return;
+typedef bench_callback_fc8e455d100e4602_callback_return_w1_row bench_callback_native_callback_return_row;
+typedef bench_callback_f1755815cfab1b60 bench_callback_native_mixed_callback;
+typedef bench_callback_f1755815cfab1b60_callback_return_w1_rows bench_callback_native_mixed_callback_return;
+typedef bench_callback_f1755815cfab1b60_callback_return_w1_row bench_callback_native_mixed_callback_return_row;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 uint64_t bench_callback_fixed(bench_callback_d4c2b6b7f94cdedf p0_callback);
 uint64_t bench_callback_many(bench_callback_7fc0734290773f1a p0_callback);
+uint64_t bench_callback_native(bench_callback_fc8e455d100e4602 p0_callback);
+uint64_t bench_callback_native_mixed(bench_callback_f1755815cfab1b60 p0_callback);
 uint64_t bench_control(uintptr_t p0_w1);
 uint64_t bench_fixed_borrow(const bench_resource * p0_w1, bench_resource * p1_w1);
 uint64_t bench_fixed_move(bench_resource * p0_w1, bench_resource * p1_w1);
