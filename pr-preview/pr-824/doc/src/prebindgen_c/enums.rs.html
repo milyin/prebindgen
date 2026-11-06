@@ -215,7 +215,7 @@
 <a href=#215 id=215 data-nosnippet>215</a>        }
 <a href=#216 id=216 data-nosnippet>216</a>        <span class="kw">if </span><span class="self">self</span>.return_owners.is_some() {
 <a href=#217 id=217 data-nosnippet>217</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
-<a href=#218 id=218 data-nosnippet>218</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(owned::input(owner, ty, w, v, active, <span class="bool-val">true</span>));
+<a href=#218 id=218 data-nosnippet>218</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(owned::input(owner, ty, w, v, active, <span class="bool-val">true</span>, <span class="bool-val">false</span>));
 <a href=#219 id=219 data-nosnippet>219</a>            }
 <a href=#220 id=220 data-nosnippet>220</a>        }
 <a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span>plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)<span class="question-mark">?</span>;
@@ -257,7 +257,7 @@
 <a href=#257 id=257 data-nosnippet>257</a>            <span class="kw">let </span>statements = std::mem::take(<span class="kw-2">&amp;mut </span>plan.statements);
 <a href=#258 id=258 data-nosnippet>258</a>            plan.statements = <span class="macro">quote!</span>(#var = <span class="kw">if </span>#condition {<span class="prelude-val">Some</span>(#decode)} <span class="kw">else </span>{<span class="prelude-val">None</span>}; #statements);
 <a href=#259 id=259 data-nosnippet>259</a>        }
-<a href=#260 id=260 data-nosnippet>260</a>        sequence::defer_buffer_decode(<span class="kw-2">&amp;mut </span>plan, ty, <span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>var, active);
+<a href=#260 id=260 data-nosnippet>260</a>        sequence::prepare_input_leaf(<span class="kw-2">&amp;mut </span>plan, ty, <span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>var, active)<span class="question-mark">?</span>;
 <a href=#261 id=261 data-nosnippet>261</a>        <span class="prelude-val">Ok</span>(plan)
 <a href=#262 id=262 data-nosnippet>262</a>    }
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">fn </span>output_leaf(
