@@ -111,13 +111,19 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     cdylib = next(m for m in messages if m.get("reason") == "compiler-artifact" and m["package_id"] == package and "cdylib" in m["target"]["kind"])
     if cdylib["profile"]["opt_level"] != "3" or cdylib["profile"]["debug_assertions"]:
         raise RuntimeError(f"unexpected native benchmark profile: {cdylib['profile']}")
-    jar = output / "bench.jar"
-    subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), str(FIXTURE / "AllocationBench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
+    # Freeze Cargo's output before Kotlin compilation: another build sharing
+    # target-dir can replace the cdylib while kotlinc is running.
     libraries = [Path(name) for name in cdylib["filenames"] if Path(name).name in ("libbulk_bench.so", "libbulk_bench.dylib", "bulk_bench.dll")]
     built_library, = libraries
     (output / "native").mkdir()
     library = output / "native" / built_library.name
     shutil.copyfile(built_library, library)
+    jar = output / "bench.jar"
+    subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), str(FIXTURE / "AllocationBench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
+    probe = subprocess.check_output(["java", "-Djava.library.path=" + str(library.parent), "-cp", str(jar),
+                                     "bench.allocations.AllocationBenchKt", "--probe-instrumentation"], text=True).strip()
+    if probe != "NATIVE_ALLOCATIONS," + str(native_allocations).lower():
+        raise RuntimeError("native allocation instrumentation does not match the requested build: " + probe)
     if record or check:
         destination = FIXTURE / "generated"
         files = {Path("kotlin") / path.relative_to(out / "kotlin"): path.read_bytes() for path in (out / "kotlin").rglob("*.kt")}
@@ -142,6 +148,7 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "dependency_lock_sha256": digest(project / "Cargo.lock"),
         "cargo_profile": cdylib["profile"],
         "native_allocations": native_allocations,
+        "instrumentation_probe": probe,
         "kotlin": command_version([kotlinc, "-version"]),
         "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "AllocationBench.kt", "native_allocations.rs", "run.py", "Cargo.lock.snapshot")},
         "kotlin_sources_sha256": {str(p.relative_to(out / "kotlin")): digest(p) for p in sorted((out / "kotlin").rglob("*.kt"))},
@@ -166,7 +173,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkout", type=Path, default=FIXTURE.parents[1])
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--target-dir", type=Path, help="optional shared Cargo cache; native library is frozen into each output directory")
+    parser.add_argument("--target-dir", type=Path, help="optional shared Cargo cache; builds sharing it must run sequentially; each native library is frozen into its output directory")
     parser.add_argument("--prepared", type=Path, help="reuse build.json/JAR/library from an earlier run")
     parser.add_argument("--jvms", type=int, default=4, help="fresh JVMs per mode; even for balanced order")
     parser.add_argument("--warmup", type=int, default=5)
