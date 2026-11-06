@@ -240,6 +240,27 @@ impl Codec for EnumCodec<'_> {
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
         let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        if let Some((_, mapping)) = self.mapping(flat, ty) {
+            let native = if let syn::Type::Reference(reference) = ty {
+                reference.elem.as_ref()
+            } else {
+                ty
+            };
+            let condition = active.rust();
+            let decode = mapping.decode(quote!(#wire));
+            debug_assert_eq!(
+                plan.validation.to_string(),
+                quote!(let #var = if #condition { Some(#decode) } else { None };).to_string(),
+                "audit deferred enum conversion when ordinary validation changes"
+            );
+            // Keep only the Copy integer tag during the address-group scan.
+            // Decode the Rust enum once, after aliases have been checked.
+            // Storage must outlive optional/selector branches borrowing it.
+            plan.validation = TokenStream::new();
+            plan.acquire.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#native> = None;));
+            let statements = std::mem::take(&mut plan.statements);
+            plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
+        }
         sequence::defer_buffer_decode(&mut plan, ty, &wire, &var, active);
         Ok(plan)
     }

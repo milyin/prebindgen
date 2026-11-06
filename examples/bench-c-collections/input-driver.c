@@ -30,6 +30,8 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
     if(kind==4)stride=sizeof(bench_take_numbers_p0_w1_row);
     if(kind==6 || kind==8)stride=sizeof(bench_take_bytes_p0_w1_row);
     if(kind==9 || kind==10)stride=sizeof(bench_take_buffers_p0_w1_row);
+    if(kind==15)stride=sizeof(bench_take_tagged_p0_w1_row);
+    if(kind==16)stride=sizeof(bench_take_tagged_buffers_p0_w1_row);
     void *rows=n ? malloc(stride*n*iterations) : NULL; assert(!n || rows);
     for(size_t j=0;j<iterations;++j)for(size_t i=0;i<n;++i) {
         size_t k=j*n+i;
@@ -45,6 +47,8 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
         case 8: ((bench_take_bytes_p0_w1_row *)rows)[k]=(bench_take_bytes_p0_w1_row){bench_resource_new(i),{large_bytes,sizeof(large_bytes)}}; break;
         case 9: ((bench_take_buffers_p0_w1_row *)rows)[k]=(bench_take_buffers_p0_w1_row){bench_resource_new(i),{(const uint8_t *)"abc",3},{(const uint8_t *)"abc",3}}; break;
         case 10: ((bench_take_buffers_p0_w1_row *)rows)[k]=(bench_take_buffers_p0_w1_row){bench_resource_new(i),{large_text,sizeof(large_text)},{large_bytes,sizeof(large_bytes)}}; break;
+        case 15: ((bench_take_tagged_p0_w1_row *)rows)[k]=(bench_take_tagged_p0_w1_row){bench_resource_new(i),i%3==0 ? bench_input_tag_Low : i%3==1 ? bench_input_tag_Normal : bench_input_tag_High}; break;
+        case 16: ((bench_take_tagged_buffers_p0_w1_row *)rows)[k]=(bench_take_tagged_buffers_p0_w1_row){bench_resource_new(i),i%3==0 ? bench_input_tag_Low : i%3==1 ? bench_input_tag_Normal : bench_input_tag_High,{(const uint8_t *)"abc",3},{(const uint8_t *)"abc",3}}; break;
         default: break;
         }
     }
@@ -80,6 +84,8 @@ static uint64_t run(struct batch b) {
         case 6: case 8: total+=bench_take_bytes((bench_take_bytes_p0_w1_rows){b.rows ? (bench_take_bytes_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 7: total+=bench_take_text((bench_take_text_p0_w1_rows){b.rows ? (bench_take_text_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 9: case 10: total+=bench_take_buffers((bench_take_buffers_p0_w1_rows){b.rows ? (bench_take_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 15: total+=bench_take_tagged((bench_take_tagged_p0_w1_rows){b.rows ? (bench_take_tagged_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 16: total+=bench_take_tagged_buffers((bench_take_tagged_buffers_p0_w1_rows){b.rows ? (bench_take_tagged_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         default: total+=bench_control(b.n); break;
         }
     }
@@ -98,8 +104,8 @@ static struct score measure(int kind,size_t n,size_t iterations,bool counts,uint
 }
 int main(int argc,char **argv) {
     assert(argc==6);bool counts=strcmp(argv[1],"count")==0;assert(counts || strcmp(argv[1],"time")==0);assert(bench_counter_enabled()==counts);
-    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many"};int kind=-1;
-    for(int i=0;i<15;++i)if(strcmp(argv[2],names[i])==0)kind=i;
+    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many","tagged","tagged_buffers"};int kind=-1;
+    for(int i=0;i<17;++i)if(strcmp(argv[2],names[i])==0)kind=i;
     // 1365 Euro signs plus one ASCII byte: valid UTF-8 exercises the scan as
     // well as copying. All source payload storage is prepared outside timing.
     for(size_t i=0;i+2<sizeof(large_text);i+=3) {large_text[i]=0xe2;large_text[i+1]=0x82;large_text[i+2]=0xac;}
@@ -117,6 +123,8 @@ int main(int argc,char **argv) {
     if(kind==8)expected+=(sizeof(large_bytes)+2*0x5a)*n;
     if(kind==9)expected+=(3+3+'a'+'c')*n;
     if(kind==10)expected+=(sizeof(large_text)+sizeof(large_bytes)+2*0x5a)*n;
+    if(kind==15 || kind==16)for(size_t i=0;i<n;++i)expected+=i%3+1;
+    if(kind==16)expected+=(3+3+'a'+'c')*n;
     Dl_info library;assert(dladdr((void *)bench_control,&library));printf("LIBRARY,%s\n",library.dli_fname);
     if(counts) {
         for(int j=0;j<10;++j)assert(measure(kind,n,1,false,NULL).sum==expected);

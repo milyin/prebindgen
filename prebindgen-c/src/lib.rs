@@ -2966,11 +2966,7 @@ mod generation_tests {
                 prebindgen_conversions::render_input_alias_checks(&code.parse().unwrap(), true)
                     .unwrap()
                     .to_string();
-            assert_eq!(
-                code.contains("_prepared"),
-                constructor == "tagged",
-                "{code}"
-            );
+            assert!(!code.contains("_prepared"), "{code}");
             assert!(code.contains("accept_group"));
             let call = format!(":: {constructor} (");
             assert_eq!(code.matches(&call).count(), 1, "{code}");
@@ -2982,6 +2978,17 @@ mod generation_tests {
                 if constructor == "text" {
                     assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
                 }
+            }
+            if constructor == "tagged" {
+                assert_eq!(
+                    code.matches("invalid enum discriminant").count(),
+                    1,
+                    "{code}"
+                );
+                assert!(
+                    code.find("accept_group").unwrap()
+                        < code.find("invalid enum discriminant").unwrap()
+                );
             }
         }
         let flat = model().function(fun!(options)).panic().prepare().unwrap();

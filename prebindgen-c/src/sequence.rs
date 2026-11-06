@@ -87,7 +87,10 @@ pub(crate) fn input(
     let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element)).all(|wire| {
         matches!(
             wire.kind,
-            CWire::Scalar { .. } | CWire::Pointer { .. } | CWire::DeferredBuffer
+            CWire::Scalar { .. }
+                | CWire::Pointer { .. }
+                | CWire::DeferredBuffer
+                | CWire::Enum { .. }
         )
     });
     let slice = format_ident!("{wire}_rows");
@@ -105,9 +108,9 @@ pub(crate) fn input(
         });
         values.push((field.name.clone(), quote!(#name)));
     }
-    // These leaves validate only Copy scalars and raw pointers. Buffer decoding
+    // These leaves validate only Copy scalars and raw pointers. Buffer/enum decoding
     // runs during construction, once the complete handle group has been checked.
-    // Enum, inline-owner, callback and nested-row conversions keep their prepared
+    // Inline-owner, callback and nested-row conversions keep their prepared
     // state until their validation effects have been audited separately.
     let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {

@@ -110,8 +110,8 @@ static void check_buffer_inputs(void) {
     assert(perftest_buffer_row_constructor_calls() == 2 && perftest_option_resource_id(shared) == 7);
     perftest_drop_owned_resource(shared);
 
-    /* Enums retain the staged fallback. It captures stable C descriptors and
-       declares temporary storage when invoked, after releasing no C row state. */
+    /* Enum rows also replay descriptors and construct each borrowed temporary
+       once, after the complete handle group has been checked. */
     perftest_buffer_rows_enum_p0_w1_row enums[] = {
         {perftest_collection_resource_new(1), 0, 1, text, 1, payload},
         {perftest_collection_resource_new(2), 0, 1, {invalid, sizeof(invalid)}, 1, payload}
@@ -121,5 +121,5 @@ static void check_buffer_inputs(void) {
     assert(result == 12345 && consumed == 2 && perftest_owned_resource_drops() == drops + 2);
     assert(perftest_buffer_row_constructor_calls() == 1 && perftest_buffer_row_function_calls() == 0);
     perftest_free_error(error);
-    puts("C buffer input replay PASS: decode once, aliases, optional/selector borrows, staged rows and prefix cleanup");
+    puts("C buffer input replay PASS: decode once, aliases, optional/selector/enum borrows and prefix cleanup");
 }
