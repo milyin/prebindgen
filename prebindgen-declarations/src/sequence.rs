@@ -28,9 +28,10 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     /// for the whole call, including source constructor invocations. Binding and
     /// validation must be repeatable without ownership transfer, user code,
     /// owned temporaries or other observable effects; `release` must also be
-    /// repeatable. The compiler also requires
-    /// every child resource to remain unacquired. JNI object rows should retain
-    /// the single-decode path by leaving this false.
+    /// repeatable. These guarantees apply to every child, including resources
+    /// whose alias registration is already handled by their codec. Registration
+    /// alone does not imply acquisition. JNI object rows should retain the
+    /// single-decode path by leaving this false.
     pub reread_rows: bool,
     /// Per-row cleanup after construction. Generated code runs this before
     /// propagating an ordinary conversion error from the row.
@@ -260,9 +261,7 @@ pub(crate) fn input<C: Codec>(
         return Err("collection prepared input names differ from validation bindings".into());
     }
     let grouped = child.resources.iter().any(|r| !r.registered);
-    let reread = transport.reread_rows
-        && deferred_construction
-        && child.resources.iter().all(|r| !r.registered);
+    let reread = transport.reread_rows && deferred_construction;
     let shared_only = child
         .resources
         .iter()

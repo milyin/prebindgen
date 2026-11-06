@@ -468,6 +468,82 @@ fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
 }
 
 #[test]
+fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
+    use super::inline_owners as ffi;
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let _owners = super::INLINE_OWNER_TESTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    type Row = ffi::__PbRow_callback_37300b78c94d93fa_callback_return_w1;
+    unsafe extern "C" fn run(context: *mut core::ffi::c_void) -> ffi::__PbRows {
+        let rows = unsafe { &*context.cast::<Vec<Row>>() };
+        ffi::__PbRows {
+            data: rows.as_ptr().cast(),
+            len: rows.len(),
+        }
+    }
+    for size in [0usize, 1, 8, 64, 512, 4096] {
+        for checked in [true, false] {
+            let mut rows: Vec<_> = (0..size)
+                .map(|i| unsafe {
+                    let packet = ffi::owner_inline_packet_new();
+                    Row {
+                        v0: ffi::owner_collection_resource_new(i as i64),
+                        v4: ffi::owner_inline_packet_bytes_address(&packet),
+                        v5: ffi::owner_inline_packet_text_address(&packet),
+                        v1: packet,
+                        v2: ffi::owner_collection_resource_new(i as i64),
+                        v3: 'a' as u32,
+                    }
+                })
+                .collect();
+            perftest_flat::inline_inputs_reset(0, 0);
+            let mut result = -1;
+            let mut consumed = usize::MAX;
+            let mut error = core::ptr::null_mut();
+            let count = allocations(|| unsafe {
+                let callback = ffi::owner_callback_37300b78c94d93fa {
+                    run: Some(run),
+                    context: (&mut rows as *mut Vec<Row>).cast(),
+                    drop: None,
+                    release_result: None,
+                };
+                assert!(if checked {
+                    ffi::owner_inline_callback_rows(
+                        callback,
+                        &mut result,
+                        &mut consumed,
+                        &mut error,
+                    )
+                } else {
+                    ffi::owner_inline_callback_rows_fast(
+                        callback,
+                        &mut result,
+                        &mut consumed,
+                        &mut error,
+                    )
+                });
+            });
+            assert_eq!(count, (1 + usize::from(checked)) * usize::from(size != 0));
+            assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+            if !checked {
+                assert_eq!(
+                    ALLOCATED_BYTES.with(Cell::get),
+                    size * core::mem::size_of::<perftest_flat::InlineCallbackRow>()
+                );
+            }
+            assert_eq!(result, (size * size.saturating_sub(1) + 100 * size) as i64);
+            assert_eq!(consumed, 1);
+            assert!(error.is_null());
+            assert_eq!(perftest_flat::inline_inputs_constructor_calls(), size);
+            assert_eq!(perftest_flat::inline_inputs_empty_calls(), 0);
+        }
+    }
+}
+
+#[test]
 fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
     for size in [0usize, 1, 65536] {
         unsafe {

@@ -3056,6 +3056,28 @@ mod generation_tests {
     }
 
     #[test]
+    fn mixed_inline_callback_rows_reread_without_prepared_closures() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source = "pub struct Owner{} pub type Handle=String; pub struct Row{pub owner:Owner,pub handle:Handle} pub fn row(owner:Owner,handle:Handle)->Row{} pub fn call(callback:impl Fn()->Vec<Row>)->usize{}";
+        let generation = Cbindgen::new(error_model(source))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .opaque_owned_struct(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<u64>(),
+            )
+            .expand(expand_param!(Row).variant(fun!(row)))
+            .function(fun!(call))
+            .panic()
+            .build()
+            .unwrap();
+        syn::parse_file(&generation.rust).unwrap();
+        assert!(!generation.rust.contains("_prepared"));
+        assert!(generation.rust.contains("accept_group"));
+        assert!(generation.rust.contains("addr_of!"));
+    }
+
+    #[test]
     fn direct_shared_returns_are_non_owning_nullable_const_pointers() {
         use prebindgen_declarations::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&Owner)->&Child{}pub fn maybe(owner:&Owner)->Option<&Child>{}pub fn nested(owner:&Owner)->Option<Option<&Child>>{}pub fn fallible(owner:&Owner)->Result<&Child,String>{}pub fn optional(owner:&Owner)->Result<Option<&Child>,String>{}pub fn message(error:&String)->String{}"))

@@ -119,3 +119,8 @@ pub fn native_mixed_new(first:Resource,packet:NativePacket,last:Resource)->Nativ
 pub fn take_native_mixed(values:Vec<NativeMixed>)->u64 {
     values.iter().map(|v|v.first.0+v.packet.id+v.packet.bytes.len() as u64+v.packet.text.len() as u64+v.last.0).sum()
 }
+
+#[prebindgen]
+pub fn callback_native(callback:impl Fn()->Vec<NativePacket>)->u64 {take_native(callback())}
+#[prebindgen]
+pub fn callback_native_mixed(callback:impl Fn()->Vec<NativeMixed>)->u64 {take_native_mixed(callback())}

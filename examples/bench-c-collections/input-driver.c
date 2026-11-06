@@ -34,6 +34,8 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
     if(kind==16)stride=sizeof(bench_take_tagged_buffers_p0_w1_row);
     if(kind==17)stride=sizeof(bench_take_native_p0_w1_row);
     if(kind==18)stride=sizeof(bench_take_native_mixed_p0_w1_row);
+    if(kind==19)stride=sizeof(bench_callback_native_callback_return_row);
+    if(kind==20)stride=sizeof(bench_callback_native_mixed_callback_return_row);
     bench_native_packet *owners=(kind==17 || kind==18) && n ? malloc(sizeof(*owners)*n*iterations) : NULL;
     assert(!(kind==17 || kind==18) || !n || owners);
     void *rows=n ? malloc(stride*n*iterations) : NULL; assert(!n || rows);
@@ -55,6 +57,8 @@ static struct batch prepare(int kind,size_t n,size_t iterations) {
         case 16: ((bench_take_tagged_buffers_p0_w1_row *)rows)[k]=(bench_take_tagged_buffers_p0_w1_row){bench_resource_new(i),i%3==0 ? bench_input_tag_Low : i%3==1 ? bench_input_tag_Normal : bench_input_tag_High,{(const uint8_t *)"abc",3},{(const uint8_t *)"abc",3}}; break;
         case 17: owners[k]=bench_native_packet_new(i); ((bench_take_native_p0_w1_row *)rows)[k]=(bench_take_native_p0_w1_row){&owners[k]}; break;
         case 18: owners[k]=bench_native_packet_new(i); ((bench_take_native_mixed_p0_w1_row *)rows)[k]=(bench_take_native_mixed_p0_w1_row){bench_resource_new(i),&owners[k],bench_resource_new(i+1)}; break;
+        case 19: ((bench_callback_native_callback_return_row *)rows)[k]=(bench_callback_native_callback_return_row){bench_native_packet_new(i)}; break;
+        case 20: ((bench_callback_native_mixed_callback_return_row *)rows)[k]=(bench_callback_native_mixed_callback_return_row){bench_resource_new(i),bench_native_packet_new(i),bench_resource_new(i+1)}; break;
         default: break;
         }
     }
@@ -72,6 +76,16 @@ static bench_callback_many_callback_return callback_many_run(void *context) {
     return (bench_callback_many_callback_return){input->batch.rows ? (bench_callback_many_callback_return_row *)input->batch.rows+k : NULL,input->batch.n};
 }
 static void callback_many_release(void *context,const bench_callback_many_callback_return *value) {(void)context;(void)value;}
+static bench_callback_native_callback_return callback_native_run(void *context) {
+    struct callback_input *input=context;size_t k=input->next++*input->batch.n;
+    return (bench_callback_native_callback_return){input->batch.rows ? (bench_callback_native_callback_return_row *)input->batch.rows+k : NULL,input->batch.n};
+}
+static bench_callback_native_mixed_callback_return callback_native_mixed_run(void *context) {
+    struct callback_input *input=context;size_t k=input->next++*input->batch.n;
+    return (bench_callback_native_mixed_callback_return){input->batch.rows ? (bench_callback_native_mixed_callback_return_row *)input->batch.rows+k : NULL,input->batch.n};
+}
+static void callback_native_release(void *context,const bench_callback_native_callback_return *value) {(void)context;(void)value;}
+static void callback_native_mixed_release(void *context,const bench_callback_native_mixed_callback_return *value) {(void)context;(void)value;}
 static uint64_t run(struct batch b) {
     struct callback_input input={b,0};
     uint64_t total=0;
@@ -94,6 +108,8 @@ static uint64_t run(struct batch b) {
         case 16: total+=bench_take_tagged_buffers((bench_take_tagged_buffers_p0_w1_rows){b.rows ? (bench_take_tagged_buffers_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 17: total+=bench_take_native((bench_take_native_p0_w1_rows){b.rows ? (bench_take_native_p0_w1_row *)b.rows+k : NULL,b.n}); break;
         case 18: total+=bench_take_native_mixed((bench_take_native_mixed_p0_w1_rows){b.rows ? (bench_take_native_mixed_p0_w1_row *)b.rows+k : NULL,b.n}); break;
+        case 19: total+=bench_callback_native((bench_callback_native_callback){.run=callback_native_run,.context=&input,.release_result=callback_native_release}); break;
+        case 20: total+=bench_callback_native_mixed((bench_callback_native_mixed_callback){.run=callback_native_mixed_run,.context=&input,.release_result=callback_native_mixed_release}); break;
         default: total+=bench_control(b.n); break;
         }
     }
@@ -112,8 +128,8 @@ static struct score measure(int kind,size_t n,size_t iterations,bool counts,uint
 }
 int main(int argc,char **argv) {
     assert(argc==6);bool counts=strcmp(argv[1],"count")==0;assert(counts || strcmp(argv[1],"time")==0);assert(bench_counter_enabled()==counts);
-    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many","tagged","tagged_buffers","native","native_mixed"};int kind=-1;
-    for(int i=0;i<19;++i)if(strcmp(argv[2],names[i])==0)kind=i;
+    const char *names[]={"handles","records","wide","text","numbers","control","bytes","text_large","bytes_large","buffers","buffers_large","fixed_move","fixed_borrow","callback_fixed","callback_many","tagged","tagged_buffers","native","native_mixed","callback_native","callback_native_mixed"};int kind=-1;
+    for(int i=0;i<21;++i)if(strcmp(argv[2],names[i])==0)kind=i;
     // 1365 Euro signs plus one ASCII byte: valid UTF-8 exercises the scan as
     // well as copying. All source payload storage is prepared outside timing.
     for(size_t i=0;i+2<sizeof(large_text);i+=3) {large_text[i]=0xe2;large_text[i+1]=0x82;large_text[i+2]=0xac;}
@@ -133,8 +149,8 @@ int main(int argc,char **argv) {
     if(kind==10)expected+=(sizeof(large_text)+sizeof(large_bytes)+2*0x5a)*n;
     if(kind==15 || kind==16)for(size_t i=0;i<n;++i)expected+=i%3+1;
     if(kind==16)expected+=(3+3+'a'+'c')*n;
-    if(kind==17)expected+=6*n;
-    if(kind==18)expected=3*expected+7*n;
+    if(kind==17 || kind==19)expected+=6*n;
+    if(kind==18 || kind==20)expected=3*expected+7*n;
     Dl_info library;assert(dladdr((void *)bench_control,&library));printf("LIBRARY,%s\n",library.dli_fname);
     if(counts) {
         for(int j=0;j<10;++j)assert(measure(kind,n,1,false,NULL).sum==expected);
