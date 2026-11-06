@@ -503,143 +503,157 @@ pub unsafe extern "C" fn bench_callback_many(
                             };
                             let raw_result = callback_result.value;
                             let callback_return_w1 = raw_result;
-                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                __prebindgen_input_consumed,
-                            );
-                            ::prebindgen_runtime::validate_slice(
-                                callback_return_w1.data
-                                    as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
-                                callback_return_w1.len,
-                            )?;
-                            for index in 0..callback_return_w1.len {
-                                let callback_return_w5 = unsafe {
-                                    (*((callback_return_w1.data
-                                        as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1)
-                                        .add(index)))
-                                        .v0
-                                };
-                                unsafe {
-                                    callback_return_owners
-                                        .receive(
-                                            callback_return_w5 as *mut c_collection_flat::Resource,
-                                        );
-                                }
-                            }
-                            callback_return_owners.check()?;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_w0: Vec<
-                                    c_collection_flat::Resource,
-                                > = Vec::new();
-                                if true {
-                                    let callback_return_w2 = callback_return_w1.len;
-                                    ::prebindgen_runtime::validate_slice(
-                                        callback_return_w1.data
-                                            as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
-                                        callback_return_w2,
-                                    )?;
-                                    let callback_return_w1_rows: &[__PbRow_callback_7fc0734290773f1a_callback_return_w1] = if callback_return_w2
-                                        == 0
-                                    {
-                                        &[]
-                                    } else {
-                                        unsafe {
-                                            ::core::slice::from_raw_parts(
-                                                callback_return_w1.data
-                                                    as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
-                                                callback_return_w2,
-                                            )
-                                        }
-                                    };
-                                    let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                        .begin_group(callback_return_w2.saturating_mul(1usize));
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                        let checked = (|| {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5) as *mut c_collection_flat::Resource
-                                            } else {
-                                                ::core::ptr::null_mut()
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w1.data
+                                        as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
+                                    callback_return_w1.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w1.len {
+                                            let callback_return_w5 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1)
+                                                    .add(index)))
+                                                    .v0
                                             };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                for address in ::core::iter::once(
-                                                    (callback_return_w5_pointer.addr()) as usize,
-                                                ) {
-                                                    callback_return_w1_accesses.push((address, true));
-                                                }
-                                            }
-                                            Ok::<_, String>(())
-                                        })();
-                                        checked?;
-                                    }
-                                    __prebindgen_input_aliases
-                                        .accept_group(callback_return_w1_accesses)?;
-                                    callback_return_w0.reserve_exact(callback_return_w2);
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(clippy::redundant_closure_call)]
-                                        let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                            c_collection_flat::Resource,
-                                            String,
-                                        > {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5) as *mut c_collection_flat::Resource
-                                            } else {
-                                                ::core::ptr::null_mut()
-                                            };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                __prebindgen_input_consumed
-                                                    .set(
-                                                        __prebindgen_input_consumed.get()
-                                                            + (::core::iter::once(
-                                                                (callback_return_w5_pointer.addr()) as usize,
-                                                            ))
-                                                                .count(),
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w5 as *mut c_collection_flat::Resource,
                                                     );
                                             }
-                                            let callback_return_w4 = if true {
-                                                Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w4: c_collection_flat::Resource = *callback_return_w4
-                                                .expect("active allocation");
-                                            let callback_return_w0 = callback_return_w4;
-                                            Ok(callback_return_w0)
-                                        })();
-                                        let element = callback_return_w1_element_built?;
-                                        #[allow(clippy::zst_offset)]
-                                        unsafe {
-                                            let initialized = callback_return_w0.len();
-                                            callback_return_w0
-                                                .as_mut_ptr()
-                                                .add(initialized)
-                                                .write(element);
-                                            callback_return_w0.set_len(initialized + 1);
                                         }
                                     }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
                                 }
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w0_built = if true {
-                                    Some(callback_return_w0)
-                                } else {
-                                    None
+                                callback_return_owners.check()
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let mut callback_return_w0: Vec<
+                                        c_collection_flat::Resource,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w2 = callback_return_w1.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
+                                            callback_return_w2,
+                                        )?;
+                                        let callback_return_w1_rows: &[__PbRow_callback_7fc0734290773f1a_callback_return_w1] = if callback_return_w2
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w1.data
+                                                        as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1,
+                                                    callback_return_w2,
+                                                )
+                                            }
+                                        };
+                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
+                                            .begin_group(callback_return_w2.saturating_mul(1usize));
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                            let checked = (|| {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w5_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w1_accesses.push((address, true));
+                                                    }
+                                                }
+                                                Ok::<_, String>(())
+                                            })();
+                                            checked?;
+                                        }
+                                        __prebindgen_input_aliases
+                                            .accept_group(callback_return_w1_accesses)?;
+                                        callback_return_w0.reserve_exact(callback_return_w2);
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                                c_collection_flat::Resource,
+                                                String,
+                                            > {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5) as *mut c_collection_flat::Resource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + (::core::iter::once(
+                                                                    (callback_return_w5_pointer.addr()) as usize,
+                                                                ))
+                                                                    .count(),
+                                                        );
+                                                }
+                                                let callback_return_w4 = if true {
+                                                    Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w4: c_collection_flat::Resource = *callback_return_w4
+                                                    .expect("active allocation");
+                                                let callback_return_w0 = callback_return_w4;
+                                                Ok(callback_return_w0)
+                                            })();
+                                            let element = callback_return_w1_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w0.len();
+                                                callback_return_w0
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w0.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some(callback_return_w0)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
                                 };
-                                let callback_return_value = callback_return_w0_built
-                                    .expect("active input");
-                                Ok(callback_return_value)
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
                             }
                         });
                         result
