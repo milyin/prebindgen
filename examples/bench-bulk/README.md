@@ -56,6 +56,9 @@ The matrix includes batches of 0, 1, 8, 64 and 512 elements:
 | `handles_input` | Borrow existing handles and read their values in Rust | Exercises collection input preparation and handle locks; handles are created outside timing and reused. |
 | `handle_records_input` | Records containing a borrowed handle and a scalar tag | Exercises record preparation and locks. An explicit Rust constructor copies only the scalar payload from each borrowed handle into the owned record; that construction remains timed in both modes. |
 | `owned_handles_roundtrip` | Consume a handle list and return its owners, then read the first value | Exercises ownership acknowledgement and both input/output conversion. Each call reuses the owners returned by the preceding call; one extra scalar JNI call checks the result. Initial handle creation and final cleanup are outside timing. |
+| `owned_handle_records_roundtrip` | Consume and return records containing an owned handle and scalar tag | Measures grouped ownership validation and conversion; the next call reuses the returned owners. |
+| `owned_buffer_records_roundtrip` | Consume and return records containing an owned handle, a 64-byte string and 64-byte array | Adds text/byte conversion to the ownership case. |
+| `callback_owned_records` | Kotlin callback returns owned handle/tag records; Rust returns the decoded records | Exercises callback-result input conversion with the same bulk row representation. |
 | `records_output` | Rust constructs records; Kotlin materializes a list and sums fields | Bulk can avoid native-side per-row object arrays and primitive boxing. |
 | `records_roundtrip` | Kotlin list to Rust `Vec<Row>` and back, then checksum | Measures conversion in both directions. |
 | `callback_records` | Fire a pre-registered Rust callback with a record batch; Kotlin sums it | Both registration and handler destruction are outside the timed path. |
@@ -309,3 +312,13 @@ the end-to-end effect of changing output cleanup bookkeeping.
 and collection-return callbacks before and after native commit-queue removal.
 It records native allocation savings, mixed latency results, identical-build
 controls and a focused repeat of the nested-array case.
+
+The optional `--target-dir` shares a Cargo cache between benchmark builds. Each
+build copies its native library into its output directory before recording the
+artifact hash, so subsequent builds cannot replace a library under measurement.
+Generated Kotlin source hashes are recorded for comparisons that reuse identical
+JVM code with different native libraries.
+
+The [JNI bulk input replay report](jni-input-replay-results/README.md) compares
+native row preparation across generator revisions, including callback results,
+text/byte records and unaffected controls.
