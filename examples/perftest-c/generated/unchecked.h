@@ -50,6 +50,25 @@ size_t fast_owned_string_len(const fast_owned_string *value);
 fast_buffer_view fast_owned_string_view(const fast_owned_string *value);
 typedef struct {
     fast_owned_resource * v0;
+    uint32_t v1;
+    fast_buffer v2;
+    fast_owned_resource * v3;
+} fast_callback_0605b38a2f053a56_callback_return_w3_row;
+typedef struct { fast_callback_0605b38a2f053a56_callback_return_w3_row *data; size_t len; } fast_callback_0605b38a2f053a56_callback_return_w3_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+typedef struct {
+    int32_t v0;
+    fast_callback_0605b38a2f053a56_callback_return_w3_rows v1;
+} fast_callback_0605b38a2f053a56_result;
+/* Rust signature: ()->Option < Vec < Option < perftest_flat :: FixedCleanupRecord > > >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    fast_callback_0605b38a2f053a56_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const fast_callback_0605b38a2f053a56_result *result);
+} fast_callback_0605b38a2f053a56;
+typedef struct {
+    fast_owned_resource * v0;
     fast_owned_resource * v1;
 } fast_callback_396f37c4ec343c74_result;
 /* Rust signature: ()->perftest_flat :: AliasPair. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
@@ -58,6 +77,31 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } fast_callback_396f37c4ec343c74;
+typedef struct {
+    fast_owned_resource * v0;
+    uint32_t v1;
+    fast_buffer v2;
+    fast_owned_resource * v3;
+} fast_callback_5b6f807c27356f4b_callback_return_w8_row;
+typedef struct { fast_callback_5b6f807c27356f4b_callback_return_w8_row *data; size_t len; } fast_callback_5b6f807c27356f4b_callback_return_w8_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+typedef struct {
+    fast_callback_5b6f807c27356f4b_callback_return_w8_rows v0;
+} fast_callback_5b6f807c27356f4b_callback_return_w4_row;
+typedef struct { fast_callback_5b6f807c27356f4b_callback_return_w4_row *data; size_t len; } fast_callback_5b6f807c27356f4b_callback_return_w4_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+typedef struct {
+    fast_owned_resource * v0;
+    fast_callback_5b6f807c27356f4b_callback_return_w4_rows v1;
+    fast_owned_resource * v2;
+} fast_callback_5b6f807c27356f4b_result;
+/* Rust signature: ()->perftest_flat :: CleanupGroup. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    fast_callback_5b6f807c27356f4b_result (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+    void (*release_result)(void *context, const fast_callback_5b6f807c27356f4b_result *result);
+} fast_callback_5b6f807c27356f4b;
 typedef struct {
     fast_owned_resource * v0;
 } fast_callback_8735da2fee137b57_callback_return_w1_row;
@@ -75,6 +119,10 @@ typedef fast_callback_8735da2fee137b57_callback_return_w1_rows fast_alias_callba
 typedef fast_callback_8735da2fee137b57_callback_return_w1_row fast_alias_callback_rows_callback_return_row;
 typedef fast_callback_396f37c4ec343c74 fast_alias_handler_new_callback;
 typedef fast_callback_396f37c4ec343c74_result fast_alias_handler_new_callback_return;
+typedef fast_callback_5b6f807c27356f4b fast_cleanup_group_call_callback;
+typedef fast_callback_5b6f807c27356f4b_result fast_cleanup_group_call_callback_return;
+typedef fast_callback_0605b38a2f053a56 fast_cleanup_optional_call_callback;
+typedef fast_callback_0605b38a2f053a56_result fast_cleanup_optional_call_callback_return;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 /* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
@@ -149,6 +197,16 @@ typedef struct { fast_buffer_rows_sum_p0_w1_row *data; size_t len; } fast_buffer
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool fast_buffer_rows_sum(fast_buffer_rows_sum_p0_w1_rows p0_w1, int64_t *out0, size_t *ownership, char * *error);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_cleanup_group_call(fast_callback_5b6f807c27356f4b p0_callback, int64_t *out0, size_t *ownership, char * *error);
+/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool fast_cleanup_optional_call(fast_callback_0605b38a2f053a56 p0_callback, int64_t *out0, size_t *ownership, char * *error);
 typedef struct {
     fast_owned_resource * v0;
 } fast_collection_alias_p0_w1_row;

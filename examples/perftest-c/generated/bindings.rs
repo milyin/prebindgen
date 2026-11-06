@@ -19,6 +19,12 @@ fn __pb_owned_owned_vec_option_perftest_flat_bufferinputrow_99c0a6a07204d20f_len
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_option_perftest_flat_fixedcleanuprecord_b5cc62725b548e0e_len(
+    value: &Vec<Option<perftest_flat::FixedCleanupRecord>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_string_3292bf5148c953ec_len(value: &Vec<String>) -> usize {
     value.len()
 }
@@ -29,6 +35,12 @@ fn __pb_owned_owned_vec_vec_i64_44fcce9e083e0432_len(value: &Vec<Vec<i64>>) -> u
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_vec_perftest_flat_callbackrow_addaf24d06e04a05_len(
     value: &Vec<Vec<perftest_flat::CallbackRow>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_fixedcleanuprecord_017e4e0f3b039b33_len(
+    value: &Vec<Vec<perftest_flat::FixedCleanupRecord>>,
 ) -> usize {
     value.len()
 }
@@ -83,6 +95,12 @@ fn __pb_owned_owned_vec_perftest_flat_callbackrow_f03a4febf07e44f9_len(
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_len(
     value: &Vec<perftest_flat::CollectionItem>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_fixedcleanuprecord_9c0a6c041d1b7f27_len(
+    value: &Vec<perftest_flat::FixedCleanupRecord>,
 ) -> usize {
     value.len()
 }
@@ -790,6 +808,37 @@ pub struct perftest_callback_0254ff800a6840ea {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct __PbRow_callback_0605b38a2f053a56_callback_return_w3 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: u32,
+    pub v2: __PbBuffer,
+    pub v3: *mut perftest_flat::OwnedResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_0605b38a2f053a56_result {
+    pub v0: i32,
+    pub v1: __PbRows,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_0605b38a2f053a56 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> perftest_callback_0605b38a2f053a56_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_callback_0605b38a2f053a56_result,
+        ),
+    >,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct perftest_callback_078f14fba1e1a0bf {
     pub run: Option<
         unsafe extern "C" fn(
@@ -864,6 +913,43 @@ pub struct perftest_callback_4f6170b342252c1b {
     >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_5b6f807c27356f4b_callback_return_w8 {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: u32,
+    pub v2: __PbBuffer,
+    pub v3: *mut perftest_flat::OwnedResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_callback_5b6f807c27356f4b_callback_return_w4 {
+    pub v0: __PbRows,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_5b6f807c27356f4b_result {
+    pub v0: *mut perftest_flat::OwnedResource,
+    pub v1: __PbRows,
+    pub v2: *mut perftest_flat::OwnedResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_5b6f807c27356f4b {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> perftest_callback_5b6f807c27356f4b_result,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    pub release_result: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *const perftest_callback_5b6f807c27356f4b_result,
+        ),
+    >,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -11189,146 +11275,160 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                             };
                             let raw_result = callback_result.value;
                             let callback_return_w1 = raw_result;
-                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                __prebindgen_input_consumed,
-                            );
-                            ::prebindgen_runtime::validate_slice(
-                                callback_return_w1.data
-                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                callback_return_w1.len,
-                            )?;
-                            for index in 0..callback_return_w1.len {
-                                let callback_return_w5 = unsafe {
-                                    (*((callback_return_w1.data
-                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                        .add(index)))
-                                        .v0
-                                };
-                                unsafe {
-                                    callback_return_owners
-                                        .receive(
-                                            callback_return_w5
-                                                as *mut perftest_flat::CallbackReturnResource,
-                                        );
-                                }
-                            }
-                            callback_return_owners.check()?;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_w0: Vec<
-                                    perftest_flat::CallbackReturnResource,
-                                > = Vec::new();
-                                if true {
-                                    let callback_return_w2 = callback_return_w1.len;
-                                    ::prebindgen_runtime::validate_slice(
-                                        callback_return_w1.data
-                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                        callback_return_w2,
-                                    )?;
-                                    let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
-                                        == 0
-                                    {
-                                        &[]
-                                    } else {
-                                        unsafe {
-                                            ::core::slice::from_raw_parts(
-                                                callback_return_w1.data
-                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                                callback_return_w2,
-                                            )
-                                        }
-                                    };
-                                    let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                        .begin_group(callback_return_w2.saturating_mul(1usize));
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                        let checked = (|| {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5)
-                                                    as *mut perftest_flat::CallbackReturnResource
-                                            } else {
-                                                ::core::ptr::null_mut()
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w1.data
+                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                    callback_return_w1.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w1.len {
+                                            let callback_return_w5 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
+                                                    .add(index)))
+                                                    .v0
                                             };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                for address in ::core::iter::once(
-                                                    (callback_return_w5_pointer.addr()) as usize,
-                                                ) {
-                                                    callback_return_w1_accesses.push((address, true));
-                                                }
-                                            }
-                                            Ok::<_, String>(())
-                                        })();
-                                        checked?;
-                                    }
-                                    __prebindgen_input_aliases
-                                        .accept_group(callback_return_w1_accesses)?;
-                                    callback_return_w0.reserve_exact(callback_return_w2);
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(clippy::redundant_closure_call)]
-                                        let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                            perftest_flat::CallbackReturnResource,
-                                            String,
-                                        > {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5)
-                                                    as *mut perftest_flat::CallbackReturnResource
-                                            } else {
-                                                ::core::ptr::null_mut()
-                                            };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                __prebindgen_input_consumed
-                                                    .set(
-                                                        __prebindgen_input_consumed.get()
-                                                            + (::core::iter::once(
-                                                                (callback_return_w5_pointer.addr()) as usize,
-                                                            ))
-                                                                .count(),
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w5
+                                                            as *mut perftest_flat::CallbackReturnResource,
                                                     );
                                             }
-                                            let callback_return_w4 = if true {
-                                                Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
-                                                .expect("active allocation");
-                                            let callback_return_w0 = callback_return_w4;
-                                            Ok(callback_return_w0)
-                                        })();
-                                        let element = callback_return_w1_element_built?;
-                                        #[allow(clippy::zst_offset)]
-                                        unsafe {
-                                            let initialized = callback_return_w0.len();
-                                            callback_return_w0
-                                                .as_mut_ptr()
-                                                .add(initialized)
-                                                .write(element);
-                                            callback_return_w0.set_len(initialized + 1);
                                         }
                                     }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
                                 }
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w0_built = if true {
-                                    Some(callback_return_w0)
-                                } else {
-                                    None
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let mut callback_return_w0: Vec<
+                                        perftest_flat::CallbackReturnResource,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w2 = callback_return_w1.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                            callback_return_w2,
+                                        )?;
+                                        let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w1.data
+                                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                                    callback_return_w2,
+                                                )
+                                            }
+                                        };
+                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
+                                            .begin_group(callback_return_w2.saturating_mul(1usize));
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                            let checked = (|| {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5)
+                                                        as *mut perftest_flat::CallbackReturnResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w5_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w1_accesses.push((address, true));
+                                                    }
+                                                }
+                                                Ok::<_, String>(())
+                                            })();
+                                            checked?;
+                                        }
+                                        __prebindgen_input_aliases
+                                            .accept_group(callback_return_w1_accesses)?;
+                                        callback_return_w0.reserve_exact(callback_return_w2);
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                                perftest_flat::CallbackReturnResource,
+                                                String,
+                                            > {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5)
+                                                        as *mut perftest_flat::CallbackReturnResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + (::core::iter::once(
+                                                                    (callback_return_w5_pointer.addr()) as usize,
+                                                                ))
+                                                                    .count(),
+                                                        );
+                                                }
+                                                let callback_return_w4 = if true {
+                                                    Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
+                                                    .expect("active allocation");
+                                                let callback_return_w0 = callback_return_w4;
+                                                Ok(callback_return_w0)
+                                            })();
+                                            let element = callback_return_w1_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w0.len();
+                                                callback_return_w0
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w0.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some(callback_return_w0)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
                                 };
-                                let callback_return_value = callback_return_w0_built
-                                    .expect("active input");
-                                Ok(callback_return_value)
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
                             }
                         });
                         result
@@ -11428,146 +11528,160 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                             };
                             let raw_result = callback_result.value;
                             let callback_return_w1 = raw_result;
-                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                __prebindgen_input_consumed,
-                            );
-                            ::prebindgen_runtime::validate_slice(
-                                callback_return_w1.data
-                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                callback_return_w1.len,
-                            )?;
-                            for index in 0..callback_return_w1.len {
-                                let callback_return_w5 = unsafe {
-                                    (*((callback_return_w1.data
-                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                        .add(index)))
-                                        .v0
-                                };
-                                unsafe {
-                                    callback_return_owners
-                                        .receive(
-                                            callback_return_w5
-                                                as *mut perftest_flat::CallbackReturnResource,
-                                        );
-                                }
-                            }
-                            callback_return_owners.check()?;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_w0: Vec<
-                                    perftest_flat::CallbackReturnResource,
-                                > = Vec::new();
-                                if true {
-                                    let callback_return_w2 = callback_return_w1.len;
-                                    ::prebindgen_runtime::validate_slice(
-                                        callback_return_w1.data
-                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                        callback_return_w2,
-                                    )?;
-                                    let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
-                                        == 0
-                                    {
-                                        &[]
-                                    } else {
-                                        unsafe {
-                                            ::core::slice::from_raw_parts(
-                                                callback_return_w1.data
-                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
-                                                callback_return_w2,
-                                            )
-                                        }
-                                    };
-                                    let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                        .begin_group(callback_return_w2.saturating_mul(1usize));
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                        let checked = (|| {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5)
-                                                    as *mut perftest_flat::CallbackReturnResource
-                                            } else {
-                                                ::core::ptr::null_mut()
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w1.data
+                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                    callback_return_w1.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w1.len {
+                                            let callback_return_w5 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
+                                                    .add(index)))
+                                                    .v0
                                             };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                for address in ::core::iter::once(
-                                                    (callback_return_w5_pointer.addr()) as usize,
-                                                ) {
-                                                    callback_return_w1_accesses.push((address, true));
-                                                }
-                                            }
-                                            Ok::<_, String>(())
-                                        })();
-                                        checked?;
-                                    }
-                                    __prebindgen_input_aliases
-                                        .accept_group(callback_return_w1_accesses)?;
-                                    callback_return_w0.reserve_exact(callback_return_w2);
-                                    for callback_return_w3 in 0..callback_return_w2 {
-                                        let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
-                                            .v0;
-                                        #[allow(clippy::redundant_closure_call)]
-                                        let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                            perftest_flat::CallbackReturnResource,
-                                            String,
-                                        > {
-                                            let callback_return_w5_pointer = if true {
-                                                (callback_return_w5)
-                                                    as *mut perftest_flat::CallbackReturnResource
-                                            } else {
-                                                ::core::ptr::null_mut()
-                                            };
-                                            if true {
-                                                ::prebindgen_runtime::validate_pointer(
-                                                    callback_return_w5_pointer,
-                                                )?;
-                                            }
-                                            if true {
-                                                __prebindgen_input_consumed
-                                                    .set(
-                                                        __prebindgen_input_consumed.get()
-                                                            + (::core::iter::once(
-                                                                (callback_return_w5_pointer.addr()) as usize,
-                                                            ))
-                                                                .count(),
+                                            unsafe {
+                                                callback_return_owners
+                                                    .receive(
+                                                        callback_return_w5
+                                                            as *mut perftest_flat::CallbackReturnResource,
                                                     );
                                             }
-                                            let callback_return_w4 = if true {
-                                                Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
-                                            } else {
-                                                None
-                                            };
-                                            let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
-                                                .expect("active allocation");
-                                            let callback_return_w0 = callback_return_w4;
-                                            Ok(callback_return_w0)
-                                        })();
-                                        let element = callback_return_w1_element_built?;
-                                        #[allow(clippy::zst_offset)]
-                                        unsafe {
-                                            let initialized = callback_return_w0.len();
-                                            callback_return_w0
-                                                .as_mut_ptr()
-                                                .add(initialized)
-                                                .write(element);
-                                            callback_return_w0.set_len(initialized + 1);
                                         }
                                     }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
                                 }
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w0_built = if true {
-                                    Some(callback_return_w0)
-                                } else {
-                                    None
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let mut callback_return_w0: Vec<
+                                        perftest_flat::CallbackReturnResource,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w2 = callback_return_w1.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w1.data
+                                                as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                            callback_return_w2,
+                                        )?;
+                                        let callback_return_w1_rows: &[__PbRow_callback_0c7ae0f660edb387_callback_return_w1] = if callback_return_w2
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w1.data
+                                                        as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1,
+                                                    callback_return_w2,
+                                                )
+                                            }
+                                        };
+                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
+                                            .begin_group(callback_return_w2.saturating_mul(1usize));
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                            let checked = (|| {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5)
+                                                        as *mut perftest_flat::CallbackReturnResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w5_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w1_accesses.push((address, true));
+                                                    }
+                                                }
+                                                Ok::<_, String>(())
+                                            })();
+                                            checked?;
+                                        }
+                                        __prebindgen_input_aliases
+                                            .accept_group(callback_return_w1_accesses)?;
+                                        callback_return_w0.reserve_exact(callback_return_w2);
+                                        for callback_return_w3 in 0..callback_return_w2 {
+                                            let callback_return_w5 = callback_return_w1_rows[callback_return_w3]
+                                                .v0;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                                perftest_flat::CallbackReturnResource,
+                                                String,
+                                            > {
+                                                let callback_return_w5_pointer = if true {
+                                                    (callback_return_w5)
+                                                        as *mut perftest_flat::CallbackReturnResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if true {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w5_pointer,
+                                                    )?;
+                                                }
+                                                if true {
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + (::core::iter::once(
+                                                                    (callback_return_w5_pointer.addr()) as usize,
+                                                                ))
+                                                                    .count(),
+                                                        );
+                                                }
+                                                let callback_return_w4 = if true {
+                                                    Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
+                                                    .expect("active allocation");
+                                                let callback_return_w0 = callback_return_w4;
+                                                Ok(callback_return_w0)
+                                            })();
+                                            let element = callback_return_w1_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w0.len();
+                                                callback_return_w0
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w0.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some(callback_return_w0)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
                                 };
-                                let callback_return_value = callback_return_w0_built
-                                    .expect("active input");
-                                Ok(callback_return_value)
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
                             }
                         });
                         result
@@ -13320,6 +13434,1094 @@ pub unsafe extern "C" fn perftest_callback_row_resource_live() -> i64 {
     }
     let value = storage.assume_init();
     value.v0
+}
+#[repr(C)]
+pub struct perftest_cleanup_group_call_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_cleanup_group_call(
+    p0_callback: perftest_callback_5b6f807c27356f4b,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_cleanup_group_call_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_callback_run = if true {
+                Some(p0_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                let p0_callback_release_result = p0_callback.release_result;
+                let p0_callback_owner = if true {
+                    {
+                        (&ownership_accepted).set((&ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p0_callback_run = p0_callback_run
+                        .expect("validated active callback");
+                    let p0_callback_owner = p0_callback_owner
+                        .expect("validated active callback");
+                    let p0_callback_value = move || {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let raw_result = unsafe {
+                                p0_callback_run(p0_callback_owner.context())
+                            };
+                            let callback_result = __PbCallbackResult {
+                                value: raw_result,
+                                context: p0_callback_owner.context(),
+                                release: p0_callback_release_result,
+                            };
+                            let raw_result = callback_result.value;
+                            let callback_return_w2 = raw_result.v0;
+                            let callback_return_w4 = raw_result.v1;
+                            let callback_return_w23 = raw_result.v2;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                unsafe {
+                                    callback_return_owners
+                                        .receive(
+                                            callback_return_w2 as *mut perftest_flat::OwnedResource,
+                                        );
+                                }
+                                match ::prebindgen_runtime::validate_slice(
+                                    callback_return_w4.data
+                                        as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4,
+                                    callback_return_w4.len,
+                                ) {
+                                    Ok(()) => {
+                                        for index in 0..callback_return_w4.len {
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w4.data
+                                                    as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4)
+                                                    .add(index)))
+                                                    .v0
+                                            };
+                                            match ::prebindgen_runtime::validate_slice(
+                                                callback_return_w8.data
+                                                    as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8,
+                                                callback_return_w8.len,
+                                            ) {
+                                                Ok(()) => {
+                                                    for index in 0..callback_return_w8.len {
+                                                        let callback_return_w13 = unsafe {
+                                                            (*((callback_return_w8.data
+                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
+                                                                .add(index)))
+                                                                .v0
+                                                        };
+                                                        let callback_return_w15 = unsafe {
+                                                            (*((callback_return_w8.data
+                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
+                                                                .add(index)))
+                                                                .v1
+                                                        };
+                                                        let callback_return_w17 = unsafe {
+                                                            (*((callback_return_w8.data
+                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
+                                                                .add(index)))
+                                                                .v2
+                                                        };
+                                                        let callback_return_w21 = unsafe {
+                                                            (*((callback_return_w8.data
+                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
+                                                                .add(index)))
+                                                                .v3
+                                                        };
+                                                        unsafe {
+                                                            callback_return_owners
+                                                                .receive(
+                                                                    callback_return_w13 as *mut perftest_flat::OwnedResource,
+                                                                );
+                                                        }
+                                                        if (callback_return_w21 as usize) != 0 {
+                                                            unsafe {
+                                                                callback_return_owners
+                                                                    .receive(
+                                                                        callback_return_w21 as *mut perftest_flat::OwnedResource,
+                                                                    );
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Err(error) => {
+                                                    ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(error) => {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    }
+                                }
+                                unsafe {
+                                    callback_return_owners
+                                        .receive(
+                                            callback_return_w23 as *mut perftest_flat::OwnedResource,
+                                        );
+                                }
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    let callback_return_w2_pointer = if true {
+                                        callback_return_w2 as *mut perftest_flat::OwnedResource
+                                    } else {
+                                        ::core::ptr::null_mut()
+                                    };
+                                    if true {
+                                        ::prebindgen_runtime::validate_pointer(
+                                            callback_return_w2_pointer,
+                                        )?;
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w1_built = if true {
+                                        let mut callback_return_w1_built_transferred_0 = 0usize;
+                                        if true {
+                                            for address in ::core::iter::once(
+                                                (callback_return_w2_pointer.addr()) as usize,
+                                            ) {
+                                                __prebindgen_input_aliases.access(address, true)?;
+                                                callback_return_w1_built_transferred_0 += 1;
+                                            }
+                                        }
+                                        let callback_return_w1 = if true {
+                                            Some(unsafe { Box::from_raw(callback_return_w2_pointer) })
+                                        } else {
+                                            None
+                                        };
+                                        __prebindgen_input_consumed
+                                            .set(
+                                                __prebindgen_input_consumed.get()
+                                                    + callback_return_w1_built_transferred_0,
+                                            );
+                                        Some({
+                                            let callback_return_w1: perftest_flat::OwnedResource = *callback_return_w1
+                                                .expect("active allocation");
+                                            callback_return_w1
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    let mut callback_return_w3: Vec<
+                                        Vec<perftest_flat::FixedCleanupRecord>,
+                                    > = Vec::new();
+                                    if true {
+                                        let callback_return_w5 = callback_return_w4.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w4.data
+                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4,
+                                            callback_return_w5,
+                                        )?;
+                                        callback_return_w3.reserve_exact(callback_return_w5);
+                                        for callback_return_w6 in 0..callback_return_w5 {
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w4.data
+                                                    as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4)
+                                                    .add(callback_return_w6)))
+                                                    .v0
+                                            };
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w4_element_built = (|| -> ::core::result::Result<
+                                                Vec<perftest_flat::FixedCleanupRecord>,
+                                                String,
+                                            > {
+                                                let mut callback_return_w7: Vec<
+                                                    perftest_flat::FixedCleanupRecord,
+                                                > = Vec::new();
+                                                if true {
+                                                    let callback_return_w9 = (callback_return_w8).len;
+                                                    ::prebindgen_runtime::validate_slice(
+                                                        (callback_return_w8).data
+                                                            as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8,
+                                                        callback_return_w9,
+                                                    )?;
+                                                    let callback_return_w8_rows: &[__PbRow_callback_5b6f807c27356f4b_callback_return_w8] = if callback_return_w9
+                                                        == 0
+                                                    {
+                                                        &[]
+                                                    } else {
+                                                        unsafe {
+                                                            ::core::slice::from_raw_parts(
+                                                                (callback_return_w8).data
+                                                                    as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8,
+                                                                callback_return_w9,
+                                                            )
+                                                        }
+                                                    };
+                                                    let mut callback_return_w8_accesses = __prebindgen_input_aliases
+                                                        .begin_group(callback_return_w9.saturating_mul(2usize));
+                                                    for callback_return_w10 in 0..callback_return_w9 {
+                                                        let callback_return_w13 = callback_return_w8_rows[callback_return_w10]
+                                                            .v0;
+                                                        let callback_return_w15 = callback_return_w8_rows[callback_return_w10]
+                                                            .v1;
+                                                        #[allow(unused_variables)]
+                                                        let callback_return_w17 = callback_return_w8_rows[callback_return_w10]
+                                                            .v2;
+                                                        let callback_return_w21 = callback_return_w8_rows[callback_return_w10]
+                                                            .v3;
+                                                        #[allow(unused_variables, clippy::redundant_closure_call)]
+                                                        let checked = (|| {
+                                                            let callback_return_w13_pointer = if true {
+                                                                (callback_return_w13) as *mut perftest_flat::OwnedResource
+                                                            } else {
+                                                                ::core::ptr::null_mut()
+                                                            };
+                                                            if true {
+                                                                ::prebindgen_runtime::validate_pointer(
+                                                                    callback_return_w13_pointer,
+                                                                )?;
+                                                            }
+                                                            let callback_return_w14 = if true {
+                                                                Some(
+                                                                    char::from_u32(callback_return_w15)
+                                                                        .ok_or("invalid Unicode scalar")?,
+                                                                )
+                                                            } else {
+                                                                None
+                                                            };
+                                                            let callback_return_w19: i32 = i32::from(
+                                                                ((callback_return_w21) as usize) != 0,
+                                                            );
+                                                            let callback_return_w21_pointer = if callback_return_w19
+                                                                == 1i32
+                                                            {
+                                                                (callback_return_w21) as *mut perftest_flat::OwnedResource
+                                                            } else {
+                                                                ::core::ptr::null_mut()
+                                                            };
+                                                            if callback_return_w19 == 1i32 {
+                                                                ::prebindgen_runtime::validate_pointer(
+                                                                    callback_return_w21_pointer,
+                                                                )?;
+                                                            }
+                                                            if true {
+                                                                for address in ::core::iter::once(
+                                                                    (callback_return_w13_pointer.addr()) as usize,
+                                                                ) {
+                                                                    callback_return_w8_accesses.push((address, true));
+                                                                }
+                                                            }
+                                                            if callback_return_w19 == 1i32 {
+                                                                for address in ::core::iter::once(
+                                                                    (callback_return_w21_pointer.addr()) as usize,
+                                                                ) {
+                                                                    callback_return_w8_accesses.push((address, true));
+                                                                }
+                                                            }
+                                                            Ok::<_, String>(())
+                                                        })();
+                                                        checked?;
+                                                    }
+                                                    __prebindgen_input_aliases
+                                                        .accept_group(callback_return_w8_accesses)?;
+                                                    callback_return_w7.reserve_exact(callback_return_w9);
+                                                    for callback_return_w10 in 0..callback_return_w9 {
+                                                        let callback_return_w13 = callback_return_w8_rows[callback_return_w10]
+                                                            .v0;
+                                                        let callback_return_w15 = callback_return_w8_rows[callback_return_w10]
+                                                            .v1;
+                                                        #[allow(unused_variables)]
+                                                        let callback_return_w17 = callback_return_w8_rows[callback_return_w10]
+                                                            .v2;
+                                                        let callback_return_w21 = callback_return_w8_rows[callback_return_w10]
+                                                            .v3;
+                                                        #[allow(clippy::redundant_closure_call)]
+                                                        let callback_return_w8_element_built = (|| -> ::core::result::Result<
+                                                            perftest_flat::FixedCleanupRecord,
+                                                            String,
+                                                        > {
+                                                            let callback_return_w13_pointer = if true {
+                                                                (callback_return_w13) as *mut perftest_flat::OwnedResource
+                                                            } else {
+                                                                ::core::ptr::null_mut()
+                                                            };
+                                                            if true {
+                                                                ::prebindgen_runtime::validate_pointer(
+                                                                    callback_return_w13_pointer,
+                                                                )?;
+                                                            }
+                                                            let callback_return_w14 = if true {
+                                                                Some(
+                                                                    char::from_u32(callback_return_w15)
+                                                                        .ok_or("invalid Unicode scalar")?,
+                                                                )
+                                                            } else {
+                                                                None
+                                                            };
+                                                            let callback_return_w19: i32 = i32::from(
+                                                                ((callback_return_w21) as usize) != 0,
+                                                            );
+                                                            let callback_return_w21_pointer = if callback_return_w19
+                                                                == 1i32
+                                                            {
+                                                                (callback_return_w21) as *mut perftest_flat::OwnedResource
+                                                            } else {
+                                                                ::core::ptr::null_mut()
+                                                            };
+                                                            if callback_return_w19 == 1i32 {
+                                                                ::prebindgen_runtime::validate_pointer(
+                                                                    callback_return_w21_pointer,
+                                                                )?;
+                                                            }
+                                                            if true {
+                                                                __prebindgen_input_consumed
+                                                                    .set(
+                                                                        __prebindgen_input_consumed.get()
+                                                                            + (::core::iter::once(
+                                                                                (callback_return_w13_pointer.addr()) as usize,
+                                                                            ))
+                                                                                .count(),
+                                                                    );
+                                                            }
+                                                            if callback_return_w19 == 1i32 {
+                                                                __prebindgen_input_consumed
+                                                                    .set(
+                                                                        __prebindgen_input_consumed.get()
+                                                                            + (::core::iter::once(
+                                                                                (callback_return_w21_pointer.addr()) as usize,
+                                                                            ))
+                                                                                .count(),
+                                                                    );
+                                                            }
+                                                            let callback_return_w12 = if true {
+                                                                Some(unsafe { Box::from_raw(callback_return_w13_pointer) })
+                                                            } else {
+                                                                None
+                                                            };
+                                                            #[allow(unused_mut, unused_assignments)]
+                                                            let mut callback_return_w16: Option<&str> = None;
+                                                            let callback_return_w20 = if callback_return_w19 == 1i32 {
+                                                                Some(unsafe { Box::from_raw(callback_return_w21_pointer) })
+                                                            } else {
+                                                                None
+                                                            };
+                                                            let callback_return_w12: perftest_flat::OwnedResource = *callback_return_w12
+                                                                .expect("active allocation");
+                                                            let callback_return_w14: char = ::core::convert::Into::into(
+                                                                callback_return_w14.expect("active value"),
+                                                            );
+                                                            callback_return_w16 = if true {
+                                                                Some(
+                                                                    std::str::from_utf8(unsafe {
+                                                                            __pb_read(callback_return_w17)?
+                                                                        })
+                                                                        .map_err(|_| "invalid UTF-8")?,
+                                                                )
+                                                            } else {
+                                                                None
+                                                            };
+                                                            let callback_return_w16: String = ::core::convert::Into::into(
+                                                                callback_return_w16.expect("active value"),
+                                                            );
+                                                            let callback_return_w18 = if callback_return_w19 == 1i32 {
+                                                                let callback_return_w20: perftest_flat::OwnedResource = *callback_return_w20
+                                                                    .expect("active allocation");
+                                                                Some(callback_return_w20)
+                                                            } else {
+                                                                None
+                                                            };
+                                                            let callback_return_w11: perftest_flat::FixedCleanupRecord = perftest_flat::fixed_cleanup_new(
+                                                                callback_return_w12,
+                                                                callback_return_w14,
+                                                                callback_return_w16,
+                                                                callback_return_w18,
+                                                            );
+                                                            let callback_return_w7 = callback_return_w11;
+                                                            Ok(callback_return_w7)
+                                                        })();
+                                                        let element = callback_return_w8_element_built?;
+                                                        #[allow(clippy::zst_offset)]
+                                                        unsafe {
+                                                            let initialized = callback_return_w7.len();
+                                                            callback_return_w7
+                                                                .as_mut_ptr()
+                                                                .add(initialized)
+                                                                .write(element);
+                                                            callback_return_w7.set_len(initialized + 1);
+                                                        }
+                                                    }
+                                                }
+                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                let callback_return_w7_built = if true {
+                                                    Some(callback_return_w7)
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w3 = callback_return_w7_built
+                                                    .expect("active input");
+                                                Ok(callback_return_w3)
+                                            })();
+                                            let element = callback_return_w4_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w3.len();
+                                                callback_return_w3
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w3.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w3_built = if true {
+                                        Some(callback_return_w3)
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_w23_pointer = if true {
+                                        callback_return_w23 as *mut perftest_flat::OwnedResource
+                                    } else {
+                                        ::core::ptr::null_mut()
+                                    };
+                                    if true {
+                                        ::prebindgen_runtime::validate_pointer(
+                                            callback_return_w23_pointer,
+                                        )?;
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w22_built = if true {
+                                        let mut callback_return_w22_built_transferred_0 = 0usize;
+                                        if true {
+                                            for address in ::core::iter::once(
+                                                (callback_return_w23_pointer.addr()) as usize,
+                                            ) {
+                                                __prebindgen_input_aliases.access(address, true)?;
+                                                callback_return_w22_built_transferred_0 += 1;
+                                            }
+                                        }
+                                        let callback_return_w22 = if true {
+                                            Some(unsafe { Box::from_raw(callback_return_w23_pointer) })
+                                        } else {
+                                            None
+                                        };
+                                        __prebindgen_input_consumed
+                                            .set(
+                                                __prebindgen_input_consumed.get()
+                                                    + callback_return_w22_built_transferred_0,
+                                            );
+                                        Some({
+                                            let callback_return_w22: perftest_flat::OwnedResource = *callback_return_w22
+                                                .expect("active allocation");
+                                            callback_return_w22
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some({
+                                            let callback_return_w0: perftest_flat::CleanupGroup = perftest_flat::cleanup_group_new(
+                                                callback_return_w1_built.expect("active input"),
+                                                callback_return_w3_built.expect("active input"),
+                                                callback_return_w22_built.expect("active input"),
+                                            );
+                                            callback_return_w0
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
+                                };
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
+                            }
+                        });
+                        result
+                            .unwrap_or_else(|error| {
+                                ::prebindgen_runtime::report_callback_error(
+                                    "perftest_callback_5b6f807c27356f4b",
+                                    "()->perftest_flat :: CleanupGroup",
+                                    &error,
+                                );
+                                panic!("callback failed: {}", error)
+                            })
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = perftest_flat::cleanup_group_call(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_cleanup_group_call_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_cleanup_optional_call_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_cleanup_optional_call(
+    p0_callback: perftest_callback_0605b38a2f053a56,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_cleanup_optional_call_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_callback_run = if true {
+                Some(p0_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                let p0_callback_release_result = p0_callback.release_result;
+                let p0_callback_owner = if true {
+                    {
+                        (&ownership_accepted).set((&ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p0_callback_run = p0_callback_run
+                        .expect("validated active callback");
+                    let p0_callback_owner = p0_callback_owner
+                        .expect("validated active callback");
+                    let p0_callback_value = move || {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let raw_result = unsafe {
+                                p0_callback_run(p0_callback_owner.context())
+                            };
+                            let callback_result = __PbCallbackResult {
+                                value: raw_result,
+                                context: p0_callback_owner.context(),
+                                release: p0_callback_release_result,
+                            };
+                            let raw_result = callback_result.value;
+                            let callback_return_w1 = raw_result.v0;
+                            let callback_return_w3 = raw_result.v1;
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                    __prebindgen_input_consumed,
+                                );
+                                if callback_return_w1 == 1 {
+                                    match ::prebindgen_runtime::validate_slice(
+                                        callback_return_w3.data
+                                            as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3,
+                                        callback_return_w3.len,
+                                    ) {
+                                        Ok(()) => {
+                                            for index in 0..callback_return_w3.len {
+                                                let callback_return_w10 = unsafe {
+                                                    (*((callback_return_w3.data
+                                                        as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
+                                                        .add(index)))
+                                                        .v0
+                                                };
+                                                let callback_return_w12 = unsafe {
+                                                    (*((callback_return_w3.data
+                                                        as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
+                                                        .add(index)))
+                                                        .v1
+                                                };
+                                                let callback_return_w14 = unsafe {
+                                                    (*((callback_return_w3.data
+                                                        as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
+                                                        .add(index)))
+                                                        .v2
+                                                };
+                                                let callback_return_w18 = unsafe {
+                                                    (*((callback_return_w3.data
+                                                        as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
+                                                        .add(index)))
+                                                        .v3
+                                                };
+                                                if (callback_return_w10 as usize) != 0 {
+                                                    unsafe {
+                                                        callback_return_owners
+                                                            .receive(
+                                                                callback_return_w10 as *mut perftest_flat::OwnedResource,
+                                                            );
+                                                    }
+                                                    if (callback_return_w18 as usize) != 0 {
+                                                        unsafe {
+                                                            callback_return_owners
+                                                                .receive(
+                                                                    callback_return_w18 as *mut perftest_flat::OwnedResource,
+                                                                );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Err(error) => {
+                                            ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                        }
+                                    }
+                                }
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    if callback_return_w1 != 0 && callback_return_w1 != 1 {
+                                        return Err("invalid option presence".into());
+                                    }
+                                    let mut callback_return_w2: Vec<
+                                        Option<perftest_flat::FixedCleanupRecord>,
+                                    > = Vec::new();
+                                    if callback_return_w1 == 1i32 {
+                                        let callback_return_w4 = callback_return_w3.len;
+                                        ::prebindgen_runtime::validate_slice(
+                                            callback_return_w3.data
+                                                as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3,
+                                            callback_return_w4,
+                                        )?;
+                                        let callback_return_w3_rows: &[__PbRow_callback_0605b38a2f053a56_callback_return_w3] = if callback_return_w4
+                                            == 0
+                                        {
+                                            &[]
+                                        } else {
+                                            unsafe {
+                                                ::core::slice::from_raw_parts(
+                                                    callback_return_w3.data
+                                                        as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3,
+                                                    callback_return_w4,
+                                                )
+                                            }
+                                        };
+                                        let mut callback_return_w3_accesses = __prebindgen_input_aliases
+                                            .begin_group(callback_return_w4.saturating_mul(2usize));
+                                        for callback_return_w5 in 0..callback_return_w4 {
+                                            let callback_return_w10 = callback_return_w3_rows[callback_return_w5]
+                                                .v0;
+                                            let callback_return_w12 = callback_return_w3_rows[callback_return_w5]
+                                                .v1;
+                                            #[allow(unused_variables)]
+                                            let callback_return_w14 = callback_return_w3_rows[callback_return_w5]
+                                                .v2;
+                                            let callback_return_w18 = callback_return_w3_rows[callback_return_w5]
+                                                .v3;
+                                            #[allow(unused_variables, clippy::redundant_closure_call)]
+                                            let checked = (|| {
+                                                let callback_return_w7: i32 = i32::from(
+                                                    ((callback_return_w10) as usize) != 0,
+                                                );
+                                                let callback_return_w10_pointer = if callback_return_w7
+                                                    == 1i32
+                                                {
+                                                    (callback_return_w10) as *mut perftest_flat::OwnedResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if callback_return_w7 == 1i32 {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w10_pointer,
+                                                    )?;
+                                                }
+                                                let callback_return_w11 = if callback_return_w7 == 1i32 {
+                                                    Some(
+                                                        char::from_u32(callback_return_w12)
+                                                            .ok_or("invalid Unicode scalar")?,
+                                                    )
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w16: i32 = i32::from(
+                                                    ((callback_return_w18) as usize) != 0,
+                                                );
+                                                let callback_return_w18_pointer = if (callback_return_w7
+                                                    == 1i32) && (callback_return_w16 == 1i32)
+                                                {
+                                                    (callback_return_w18) as *mut perftest_flat::OwnedResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w18_pointer,
+                                                    )?;
+                                                }
+                                                if callback_return_w7 == 1i32 {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w10_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w3_accesses.push((address, true));
+                                                    }
+                                                }
+                                                if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    for address in ::core::iter::once(
+                                                        (callback_return_w18_pointer.addr()) as usize,
+                                                    ) {
+                                                        callback_return_w3_accesses.push((address, true));
+                                                    }
+                                                }
+                                                Ok::<_, String>(())
+                                            })();
+                                            checked?;
+                                        }
+                                        __prebindgen_input_aliases
+                                            .accept_group(callback_return_w3_accesses)?;
+                                        callback_return_w2.reserve_exact(callback_return_w4);
+                                        for callback_return_w5 in 0..callback_return_w4 {
+                                            let callback_return_w10 = callback_return_w3_rows[callback_return_w5]
+                                                .v0;
+                                            let callback_return_w12 = callback_return_w3_rows[callback_return_w5]
+                                                .v1;
+                                            #[allow(unused_variables)]
+                                            let callback_return_w14 = callback_return_w3_rows[callback_return_w5]
+                                                .v2;
+                                            let callback_return_w18 = callback_return_w3_rows[callback_return_w5]
+                                                .v3;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let callback_return_w3_element_built = (|| -> ::core::result::Result<
+                                                Option<perftest_flat::FixedCleanupRecord>,
+                                                String,
+                                            > {
+                                                let callback_return_w7: i32 = i32::from(
+                                                    ((callback_return_w10) as usize) != 0,
+                                                );
+                                                let callback_return_w10_pointer = if callback_return_w7
+                                                    == 1i32
+                                                {
+                                                    (callback_return_w10) as *mut perftest_flat::OwnedResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if callback_return_w7 == 1i32 {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w10_pointer,
+                                                    )?;
+                                                }
+                                                let callback_return_w11 = if callback_return_w7 == 1i32 {
+                                                    Some(
+                                                        char::from_u32(callback_return_w12)
+                                                            .ok_or("invalid Unicode scalar")?,
+                                                    )
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w16: i32 = i32::from(
+                                                    ((callback_return_w18) as usize) != 0,
+                                                );
+                                                let callback_return_w18_pointer = if (callback_return_w7
+                                                    == 1i32) && (callback_return_w16 == 1i32)
+                                                {
+                                                    (callback_return_w18) as *mut perftest_flat::OwnedResource
+                                                } else {
+                                                    ::core::ptr::null_mut()
+                                                };
+                                                if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    ::prebindgen_runtime::validate_pointer(
+                                                        callback_return_w18_pointer,
+                                                    )?;
+                                                }
+                                                if callback_return_w7 == 1i32 {
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + (::core::iter::once(
+                                                                    (callback_return_w10_pointer.addr()) as usize,
+                                                                ))
+                                                                    .count(),
+                                                        );
+                                                }
+                                                if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    __prebindgen_input_consumed
+                                                        .set(
+                                                            __prebindgen_input_consumed.get()
+                                                                + (::core::iter::once(
+                                                                    (callback_return_w18_pointer.addr()) as usize,
+                                                                ))
+                                                                    .count(),
+                                                        );
+                                                }
+                                                let callback_return_w9 = if callback_return_w7 == 1i32 {
+                                                    Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                #[allow(unused_mut, unused_assignments)]
+                                                let mut callback_return_w13: Option<&str> = None;
+                                                let callback_return_w17 = if (callback_return_w7 == 1i32)
+                                                    && (callback_return_w16 == 1i32)
+                                                {
+                                                    Some(unsafe { Box::from_raw(callback_return_w18_pointer) })
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w6 = if callback_return_w7 == 1i32 {
+                                                    let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
+                                                        .expect("active allocation");
+                                                    let callback_return_w11: char = ::core::convert::Into::into(
+                                                        callback_return_w11.expect("active value"),
+                                                    );
+                                                    callback_return_w13 = if callback_return_w7 == 1i32 {
+                                                        Some(
+                                                            std::str::from_utf8(unsafe {
+                                                                    __pb_read(callback_return_w14)?
+                                                                })
+                                                                .map_err(|_| "invalid UTF-8")?,
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w13: String = ::core::convert::Into::into(
+                                                        callback_return_w13.expect("active value"),
+                                                    );
+                                                    let callback_return_w15 = if (callback_return_w7 == 1i32)
+                                                        && (callback_return_w16 == 1i32)
+                                                    {
+                                                        let callback_return_w17: perftest_flat::OwnedResource = *callback_return_w17
+                                                            .expect("active allocation");
+                                                        Some(callback_return_w17)
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w8: perftest_flat::FixedCleanupRecord = perftest_flat::fixed_cleanup_new(
+                                                        callback_return_w9,
+                                                        callback_return_w11,
+                                                        callback_return_w13,
+                                                        callback_return_w15,
+                                                    );
+                                                    Some(callback_return_w8)
+                                                } else {
+                                                    None
+                                                };
+                                                let callback_return_w2 = callback_return_w6;
+                                                Ok(callback_return_w2)
+                                            })();
+                                            let element = callback_return_w3_element_built?;
+                                            #[allow(clippy::zst_offset)]
+                                            unsafe {
+                                                let initialized = callback_return_w2.len();
+                                                callback_return_w2
+                                                    .as_mut_ptr()
+                                                    .add(initialized)
+                                                    .write(element);
+                                                callback_return_w2.set_len(initialized + 1);
+                                            }
+                                        }
+                                    }
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w2_built = if callback_return_w1 == 1i32
+                                    {
+                                        Some(callback_return_w2)
+                                    } else {
+                                        None
+                                    };
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some({
+                                            let callback_return_w0 = if callback_return_w1 == 1i32 {
+                                                Some(callback_return_w2_built.expect("active input"))
+                                            } else {
+                                                None
+                                            };
+                                            callback_return_w0
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
+                                };
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
+                            }
+                        });
+                        result
+                            .unwrap_or_else(|error| {
+                                ::prebindgen_runtime::report_callback_error(
+                                    "perftest_callback_0605b38a2f053a56",
+                                    "()->Option < Vec < Option < perftest_flat :: FixedCleanupRecord > > >",
+                                    &error,
+                                );
+                                panic!("callback failed: {}", error)
+                            })
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let source_value = perftest_flat::cleanup_optional_call(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::result_error_message(ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_cleanup_optional_call_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -34971,6 +36173,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CallbackRowResource > () != 0,
     "flat object `CallbackRowResource` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CleanupGroup > () != 0,
+    "flat object `CleanupGroup` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CollectionBundle > () != 0,

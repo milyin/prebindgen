@@ -8,7 +8,8 @@ mod callback;
 #[cfg(test)]
 mod diagnostics_tests;
 pub use callback::{
-    CallbackReturnAllocations, FixedCallbackReturnAllocations, TransferredBox, TransferredOwner,
+    CallbackReturnAllocations, CallbackReturnCleanup, FixedCallbackReturnAllocations,
+    TransferredBox, TransferredOwner,
 };
 
 /// Runtime failure represented as a message for the adapter's error channel.

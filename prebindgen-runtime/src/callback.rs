@@ -28,7 +28,10 @@ impl<'a> CallbackReturnAllocations<'a> {
     /// # Safety
     /// Each non-null, aligned address must be a live `Box<T>` allocation whose
     /// ownership is being transferred by this callback. Repeated addresses must
-    /// refer to the same allocation and type.
+    /// refer to the same allocation and type. With [`Self::tracking`], entries in
+    /// the consumed prefix and their aliases may already have been acquired or
+    /// destroyed; all other entries must still own live allocations. Scan order
+    /// must match the decoder's consumption order.
     pub unsafe fn receive<T>(&mut self, pointer: *mut T) {
         if pointer.is_null() {
             return;
@@ -47,8 +50,10 @@ impl<'a> CallbackReturnAllocations<'a> {
     /// This does not free the foreign storage itself.
     ///
     /// # Safety
-    /// `pointer` must remain readable and hold a live `T` until this guard is
-    /// committed or dropped. No other owner may drop that same value.
+    /// Unconsumed entries must remain readable and hold a live `T` until this
+    /// guard is committed or dropped. In tracking mode, consumed entries and
+    /// their aliases may already have been moved or destroyed. Scan order must
+    /// match the decoder's consumption order; unconsumed values have no other owner.
     pub unsafe fn receive_inline<T>(&mut self, pointer: *const T) {
         unsafe fn release<T>(value: *mut ()) {
             drop(core::ptr::read(value as *const T));
@@ -92,6 +97,39 @@ impl Drop for CallbackReturnAllocations<'_> {
         if consumed != self.values.len() {
             release_unconsumed(&mut self.values, consumed);
         }
+    }
+}
+
+/// Defers a callback result's rollback scan until decoding fails or unwinds.
+///
+/// Generated C adapters retain stable foreign rows until this guard is dropped.
+/// The cleanup closure may allocate on failure, but is never run after commit.
+pub struct CallbackReturnCleanup<F: FnOnce() -> Result<()>> {
+    cleanup: Option<F>,
+}
+impl<F: FnOnce() -> Result<()>> CallbackReturnCleanup<F> {
+    /// Arm cleanup before acquiring any returned owners.
+    pub fn new(cleanup: F) -> Self {
+        Self {
+            cleanup: Some(cleanup),
+        }
+    }
+    /// Decoding succeeded; Rust values now own all transferred resources.
+    pub fn commit(&mut self) {
+        let _ = self.cleanup.take();
+    }
+}
+impl<F: FnOnce() -> Result<()>> Drop for CallbackReturnCleanup<F> {
+    fn drop(&mut self) {
+        if let Some(cleanup) = self.cleanup.take() {
+            failed_callback_cleanup(cleanup);
+        }
+    }
+}
+#[cold]
+fn failed_callback_cleanup(cleanup: impl FnOnce() -> Result<()>) {
+    if let Err(error) = boundary(cleanup) {
+        crate::report_callback_cleanup_error(&error);
     }
 }
 
@@ -294,6 +332,49 @@ mod tests {
         assert_eq!(drops.load(Ordering::SeqCst), 2);
     }
     #[test]
+    fn deferred_cleanup_skips_success_and_contains_cleanup_panics() {
+        let calls = core::cell::Cell::new(0);
+        let mut committed = CallbackReturnCleanup::new(|| {
+            calls.set(calls.get() + 1);
+            Ok(())
+        });
+        committed.commit();
+        drop(committed);
+        assert_eq!(calls.get(), 0);
+        let result = boundary::<()>(|| {
+            let _cleanup = CallbackReturnCleanup::new(|| -> Result<()> {
+                calls.set(calls.get() + 1);
+                panic!("cleanup failure")
+            });
+            panic!("decoding failure")
+        });
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 1);
+    }
+    #[test]
+    fn deferred_cleanup_reclaims_unread_owners_after_decoder_unwinds() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let rows = [
+            Box::into_raw(Box::new(Owner(drops.clone(), true))),
+            Box::into_raw(Box::new(Owner(drops.clone(), false))),
+        ];
+        let consumed = core::cell::Cell::new(0);
+        assert!(boundary::<()>(|| {
+            let _cleanup = CallbackReturnCleanup::new(|| {
+                let mut owners = CallbackReturnAllocations::tracking(&consumed);
+                for pointer in rows {
+                    unsafe {
+                        owners.receive(pointer);
+                    }
+                }
+                owners.check()
+            });
+            panic!("constructor failure")
+        })
+        .is_err());
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+    #[test]
     fn fixed_result_cleanup_deduplicates_and_continues_after_drop_failure() {
         let drops = Arc::new(AtomicUsize::new(0));
         let first = Box::into_raw(Box::new(Owner(drops.clone(), true)));
@@ -419,6 +500,52 @@ mod eager_tests {
             drop(guard);
             assert_eq!(drops.get(), 2);
         }
+    }
+    #[test]
+    fn deferred_rescan_accepts_consumed_dangling_pointers_and_their_aliases() {
+        let drops = Rc::new(Cell::new(0));
+        let consumed = Cell::new(0);
+        let a = Box::into_raw(Box::new(Owner(drops.clone())));
+        let b = Box::into_raw(Box::new(Owner(drops.clone())));
+        let rows = [a, a, b];
+        let cleanup = CallbackReturnCleanup::new(|| {
+            let mut owners = CallbackReturnAllocations::tracking(&consumed);
+            for pointer in rows {
+                unsafe {
+                    owners.receive(pointer);
+                }
+            }
+            owners.check()
+        });
+        consumed.set(1);
+        unsafe {
+            drop(Box::from_raw(a));
+        }
+        drop(cleanup);
+        assert_eq!(drops.get(), 2);
+    }
+    #[test]
+    fn deferred_rescan_skips_consumed_inline_storage() {
+        let drops = Rc::new(Cell::new(0));
+        let consumed = Cell::new(0);
+        let mut first = core::mem::ManuallyDrop::new(Owner(drops.clone()));
+        let second = core::mem::ManuallyDrop::new(Owner(drops.clone()));
+        let a = core::ptr::addr_of!(first).cast::<Owner>();
+        let b = core::ptr::addr_of!(second).cast::<Owner>();
+        let cleanup = CallbackReturnCleanup::new(|| {
+            let mut owners = CallbackReturnAllocations::tracking(&consumed);
+            unsafe {
+                owners.receive_inline(a);
+                owners.receive_inline(b);
+            }
+            owners.check()
+        });
+        consumed.set(1);
+        unsafe {
+            core::mem::ManuallyDrop::drop(&mut first);
+        }
+        drop(cleanup);
+        assert_eq!(drops.get(), 2);
     }
     #[test]
     fn stack_guards_release_only_unread_slots() {
