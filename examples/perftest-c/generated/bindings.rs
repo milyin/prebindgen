@@ -11306,7 +11306,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                         ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
@@ -11559,7 +11559,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                         ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
@@ -13599,7 +13599,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                             callback_return_w23 as *mut perftest_flat::OwnedResource,
                                         );
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
@@ -14175,7 +14175,7 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                         }
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {

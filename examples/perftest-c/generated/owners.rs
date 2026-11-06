@@ -1534,7 +1534,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                         ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
@@ -3015,7 +3015,7 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                         ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
-                                callback_return_owners.check()
+                                Ok(())
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
