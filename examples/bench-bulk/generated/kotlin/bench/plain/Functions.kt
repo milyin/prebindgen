@@ -224,6 +224,160 @@ try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.p
     } finally { returnCapture.release() }
 }
 
+public fun callbackOwnedRecords(callback: bench.plain.OwnedRecordsCallback, onError: bench.plain.JniErrorHandler<kotlin.collections.List<bench.plain.HandleRecord>> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.plain.HandleRecord> = run {
+    val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<bench.plain.HandleRecord>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { callback_return_w5.handle }, bench.plain.InputValidation.value { callback_return_w5.tag }) }, intArrayOf(2, 0)) } else null
+ bench.plain.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? bench.plain.HandleRecord)?.let { returnedValue1 -> (returnedValue1.handle as? bench.plain.NativeHandle)?.let { returnedValue3 -> returnedHandles.add(returnedValue3); returnedOwners.add(returnedValue3) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_callback_owned_records_d83c514a055c27ec(nativeArgument0, nativeArgument1) } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<bench.plain.HandleRecord>? = null
+ outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<bench.plain.HandleRecord>? = null
+        try {
+outputowners = bench.plain.CollectionOwners()
+outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            outputitem_g0_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row.c0))
+
+outputlist.add(bench.plain.HandleRecord(requireNotNull(outputitem_g0_0), output_row.c1))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputlist)
+        } catch (failure: Throwable) {
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_Long_2_c3e8677e51c52ca2
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun ownedBufferRecordsEcho(values: kotlin.collections.List<bench.plain.BufferRecord>, onError: bench.plain.JniErrorHandler<kotlin.collections.List<bench.plain.BufferRecord>> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<bench.plain.BufferRecord> = run {
+    val p0_w1_elements = try { if (true) values?.toList()?.let { p0_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { p0_w5.handle }, bench.plain.InputValidation.value { p0_w5.text }, bench.plain.InputValidation.value { p0_w5.bytes }) }, intArrayOf(2, 0, 0)) } else null } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handles = try { (p0_w1_elements?.handles.orEmpty()) } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.plain.withHandleLocks(handles) {
+        val ownership = LongArray(1) { -1L }
+        try { run { val nativeArgument0 = try { p0_w1_elements?.encode() } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_owned_buffer_records_echo_d2839a0a4452a203(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_elements?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (bench.plain.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; p0_w1_elements?.consume(__pb_consume); handles.forEach { if (it.address in taken) it.markConsumed() } } }
+    } } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<bench.plain.BufferRecord>? = null
+ outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<bench.plain.BufferRecord>? = null
+        try {
+outputowners = bench.plain.CollectionOwners()
+outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            outputitem_g0_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(output_row.c0))
+
+outputlist.add(bench.plain.BufferRecord(requireNotNull(outputitem_g0_0), output_row.c1 as String, output_row.c2 as ByteArray))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputlist)
+        } catch (failure: Throwable) {
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04
+        var outputitem_g0_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(output_row.c0) } } catch (cleanup: Throwable) { if (outputfailure == null) outputfailure = cleanup else if (outputfailure !== cleanup) outputfailure!!.addSuppressed(cleanup) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
 public fun nestedOwnedHandlesEcho(values: kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>>, onError: bench.plain.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>>> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>> = run {
     val p0_w1_elements = try { if (true) values?.toList()?.let { p0_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(p0_w1_snapshot.size) { p0_w1_index -> val p0_w5 = p0_w1_snapshot[p0_w1_index]
 val p0_w5_elements = if (true) p0_w5?.toList()?.let { p0_w5_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(p0_w5_snapshot.size) { p0_w5_index -> val p0_w9 = p0_w5_snapshot[p0_w5_index]

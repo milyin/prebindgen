@@ -16,6 +16,20 @@ rows0Index++
 }
 }
 }
+internal class Input_Range_50871c2a8b72df4b : BulkHandleWriter(BulkLayouts.r50871c2a8b72df4b.size) {
+override fun patchHandles() {
+var handleIndex = 0
+val rows0Start = long((0) + bench.bulk.BulkLayouts.r50871c2a8b72df4b.offsets[0]).toInt()
+if (rows0Start >= 0) {
+val rows0Count = long(((0) + bench.bulk.BulkLayouts.r50871c2a8b72df4b.offsets[0]) + 8).toInt()
+var rows0Index = 0
+while (rows0Index < rows0Count) {
+handleIndex = patchHandle((rows0Start + rows0Index * bench.bulk.BulkLayouts.r9cc3e9775849e9ab.size) + bench.bulk.BulkLayouts.r9cc3e9775849e9ab.offsets[0], handleIndex)
+rows0Index++
+}
+}
+}
+}
 internal class Input_Range_5e24e8a1a6fd1960 : BulkHandleWriter(BulkLayouts.r5e24e8a1a6fd1960.size) {
 override fun patchHandles() {
 var handleIndex = 0

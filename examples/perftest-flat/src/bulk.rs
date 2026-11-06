@@ -552,3 +552,8 @@ pub fn bulk_replay_count(which: usize) -> usize {
 pub fn bulk_replay_staged_rows(rows: Vec<BulkReplayRow>) -> usize {
     bulk_replay_rows(rows)
 }
+
+#[prebindgen]
+pub fn bulk_replay_object_rows(rows: Vec<BulkReplayRow>) -> usize {
+    bulk_replay_rows(rows)
+}
