@@ -114,16 +114,113 @@ and a 20 ms calibration target; its same-library control uses four processes:
 
 The large primitive-control increase reproduced: +15.5% at 512 rows and +10.5%
 at 4,096, compared with +1.1% and +2.4% in its focused same-library control.
-This is an unresolved timing regression for these benchmark binaries; it is
-not dismissed as ordinary run-to-run noise. Inspection of the primitive
+This is a real timing regression for the original benchmark binaries. The
+placement investigation below identifies a dominant cause; the original
+measurements are retained. Inspection of the primitive
 conversion boundary found the same 211 disassembled instructions after
 normalizing relocated addresses and Rust symbol hashes; the code and data
-addresses differ. Binary-layout effects are a possible explanation, not an
-established cause. No extra converter operations or allocations were found.
+addresses differ. That comparison alone did not explain the slowdown. No extra
+converter operations or allocations were found.
 
 The supported guarantee is less preparation storage on successful checked enum
 inputs. Latency results are case-specific; neither unchecked inputs nor unrelated
 functions are promised a speedup. The report retains all measured control changes.
+
+## Follow-up: native sum-function placement
+
+The dominant cause is the placement of the benchmark's native Rust summation
+function, `c_collection_flat::take_numbers`. This function performs the workload
+**after** generated C input conversion. Its machine instructions are unchanged,
+but the shorter generated code moves the function from library offset `0x27580`
+to `0x27030`. Its 28-byte vector-sum loop starts 64 bytes into the function:
+
+| Binary | Loop address in library | Offset within a 64-byte instruction-cache line |
+|---|---:|---:|
+| Before | `0x275c0` | 0 |
+| After | `0x27070` | 48 |
+
+In the second placement, the tight loop crosses a cache-line boundary. This
+observation suggested an explanation; the interventions below test causality.
+They identify a code-placement cost on this AMD EPYC 7713 VM, rather than an
+extra operation in the primitive converter. They do not identify the precise
+processor front-end mechanism or promise the same effect on another CPU.
+
+The original driver also capped primitive tests at 512 calls/batch for 512-row
+inputs: median measured duration was 0.116 ms despite a 20 ms target. The
+follow-up uses a fixed, reusable input pool and much longer batches. Primitive
+C rows are read-only and can be reused while every call still constructs,
+consumes and destroys its own final Rust vector. No handles are reused.
+
+Both frozen libraries are loaded into one process with local symbol scopes and
+receive the same C input addresses. A separate untimed allocator probe confirms
+one native allocation per 512-row call and the same destination address for
+both versions, in both single-array and streaming modes. Source-offset sweeps
+also reproduced the slowdown. Thus different input/allocator addresses and
+short batches do not explain it.
+
+To control placement directly, the isolated diagnostic copies the verified
+152-byte native sum function to executable pages at chosen offsets. It repairs
+its sole relative deallocation call, keeping that target fixed across the cloned
+variants, and redirects only the native sum call through the process's function
+pointer table. The generated converters, native data, instructions and allocation
+policy remain fixed. Separate function copies avoid requiring both versions to
+share a call target. Library files are never changed. This experiment is not
+part of generated bindings or the runtime library.
+
+Eight fresh processes/configuration use eight paired batches each, alternate
+library load and measurement order, and randomize configuration order. Each
+batch processes 33,554,432 elements (65,536 calls at 512 rows; 8,192 at 4,096),
+rather than increasing input storage with the number of calls. Both a reused
+single array and a fixed 2 MiB streaming pool are measured. The table below uses
+the streaming pool; all configurations and paired process scores are retained
+in `placement-summary.json`.
+
+| Native function offsets modulo 64, before / after | Rows | Before, ns/call | After, ns/call | Change |
+|---|---:|---:|---:|---:|
+| Original binaries: 0 / 48 | 512 | 189.72 | 222.65 | +17.4% |
+| Original binaries: 0 / 48 | 4,096 | 1288.57 | 1600.43 | +24.2% |
+| Both copied: 0 / 0 | 512 | 198.48 | 189.25 | -4.7% |
+| Both copied: 0 / 0 | 4,096 | 1284.90 | 1271.31 | -1.1% |
+| Both copied: 48 / 48 | 512 | 242.26 | 231.00 | -4.6% |
+| Both copied: 48 / 48 | 4,096 | 1590.41 | 1611.13 | +1.3% |
+| Reproduce placement: 0 / 48 | 512 | 194.66 | 226.72 | +16.5% |
+| Reproduce placement: 0 / 48 | 4,096 | 1255.27 | 1533.12 | +22.1% |
+| Swap placement: 48 / 0 | 512 | 235.09 | 186.17 | -20.8% |
+| Swap placement: 48 / 0 | 4,096 | 1514.85 | 1244.12 | -17.9% |
+
+Matching the function placement removes the slowdown: the 512-row case measures
+4.7% lower latency after the change with both copies aligned to offset zero.
+Recreating the original offset difference reproduces a 16.5% slowdown; swapping
+the offsets reverses it to a 20.8% improvement. The 4,096-row results show the
+same direction. Moving the same instructions is enough to produce and reverse
+the large timing gap. The extra enum support does not introduce primitive-row
+conversion work; the compiled program's layout changes its execution time.
+
+The original binaries still have their measured slowdown. This investigation
+explains a dominant cause, rather than erasing the result or guaranteeing that
+unrelated functions retain their timing after compilation. The confirmed enum
+preparation allocation savings stand independently. No generator padding,
+mandatory alignment policy or global compiler flags were added.
+
+Reproduce using the existing checked, counter-free frozen build directories:
+
+```sh
+python3 examples/bench-c-collections/enum-input-results/placement.py --before /tmp/before --after /tmp/after --output /tmp/placement --probe-allocations
+```
+
+`placement.py` verifies library hashes, discovers function/table offsets from ELF
+metadata, checks the exact supported native instruction shape and read-only
+relocation pages, then builds `placement.c`. It rejects unsupported code before
+loading it. This diagnostic currently requires Linux x86-64, 4 KiB pages, GNU
+libc for the optional allocator probe, and the verified Rust/LLVM sum-function
+shape. It needs `cc`, `nm`, `readelf`, `objdump` and `taskset`; use `--cpu` to select
+an available core. `--smoke` runs checksum/protocol checks without useful latency
+statistics. New compiler code shapes require a separate audit rather than a
+silent change to the relocation assumptions.
+
+The full run passed all checksum assertions. The smoke run and GNU libc address
+probe also pass; a deliberately modified native function is rejected during
+inspection before loading/execution. The committed summary omits raw logs.
 
 ## Environment and reproduction
 
