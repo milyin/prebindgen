@@ -141,7 +141,7 @@ typedef struct {
     perftest_owned_resource * v3;
 } perftest_callback_0605b38a2f053a56_callback_return_w3_row;
 typedef struct { perftest_callback_0605b38a2f053a56_callback_return_w3_row *data; size_t len; } perftest_callback_0605b38a2f053a56_callback_return_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int32_t v0;
     perftest_callback_0605b38a2f053a56_callback_return_w3_rows v1;
@@ -163,7 +163,7 @@ typedef struct {
     perftest_callback_return_resource * v0;
 } perftest_callback_0c7ae0f660edb387_callback_return_w1_row;
 typedef struct { perftest_callback_0c7ae0f660edb387_callback_return_w1_row *data; size_t len; } perftest_callback_0c7ae0f660edb387_callback_return_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Rust signature: ()->Vec < perftest_flat :: CallbackReturnResource >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_callback_0c7ae0f660edb387_callback_return_w1_rows (*run)(void *context);
@@ -207,12 +207,12 @@ typedef struct {
     perftest_owned_resource * v3;
 } perftest_callback_5b6f807c27356f4b_callback_return_w8_row;
 typedef struct { perftest_callback_5b6f807c27356f4b_callback_return_w8_row *data; size_t len; } perftest_callback_5b6f807c27356f4b_callback_return_w8_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_callback_5b6f807c27356f4b_callback_return_w8_rows v0;
 } perftest_callback_5b6f807c27356f4b_callback_return_w4_row;
 typedef struct { perftest_callback_5b6f807c27356f4b_callback_return_w4_row *data; size_t len; } perftest_callback_5b6f807c27356f4b_callback_return_w4_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
     perftest_callback_5b6f807c27356f4b_callback_return_w4_rows v1;
@@ -323,7 +323,7 @@ typedef struct {
     int64_t v0;
 } perftest_callback_aaca2bf4492ad16a_callback_return_w1_row;
 typedef struct { perftest_callback_aaca2bf4492ad16a_callback_return_w1_row *data; size_t len; } perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Rust signature: (Vec < i64 >)->Vec < i64 >. The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_callback_aaca2bf4492ad16a_callback_return_w1_rows (*run)(void *context, perftest_callback_aaca2bf4492ad16a_callback_arg_0_w0_rows arg0);
@@ -610,7 +610,7 @@ typedef struct {
     perftest_buffer v8;
 } perftest_buffer_rows_alternatives_p0_w1_row;
 typedef struct { perftest_buffer_rows_alternatives_p0_w1_row *data; size_t len; } perftest_buffer_rows_alternatives_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 9 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v2: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: row.v4: 0 = None, 1 = Some; other active flags are errors. */
@@ -624,7 +624,7 @@ typedef struct {
     perftest_buffer v2;
 } perftest_buffer_rows_borrowed_p1_w1_row;
 typedef struct { perftest_buffer_rows_borrowed_p1_w1_row *data; size_t len; } perftest_buffer_rows_borrowed_p1_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p1_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
@@ -638,7 +638,7 @@ typedef struct {
     perftest_buffer v5;
 } perftest_buffer_rows_enum_p0_w1_row;
 typedef struct { perftest_buffer_rows_enum_p0_w1_row *data; size_t len; } perftest_buffer_rows_enum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 6 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v2: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: row.v4: 0 = None, 1 = Some; other active flags are errors. */
@@ -652,7 +652,7 @@ typedef struct {
     perftest_buffer v2;
 } perftest_buffer_rows_optional_p0_w3_row;
 typedef struct { perftest_buffer_rows_optional_p0_w3_row *data; size_t len; } perftest_buffer_rows_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection rows: p0_w3 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option1: row.v0 == NULL means None; non-null means Some; only when option0 is present. */
@@ -668,7 +668,7 @@ typedef struct {
     perftest_buffer v4;
 } perftest_buffer_rows_optional_temporaries_p0_w1_row;
 typedef struct { perftest_buffer_rows_optional_temporaries_p0_w1_row *data; size_t len; } perftest_buffer_rows_optional_temporaries_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v1: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: row.v3: 0 = None, 1 = Some; other active flags are errors. */
@@ -682,7 +682,7 @@ typedef struct {
     perftest_buffer v2;
 } perftest_buffer_rows_sum_p0_w1_row;
 typedef struct { perftest_buffer_rows_sum_p0_w1_row *data; size_t len; } perftest_buffer_rows_sum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
@@ -694,7 +694,7 @@ typedef struct {
     perftest_buffer v2;
 } perftest_buffer_rows_temporaries_p0_w1_row;
 typedef struct { perftest_buffer_rows_temporaries_p0_w1_row *data; size_t len; } perftest_buffer_rows_temporaries_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 3 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
@@ -708,7 +708,7 @@ typedef struct {
     perftest_buffer v4;
 } perftest_buffer_rows_views_p0_w1_row;
 typedef struct { perftest_buffer_rows_views_p0_w1_row *data; size_t len; } perftest_buffer_rows_views_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v1: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: row.v3: 0 = None, 1 = Some; other active flags are errors. */
@@ -828,7 +828,7 @@ typedef struct {
     perftest_callback_a4bc3153f04892c6 v0;
 } perftest_callback_return_handler_many_p0_w1_row;
 typedef struct { perftest_callback_return_handler_many_p0_w1_row *data; size_t len; } perftest_callback_return_handler_many_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection handlers: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_callback_return_handler_many(perftest_callback_return_handler_many_p0_w1_rows p0_w1);
 /* Result: success field v0 is returned directly; NULL means failure. */
@@ -881,14 +881,14 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_alias_p0_w1_row;
 typedef struct { perftest_collection_alias_p0_w1_row *data; size_t len; } perftest_collection_alias_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_alias(perftest_collection_alias_p0_w1_rows p0_w1, const perftest_owned_resource * p1_w1);
 typedef struct {
     int64_t v0;
 } perftest_collection_borrow_p0_w1_row;
 typedef struct { perftest_collection_borrow_p0_w1_row *data; size_t len; } perftest_collection_borrow_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_borrow_ret_w0_row;
@@ -902,7 +902,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_borrow_each_p0_w1_row;
 typedef struct { perftest_collection_borrow_each_p0_w1_row *data; size_t len; } perftest_collection_borrow_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -921,7 +921,7 @@ typedef struct {
     perftest_buffer v0;
 } perftest_collection_bytes_p0_w1_row;
 typedef struct { perftest_collection_bytes_p0_w1_row *data; size_t len; } perftest_collection_bytes_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_vec_u8_672e72343c1b4cb4 v0;
 } perftest_collection_bytes_ret_w0_row;
@@ -935,7 +935,7 @@ typedef struct {
     perftest_buffer v0;
 } perftest_collection_bytes_each_p0_w1_row;
 typedef struct { perftest_collection_bytes_each_p0_w1_row *data; size_t len; } perftest_collection_bytes_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -944,14 +944,14 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_construct_all_p0_w1_row;
 typedef struct { perftest_collection_construct_all_p0_w1_row *data; size_t len; } perftest_collection_construct_all_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_construct_all(perftest_collection_construct_all_p0_w1_rows p0_w1);
 typedef struct {
     perftest_code v0;
 } perftest_collection_enum_p0_w1_row;
 typedef struct { perftest_collection_enum_p0_w1_row *data; size_t len; } perftest_collection_enum_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_code v0;
 } perftest_collection_enum_ret_w0_row;
@@ -965,7 +965,7 @@ typedef struct {
     perftest_code v0;
 } perftest_collection_enum_each_p0_w1_row;
 typedef struct { perftest_collection_enum_each_p0_w1_row *data; size_t len; } perftest_collection_enum_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -977,7 +977,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_handles_p0_w1_row;
 typedef struct { perftest_collection_handles_p0_w1_row *data; size_t len; } perftest_collection_handles_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_handles_ret_w2_row;
@@ -994,7 +994,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_handles_each_p0_w1_row;
 typedef struct { perftest_collection_handles_each_p0_w1_row *data; size_t len; } perftest_collection_handles_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
 /* Callback sequence return: ret_w2 reports the delivered element count; the visitor receives 1 fields per element. */
@@ -1006,7 +1006,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_i64_p0_w1_row;
 typedef struct { perftest_collection_i64_p0_w1_row *data; size_t len; } perftest_collection_i64_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_i64_ret_w0_row;
@@ -1020,7 +1020,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_i64_each_p0_w1_row;
 typedef struct { perftest_collection_i64_each_p0_w1_row *data; size_t len; } perftest_collection_i64_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -1029,21 +1029,21 @@ typedef struct {
     int64_t v0;
 } perftest_collection_input_array_p0_w1_row;
 typedef struct { perftest_collection_input_array_p0_w1_row *data; size_t len; } perftest_collection_input_array_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_array(perftest_collection_input_array_p0_w1_rows p0_w1);
 typedef struct {
     int64_t v0;
 } perftest_collection_input_custom_p0_w1_row;
 typedef struct { perftest_collection_input_custom_p0_w1_row *data; size_t len; } perftest_collection_input_custom_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_custom(perftest_collection_input_custom_p0_w1_rows p0_w1, uint8_t p1_w1);
 typedef struct {
     int64_t v0;
 } perftest_collection_input_optional_p0_w3_row;
 typedef struct { perftest_collection_input_optional_p0_w3_row *data; size_t len; } perftest_collection_input_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection values: p0_w3 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_optional(int32_t p0_w1, perftest_collection_input_optional_p0_w3_rows p0_w3);
@@ -1051,7 +1051,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_input_optional_array_p0_w3_row;
 typedef struct { perftest_collection_input_optional_array_p0_w3_row *data; size_t len; } perftest_collection_input_optional_array_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection values: p0_w3 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_optional_array(int32_t p0_w1, perftest_collection_input_optional_array_p0_w3_rows p0_w3);
@@ -1059,14 +1059,14 @@ typedef struct {
     int64_t v0;
 } perftest_collection_input_plain_p0_w1_row;
 typedef struct { perftest_collection_input_plain_p0_w1_row *data; size_t len; } perftest_collection_input_plain_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_plain(perftest_collection_input_plain_p0_w1_rows p0_w1, uint8_t p1_w1);
 typedef struct {
     int64_t v0;
 } perftest_collection_input_slice_p0_w1_row;
 typedef struct { perftest_collection_input_slice_p0_w1_row *data; size_t len; } perftest_collection_input_slice_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 int64_t perftest_collection_input_slice(perftest_collection_input_slice_p0_w1_rows p0_w1);
 typedef struct {
@@ -1099,12 +1099,12 @@ typedef struct {
     int64_t v0;
 } perftest_collection_nested_p0_w5_row;
 typedef struct { perftest_collection_nested_p0_w5_row *data; size_t len; } perftest_collection_nested_p0_w5_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_collection_nested_p0_w5_rows v0;
 } perftest_collection_nested_p0_w1_row;
 typedef struct { perftest_collection_nested_p0_w1_row *data; size_t len; } perftest_collection_nested_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_nested_ret_w4_row;
@@ -1126,12 +1126,12 @@ typedef struct {
     int64_t v0;
 } perftest_collection_nested_each_p0_w5_row;
 typedef struct { perftest_collection_nested_each_p0_w5_row *data; size_t len; } perftest_collection_nested_each_p0_w5_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_collection_nested_each_p0_w5_rows v0;
 } perftest_collection_nested_each_p0_w1_row;
 typedef struct { perftest_collection_nested_each_p0_w1_row *data; size_t len; } perftest_collection_nested_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_nested_each_ret_w4_row;
@@ -1148,12 +1148,12 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_nested_handles_p0_w5_row;
 typedef struct { perftest_collection_nested_handles_p0_w5_row *data; size_t len; } perftest_collection_nested_handles_p0_w5_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_collection_nested_handles_p0_w5_rows v0;
 } perftest_collection_nested_handles_p0_w1_row;
 typedef struct { perftest_collection_nested_handles_p0_w1_row *data; size_t len; } perftest_collection_nested_handles_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_nested_handles_ret_w4_row;
@@ -1175,12 +1175,12 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_nested_handles_each_p0_w5_row;
 typedef struct { perftest_collection_nested_handles_each_p0_w5_row *data; size_t len; } perftest_collection_nested_handles_each_p0_w5_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_collection_nested_handles_each_p0_w5_rows v0;
 } perftest_collection_nested_handles_each_p0_w1_row;
 typedef struct { perftest_collection_nested_handles_each_p0_w1_row *data; size_t len; } perftest_collection_nested_handles_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_nested_handles_each_ret_w4_row;
@@ -1207,7 +1207,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_optional_p0_w3_row;
 typedef struct { perftest_collection_optional_p0_w3_row *data; size_t len; } perftest_collection_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_optional_ret_w2_row;
@@ -1223,7 +1223,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_optional_each_p0_w3_row;
 typedef struct { perftest_collection_optional_each_p0_w3_row *data; size_t len; } perftest_collection_optional_each_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection values: p0_w3 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option1: return value: 0 = None, 1 = Some; other active flags are errors. */
@@ -1234,7 +1234,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_optional_handles_p0_w3_row;
 typedef struct { perftest_collection_optional_handles_p0_w3_row *data; size_t len; } perftest_collection_optional_handles_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_optional_handles_ret_w2_row;
@@ -1250,7 +1250,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_optional_handles_each_p0_w3_row;
 typedef struct { perftest_collection_optional_handles_each_p0_w3_row *data; size_t len; } perftest_collection_optional_handles_each_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection values: p0_w3 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option1: return value: 0 = None, 1 = Some; other active flags are errors. */
@@ -1262,7 +1262,7 @@ typedef struct {
     int64_t v1;
 } perftest_collection_optional_items_p0_w3_row;
 typedef struct { perftest_collection_optional_items_p0_w3_row *data; size_t len; } perftest_collection_optional_items_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int32_t v0;
     int64_t v1;
@@ -1282,7 +1282,7 @@ typedef struct {
     int64_t v1;
 } perftest_collection_optional_items_each_p0_w3_row;
 typedef struct { perftest_collection_optional_items_each_p0_w3_row *data; size_t len; } perftest_collection_optional_items_each_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection values: p0_w3 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option1: row.v0: 0 = None, 1 = Some; other active flags are errors; only when option0 is present. */
@@ -1296,7 +1296,7 @@ typedef struct {
     int64_t v1;
 } perftest_collection_options_p0_w1_row;
 typedef struct { perftest_collection_options_p0_w1_row *data; size_t len; } perftest_collection_options_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int32_t v0;
     int64_t v1;
@@ -1314,7 +1314,7 @@ typedef struct {
     int64_t v1;
 } perftest_collection_options_each_p0_w1_row;
 typedef struct { perftest_collection_options_each_p0_w1_row *data; size_t len; } perftest_collection_options_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v0: 0 = None, 1 = Some; other active flags are errors. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 2 fields per element. */
@@ -1325,7 +1325,7 @@ typedef struct {
     uint32_t v0;
 } perftest_collection_probe_p0_w1_row;
 typedef struct { perftest_collection_probe_p0_w1_row *data; size_t len; } perftest_collection_probe_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     uint32_t v0;
 } perftest_collection_probe_ret_w0_row;
@@ -1339,7 +1339,7 @@ typedef struct {
     const perftest_owned_resource * v0;
 } perftest_collection_resource_ids_p0_w1_row;
 typedef struct { perftest_collection_resource_ids_p0_w1_row *data; size_t len; } perftest_collection_resource_ids_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_resource_ids_ret_w0_row;
@@ -1354,7 +1354,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_result_p0_w1_row;
 typedef struct { perftest_collection_result_p0_w1_row *data; size_t len; } perftest_collection_result_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_result_ret_w2_row;
@@ -1370,7 +1370,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_result_each_p0_w1_row;
 typedef struct { perftest_collection_result_each_p0_w1_row *data; size_t len; } perftest_collection_result_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
 /* Callback sequence return: ret_w2 reports the delivered element count; the visitor receives 1 fields per element. */
@@ -1381,7 +1381,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_result_optional_p0_w1_row;
 typedef struct { perftest_collection_result_optional_p0_w1_row *data; size_t len; } perftest_collection_result_optional_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_result_optional_ret_w4_row;
@@ -1399,7 +1399,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_result_optional_each_p0_w1_row;
 typedef struct { perftest_collection_result_optional_each_p0_w1_row *data; size_t len; } perftest_collection_result_optional_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
 /* Option option0: *out0: 0 = None, 1 = Some; other active flags are errors. */
@@ -1412,7 +1412,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_slice_p0_w1_row;
 typedef struct { perftest_collection_slice_p0_w1_row *data; size_t len; } perftest_collection_slice_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     int64_t v0;
 } perftest_collection_slice_ret_w0_row;
@@ -1426,7 +1426,7 @@ typedef struct {
     int64_t v0;
 } perftest_collection_slice_each_p0_w1_row;
 typedef struct { perftest_collection_slice_each_p0_w1_row *data; size_t len; } perftest_collection_slice_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -1435,7 +1435,7 @@ typedef struct {
     perftest_buffer v0;
 } perftest_collection_text_p0_w1_row;
 typedef struct { perftest_collection_text_p0_w1_row *data; size_t len; } perftest_collection_text_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 typedef struct {
     perftest_owned_string v0;
 } perftest_collection_text_ret_w0_row;
@@ -1449,7 +1449,7 @@ typedef struct {
     perftest_buffer v0;
 } perftest_collection_text_each_p0_w1_row;
 typedef struct { perftest_collection_text_each_p0_w1_row *data; size_t len; } perftest_collection_text_each_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Callback sequence return: ret_w0 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
@@ -1458,7 +1458,7 @@ typedef struct {
     perftest_owned_resource * v0;
 } perftest_collection_try_construct_all_p0_w1_row;
 typedef struct { perftest_collection_try_construct_all_p0_w1_row *data; size_t len; } perftest_collection_try_construct_all_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
@@ -1483,7 +1483,7 @@ typedef struct {
     perftest_input_tag v4;
 } perftest_enum_inputs_alternatives_p0_w1_row;
 typedef struct { perftest_enum_inputs_alternatives_p0_w1_row *data; size_t len; } perftest_enum_inputs_alternatives_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 5 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v4 == -1 means None; other values encode Some and must be valid payloads. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
@@ -1495,7 +1495,7 @@ typedef struct {
     perftest_input_tag v1;
 } perftest_enum_inputs_borrow_p1_w1_row;
 typedef struct { perftest_enum_inputs_borrow_p1_w1_row *data; size_t len; } perftest_enum_inputs_borrow_p1_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p1_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option0: row.v1 == -1 means None; other values encode Some and must be valid payloads. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
@@ -1508,7 +1508,7 @@ typedef struct {
     perftest_input_tag v1;
 } perftest_enum_inputs_optional_p0_w3_row;
 typedef struct { perftest_enum_inputs_optional_p0_w3_row *data; size_t len; } perftest_enum_inputs_optional_p0_w3_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Collection rows: p0_w3 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Option option1: row.v0 == NULL means None; non-null means Some; only when option0 is present. */
@@ -1523,7 +1523,7 @@ typedef struct {
     perftest_input_tag v1;
 } perftest_enum_inputs_take_p0_w1_row;
 typedef struct { perftest_enum_inputs_take_p0_w1_row *data; size_t len; } perftest_enum_inputs_take_p0_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection rows: p0_w1 carries rows of 2 ABI fields; element-owned fields are released separately from row storage. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
@@ -1887,7 +1887,7 @@ typedef struct {
     uint8_t v3;
 } perftest_storage_put_slice_p1_w1_row;
 typedef struct { perftest_storage_put_slice_p1_w1_row *data; size_t len; } perftest_storage_put_slice_p1_w1_rows;
-/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. */
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
 /* Collection payloads: p1_w1 carries rows of 4 ABI fields; element-owned fields are released separately from row storage. */
 void perftest_storage_put_slice(perftest_storage * p0_w1, perftest_storage_put_slice_p1_w1_rows p1_w1);
 perftest_summary * perftest_storage_summary_handle(const perftest_storage * p0_w1);

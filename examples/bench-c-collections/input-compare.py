@@ -44,7 +44,7 @@ assert set(cases)<=set(['handles','records','wide','text','bytes','buffers','tex
 single={'control','fixed_move','fixed_borrow','callback_fixed'}
 cells=[(case,n) for case in cases if case not in single for n in sizes]
 cells += [(case,1) for case in cases if case in single]
-if a.smoke:cells=[('handles',0),('handles',8),('records',8),('wide',8),('text',8),('bytes',8),('buffers',8),('text_large',8),('bytes_large',8),('buffers_large',8),('numbers',8),('control',1),('fixed_move',1),('fixed_borrow',1),('callback_fixed',1),('callback_many',8),('tagged',8),('tagged_buffers',8)]
+if a.smoke:cells=[('handles',0),('handles',8),('records',8),('wide',8),('text',8),('bytes',8),('buffers',8),('text_large',8),('bytes_large',8),('buffers_large',8),('numbers',8),('control',1),('fixed_move',1),('fixed_borrow',1),('callback_fixed',1),('callback_many',8),('tagged',8),('tagged_buffers',8),('native',8),('native_mixed',8)]
 batches=a.batches or (10 if a.kind=='count' else 12)
 if a.smoke:batches=2
 runs=[];samples=[]
