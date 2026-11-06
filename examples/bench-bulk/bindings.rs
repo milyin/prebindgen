@@ -95,6 +95,10 @@ fn main() {
         } else {
             (owned_handles.callback_return(), nested_owners.callback_return())
         };
+        let nested_callback_input=Input::Sequence(Box::new(Input::Sequence(Box::new(if bulk {Input::Leaf.bulk()}else{Input::Leaf}))));
+        let nested_callback_input=if bulk {nested_callback_input.bulk()}else{nested_callback_input};
+        let nested_callback=fun!(callback_nested_owned_handles).expand_param("callback",callback!(impl Fn()->Vec<Vec<InputHandle>>).name("OwnedNestedCallback").expand_return(nested_callback_input));
+        let nested_callback=if bulk {nested_callback.expand_return(expand_return!(InputHandle).field_self_into().bulk())}else{nested_callback.callback_return()};
         let callback_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2])));
         let callback_input=if bulk {callback_input.bulk()} else {callback_input};
         let callback_records=fun!(callback_owned_records).expand_param("callback",callback!(impl Fn()->Vec<HandleRecord>).name("OwnedRecordsCallback").expand_return(callback_input));
@@ -129,6 +133,7 @@ fn main() {
                     .fun(callback_record)
                     .fun(buffers)
                     .fun(nested_owners)
+                    .fun(nested_callback)
                     .class(data_class!(Row))
                     .class(data_class!(WideRow))
                     .class(ptr_class!(RowReturnHandler))

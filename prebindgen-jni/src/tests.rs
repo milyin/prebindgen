@@ -43,6 +43,67 @@ fn bulk_resource_rows_replay_while_object_rows_decode_once() {
 }
 
 #[test]
+fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
+    let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
+    for bulk in [false, true] {
+        let handle = if bulk {
+            Input::Leaf.bulk()
+        } else {
+            Input::Leaf
+        };
+        let row = Input::Record(vec![
+            Input::Constructor {
+                function: "make".into(),
+                args: vec![handle],
+            },
+            Input::Leaf,
+        ]);
+        let input = Input::Sequence(Box::new(Input::Sequence(Box::new(row))));
+        let input = if bulk { input.bulk() } else { input };
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Row))
+                    .fun(fun!(nested).expand_param("values", input)),
+            )
+            .build()
+            .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert_eq!(generated.rust.contains("_prepared"), !bulk);
+        assert!(generated.rust.contains("accept_group"));
+        if bulk {
+            struct Checks(usize);
+            impl syn::visit_mut::VisitMut for Checks {
+                fn visit_expr_for_loop_mut(&mut self, node: &mut syn::ExprForLoop) {
+                    let body = quote::quote!(#node).to_string();
+                    if node.body.stmts.iter().any(|stmt| {
+                        matches!(stmt,
+                        syn::Stmt::Local(local) if matches!(&local.pat,
+                            syn::Pat::Ident(pat) if pat.ident == "checked"))
+                    }) {
+                        self.0 += 1;
+                        assert!(!body.contains("_built"));
+                        assert!(!body.contains("Box :: from_raw"));
+                        assert!(!body.contains("make ("));
+                        assert!(!body.contains("__prebindgen_input_aliases . access ("));
+                    }
+                    syn::visit_mut::visit_expr_for_loop_mut(self, node);
+                }
+            }
+            let mut checks = Checks(0);
+            syn::visit_mut::VisitMut::visit_file_mut(
+                &mut checks,
+                &mut syn::parse_file(&generated.rust).unwrap(),
+            );
+            assert_eq!(checks.0, 1);
+        }
+    }
+}
+
+#[test]
 fn gc_managed_is_opt_in_and_preserves_native_call_generation() {
     let generate_handle = |managed: bool| {
         let class = ptr_class!(Handle).name("Resource");

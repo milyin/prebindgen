@@ -17,6 +17,29 @@ rows0Index++
 }
 }
 }
+internal class Input_Range_3087f4c8799259e2 : BulkHandleWriter(BulkLayouts.r3087f4c8799259e2.size) {
+override fun patchHandles() {
+var handleIndex = 0
+val rows0Start = long((0) + io.prebindgen.covertest.BulkLayouts.r3087f4c8799259e2.offsets[0]).toInt()
+if (rows0Start >= 0) {
+val rows0Count = long(((0) + io.prebindgen.covertest.BulkLayouts.r3087f4c8799259e2.offsets[0]) + 8).toInt()
+var rows0Index = 0
+while (rows0Index < rows0Count) {
+val rows1Start = long((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r55fb9dde8a946716.size) + io.prebindgen.covertest.BulkLayouts.r55fb9dde8a946716.offsets[0]).toInt()
+if (rows1Start >= 0) {
+val rows1Count = long(((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r55fb9dde8a946716.size) + io.prebindgen.covertest.BulkLayouts.r55fb9dde8a946716.offsets[0]) + 8).toInt()
+var rows1Index = 0
+while (rows1Index < rows1Count) {
+handleIndex = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], handleIndex)
+handleIndex = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], handleIndex)
+rows1Index++
+}
+}
+rows0Index++
+}
+}
+}
+}
 internal class Input_Range_42eab86179b36709 : BulkHandleWriter(BulkLayouts.r42eab86179b36709.size) {
 override fun patchHandles() {
 var handleIndex = 0

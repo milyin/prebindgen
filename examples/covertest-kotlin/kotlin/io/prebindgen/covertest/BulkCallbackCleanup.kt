@@ -61,6 +61,23 @@ fun checkBulkCallbackCleanup() {
         check(owners.all { it.isClosed } && bulkDrops() == before + 3uL)
     }
 
+    // Ordinary inputs report their consumed prefix and leave unread owners to Kotlin.
+    val inputMethod=JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_nested_handles_input_")}.also {it.isAccessible=true}
+    for(mode in 0..3) {
+        val owners=List(2) {bulkHandleNew(500L+it)}
+        val before=bulkDrops()
+        val bytes=nestedCleanupFrame(owners,mode)
+        val consumed=if(mode==3)0 else 1
+        val ownership=LongArray(1) {Long.MIN_VALUE}
+        val packet=withHandleLocks(owners) {inputMethod.invokePacket(bytes,bytes.size,ownership)}
+        check((packet[0] as String).isNotEmpty() && ownership[0]==-1L-consumed)
+        owners.take(consumed).forEach {it.markConsumed()}
+        check(bulkDrops()==before+consumed.toULong())
+        owners.drop(consumed).forEachIndexed {i,h->check(bulkHandleValue(h)==500L+consumed+i)}
+        owners.forEach {it.close()}
+        check(bulkDrops()==before+2uL)
+    }
+
     val method = JNINative::class.java.declaredMethods.single {
         it.name.startsWith("call_bulk_cleanup_nested_callback_")
     }.also { it.isAccessible = true }
