@@ -41,6 +41,7 @@ use prebindgen_declarations::Codec;
 pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
+mod handles;
 mod names;
 mod parameter_names;
 pub use emission::JniContext;
@@ -50,7 +51,7 @@ type OutputPlan<W> =
     prebindgen_conversions::OutputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinInput,
+    JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
     KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
@@ -240,6 +241,7 @@ type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
 /// configuration callbacks run in registration order before declarations fill slots.
 #[derive(Default)]
 pub struct JniGenBuilder {
+    kotlin_input_preflight: Option<bool>,
     configure: Vec<Configure>,
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -416,6 +418,18 @@ impl JniGenBuilder {
         self.packages.push(package);
         self
     }
+    /// Choose where input-handle aliases are checked. Defaults to Kotlin:
+    /// generated wrappers reuse lock ordering for preflight and native decoding
+    /// omits duplicate alias history. False retains native alias validation for
+    /// consumers constructing JNI frames themselves. Pointer/length/value checks,
+    /// ownership receipts and Kotlin locking remain in both modes. Custom plans
+    /// without complete allocation/preparation metadata retain native checking.
+    /// Internal JNI names pair preflight-dependent entry points with their Kotlin
+    /// wrappers; regenerate and deploy both sides together.
+    pub fn set_kotlin_input_preflight(mut self, enabled: bool) -> Self {
+        self.kotlin_input_preflight = Some(enabled);
+        self
+    }
     /// Resolve declarations and return a complete Flat binding model for emission.
     ///
     /// Rejects ambiguous source selection, invalid or duplicate names, unsupported
@@ -465,6 +479,7 @@ impl JniGenBuilder {
         };
         validate_package(&self.prefix)?;
         flat.metadata = JniModule {
+            kotlin_input_preflight: self.kotlin_input_preflight.unwrap_or(true),
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
@@ -1489,6 +1504,17 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 .map(|c| (type_key(&t.ty), (&t.ty, c)))
         })
         .collect::<BTreeMap<_, _>>();
+    let mut allocation_ids = BTreeMap::new();
+    let mut claimed_ids = BTreeMap::new();
+    for (key, (ty, _)) in &classes {
+        let id = handles::allocation_type_id(ty);
+        if let Some(previous) = claimed_ids.insert(id, key.clone()) {
+            return Err(format!(
+                "allocation-type identity collision between `{previous}` and `{key}`"
+            ));
+        }
+        allocation_ids.insert(key.clone(), id);
+    }
     let mut functions = flat
         .functions
         .values()
@@ -1548,6 +1574,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     let mut row_captures = BTreeSet::new();
     let mut capacity_registered = false;
     for (ty, c) in classes.values() {
+        let id = allocation_ids[&type_key(ty)];
+        let handle_type = if id == i64::MIN {
+            "kotlin.Long.MIN_VALUE".into()
+        } else {
+            format!("{id}L")
+        };
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
@@ -1558,7 +1590,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             format!("{prefix}.NativeHandle(raw)")
         };
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {base} {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {base} {{\n    override val handleType: Long get() = {handle_type}\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -1567,6 +1599,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             Ok((
                 ty.clone(),
                 KotlinClass {
+                    handle_type: allocation_ids[ty],
+                    gc_managed: class.gc_managed,
                     name: class.fqn(),
                     drop_function: format!(
                         "{prefix}.JNINative.{}",
@@ -1661,12 +1695,13 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let throws = error.map_or_else(String::new, |error| error.throws(exception));
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
-        let context = JniContext {
+        let mut context = JniContext {
             environment: env.clone(),
             acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
             return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
+            input_alias_checks: true,
             output_committed: if native_return.is_some() {
                 if matches!(native_return, Some(returns::NativeReturn::Direct(_))) {
                     quote!(direct_output = __pb_direct_result; success_transferred = true;)
@@ -1678,11 +1713,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             },
         };
         let source = format_ident!("source_value");
-        let method = names.name(
-            "call",
-            &f.name.to_string(),
-            &[&names::path_identity(&f.path), &f.name.to_string()],
-        )?;
+
         let capture_name = if let Some(kind) = &native_return {
             let success = if matches!(kind, returns::NativeReturn::Callback) {
                 crate::group::result_packet_fields(logical).collect::<Vec<_>>()
@@ -1737,7 +1768,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             None
         };
-        let sym = symbol(prefix, &method);
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
         let binding_name = if error.is_some() {
@@ -1788,6 +1818,30 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             &mut kotlin_inputs,
             &parameter_package_roots,
         )?;
+        let handle_locks = if flat.metadata.kotlin_input_preflight
+            && inputs.iter().all(|input| handles::kotlin_preflight(input))
+        {
+            handles::HandleLocks::new(&mut kotlin_inputs, &kotlin_context)?
+        } else {
+            None
+        };
+        context.input_alias_checks =
+            handle_locks.is_none() || !inputs.iter().all(|input| handles::kotlin_preflight(input));
+        let delegated_callbacks = inputs.iter().any(|input| {
+            prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
+                matches!(&wire.kind,JniWire::Callback{callback} if callback.requires_preflight())
+            })
+        });
+        let delegated_handles = !context.input_alias_checks
+            && inputs.iter().any(|input| !input.rust.resources.is_empty());
+        let path_identity = names::path_identity(&f.path);
+        let function_identity = f.name.to_string();
+        let mut identity = vec![path_identity.as_str(), function_identity.as_str()];
+        if delegated_handles || delegated_callbacks {
+            identity.push("kotlin-handle-preflight-v1");
+        }
+        let method = names.name("call", &function_identity, &identity)?;
+        let sym = symbol(prefix, &method);
         for code in kotlin_inputs {
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
@@ -2022,7 +2076,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         ));
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
+   #[doc = "# Safety\nThe caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*) #native_signature_return {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
@@ -2100,7 +2154,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 } else {
                     "handles.forEach { if (it.address in taken) it.markConsumed() }".into()
                 };
-                format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ taken.add(handle.address); handle.markConsumed(); remaining-- }} else if (handle.address in taken) handle.markConsumed() }}; {consume}; {} }} }}", alias_cleanup)
+                if !context.input_alias_checks {
+                    format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ handle.markConsumed(); remaining-- }} }}; {consume} }} }}")
+                } else {
+                    format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ taken.add(handle.address); handle.markConsumed(); remaining-- }} else if (handle.address in taken) handle.markConsumed() }}; {consume}; {} }} }}", alias_cleanup)
+                }
             }
         } else {
             call
@@ -2120,7 +2178,9 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         if let Some(fold) = &fold {
             kt_params.push(fold.parameter.clone());
         }
-        let call = if locks.is_empty() && lock_groups.is_empty() {
+        let call = if let Some(plan) = &handle_locks {
+            plan.wrap(&call)
+        } else if locks.is_empty() && lock_groups.is_empty() {
             call
         } else if lock_groups.is_empty() && locks.len() <= 3 {
             use std::fmt::Write as _;

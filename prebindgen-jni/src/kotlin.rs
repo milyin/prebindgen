@@ -8,6 +8,10 @@ use prebindgen_flat::{InputConversion, OutputConversion};
 /// Configured names for a generated handle class and its native destructor.
 #[derive(Clone, Debug)]
 pub struct KotlinClass {
+    /// Stable allocation-class identifier used for one consistent lock order.
+    pub handle_type: i64,
+    /// Whether inputs of this class need a JVM reachability fence.
+    pub gc_managed: bool,
     /// Fully qualified Kotlin class name.
     pub name: String,
     /// Fully qualified native function accepting a raw handle address.
@@ -58,9 +62,31 @@ pub struct KotlinBinding {
     /// Inactive expression when an enclosing optional/alternative suppresses it.
     pub absent: String,
 }
+/// One handle input, or a homogeneous list of handle inputs, retained before JNI.
+/// Its allocation type and access mode let the wrapper reuse lock ordering for
+/// alias validation without inspecting the native payload a second time.
+#[derive(Clone, Debug)]
+pub struct KotlinHandleInput {
+    /// Source allocation type, resolved to its generated owning handle class.
+    pub ty: syn::Type,
+    /// Borrow or ownership requirement for every value in this source.
+    pub access: Access,
+    /// Kotlin expression selecting a nullable handle or a list of handles.
+    pub value: String,
+    /// True when value is a homogeneous list, false for an individual handle.
+    pub many: bool,
+    /// Native argument index for an individual handle; carrier lists use None.
+    pub argument: Option<usize>,
+    /// Original direct ownership update, replaced with the retained handle.
+    /// Carrier ownership remains in its original wire traversal order.
+    pub consumed: Option<String>,
+}
 /// Prepared Kotlin input code; the writer orders these operations across slots.
 #[derive(Default)]
 pub struct KotlinInput {
+    /// Complete handle inputs used for Kotlin alias preflight. None retains
+    /// native alias checks for custom input emission without this information.
+    pub handle_inputs: Option<Vec<KotlinHandleInput>>,
     /// Input snapshots evaluated once before locking; handle addresses stay deferred.
     pub setup: Vec<KotlinBinding>,
     /// Lists of handles to combine with individual locks.
@@ -282,6 +308,7 @@ pub(crate) fn input_leaves(
     let mut kt_params = Vec::new();
     let mut kt_args = Vec::new();
     let mut locks = Vec::new();
+    let mut handle_inputs = Vec::new();
     let mut prepared_arguments = Vec::new();
     let mut consumed = Vec::new();
     for w in wires {
@@ -352,6 +379,14 @@ pub(crate) fn input_leaves(
                 } else {
                     format!("if ({condition}) {value} else null")
                 });
+                handle_inputs.push(KotlinHandleInput {
+                    ty: handle.ty.clone(),
+                    access: handle.access,
+                    value: locks.last().unwrap().clone(),
+                    many: false,
+                    argument: Some(kt_args.len()),
+                    consumed: None,
+                });
                 if handle.access == Access::Move {
                     let consume = format!("__pb_consume({value})");
                     consumed.push(if condition == "true" {
@@ -359,6 +394,7 @@ pub(crate) fn input_leaves(
                     } else {
                         format!("if ({condition}) {consume}")
                     });
+                    handle_inputs.last_mut().unwrap().consumed = consumed.last().cloned();
                 }
                 (
                     format!(
@@ -404,6 +440,7 @@ pub(crate) fn input_leaves(
         kt_args.push(arg);
     }
     Ok(KotlinInput {
+        handle_inputs: Some(handle_inputs),
         prepared_arguments,
         parameters: kt_params,
         parameter_paths: (0..wires.len())
@@ -675,7 +712,10 @@ fn input_components_when(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    let mut out = KotlinInput::default();
+    let mut out = KotlinInput {
+        handle_inputs: Some(Vec::new()),
+        ..Default::default()
+    };
     for node in nodes {
         merge_input(&mut out, input_kotlin_when(node, context, active)?)?;
     }
@@ -689,9 +729,22 @@ fn merge_input(out: &mut KotlinInput, mut child: KotlinInput) -> Result<()> {
     )?;
     out.parameters.extend(child.parameters);
     out.parameter_paths.extend(child.parameter_paths);
+    let argument_offset = out.arguments.len();
+    if let Some(handles) = &mut child.handle_inputs {
+        for handle in handles {
+            if let Some(index) = &mut handle.argument {
+                *index += argument_offset;
+            }
+        }
+    }
     out.arguments.extend(child.arguments);
     out.prepared_arguments.extend(child.prepared_arguments);
     out.setup.extend(child.setup);
+    if let (Some(out), Some(child)) = (&mut out.handle_inputs, child.handle_inputs) {
+        out.extend(child);
+    } else {
+        out.handle_inputs = None;
+    }
     out.lock_groups.extend(child.lock_groups);
     out.locks.extend(child.locks);
     out.consumed.extend(child.consumed);
@@ -880,6 +933,8 @@ mod tests {
             KotlinClass {
                 name: "example.Counter".into(),
                 drop_function: "example.Native.release".into(),
+                handle_type: 0,
+                gc_managed: false,
             },
         )]);
         let context = KotlinContext {

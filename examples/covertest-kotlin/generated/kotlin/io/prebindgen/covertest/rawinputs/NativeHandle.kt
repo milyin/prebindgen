@@ -1,0 +1,253 @@
+package io.prebindgen.covertest.rawinputs
+
+/** Owns one boxed Rust allocation. The low bit records close or consumption. */
+public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseable {
+    @Volatile internal var raw: Long = raw
+        private set
+    internal abstract val handleType: Long
+    internal val address: Long = raw
+    public val isClosed: Boolean get() = raw == 0L || raw and 1L != 0L
+    internal fun markConsumed() { raw = raw or 1L }
+    protected abstract fun freeNative(raw: Long)
+    final override fun close() = synchronized(this) {
+        if (!isClosed) {
+            val owned = raw
+            markConsumed()
+            freeNative(owned)
+        }
+    }
+}
+
+internal class HandleValidationFailure(message: String) : IllegalStateException(message)
+
+// Monitors serialize threads and allow same-thread reentry. Callers
+// must respect Rust borrows and must not close or move a value still in use.
+internal inline fun <R> withHandleLocks(handle: NativeHandle?, body: () -> R): R =
+    if (handle == null) body() else synchronized(handle) { body() }
+
+internal inline fun <R> withHandleLocks(a: NativeHandle?, b: NativeHandle?, body: () -> R): R {
+    if (a == null) return withHandleLocks(b, body)
+    if (b == null) return withHandleLocks(a, body)
+    val first = if (compareHandleOrder(a, b) <= 0) a else b
+    val second = if (first === a) b else a
+    return synchronized(first) { synchronized(second) { body() } }
+}
+
+internal inline fun <R> withHandleLocks(a: NativeHandle?, b: NativeHandle?, c: NativeHandle?, body: () -> R): R {
+    if (a == null) return withHandleLocks(b, c, body)
+    if (b == null) return withHandleLocks(a, c, body)
+    if (c == null) return withHandleLocks(a, b, body)
+    var x = a
+    var y = b
+    var z = c
+    if (compareHandleOrder(x, y) > 0) { val t = x; x = y; y = t }
+    if (compareHandleOrder(y, z) > 0) { val t = y; y = z; z = t }
+    if (compareHandleOrder(x, y) > 0) { val t = x; x = y; y = t }
+    return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
+}
+
+internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R {
+    when (handles.size) {
+        0 -> return body()
+        1 -> return withHandleLocks(handles[0], body)
+        2 -> return withHandleLocks(handles[0], handles[1], body)
+        3 -> return withHandleLocks(handles[0], handles[1], handles[2], body)
+    }
+    val ordered = handles.sortedWith(handleOrder)
+    fun acquire(index: Int): R = if (index == ordered.size) body()
+        else synchronized(ordered[index]) { acquire(index + 1) }
+    return acquire(0)
+}
+
+// Owning wrappers for different live allocations have different addresses.
+// Reject stale/reused or forged duplicate owners on the rare comparator tie,
+// rather than allowing argument order to choose inconsistent monitor ordering.
+internal fun compareHandleAddress(a: NativeHandle, b: NativeHandle): Int {
+    val result = a.address.compareTo(b.address)
+    if (result == 0 && a !== b) throw HandleValidationFailure(
+        if (a.isClosed || b.isClosed) "closed or consumed handle" else "duplicate native handle owners")
+    return result
+}
+internal fun compareHandleOrder(a: NativeHandle, b: NativeHandle): Int {
+    val type = a.handleType.compareTo(b.handleType)
+    return if (type != 0) type else compareHandleAddress(a, b)
+}
+private val handleOrder = Comparator<NativeHandle> { a, b -> compareHandleOrder(a, b) }
+private val handleAddressOrder = Comparator<NativeHandle> { a, b -> compareHandleAddress(a, b) }
+
+internal fun prepareInputHandles(handles: List<NativeHandle>, exclusive: Boolean): List<NativeHandle> {
+    val ordered = if (handles.size <= 1) handles else handles.sortedWith(handleAddressOrder)
+    if (exclusive) for (i in 1 until ordered.size) {
+        if (ordered[i - 1].address == ordered[i].address)
+            throw HandleValidationFailure("conflicting input aliases")
+    }
+    return ordered
+}
+
+// Each occurrence is sorted exactly once. Separate shared/exclusive runs avoid
+// per-element access objects and linear exact rescans for legal shared repeats.
+internal fun prepareMixedInputHandles(shared: List<NativeHandle>, exclusive: List<NativeHandle>): List<NativeHandle> {
+    if (shared.isEmpty()) return prepareInputHandles(exclusive, true)
+    if (exclusive.isEmpty()) return prepareInputHandles(shared, false)
+    val reads = prepareInputHandles(shared, false)
+    val writes = prepareInputHandles(exclusive, true)
+    val ordered = ArrayList<NativeHandle>(reads.size + writes.size)
+    var r = 0; var w = 0
+    while (r < reads.size && w < writes.size) {
+        val a = reads[r]; val b = writes[w]
+        if (a.address == b.address) throw HandleValidationFailure("conflicting input aliases")
+        if (a.address < b.address) { ordered.add(a); r++ } else { ordered.add(b); w++ }
+    }
+    while (r < reads.size) ordered.add(reads[r++])
+    while (w < writes.size) ordered.add(writes[w++])
+    return ordered
+}
+
+internal fun <R> withOrderedHandleLocks(ordered: List<NativeHandle>, body: () -> R): R {
+    fun acquire(index: Int): R = if (index == ordered.size) body()
+        else synchronized(ordered[index]) { acquire(index + 1) }
+    return acquire(0)
+}
+internal fun <R> withInputHandleLocks(handles: List<NativeHandle>, exclusive: Boolean, body: () -> R): R {
+    if (handles.size <= 3) {
+        if (exclusive) for (i in handles.indices) for (j in i + 1 until handles.size) {
+            if (handles[i].address == handles[j].address) throw HandleValidationFailure("conflicting input aliases")
+        }
+        return when (handles.size) {
+            0 -> body()
+            1 -> withHandleLocks(handles[0], body)
+            2 -> withHandleLocks(handles[0], handles[1], body)
+            else -> withHandleLocks(handles[0], handles[1], handles[2], body)
+        }
+    }
+    return withOrderedHandleLocks(prepareInputHandles(handles, exclusive), body)
+}
+internal fun <R> withMixedInputLocks(shared: List<NativeHandle>, exclusive: List<NativeHandle>, body: () -> R): R =
+    withOrderedHandleLocks(prepareMixedInputHandles(shared, exclusive), body)
+
+/** Distinguish generated wire validation from exceptions in user list implementations. */
+internal object InputValidation {
+    inline fun <T> value(body: () -> T): T = try { body() }
+        catch (failure: IllegalArgumentException) { throw HandleValidationFailure(failure.message ?: "invalid input") }
+    inline fun require(value: Boolean, message: () -> String) {
+        if (!value) throw HandleValidationFailure(message())
+    }
+}
+
+/** One-call input preparation, local to one generated invocation.
+ * encode encodes under the handle locks; the generated invocation calls it once.
+ * The cached references remain live for ownership-receipt handling afterwards.
+ */
+internal interface PreparedInput {
+    val handles: List<NativeHandle>
+    val owners: List<NativeHandle>
+    fun handleGroup(index: Int): List<NativeHandle> = if (index == 0) handles else error("invalid handle group")
+    fun encode(): Any
+    fun consume(visit: (NativeHandle) -> Unit) { for (owner in owners) visit(owner) }
+}
+
+/** The row arrays are the actual JNI carrier, rather than per-row callback objects. */
+internal class InputRows(private val rows: Array<Any?>, private val handleKinds: IntArray?,
+                         private val groupCount: Int = 1, private val columnGroups: Array<IntArray>? = null) : PreparedInput {
+    private var savedHandles: ArrayList<NativeHandle>? = null
+    private var savedOwners: ArrayList<NativeHandle>? = null
+    private var savedGroups: Array<ArrayList<NativeHandle>?>? = null
+    override val handles: List<NativeHandle> get() = if (groupCount == 1) savedHandles ?: emptyList()
+        else (0 until groupCount).flatMap { handleGroup(it) }
+    override fun handleGroup(index: Int): List<NativeHandle> =
+        if (groupCount == 1) savedHandles ?: emptyList() else savedGroups?.get(index) ?: emptyList()
+    override val owners: List<NativeHandle> get() = savedOwners ?: emptyList()
+    private fun add(handle: NativeHandle, group: Int) {
+        if (groupCount == 1) {
+            if (savedHandles == null) savedHandles = ArrayList()
+            savedHandles!!.add(handle)
+        } else {
+            if (savedGroups == null) savedGroups = arrayOfNulls(groupCount)
+            if (savedGroups!![group] == null) savedGroups!![group] = ArrayList()
+            savedGroups!![group]!!.add(handle)
+        }
+    }
+    init {
+        for (raw in rows) {
+            val row = raw as Array<*>
+            for (column in row.indices) {
+                val value = row[column]
+                if (value is NativeHandle) {
+                    add(value, columnGroups?.get(column)?.get(0) ?: 0)
+                    if (handleKinds?.get(column) == 2) {
+                        if (savedOwners == null) savedOwners = ArrayList()
+                        savedOwners!!.add(value)
+                    }
+                } else if (value is PreparedInput) {
+                    val mapping = columnGroups?.get(column)
+                    if (mapping == null) {
+                        for (handle in value.handleGroup(0)) add(handle, 0)
+                    } else for (source in mapping.indices) {
+                        for (handle in value.handleGroup(source)) add(handle, mapping[source])
+                    }
+                    if (value.owners.isNotEmpty()) {
+                        if (savedOwners == null) savedOwners = ArrayList()
+                        savedOwners!!.addAll(value.owners)
+                    }
+                }
+            }
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    override fun encode(): Array<Any?> {
+        for (raw in rows) {
+            val row = raw as Array<Any?>
+            for (column in row.indices) {
+                val value = row[column]
+                if ((handleKinds?.get(column) ?: 0) != 0) {
+                    if (value is NativeHandle) row[column] = value.raw
+                    else if (value == null) row[column] = 0L
+                } else if (value is PreparedInput) row[column] = value.encode()
+            }
+        }
+        return rows
+    }
+}
+
+
+/** Retain only constructed owners; native fields keep the unread suffix alive.
+ * Registration and failure scanning follow the same schema order, including
+ * nested lists and active optional fields. No per-row cleanup objects are needed.
+ */
+internal class CollectionOwners {
+    private var owners: ArrayList<NativeHandle>? = null
+    private var scanned = 0
+    var complete = false
+    fun <T : NativeHandle> own(owner: T): T {
+        try {
+            if (owners == null) owners = ArrayList()
+            owners!!.add(owner)
+        } catch (failure: Throwable) {
+            // Registration failed: the native field must remain the sole owner.
+            owner.markConsumed()
+            throw failure
+        }
+        return owner
+    }
+    /** Transfer a successfully folded row to the caller and reuse the journal. */
+    fun release() {
+        owners?.clear()
+        scanned = 0
+        complete = false
+    }
+    fun unread(): Boolean {
+        if (scanned >= (owners?.size ?: 0)) return true
+        scanned++
+        return false
+    }
+    fun close(initial: Throwable?): Throwable? {
+        var failure = initial
+        for (owner in owners.orEmpty()) {
+            try { owner.close() } catch (cleanup: Throwable) {
+                if (failure == null) failure = cleanup
+                else if (failure !== cleanup) failure.addSuppressed(cleanup)
+            }
+        }
+        return failure
+    }
+}

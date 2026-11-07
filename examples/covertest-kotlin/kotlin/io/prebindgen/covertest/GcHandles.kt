@@ -77,10 +77,10 @@ fun checkGcHandles() {
     val duplicate = gcResourceNew(4uL, 46uL)
     try { gcResourcePair(duplicate, duplicate); error("duplicate move accepted") }
     catch (_: IllegalArgumentException) { }
-    // Ordinary arguments may consume a validated prefix before a later alias
-    // fails. Its receipt must cancel cleanup on this shared wrapper exactly once.
-    check(duplicate.isClosed && gcResourceDrops(4uL) == 1uL)
+    // Preflight rejects duplicate moves before native code consumes either one.
+    check(!duplicate.isClosed && gcResourceDrops(4uL) == 0uL)
     duplicate.close()
+    check(gcResourceDrops(4uL) == 1uL)
 
     val shared = gcResourceNew(15uL, 4uL)
     check(gcResourceThree(shared, shared, shared) == 12uL)

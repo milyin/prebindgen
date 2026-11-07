@@ -106,6 +106,26 @@ in source. Non-null closed handles and native conversion failures retain their
 existing binding-error routing. The internal JNI reference carriers remain
 nullable independently of these public declarations.
 
+Handle inputs use one generated Kotlin preflight before entering Rust. The
+wrapper snapshots handle references, groups them by their owning Rust allocation
+type, and sorts each group by address for monitor acquisition. Types have stable,
+collision-checked identifiers, so every wrapper takes type groups in the same
+order. Shared-only groups need no alias check; groups containing moves or mutable
+borrows reject overlapping accesses using the sorted addresses. Repeated shared
+access to the same wrapper remains valid. Kotlin then encodes exactly those
+snapshots under the locks. Native pointer, length and value validation remains.
+Ordinary arguments and callback return values use the same policy, including
+nested collections. Conflict rejection before JNI leaves ordinary input owners
+with their caller; a later conversion failure may consume a prefix.
+
+`JniGen::builder().set_kotlin_input_preflight(false)` keeps alias validation in
+Rust for consumers constructing internal JNI frames directly. Custom conversion
+plans whose allocation identity or Kotlin preparation cannot be proved complete
+also retain native validation. Internal JNI names distinguish entry points that
+require Kotlin preflight, so regenerate and deploy the Kotlin and native bindings
+together. This does not remove monitor locking or add protection for same-thread
+callback reentry that violates an active Rust borrow.
+
 `ptr_class!(Query).gc_managed()` opts that handle class into automatic cleanup
 of abandoned wrappers through `java.lang.ref.Cleaner` (Java 9 or newer, or a
 runtime providing that API). Explicit `close()` still releases immediately;
@@ -531,11 +551,12 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional plans describe resource access using emitted Rust conditions.
-Compiled C/JNI inputs validate every value before using it. Shared-only calls
-need no alias bookkeeping. Small fixed sets compare stack entries; larger fixed
-sets use a stack hash table. Resource-bearing collection rows are decoded once,
-then their addresses are checked together against a sorted native history before
-acquisition and construction. Addresses remain recorded
+Compiled C/JNI inputs validate every value before using it. Native alias
+validation uses no bookkeeping for shared-only calls. Small fixed sets compare
+stack entries; larger fixed sets use a stack hash table. Resource-bearing
+collection rows are decoded once, then their addresses are checked together
+against a sorted native history before acquisition and construction. JNI plans
+covered by Kotlin preflight omit this native history and its validation staging. Addresses remain recorded
 even when constructors move or drop the original object. `CheckAliases` collects
 this access profile when generating the wrapper. Manually staged conversions
 retain their deferred checks; mixing deferred resource plans with compiled eager
@@ -691,9 +712,19 @@ Low-level adapters constructing `prebindgen_conversions::Resource` use
 `records_consumption: false` for compiler-managed ownership counts. Set it to
 `true` when acquisition updates `__prebindgen_input_consumed` after each successful
 move, so failures between transfers preserve the exact consumed prefix. This is
-independent of `registered`, which tracks alias checking. Existing external
-adapter struct literals need the new field; ordinary binding declarations do not
-change.
+independent of `registered`, which tracks alias checking. `allocation_type`
+identifies an independently owned allocation class; use `None` for unknown
+identities or interior pointers that may overlap another class. JNI delegates
+validation to Kotlin only when these identities and access modes match its
+prepared handles. External adapter struct literals must supply this metadata;
+ordinary binding declarations do not change.
+
+Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
+gc_managed}`, `KotlinInput::handle_inputs`, `JniModule::kotlin_input_preflight`
+and `JniContext::input_alias_checks`. `KotlinInput::default()` leaves handle
+preflight metadata absent, preserving native checks. Keep
+`JniContext::input_alias_checks` true for native frames without matching Kotlin
+preflight. Normal binding declarations obtain all these settings from the builder.
 
 Consuming C Result calls return an ownership count through `size_t *ownership`.
 The count identifies the consumed prefix of active owned wire values in argument,

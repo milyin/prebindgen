@@ -596,6 +596,7 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
     let code = validate_resources(&[
         Resource {
+            allocation_type: None,
             registered: false,
             records_consumption: false,
             identity: crate::ResourceIdentity::Single(quote!(left)),
@@ -603,6 +604,7 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             active: quote!(enabled && count > 0),
         },
         Resource {
+            allocation_type: None,
             registered: false,
             records_consumption: false,
             identity: crate::ResourceIdentity::Single(quote!(
@@ -625,6 +627,7 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             let name = quote::format_ident!("pair_{i}_{j}");
             let pair = validate_resources(&[
                 Resource {
+                    allocation_type: None,
                     registered: false,
                     records_consumption: false,
                     identity: crate::ResourceIdentity::Single(quote!(left)),
@@ -632,6 +635,7 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
                     active: quote!(true),
                 },
                 Resource {
+                    allocation_type: None,
                     registered: false,
                     records_consumption: false,
                     identity: crate::ResourceIdentity::Single(quote!(right)),
@@ -904,6 +908,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
 #[test]
 fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
     let single = |access| Resource {
+        allocation_type: None,
         registered: false,
         records_consumption: false,
         identity: ResourceIdentity::Single(quote!(left)),
@@ -911,6 +916,7 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
         active: quote!(enabled),
     };
     let many = |access| Resource {
+        allocation_type: None,
         registered: false,
         records_consumption: false,
         // Dynamic-set scratch storage must not shadow this validation local.
@@ -1053,6 +1059,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                     .include_parameter(
                         &(),
                         &[Resource {
+                            allocation_type: None,
                             registered: false,
                             records_consumption: false,
                             identity: ResourceIdentity::Single(
@@ -1109,6 +1116,7 @@ fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
                 .include_parameter(
                     &(),
                     &[Resource {
+                        allocation_type: None,
                         registered: false,
                         records_consumption: false,
                         identity: ResourceIdentity::Single(quote!(__prebindgen_resources[#index])),
@@ -1193,6 +1201,7 @@ fn eager_resource_conversions_reject_deferred_resource_neighbors() {
     for (index, parameter) in function.params.iter_mut().enumerate() {
         let mut plan = Input(index).plan();
         plan.resources.push(Resource {
+            allocation_type: None,
             registered: index == 0,
             records_consumption: false,
             identity: ResourceIdentity::Single(quote!(8usize)),

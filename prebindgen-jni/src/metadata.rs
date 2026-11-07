@@ -46,6 +46,9 @@ impl prebindgen_flat::Schema for JniSchema {
 /// Settings shared by the generated Kotlin/JNI module.
 #[derive(Clone, Debug, Default)]
 pub struct JniModule {
+    /// Validate handle aliases in generated Kotlin before JNI. Disable for
+    /// native callers that supply their own frames and need native validation.
+    pub kotlin_input_preflight: bool,
     /// Root Kotlin package containing JNINative and shared infrastructure.
     pub package: String,
     /// Kotlin initialization statements in JNINative.

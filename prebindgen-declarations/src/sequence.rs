@@ -303,6 +303,7 @@ pub(crate) fn input<C: Codec>(
         .resources
         .into_iter()
         .map(|resource| Resource {
+            allocation_type: resource.allocation_type,
             registered: true,
             records_consumption: true,
             // Runtime addresses are checked while each row is alive. This descriptor

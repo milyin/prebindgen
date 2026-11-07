@@ -82,7 +82,7 @@ private fun checkLargeAliasHistory() {
 private fun checkBulkReplayRaw() {
     val root=BulkLayouts.r55fb9dde8a946716
     val row=BulkLayouts.r01496d6ef6ccdfde
-    val method=JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_replay_rows_")}
+    val method=io.prebindgen.covertest.rawinputs.JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_replay_rows_")}
     val captureType=method.parameterTypes.last()
     val companion=captureType.getField("Companion").get(null)
     for(mode in 0..3) {
@@ -106,7 +106,7 @@ private fun checkBulkReplayRaw() {
         val capture=companion.javaClass.getMethod("acquire").invoke(companion)
         val ownership=LongArray(1) {Long.MIN_VALUE}
         try {
-            withHandleLocks(handles) {method.invoke(JNINative,frame.array(),frame.capacity(),ownership,capture)}
+            withHandleLocks(handles) {method.invoke(io.prebindgen.covertest.rawinputs.JNINative,frame.array(),frame.capacity(),ownership,capture)}
             check(captureType.getMethod("getStatus").invoke(capture)==2)
             val message=captureType.getMethod("getMessage").invoke(capture) as String
             check(message.isNotEmpty())

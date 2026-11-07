@@ -148,6 +148,10 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         statements,
         argument: quote!(#var),
         resources: vec![Resource {
+            allocation_type: match storage {
+                Storage::Wrapped(_) => Some(target.clone()),
+                Storage::Direct => None,
+            },
             registered: false,
             records_consumption: false,
             identity: crate::ResourceIdentity::Single(quote!(#pointer.addr())),

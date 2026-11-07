@@ -82,30 +82,40 @@ internal class BulkReader(val array: ByteArray) {
 }
 
 /** Pack once; generated schema walks resolve native addresses under the locks. */
-internal abstract class BulkHandleWriter(initial: Int) : BulkWriter(initial), PreparedInput {
+internal abstract class BulkHandleWriter(initial: Int, private val groupCount: Int = 1) : BulkWriter(initial), PreparedInput {
     private var savedHandles: ArrayList<NativeHandle>? = null
     private var savedOwners: ArrayList<NativeHandle>? = null
-    override val handles: List<NativeHandle> get() = savedHandles ?: emptyList()
+    private var savedGroups: Array<ArrayList<NativeHandle>?>? = null
+    override val handles: List<NativeHandle> get() = if (groupCount == 1) savedHandles ?: emptyList()
+        else (0 until groupCount).flatMap { handleGroup(it) }
+    override fun handleGroup(index: Int): List<NativeHandle> =
+        if (groupCount == 1) savedHandles ?: emptyList() else savedGroups?.get(index) ?: emptyList()
     override val owners: List<NativeHandle> get() = savedOwners ?: emptyList()
-    fun handle(at: Int, value: NativeHandle?, owned: Boolean) {
+    fun handle(at: Int, value: NativeHandle?, owned: Boolean, group: Int = 0) {
         // A nonzero placeholder distinguishes a retained wrapper from a null slot.
         long(at, if (value == null) 0L else 1L)
         if (value == null) return
-        if (savedHandles == null) savedHandles = ArrayList()
-        savedHandles!!.add(value)
+        if (groupCount == 1) {
+            if (savedHandles == null) savedHandles = ArrayList()
+            savedHandles!!.add(value)
+        } else {
+            if (savedGroups == null) savedGroups = arrayOfNulls(groupCount)
+            if (savedGroups!![group] == null) savedGroups!![group] = ArrayList()
+            savedGroups!![group]!!.add(value)
+        }
         if (owned) {
             if (savedOwners == null) savedOwners = ArrayList()
             savedOwners!!.add(value)
         }
     }
-    protected fun patchHandle(at: Int, index: Int): Int {
+    protected fun patchHandle(at: Int, index: Int, group: Int = 0): Int {
         if (long(at) == 0L) return index
-        long(at, handles[index].raw)
+        long(at, handleGroup(group)[index].raw)
         return index + 1
     }
     protected abstract fun patchHandles()
     final override fun encode(): ByteArray {
-        if (savedHandles != null) patchHandles()
+        if (savedHandles != null || savedGroups != null) patchHandles()
         return array
     }
 }
