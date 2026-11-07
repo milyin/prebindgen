@@ -97,7 +97,7 @@ for case,n in sorted(cells):
         else:
             scores=[]
             for fork in range(a.forks):
-                group=[s for s in selected if s['fork']==fork];count=sum(s['iterations'] for s in group)
+                group=[s for s in selected if s['fork']==fork]
                 scores.append(dict(fork=fork,wall_ns=statistics.median(s['wall_ns']/s['iterations'] for s in group)))
             row[version]=dict(wall_ns=statistics.median(s['wall_ns'] for s in scores),min_wall_ns=min(s['wall_ns'] for s in scores),max_wall_ns=max(s['wall_ns'] for s in scores),forks=scores)
     if a.kind=='time':

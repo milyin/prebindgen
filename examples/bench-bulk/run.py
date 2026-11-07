@@ -119,6 +119,8 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     (output / "native").mkdir()
     library = output / "native" / built_library.name
     shutil.copyfile(built_library, library)
+    for name in ("plain.rs", "bulk.rs"):
+        shutil.copyfile(out / name, output / name)
     jar = output / "bench.jar"
     subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), str(FIXTURE / "AllocationBench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
     probe = subprocess.check_output(["java", "-Djava.library.path=" + str(library.parent), "-cp", str(jar),
@@ -148,6 +150,7 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "cargo": command_version(["cargo", "-V"], cwd=project),
         "dependency_lock_sha256": digest(project / "Cargo.lock"),
         "cargo_profile": cdylib["profile"],
+        "rust_sources_sha256": {name: digest(output / name) for name in ("plain.rs", "bulk.rs")},
         "native_allocations": native_allocations,
         "native_input_checks": native_input_checks,
         "instrumentation_probe": probe,

@@ -87,12 +87,20 @@ private fun checkLargeAliasHistory() {
         val last=values.last()
         val rows=(values.dropLast(1)+io.prebindgen.covertest.rawinputs.BulkReplayRow(values.first().first,last.text,last.bytes,last.kind,last.last)).map{listOf(it)}
         bulkReplayReset(0uL)
-        var rejected=false
-        val error=io.prebindgen.covertest.rawinputs.JniErrorHandler {rejected=true;0uL}
+        val before=bulkDrops()
+        var message: String?=null
+        val error=io.prebindgen.covertest.rawinputs.JniErrorHandler {message=it;0uL}
         if(callback)io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback {rows},error)
         else io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(rows,error)
-        check(rejected && bulkReplayCount(0uL)>128uL) {"native alias validation was bypassed"}
+        // A source Fn cannot return a binding error. Its adapter aborts the
+        // Rust operation through the existing panic route; ordinary input
+        // validation preserves the specific alias diagnostic.
+        check((if(callback)message=="Rust operation panicked" else message?.contains("conflicting input aliases")==true) && bulkReplayCount(0uL)>128uL)
+
+        check(values.first().first.isClosed) // The duplicate refers to a consumed prefix owner.
+        check(!last.first.isClosed && io.prebindgen.covertest.rawinputs.bulkHandleValue(last.first)==2L*count-1)
         handles.forEach{it.close()}
+        check(bulkDrops()==before+handles.size.toULong())
     }
     bulkReplayReset(0uL)
 }

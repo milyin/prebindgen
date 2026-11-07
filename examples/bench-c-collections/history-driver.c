@@ -90,7 +90,11 @@ int main(int argc,char **argv) {
     // Checked-only child-process probes deliberately fail after a large prefix.
     // Never run malformed frames against an unchecked build.
     if(argc==3 && !strcmp(argv[1],"reject")) {
-        int kind=!strcmp(argv[2],"flat")?0:!strcmp(argv[2],"nested")?1:!strcmp(argv[2],"groups8")?2:!strcmp(argv[2],"shared")?3:!strcmp(argv[2],"callback")?5:6;
+        const char *reject_names[]={"flat","nested","groups8","shared","callback","callback_single"};
+        const int reject_kinds[]={0,1,2,3,5,6};
+        int kind=-1;
+        for(size_t i=0;i<6;++i)if(!strcmp(argv[2],reject_names[i]))kind=reject_kinds[i];
+        assert(kind>=0);
         struct fixture f=prepare(kind,256,1,"ascending");
         size_t at=200;
         switch(kind){

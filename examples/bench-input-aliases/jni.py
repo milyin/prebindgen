@@ -19,6 +19,8 @@ sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 info={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before),('after',a.after)]}
 for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sha256','cargo_config_sha256','cargo_profile','profile_environment','native_input_checks']:
  assert info['before'][key]==info['after'][key],key
+glue={v:{name:sha(directory/name) for name in ['plain.rs','bulk.rs']} for v,directory in [('before',a.before),('after',a.after)]}
+assert glue['before']==glue['after'], 'generated JNI Rust differs'
 for d in info.values():
  assert d['native_input_checks']==(a.policy=='native'), 'unexpected alias-validation policy'
  assert not d['native_allocations'] and d['instrumentation_probe']=='NATIVE_ALLOCATIONS,false'
@@ -55,5 +57,5 @@ for mode,case,size in sorted({(s['mode'],s['case'],s['size']) for s in samples})
   row[metric]['paired_after_before']=statistics.median(y/x if x else 1.0 for x,y in zip(fm['before'],fm['after']))
  summary.append(row)
 for d in info.values():assert sha(d['library'])==d['native_sha256'] and sha(d['jar'])==d['jar_sha256']
-(root/'results.json').write_text(json.dumps(dict(builds=info,settings=dict(forks=a.forks,aa=a.aa,policy=a.policy,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
+(root/'results.json').write_text(json.dumps(dict(builds=info,rust_glue_sha256=glue,settings=dict(forks=a.forks,aa=a.aa,policy=a.policy,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
 print('Finished',root,flush=True)

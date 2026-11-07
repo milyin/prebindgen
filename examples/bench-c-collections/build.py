@@ -88,6 +88,8 @@ def build(args):
     (output/'frozen').mkdir()
     library=output/'frozen/libc_collection_bench.so'
     shutil.copyfile(built_library,library)
+    for name in ['bindings.rs','bindings.h']:
+        shutil.copyfile(out/name,output/name)
     driver=output/'driver'
     cc=shlex.split(os.environ.get('CC','cc'))
     compile_command=[*cc,'-std=gnu11','-O3','-fno-plt','-Wall','-Wextra','-Werror',str(FIXTURE/'driver.c'),'-I'+str(out),'-L'+str(library.parent),'-lc_collection_bench','-Wl,-rpath,'+str(library.parent),'-ldl','-o',str(driver)]

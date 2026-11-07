@@ -2,6 +2,26 @@
 
 The validator checks numeric handle addresses for equality and remembers whether each access is shared or exclusive.
 
+## Scope after Kotlin preflight (#887)
+
+Default generated JNI wrappers now perform alias validation together with Kotlin
+handle locking. Those calls do not instantiate the native `DynamicInputs`
+history, including ordinary arguments and callback results covered by that
+preparation. The JNI timings near the end of this document predate #887 and no
+longer describe the default JNI path.
+
+This runtime change still applies to C with alias checks enabled, JNI configured
+with `set_kotlin_input_preflight(false)`, and custom conversions retaining native
+validation. Its intended case is a history built incrementally by nested
+collections or successive arguments. One first batch keeps sorted storage;
+shared-only and fixed sets use other runtime implementations. C's check opt-out
+also bypasses this history.
+
+[The remaining-path report](remaining-paths.md) measures generated C calls,
+native-checked JNI and default-JNI/checks-disabled controls against #824 **after**
+#887. It separates whole-call timing from native allocation measurements and
+retains slower controls and identical-library comparisons.
+
 The decision is a sorted-vector/integer-hash hybrid. One first batch retains the existing sorted vector and reuses its allocation, including large batches. Small incremental histories retain the same sorted-vector algorithm. A subsequent group whose potential total exceeds 128 entries, or a new individual address beyond 128 stored entries, promotes history into an exact `HashMap`. Existing shared addresses found by `access` do not trigger promotion. Fixed-size and shared-only calls keep their existing implementations.
 
 This favors predictable incremental scaling over the growing Bloom prototype's better unique-input speed and lower memory use. The growing filter is competitive on unique addresses, but confirmed shared repetitions still require exact searches through its history. The hybrid removes that linear fallback. This is a comparison of the supplied implementations, not proof that every possible Bloom-based design loses. In particular, separate shared/exclusive filters or specialized access to cached wire data could change the tradeoff, and are not implemented here.
@@ -97,7 +117,7 @@ After source review cleanup, a separate focused repeat imports the final runtime
 
 The selected threshold preserves the vector through 128 distinct individual entries and avoids building another index for one first batch. Thresholds 64 and 128 are broadly competitive; 128 is a conservative choice for small histories, not a claim of a universal optimum. Transition costs remain visible: the 128-address mixed case adds 16 direct prefix accesses, crosses the threshold near the end, and is 11% slower in the final repeat. A late conflict after a 128-address first batch costs 0.571 → 1.804 µs because promotion happens before rejection. Error-path throughput is not the optimization goal. Small shuffled singleton cases remain within a few percent, but that statement does not apply to every small input or failure shape.
 
-## Complete generated JNI calls
+## Historical generated JNI calls before #887
 
 Fresh frozen native libraries use the same baseline Kotlin JAR. The baseline library was built at `6e00520a7`; all runtime/generator/benchmark fixture sources match merged #824 at `45933039a`, verified by `git diff`. Candidate source is `4e4482ef5`. Native allocator instrumentation is verified on load, enabled only in separate counting libraries, and disabled for all latency runs. Builds, counting and timing run sequentially.
 
