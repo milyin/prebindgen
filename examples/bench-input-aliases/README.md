@@ -1,5 +1,7 @@
 # Dynamic input alias-history comparison
 
+The validator checks numeric handle addresses for equality and remembers whether each access is shared or exclusive.
+
 The decision is a sorted-vector/integer-hash hybrid. One first batch retains the existing sorted vector and reuses its allocation, including large batches. Small incremental histories retain the same sorted-vector algorithm. A subsequent group whose potential total exceeds 128 entries, or a new individual address beyond 128 stored entries, promotes history into an exact `HashMap`. Existing shared addresses found by `access` do not trigger promotion. Fixed-size and shared-only calls keep their existing implementations.
 
 This favors predictable incremental scaling over the growing Bloom prototype's better unique-input speed and lower memory use. The growing filter is competitive on unique addresses, but confirmed shared repetitions still require exact searches through its history. The hybrid removes that linear fallback. This is a comparison of the supplied implementations, not proof that every possible Bloom-based design loses. In particular, separate shared/exclusive filters or specialized access to cached wire data could change the tradeoff, and are not implemented here.
@@ -78,3 +80,19 @@ python3 examples/bench-input-aliases/run.py --runtime /tmp/input-alias-baseline.
 ```
 
 The full mode also includes individual `access()` streams, groups of four and additional rejection cases. The current runner allows `--candidates selected,sorted` for focused repeats. Sources remain experiment-local; only the selected implementation is in `prebindgen-runtime`.
+
+## Final-source confirmation
+
+After source review cleanup, a separate focused repeat imports the final runtime at `4e4482ef5`. It uses four isolated-process forks, nine measured batches targeting 5 ms, and the same baseline. [confirmation.csv](confirmation.csv) and [confirmation-provenance.json](confirmation-provenance.json) retain all 126 cells, memory counts, fork spread and provenance.
+
+| Case | Baseline µs | Final runtime µs |
+|---|---:|---:|
+| 16/singletons/shuffled/unique | 0.610 | 0.635 |
+| 128/singletons/shuffled/unique | 6.115 | 6.365 |
+| 512/singletons/shuffled/unique | 36.814 | 24.305 |
+| 8192/singletons/shuffled/unique | 4,521.906 | 664.509 |
+| 8192/history/repeated/shared | 480.391 | 323.788 |
+| 128/mixed/shuffled/unique | 6.994 | 7.765 |
+| 128/history/late/conflict | 0.571 | 1.804 |
+
+The selected threshold preserves the vector through 128 distinct individual entries and avoids building another index for one first batch. Thresholds 64 and 128 are broadly competitive; 128 is a conservative choice for small histories, not a claim of a universal optimum. Transition costs remain visible: the 128-address mixed case adds 16 direct prefix accesses, crosses the threshold near the end, and is 11% slower in the final repeat. A late conflict after a 128-address first batch costs 0.571 → 1.804 µs because promotion happens before rejection. Error-path throughput is not the optimization goal. Small shuffled singleton cases remain within a few percent, but that statement does not apply to every small input or failure shape.
