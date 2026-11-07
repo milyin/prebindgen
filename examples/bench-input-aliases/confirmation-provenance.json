@@ -1,0 +1,32 @@
+{
+  "settings": {
+    "output": "/tmp/input-alias-confirm",
+    "runtime": "/tmp/input-alias-baseline.rs",
+    "forks": 4,
+    "batches": 9,
+    "target_ms": 5,
+    "sizes": "1,16,64,128,512,8192",
+    "candidates": "selected,sorted",
+    "skip_counts": false,
+    "quick": true,
+    "cpu": 0
+  },
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu_model": "AMD EPYC 7713 64-Core Processor",
+  "libc": [
+    "glibc",
+    "2.39"
+  ],
+  "hashes": {
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/examples/bench-input-aliases/bench.rs": "291bdf57ee0cc1eba1092043a08ddde90f0b603c5692eefa5a54f512d5a4ba1f",
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/examples/bench-input-aliases/run.py": "ca0a99a1cb91d214499efe0f57184bbcb7261674679e185849937e5c82da7ad7",
+    "/tmp/input-alias-baseline.rs": "cd9ef940724840d03ac488cf9b144725775b0a0b593763214110c0aecde1c17d",
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/prebindgen-runtime/src/input.rs": "c264360faec939ef89bab629eb89dfd3a8aa1fca817d7d7faabbf11c97689279",
+    "/tmp/input-alias-confirm/time": "e84b0cbb5938829c3211a90280fb9d1dba577ecc9395dae74e18cf9845936461",
+    "/tmp/input-alias-confirm/counts": "cdd548f391b5cde6fc7424937866e7c877da2393023e7614e1bd51ae03f13c71"
+  },
+  "samples_sha256": "7bc1eedf452ea309eb5563c20f65a947604f8661df05a14a04c143b41ec96c42",
+  "source_commit": "4e4482ef5",
+  "confirmation_csv_sha256": "750ad7c5596f9f3afe6ab905b3ac21125676b4ecc20845b1283cc9e4ce0d21d7"
+}

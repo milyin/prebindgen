@@ -1,6 +1,9 @@
 //! Call-scoped resource conflicts for inputs constructed as they are decoded.
 use crate::Result;
-use std::hash::Hasher;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::{BuildHasherDefault, Hasher},
+};
 
 /// No bookkeeping is needed for shared-only calls or a single fixed handle.
 #[derive(Default)]
@@ -128,11 +131,69 @@ impl InputGroup {
         self.values.push(value);
     }
 }
-/// Sorted address history for dynamic collections. A collection checks all of
-/// its addresses together, before creating any owners or Rust references.
+/// Address history for a call with dynamic collections. One complete batch and
+/// small incremental histories retain sorted storage. Larger incremental sets
+/// use an exact integer-hashed index rather than repeatedly moving old entries.
 #[derive(Default)]
 pub struct DynamicInputs {
-    values: Vec<(usize, bool)>,
+    history: InputHistory,
+}
+
+// A single batch can reuse its input allocation without building another index.
+// The threshold applies only when accepting additional distinct accesses/groups.
+const INDEX_THRESHOLD: usize = 128;
+enum InputHistory {
+    Sorted(Vec<(usize, bool)>),
+    Indexed(InputIndex),
+}
+impl Default for InputHistory {
+    fn default() -> Self {
+        Self::Sorted(Vec::new())
+    }
+}
+#[derive(Default)]
+struct InputIndex {
+    // Low bit: exclusive access. Other bits identify the group that inserted
+    // the address, so a rejected group can roll back without a second vector.
+    values: HashMap<usize, u64, BuildHasherDefault<AddressHasher>>,
+    generation: u64,
+}
+impl InputIndex {
+    fn access(&mut self, address: usize, exclusive: bool) -> Result<()> {
+        match self.values.entry(address) {
+            Entry::Vacant(entry) => {
+                entry.insert(self.generation | u64::from(exclusive));
+                Ok(())
+            }
+            Entry::Occupied(entry) if (entry.get() | u64::from(exclusive)) & 1 == 0 => Ok(()),
+            Entry::Occupied(_) => Err("conflicting input aliases".into()),
+        }
+    }
+    fn accept_group(&mut self, group: InputGroup) -> Result<()> {
+        self.generation = match self.generation.checked_add(2) {
+            Some(next) => next,
+            None => {
+                // Reset only group tags; retain every address and its access mode.
+                // This is unreachable for practical call sizes, but keeps the API
+                // correct even if a validator is reused for more than 2^63 groups.
+                for value in self.values.values_mut() {
+                    *value &= 1;
+                }
+                2
+            }
+        };
+        self.values.reserve(group.values.len());
+        for (address, exclusive) in group.values {
+            if let Err(error) = self.access(address, exclusive) {
+                let generation = self.generation;
+                // Generated conversion exits on this error. Full-table rollback
+                // is confined to failure; successful groups need no undo vector.
+                self.values.retain(|_, value| *value & !1 != generation);
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
 }
 impl DynamicInputs {
     /// Dynamic exclusive accesses need a checked batch before construction.
@@ -149,18 +210,48 @@ impl DynamicInputs {
             capacity,
         }
     }
-    /// Check the batch against itself and previous accesses, rejecting every
-    /// shared/exclusive or exclusive/exclusive duplicate before using the batch.
+    fn promote(&mut self) {
+        let previous = std::mem::take(&mut self.history);
+        if let InputHistory::Sorted(values) = previous {
+            let mut index = InputIndex {
+                values: HashMap::with_capacity_and_hasher(values.len(), Default::default()),
+                generation: 0,
+            };
+            for (address, exclusive) in values {
+                index.values.insert(address, u64::from(exclusive));
+            }
+            self.history = InputHistory::Indexed(index);
+        } else {
+            self.history = previous;
+        }
+    }
+    /// Reject conflicting accesses before constructing any owner or reference.
+    /// A rejected group leaves previously accepted identities unchanged.
     pub fn accept_group(&mut self, group: InputGroup) -> Result<()> {
+        if group.values.is_empty() {
+            return Ok(());
+        }
+        if let InputHistory::Sorted(values) = &self.history {
+            if !values.is_empty() && group.values.len() == 1 {
+                let (a, e) = group.values[0];
+                return self.access(a, e);
+            }
+            if !values.is_empty()
+                && values.len().saturating_add(group.values.len()) > INDEX_THRESHOLD
+            {
+                self.promote();
+            }
+        }
+        match &mut self.history {
+            InputHistory::Sorted(values) => Self::accept_sorted(values, group),
+            InputHistory::Indexed(index) => index.accept_group(group),
+        }
+    }
+    fn accept_sorted(values: &mut Vec<(usize, bool)>, group: InputGroup) -> Result<()> {
         let mut group = group.values;
         if group.is_empty() {
             // Previously accepted accesses are already sorted and checked.
             return Ok(());
-        }
-        if group.len() == 1 && !self.values.is_empty() {
-            // No internal duplicate is possible; only history can conflict.
-            let (address, exclusive) = group[0];
-            return self.access(address, exclusive);
         }
         // Sort only the new addresses. Re-sorting/scanning the complete history
         // for every inner list makes nested input cost depend heavily on the
@@ -172,21 +263,21 @@ impl DynamicInputs {
             }
         }
         group.dedup_by_key(|entry| entry.0);
-        if self.values.is_empty() {
+        if values.is_empty() {
             // Reuse the first batch's allocation as the history.
-            self.values = group;
+            *values = group;
             return Ok(());
         }
-        if group[0].0 > self.values.last().expect("nonempty history").0 {
+        if group[0].0 > values.last().expect("nonempty history").0 {
             // Disjoint ascending batches can append without any history scan.
-            self.values.append(&mut group);
+            values.append(&mut group);
             return Ok(());
         }
         let mut added = 0;
         for i in 0..group.len() {
             let (address, exclusive) = group[i];
-            match self.values.binary_search_by_key(&address, |entry| entry.0) {
-                Ok(previous) if exclusive || self.values[previous].1 => {
+            match values.binary_search_by_key(&address, |entry| entry.0) {
+                Ok(previous) if exclusive || values[previous].1 => {
                     return Err("conflicting input aliases".into());
                 }
                 Ok(_) => {} // A repeated shared access needs no new entry.
@@ -199,28 +290,56 @@ impl DynamicInputs {
         group.truncate(added);
         // Merge backwards into the existing allocation. The already ordered
         // prefix stays in place, and no temporary merged vector is needed.
-        let mut previous = self.values.len();
-        self.values.resize(previous + added, (0, false));
-        let mut write = self.values.len();
+        let mut previous = values.len();
+        values.resize(previous + added, (0, false));
+        let mut write = values.len();
         for entry in group.into_iter().rev() {
-            while previous > 0 && self.values[previous - 1].0 > entry.0 {
+            while previous > 0 && values[previous - 1].0 > entry.0 {
                 previous -= 1;
                 write -= 1;
-                self.values[write] = self.values[previous];
+                values[write] = values[previous];
             }
             write -= 1;
-            self.values[write] = entry;
+            values[write] = entry;
         }
         Ok(())
     }
-    /// Check an individual argument against the history of previous arguments.
+    /// Check an individual argument against previous accesses in this call.
     pub fn access(&mut self, address: usize, exclusive: bool) -> Result<()> {
-        match self.values.binary_search_by_key(&address, |entry| entry.0) {
-            Ok(i) if self.values[i].1 || exclusive => Err("conflicting input aliases".into()),
-            Ok(_) => Ok(()),
-            Err(i) => {
-                self.values.insert(i, (address, exclusive));
-                Ok(())
+        if let InputHistory::Sorted(values) = &mut self.history {
+            let position = match values.binary_search_by_key(&address, |entry| entry.0) {
+                Ok(i) => {
+                    return if values[i].1 || exclusive {
+                        Err("conflicting input aliases".into())
+                    } else {
+                        Ok(())
+                    }
+                }
+                Err(position) => position,
+            };
+            if values.len() < INDEX_THRESHOLD {
+                values.insert(position, (address, exclusive));
+                return Ok(());
+            }
+            self.promote();
+        }
+        match &mut self.history {
+            InputHistory::Indexed(index) => index.access(address, exclusive),
+            InputHistory::Sorted(_) => unreachable!("promoted above"),
+        }
+    }
+    #[cfg(test)]
+    fn snapshot(&self) -> Vec<(usize, bool)> {
+        match &self.history {
+            InputHistory::Sorted(values) => values.clone(),
+            InputHistory::Indexed(index) => {
+                let mut values = index
+                    .values
+                    .iter()
+                    .map(|(&a, &tag)| (a, tag & 1 != 0))
+                    .collect::<Vec<_>>();
+                values.sort_unstable_by_key(|entry| entry.0);
+                values
             }
         }
     }
@@ -282,9 +401,9 @@ mod tests {
     fn inactive_dynamic_input_does_not_allocate() {
         let mut history = DynamicInputs::default();
         history.reserve(1000);
-        assert_eq!(history.values.capacity(), 0);
+        assert!(matches!(&history.history, InputHistory::Sorted(values) if values.capacity()==0));
         history.access(8, true).unwrap();
-        assert!(history.values.capacity() > 0);
+        assert!(matches!(&history.history,InputHistory::Sorted(values) if values.capacity()>0));
     }
 
     #[test]
@@ -311,7 +430,7 @@ mod tests {
                 assert!(history.accept_group(next).is_err());
             }
             assert_eq!(
-                history.values,
+                history.snapshot(),
                 vec![
                     (4, true),
                     (8, false),
@@ -341,7 +460,7 @@ mod tests {
         }
         history.accept_group(group).unwrap();
         assert_eq!(
-            history.values,
+            history.snapshot(),
             vec![
                 (4, true),
                 (16, false),
@@ -350,12 +469,12 @@ mod tests {
                 (40, false)
             ]
         );
-        let previous = history.values.clone();
+        let previous = history.snapshot();
         let mut bad = history.begin_group(2);
         bad.push((8, false));
         bad.push((32, true));
         assert!(history.accept_group(bad).is_err());
-        assert_eq!(history.values, previous);
+        assert_eq!(history.snapshot(), previous);
     }
 
     #[test]
@@ -371,7 +490,7 @@ mod tests {
             }
             history.accept_group(group).unwrap();
             expected.sort_unstable_by_key(|entry| entry.0);
-            assert_eq!(history.values, expected);
+            assert_eq!(history.snapshot(), expected);
         }
     }
 
@@ -383,7 +502,7 @@ mod tests {
             for step in 0..64 {
                 let len = step % 5;
                 let mut group = history.begin_group(len);
-                let previous = history.values.clone();
+                let previous = history.snapshot();
                 let mut expected = previous.clone();
                 for _ in 0..len {
                     seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -397,14 +516,177 @@ mod tests {
                     .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1));
                 assert_eq!(history.accept_group(group).is_err(), conflict);
                 if conflict {
-                    assert_eq!(history.values, previous);
+                    assert_eq!(history.snapshot(), previous);
                     // Generated conversion returns immediately on conflict.
                     history = DynamicInputs::default();
                 } else {
                     expected.dedup_by_key(|entry| entry.0);
-                    assert_eq!(history.values, expected);
+                    assert_eq!(history.snapshot(), expected);
                 }
             }
         }
+    }
+
+    #[test]
+    fn one_large_batch_reuses_sorted_storage_until_another_identity_arrives() {
+        let mut history = DynamicInputs::default();
+        let mut group = history.begin_group(2048);
+        for i in (0..2048).rev() {
+            group.push((i * 64, i % 4 == 0));
+        }
+        history.accept_group(group).unwrap();
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.accept_group(history.begin_group(0)).unwrap();
+        history.access(64, false).unwrap();
+        assert!(history.access(0, false).is_err());
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.access(2048 * 64, true).unwrap();
+        assert!(matches!(history.history, InputHistory::Indexed(_)));
+        assert_eq!(history.snapshot().len(), 2049);
+    }
+
+    #[test]
+    fn indexed_groups_roll_back_new_shared_and_exclusive_entries_only() {
+        let mut history = DynamicInputs::default();
+        for i in 0..512 {
+            history.access(i * 64, i % 4 == 0).unwrap();
+        }
+        assert!(matches!(history.history, InputHistory::Indexed(_)));
+        let before = history.snapshot();
+        for conflict in [(0, false), (64, true), (0, true)] {
+            let mut group = history.begin_group(5);
+            for entry in [
+                (100000, true),
+                (100064, false),
+                (64, false),
+                (100064, false),
+                conflict,
+            ] {
+                group.push(entry);
+            }
+            assert!(history.accept_group(group).is_err());
+            assert_eq!(history.snapshot(), before);
+        }
+        let mut group = history.begin_group(3);
+        for entry in [(100000, false), (100000, false), (100000, true)] {
+            group.push(entry);
+        }
+        assert!(history.accept_group(group).is_err());
+        assert_eq!(history.snapshot(), before);
+        history.access(100000, true).unwrap();
+        assert!(history.access(100000, false).is_err());
+    }
+
+    #[test]
+    fn indexed_generation_wrap_preserves_older_modes_and_rollback() {
+        let mut history = DynamicInputs::default();
+        for i in 0..512 {
+            history.access(i * 64, i % 4 == 0).unwrap();
+        }
+        let InputHistory::Indexed(index) = &mut history.history else {
+            panic!("index expected")
+        };
+        index.generation = u64::MAX - 1;
+        index.access(100128, true).unwrap();
+        let before = history.snapshot();
+        let mut group = history.begin_group(2);
+        group.push((100000, true));
+        group.push((0, false));
+        assert!(history.accept_group(group).is_err());
+        assert_eq!(history.snapshot(), before);
+        history.access(64, false).unwrap();
+        assert!(history.access(64, true).is_err());
+        history.access(100000, true).unwrap();
+        assert!(history.access(100128, false).is_err());
+    }
+
+    #[test]
+    fn mixed_incremental_calls_match_exact_model_across_promotion_and_failures() {
+        use std::collections::BTreeMap;
+        for initial in 0..16u64 {
+            let mut history = DynamicInputs::default();
+            let mut model = BTreeMap::new();
+            let mut seed = initial;
+            for step in 0..512 {
+                let mut group = history.begin_group(step % 11);
+                let mut expected = model.clone();
+                let mut conflict = false;
+                for _ in 0..step % 11 {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    let address = ((seed >> 32) as usize % 4096) * 64;
+                    let exclusive = seed % 13 == 0;
+                    group.push((address, exclusive));
+                    if !conflict {
+                        if expected
+                            .get(&address)
+                            .is_some_and(|e: &bool| *e || exclusive)
+                        {
+                            conflict = true;
+                        } else {
+                            expected.insert(address, exclusive);
+                        }
+                    }
+                }
+                assert_eq!(history.accept_group(group).is_err(), conflict);
+                if !conflict {
+                    model = expected;
+                }
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                let address = ((seed >> 32) as usize % 4096) * 64;
+                let exclusive = step % 3 == 0;
+                let conflict = model.get(&address).is_some_and(|e| *e || exclusive);
+                assert_eq!(history.access(address, exclusive).is_err(), conflict);
+                if !conflict {
+                    model.insert(address, exclusive);
+                }
+                assert_eq!(
+                    history.snapshot(),
+                    model.iter().map(|(&a, &e)| (a, e)).collect::<Vec<_>>()
+                );
+            }
+            assert!(matches!(history.history, InputHistory::Indexed(_)));
+        }
+    }
+    #[test]
+    fn index_threshold_preserves_small_shared_repeats_and_access_modes() {
+        let mut history = DynamicInputs::default();
+        for i in 0..127 {
+            history.access(i * 64, false).unwrap();
+        }
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.access(127 * 64, false).unwrap();
+        history.access(64, false).unwrap();
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.access(128 * 64, true).unwrap();
+        assert!(matches!(history.history, InputHistory::Indexed(_)));
+        assert!(history.access(128 * 64, false).is_err());
+        let mut history = DynamicInputs::default();
+        let mut group = history.begin_group(128);
+        for i in 0..128 {
+            group.push((i * 64, false));
+        }
+        history.accept_group(group).unwrap();
+        let before = history.snapshot();
+        let mut repeats = history.begin_group(128);
+        for i in 0..128 {
+            repeats.push((i * 64, false));
+        }
+        history.accept_group(repeats).unwrap();
+        assert_eq!(history.snapshot(), before);
+    }
+
+    #[test]
+    fn address_hash_mixes_both_ends_of_aligned_addresses() {
+        let mut low = std::collections::HashSet::new();
+        let mut high = std::collections::HashSet::new();
+        for i in 0..4096 {
+            let mut hasher = AddressHasher::default();
+            hasher.write_usize(0x100000 + i * 64);
+            let hash = hasher.finish();
+            low.insert(hash & 255);
+            high.insert(hash >> 57);
+        }
+        assert!(low.len() > 240);
+        assert!(high.len() > 120);
     }
 }
