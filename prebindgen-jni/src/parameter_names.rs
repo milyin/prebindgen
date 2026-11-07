@@ -124,6 +124,12 @@ pub(crate) fn apply(
             .chain(&code.locks)
             .chain(&code.consumed)
             .chain(&code.lock_groups)
+            .chain(
+                code.handle_inputs
+                    .iter()
+                    .flatten()
+                    .flat_map(|h| std::iter::once(&h.value).chain(h.consumed.iter())),
+            )
             .chain(code.setup.iter().map(|b| &b.expression))
         {
             locals.extend(identifiers(text));
@@ -223,6 +229,12 @@ pub(crate) fn apply(
             .chain(&mut code.locks)
             .chain(&mut code.consumed)
             .chain(&mut code.lock_groups)
+            .chain(
+                code.handle_inputs
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+            )
             .chain(code.setup.iter_mut().map(|b| &mut b.expression))
         {
             *text = rewrite(text, mapping);

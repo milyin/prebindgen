@@ -198,6 +198,7 @@ private fun checkCollectionOwnerFailures() {
     val reused = CollectionOwners()
     var released = 0
     fun owner() = object : NativeHandle(2L) {
+        override val handleType: Long get() = 0L
         override fun freeNative(raw: Long) { released++ }
     }
     val delivered = reused.own(owner())
@@ -220,6 +221,7 @@ private fun checkCollectionOwnerFailures() {
     var releases = 0
     for (failure in listOf(first, second)) {
         failed.own(object : NativeHandle(2L) {
+        override val handleType: Long get() = 0L
             override fun freeNative(raw: Long) { releases++; throw failure }
         })
     }

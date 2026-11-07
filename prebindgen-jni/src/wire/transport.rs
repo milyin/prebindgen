@@ -168,6 +168,7 @@ impl JniWire {
     ///     domain_output: syn::parse_quote!(domain_output),
     ///     return_sink: None,
     ///     is_domain_error: false,
+    ///     input_alias_checks: true,
     ///     output_committed: quote!(),
     /// };
     /// let argument = JniWire::text().output_argument(

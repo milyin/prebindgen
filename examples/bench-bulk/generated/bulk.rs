@@ -504,7 +504,7 @@ unsafe fn __pb_cleanup_native_Rows_ca08f1b833732d9d(
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1new_1d7aa473c3cabcfa5<
     'local,
@@ -600,9 +600,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1new
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1value_19dacbaa67102b1db<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1value_1ae1ea4e2f311cdb7<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -619,7 +619,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1val
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<bench_flat::InputHandle>
@@ -631,11 +630,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1val
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &bench_flat::InputHandle = unsafe {
                         &(*p0_w1_pointer).value
@@ -705,7 +699,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1input_1handle_1val
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1buffer_1sizes_109330eed51da0791<
     'local,
@@ -818,9 +812,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1buffer_1sizes_1093
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1selected_1handle_10b5f8bb745f1d664<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1selected_1handle_15e0482e736d8e05c<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -839,7 +833,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1selected_1handle_1
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             if !(0..2i32).contains(&p0_w1) {
                 return Err("invalid selector".into());
             }
@@ -866,11 +859,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1selected_1handle_1
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w5_built = if p0_w1 == 1i32 {
-                if p0_w1 == 1i32 {
-                    for address in ::core::iter::once((p0_w6_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w5: &bench_flat::InputHandle = unsafe {
                         &(*p0_w6_pointer).value
@@ -964,9 +952,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1selected_1handle_1
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1sum_1cc53b2df8a803a98<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1sum_10c275022668af098<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -984,7 +972,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1su
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_bytes = if true {
                 ::prebindgen_jni_runtime::bulk::input(
                     &mut jni_environment,
@@ -1008,148 +995,53 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1su
             } else {
                 None
             };
-            let p0_w2 = if __prebindgen_input_aliases.needs_group() {
-                let mut p0_w2: Vec<i64> = Vec::new();
-                if true {
-                    let (p0_w3_start, p0_w4) = p0_w1_reader
-                        .rows(
-                            p0_w3,
-                            ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
-                        )?;
-                    let mut p0_w3_accesses = __prebindgen_input_aliases
-                        .begin_group(p0_w4.saturating_mul(1usize));
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
-                                    + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
-                            )?;
-                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                        let checked = (|| {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            if true {
-                                for address in ::core::iter::once(
-                                    (p0_w9_pointer.addr()) as usize,
-                                ) {
-                                    p0_w3_accesses.push((address, false));
-                                }
-                            }
-                            Ok::<_, String>(())
-                        })();
-                        checked?;
-                    }
-                    __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
-                    p0_w2.reserve_exact(p0_w4);
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
-                                    + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
-                            )?;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p0_w3_element_built = (|| -> ::core::result::Result<
+            let mut p0_w2: Vec<i64> = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
+                    )?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w9 = p0_w1_reader
+                        .read::<
                             i64,
-                            String,
-                        > {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            let p0_w8: &bench_flat::InputHandle = unsafe {
-                                &(*p0_w9_pointer).value
-                            };
-                            let p0_w7: i64 = bench_flat::input_handle_value(p0_w8);
-                            let p0_w2 = p0_w7;
-                            Ok(p0_w2)
-                        })();
-                        let element = p0_w3_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p0_w2.len();
-                            p0_w2.as_mut_ptr().add(initialized).write(element);
-                            p0_w2.set_len(initialized + 1);
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
+                                + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
+                        )?;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w9_pointer = if true {
+                            (p0_w9)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    bench_flat::InputHandle,
+                                >
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
                         }
+                        let p0_w8: &bench_flat::InputHandle = unsafe {
+                            &(*p0_w9_pointer).value
+                        };
+                        let p0_w7: i64 = bench_flat::input_handle_value(p0_w8);
+                        let p0_w2 = p0_w7;
+                        Ok(p0_w2)
+                    })();
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
                     }
                 }
-                p0_w2
-            } else {
-                let mut p0_w2: Vec<i64> = Vec::new();
-                if true {
-                    let (p0_w3_start, p0_w4) = p0_w1_reader
-                        .rows(
-                            p0_w3,
-                            ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>(),
-                        )?;
-                    p0_w2.reserve_exact(p0_w4);
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<__PbBulk_i64_d159346acd2a185e>())
-                                    + ::core::mem::offset_of!(__PbBulk_i64_d159346acd2a185e, v0),
-                            )?;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p0_w3_element_built = (|| -> ::core::result::Result<
-                            i64,
-                            String,
-                        > {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            let p0_w8: &bench_flat::InputHandle = unsafe {
-                                &(*p0_w9_pointer).value
-                            };
-                            let p0_w7: i64 = bench_flat::input_handle_value(p0_w8);
-                            let p0_w2 = p0_w7;
-                            Ok(p0_w2)
-                        })();
-                        let element = p0_w3_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p0_w2.len();
-                            p0_w2.as_mut_ptr().add(initialized).write(element);
-                            p0_w2.set_len(initialized + 1);
-                        }
-                    }
-                }
-                p0_w2
-            };
+            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w2_built = if true { Some(p0_w2) } else { None };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -1218,9 +1110,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1values_1su
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1sum_1cabe62d5ee2df7d3<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1sum_14d3c2822396924df<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -1238,7 +1130,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1s
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_bytes = if true {
                 ::prebindgen_jni_runtime::bulk::input(
                     &mut jni_environment,
@@ -1262,220 +1153,83 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1s
             } else {
                 None
             };
-            let p0_w2 = if __prebindgen_input_aliases.needs_group() {
-                let mut p0_w2: Vec<bench_flat::HandleRecord> = Vec::new();
-                if true {
-                    let (p0_w3_start, p0_w4) = p0_w1_reader
-                        .rows(
-                            p0_w3,
-                            ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+            let mut p0_w2: Vec<bench_flat::HandleRecord> = Vec::new();
+            if true {
+                let (p0_w3_start, p0_w4) = p0_w1_reader
+                    .rows(
+                        p0_w3,
+                        ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
+                    )?;
+                p0_w2.reserve_exact(p0_w4);
+                for p0_w5 in 0..p0_w4 {
+                    let p0_w9 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<
+                                        __PbBulk_i64_i64_06de1c5aa99699f6,
+                                    >())
+                                + ::core::mem::offset_of!(
+                                    __PbBulk_i64_i64_06de1c5aa99699f6, v0
+                                ),
                         )?;
-                    let mut p0_w3_accesses = __prebindgen_input_aliases
-                        .begin_group(p0_w4.saturating_mul(1usize));
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v0
-                                    ),
-                            )?;
-                        let p0_w7_f1 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v1
-                                    ),
-                            )?;
-                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                        let checked = (|| {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                            if true {
-                                for address in ::core::iter::once(
-                                    (p0_w9_pointer.addr()) as usize,
-                                ) {
-                                    p0_w3_accesses.push((address, false));
-                                }
-                            }
-                            Ok::<_, String>(())
-                        })();
-                        checked?;
-                    }
-                    __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
-                    p0_w2.reserve_exact(p0_w4);
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v0
-                                    ),
-                            )?;
-                        let p0_w7_f1 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v1
-                                    ),
-                            )?;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p0_w3_element_built = (|| -> ::core::result::Result<
-                            bench_flat::HandleRecord,
-                            String,
-                        > {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                            let p0_w8: &bench_flat::InputHandle = unsafe {
-                                &(*p0_w9_pointer).value
-                            };
-                            let p0_w6_f0: bench_flat::InputHandle = bench_flat::input_handle_copy(
-                                p0_w8,
-                            );
-                            let p0_w6_f1: i64 = ::core::convert::Into::into(
-                                p0_w6_f1.expect("active value"),
-                            );
-                            let p0_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
-                                handle: p0_w6_f0,
-                                tag: p0_w6_f1,
-                            };
-                            let p0_w2 = p0_w6;
-                            Ok(p0_w2)
-                        })();
-                        let element = p0_w3_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p0_w2.len();
-                            p0_w2.as_mut_ptr().add(initialized).write(element);
-                            p0_w2.set_len(initialized + 1);
+                    let p0_w7_f1 = p0_w1_reader
+                        .read::<
+                            i64,
+                        >(
+                            (p0_w3_start
+                                + p0_w5
+                                    * ::core::mem::size_of::<
+                                        __PbBulk_i64_i64_06de1c5aa99699f6,
+                                    >())
+                                + ::core::mem::offset_of!(
+                                    __PbBulk_i64_i64_06de1c5aa99699f6, v1
+                                ),
+                        )?;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<
+                        bench_flat::HandleRecord,
+                        String,
+                    > {
+                        let p0_w9_pointer = if true {
+                            (p0_w9)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    bench_flat::InputHandle,
+                                >
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        if true {
+                            ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
                         }
+                        let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
+                        let p0_w8: &bench_flat::InputHandle = unsafe {
+                            &(*p0_w9_pointer).value
+                        };
+                        let p0_w6_f0: bench_flat::InputHandle = bench_flat::input_handle_copy(
+                            p0_w8,
+                        );
+                        let p0_w6_f1: i64 = ::core::convert::Into::into(
+                            p0_w6_f1.expect("active value"),
+                        );
+                        let p0_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
+                            handle: p0_w6_f0,
+                            tag: p0_w6_f1,
+                        };
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    let element = p0_w3_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w2.len();
+                        p0_w2.as_mut_ptr().add(initialized).write(element);
+                        p0_w2.set_len(initialized + 1);
                     }
                 }
-                p0_w2
-            } else {
-                let mut p0_w2: Vec<bench_flat::HandleRecord> = Vec::new();
-                if true {
-                    let (p0_w3_start, p0_w4) = p0_w1_reader
-                        .rows(
-                            p0_w3,
-                            ::core::mem::size_of::<__PbBulk_i64_i64_06de1c5aa99699f6>(),
-                        )?;
-                    p0_w2.reserve_exact(p0_w4);
-                    for p0_w5 in 0..p0_w4 {
-                        let p0_w9 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v0
-                                    ),
-                            )?;
-                        let p0_w7_f1 = p0_w1_reader
-                            .read::<
-                                i64,
-                            >(
-                                (p0_w3_start
-                                    + p0_w5
-                                        * ::core::mem::size_of::<
-                                            __PbBulk_i64_i64_06de1c5aa99699f6,
-                                        >())
-                                    + ::core::mem::offset_of!(
-                                        __PbBulk_i64_i64_06de1c5aa99699f6, v1
-                                    ),
-                            )?;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p0_w3_element_built = (|| -> ::core::result::Result<
-                            bench_flat::HandleRecord,
-                            String,
-                        > {
-                            let p0_w9_pointer = if true {
-                                (p0_w9)
-                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                        bench_flat::InputHandle,
-                                    >
-                            } else {
-                                ::core::ptr::null_mut()
-                            };
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                            }
-                            let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                            let p0_w8: &bench_flat::InputHandle = unsafe {
-                                &(*p0_w9_pointer).value
-                            };
-                            let p0_w6_f0: bench_flat::InputHandle = bench_flat::input_handle_copy(
-                                p0_w8,
-                            );
-                            let p0_w6_f1: i64 = ::core::convert::Into::into(
-                                p0_w6_f1.expect("active value"),
-                            );
-                            let p0_w6: bench_flat::HandleRecord = bench_flat::HandleRecord {
-                                handle: p0_w6_f0,
-                                tag: p0_w6_f1,
-                            };
-                            let p0_w2 = p0_w6;
-                            Ok(p0_w2)
-                        })();
-                        let element = p0_w3_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p0_w2.len();
-                            p0_w2.as_mut_ptr().add(initialized).write(element);
-                            p0_w2.set_len(initialized + 1);
-                        }
-                    }
-                }
-                p0_w2
-            };
+            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w2_built = if true { Some(p0_w2) } else { None };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -1544,9 +1298,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handle_1records_1s
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1echo_1951038e1201850d3<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1echo_1e97ab382b6bce5df<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -1565,7 +1319,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -1605,43 +1358,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                     )?;
-                let mut p0_w3_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w4.saturating_mul(1usize));
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w8 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>())
-                                + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                        )?;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w8_pointer = if true {
-                            (p0_w8)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    bench_flat::InputHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w8_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8 = p0_w1_reader
@@ -1835,9 +1551,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handles_1ec
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1records_1echo_1afd2d16618028a6f<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1records_1echo_17223d199891bf713<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -1856,7 +1572,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -1896,61 +1611,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
                     )?;
-                let mut p0_w3_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w4.saturating_mul(1usize));
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w7_f0 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                ),
-                        )?;
-                    let p0_w7_f1 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
-                                ),
-                        )?;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w7_f0_pointer = if true {
-                            (p0_w7_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    bench_flat::InputHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                        }
-                        let p0_w6_f1 = if true { Some(p0_w7_f1) } else { None };
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w7_f0_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7_f0 = p0_w1_reader
@@ -2189,9 +1849,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1handle_1rec
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1records_1d83c514a055c27ec<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1records_159a5e85070935754<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -2228,7 +1888,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                         {
                                             let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                             let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                                             let callback_result = unsafe {
                                                 p0_callback_retained
                                                     .invoke_return(
@@ -2345,68 +2004,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                                                 callback_return_w3,
                                                                 ::core::mem::size_of::<__PbBulk_i64_i64_b3c08eb92fbbc74c>(),
                                                             )?;
-                                                        let mut callback_return_w3_accesses = __prebindgen_input_aliases
-                                                            .begin_group(callback_return_w4.saturating_mul(1usize));
-                                                        for callback_return_w5 in 0..callback_return_w4 {
-                                                            let callback_return_w7_f0 = callback_return_w1_reader
-                                                                .read::<
-                                                                    i64,
-                                                                >(
-                                                                    (callback_return_w3_start
-                                                                        + callback_return_w5
-                                                                            * ::core::mem::size_of::<
-                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                            >())
-                                                                        + ::core::mem::offset_of!(
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v0
-                                                                        ),
-                                                                )?;
-                                                            let callback_return_w7_f1 = callback_return_w1_reader
-                                                                .read::<
-                                                                    i64,
-                                                                >(
-                                                                    (callback_return_w3_start
-                                                                        + callback_return_w5
-                                                                            * ::core::mem::size_of::<
-                                                                                __PbBulk_i64_i64_b3c08eb92fbbc74c,
-                                                                            >())
-                                                                        + ::core::mem::offset_of!(
-                                                                            __PbBulk_i64_i64_b3c08eb92fbbc74c, v1
-                                                                        ),
-                                                                )?;
-                                                            #[allow(unused_variables, clippy::redundant_closure_call)]
-                                                            let checked = (|| {
-                                                                let callback_return_w7_f0_pointer = if true {
-                                                                    (callback_return_w7_f0)
-                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                            bench_flat::InputHandle,
-                                                                        >
-                                                                } else {
-                                                                    ::core::ptr::null_mut()
-                                                                };
-                                                                if true {
-                                                                    ::prebindgen_runtime::validate_pointer(
-                                                                        callback_return_w7_f0_pointer,
-                                                                    )?;
-                                                                }
-                                                                let callback_return_w6_f1 = if true {
-                                                                    Some(callback_return_w7_f1)
-                                                                } else {
-                                                                    None
-                                                                };
-                                                                if true {
-                                                                    for address in ::core::iter::once(
-                                                                        (callback_return_w7_f0_pointer.addr()) as usize,
-                                                                    ) {
-                                                                        callback_return_w3_accesses.push((address, true));
-                                                                    }
-                                                                }
-                                                                Ok::<_, String>(())
-                                                            })();
-                                                            checked?;
-                                                        }
-                                                        __prebindgen_input_aliases
-                                                            .accept_group(callback_return_w3_accesses)?;
                                                         callback_return_w2.reserve_exact(callback_return_w4);
                                                         for callback_return_w5 in 0..callback_return_w4 {
                                                             let callback_return_w7_f0 = callback_return_w1_reader
@@ -2670,9 +2267,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1record_1990f8f2a11136fc7<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1record_1c829b73c0af8c75b<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -2709,7 +2306,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                         {
                                             let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                             let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
                                             let callback_result = unsafe {
                                                 p0_callback_retained
                                                     .invoke_return(
@@ -2829,15 +2425,11 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                                     }
                                                     #[allow(clippy::let_and_return, clippy::unit_arg)]
                                                     let callback_return_w2_f0_built = if true {
-                                                        let mut callback_return_w2_f0_built_transferred_0 = 0usize;
-                                                        if true {
-                                                            for address in ::core::iter::once(
-                                                                (callback_return_w3_f0_pointer.addr()) as usize,
-                                                            ) {
-                                                                __prebindgen_input_aliases.access(address, true)?;
-                                                                callback_return_w2_f0_built_transferred_0 += 1;
-                                                            }
-                                                        }
+                                                        let callback_return_w2_f0_built_transferred_0 = if true {
+                                                            1usize
+                                                        } else {
+                                                            0usize
+                                                        };
                                                         let callback_return_w2_f0 = if true {
                                                             Some(unsafe {
                                                                 Box::from_raw(callback_return_w3_f0_pointer)
@@ -3001,9 +2593,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1buffer_1records_1echo_1d2839a0a4452a203<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1buffer_1records_1echo_132801b2928e6b02f<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -3022,7 +2614,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1buffer_1rec
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -3062,69 +2653,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1buffer_1rec
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_Range_9cc3e9775849e9ab>(),
                     )?;
-                let mut p0_w3_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w4.saturating_mul(1usize));
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w7_f0 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_9cc3e9775849e9ab,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_9cc3e9775849e9ab, v0
-                                ),
-                        )?;
-                    let p0_w7_f1 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_9cc3e9775849e9ab,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_9cc3e9775849e9ab, v1
-                                ),
-                        )?;
-                    let p0_w7_f2 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_9cc3e9775849e9ab,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_9cc3e9775849e9ab, v2
-                                ),
-                        )?;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w7_f0_pointer = if true {
-                            (p0_w7_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    bench_flat::InputHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w7_f0_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7_f0 = p0_w1_reader
@@ -3419,9 +2947,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1owned_1buffer_1rec
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1handles_1echo_147d054d07c837967<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1handles_1echo_1656072b3182d8e7b<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -3440,7 +2968,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -3503,43 +3030,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
                                     p0_w8,
                                     ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                                 )?;
-                            let mut p0_w8_accesses = __prebindgen_input_aliases
-                                .begin_group(p0_w9.saturating_mul(1usize));
-                            for p0_w10 in 0..p0_w9 {
-                                let p0_w13 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w8_start
-                                            + p0_w10
-                                                * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>())
-                                            + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                                    )?;
-                                #[allow(unused_variables, clippy::redundant_closure_call)]
-                                let checked = (|| {
-                                    let p0_w13_pointer = if true {
-                                        (p0_w13)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                bench_flat::InputHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if true {
-                                        ::prebindgen_runtime::validate_pointer(p0_w13_pointer)?;
-                                    }
-                                    if true {
-                                        for address in ::core::iter::once(
-                                            (p0_w13_pointer.addr()) as usize,
-                                        ) {
-                                            p0_w8_accesses.push((address, true));
-                                        }
-                                    }
-                                    Ok::<_, String>(())
-                                })();
-                                checked?;
-                            }
-                            __prebindgen_input_aliases.accept_group(p0_w8_accesses)?;
                             p0_w7.reserve_exact(p0_w9);
                             for p0_w10 in 0..p0_w9 {
                                 let p0_w13 = p0_w1_reader
@@ -3797,9 +3287,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1nested_1owned_1han
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1owned_1handles_1af3eabfc6c44ae0b<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1owned_1handles_145191dd02ebf0e07<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -3836,7 +3326,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1
                                         {
                                             let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                             let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                                             let callback_result = unsafe {
                                                 p0_callback_retained
                                                     .invoke_return(
@@ -3997,46 +3486,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1
                                                                             callback_return_w7,
                                                                             ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>(),
                                                                         )?;
-                                                                    let mut callback_return_w7_accesses = __prebindgen_input_aliases
-                                                                        .begin_group(callback_return_w8.saturating_mul(1usize));
-                                                                    for callback_return_w9 in 0..callback_return_w8 {
-                                                                        let callback_return_w12 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w7_start
-                                                                                    + callback_return_w9
-                                                                                        * ::core::mem::size_of::<__PbBulk_i64_b2426f0d5f2715c0>())
-                                                                                    + ::core::mem::offset_of!(__PbBulk_i64_b2426f0d5f2715c0, v0),
-                                                                            )?;
-                                                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                                                        let checked = (|| {
-                                                                            let callback_return_w12_pointer = if true {
-                                                                                (callback_return_w12)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        bench_flat::InputHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if true {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w12_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if true {
-                                                                                for address in ::core::iter::once(
-                                                                                    (callback_return_w12_pointer.addr()) as usize,
-                                                                                ) {
-                                                                                    callback_return_w7_accesses.push((address, true));
-                                                                                }
-                                                                            }
-                                                                            Ok::<_, String>(())
-                                                                        })();
-                                                                        checked?;
-                                                                    }
-                                                                    __prebindgen_input_aliases
-                                                                        .accept_group(callback_return_w7_accesses)?;
                                                                     callback_return_w6.reserve_exact(callback_return_w8);
                                                                     for callback_return_w9 in 0..callback_return_w8 {
                                                                         let callback_return_w12 = callback_return_w1_reader
@@ -4315,7 +3764,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1make_1bcd43e7b136151dd<
     'local,
@@ -4463,7 +3912,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1make_1bcd43e7
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1make_11dbd8ca2fd4616ac<
     'local,
@@ -4755,7 +4204,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1make_11
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1sum_1861bdfef124a25ad<
     'local,
@@ -5539,7 +4988,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1sum_186
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1handler_1new_19a8fcadcab7b9640<
     'local,
@@ -5958,7 +5407,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1handl
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_1handler_1new_167f38d7168020371<
     'local,
@@ -7073,9 +6522,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1fire_17c8a1183dcdd277c<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1fire_1434e8dbfa624de44<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -7093,7 +6542,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1fire_
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -7107,11 +6555,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1fire_
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &bench_flat::RowReturnHandler = unsafe {
                         &(*p0_w1_pointer).value
@@ -7197,9 +6640,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1fire_
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_1fire_188ad5bbf9c8c73e2<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_1fire_1ea0468a8c78895fe<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -7217,7 +6660,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -7231,11 +6673,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &bench_flat::WideRowReturnHandler = unsafe {
                         &(*p0_w1_pointer).value
@@ -7321,7 +6758,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1control_1b0073ee32096caea<
     'local,
@@ -7411,7 +6848,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1control_1b0073ee32
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1scalar_1a4a5da3f79ebbcaf<
     'local,
@@ -7548,7 +6985,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1scalar_1a4a5da3f79
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1sum_1db65517187cece4c<
     'local,
@@ -7828,7 +7265,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1sum_1db655171
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1numbers_1sum_147543406a5cdf588<
     'local,
@@ -7974,7 +7411,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1numbers_1sum_14754
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1sum_1d4a5ecfa43bf26b9<
     'local,
@@ -8256,7 +7693,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1sum_1d4a5ecf
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1make_16f7eb2a3ee93e0ae<
     'local,
@@ -8501,7 +7938,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1make_16f7eb2
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1for_1reduce_13c2e82abbc965f1c<
     'local,
@@ -8746,7 +8183,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1for_1reduce_
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1echo_15c26c8cf4751c454<
     'local,
@@ -9166,7 +8603,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1echo_15c26c8
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1packet_1sum_1c07ede9eb5de050f<
     'local,
@@ -9482,7 +8919,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1packet_1sum_1c07ed
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handler_1new_1916a49ec8343b596<
     'local,
@@ -9784,9 +9221,9 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1handler_1new_1916a
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1fire_16fdab6ebdaeffb11<
+pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1fire_1ff69607332471b89<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -9805,7 +9242,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1fire_16fdab6ebdaef
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut ::prebindgen_jni_runtime::Allocation<bench_flat::Handler>
             } else {
@@ -9816,11 +9252,6 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1fire_16fdab6ebdaef
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &bench_flat::Handler = unsafe { &(*p0_w1_pointer).value };
                     p0_w0

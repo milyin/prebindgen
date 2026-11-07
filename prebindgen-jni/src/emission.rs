@@ -18,12 +18,15 @@ pub struct JniContext {
     pub return_sink: Option<syn::Ident>,
     /// Whether this delivery belongs to the typed domain-error channel.
     pub is_domain_error: bool,
+    /// Keep native alias validation for inputs without generated Kotlin preflight.
+    pub input_alias_checks: bool,
     /// Infallible statements recording completed output ownership transfer.
     pub output_committed: TokenStream,
 }
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        let code = prebindgen_conversions::render_input_alias_checks(code, true)?;
+        let code =
+            prebindgen_conversions::render_input_alias_checks(code, self.input_alias_checks)?;
         render_template(&code, &|name| match name {
             "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),

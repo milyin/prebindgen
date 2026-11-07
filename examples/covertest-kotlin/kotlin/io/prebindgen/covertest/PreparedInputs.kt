@@ -55,14 +55,16 @@ fun checkPreparedInputs() {
             if (i == bad) handleField.set(it, null)
         } }
     }
-    // Invalid required handles never consume the other members of the group.
+    // A malformed later row may follow an already consumed prefix. Receipts
+    // must mark that prefix and leave ordinary unread owners with the caller.
     for (bad in 0..2) {
         val owners = List(2) { bulkHandleNew(it.toLong()) }
         val rows = rowsWithNull(owners, bad)
         val drops = bulkDrops()
         var rejected = false
         check(bulkHandleTexts(rows, JniErrorHandler { rejected = true; emptyList() }).isEmpty())
-        check(rejected && owners.none { it.isClosed } && bulkDrops() == drops)
+        check(rejected && owners.withIndex().all { (i,h) -> h.isClosed == (i < bad) }
+            && bulkDrops() == drops + bad.toULong())
         owners.forEach { it.close() }
         check(bulkDrops() == drops + 2uL)
 

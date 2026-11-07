@@ -20,7 +20,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop_1Storag
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1new_1a15b46920214a065<
     'local,
@@ -102,9 +102,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1get_1b7f3d4a82ad753f5<
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1get_1b38090762950a015<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -120,7 +120,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
@@ -132,11 +131,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::Storage = unsafe {
                         &(*p0_w1_pointer).value
@@ -247,7 +241,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payload_1new_14db541865be00283<
     'local,
@@ -408,7 +402,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1with_1payload_1b44f150bf309e573<
     'local,
@@ -559,9 +553,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1put_1opt_138084ee844ee97a7<
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1put_1opt_1179bf292b0cec6bb<
     'local,
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
@@ -583,7 +577,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
@@ -595,11 +588,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                    }
-                }
                 Some({
                     let p0_w0: &mut perftest_flat::Storage = unsafe {
                         &mut (*p0_w1_pointer).value
