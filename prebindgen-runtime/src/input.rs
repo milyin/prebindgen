@@ -186,6 +186,8 @@ impl InputIndex {
         for (address, exclusive) in group.values {
             if let Err(error) = self.access(address, exclusive) {
                 let generation = self.generation;
+                // Generated conversion exits on this error. Full-table rollback
+                // is confined to failure; successful groups need no undo vector.
                 self.values.retain(|_, value| *value & !1 != generation);
                 return Err(error);
             }
@@ -250,11 +252,6 @@ impl DynamicInputs {
         if group.is_empty() {
             // Previously accepted accesses are already sorted and checked.
             return Ok(());
-        }
-        if group.len() == 1 && !values.is_empty() {
-            // No internal duplicate is possible; only history can conflict.
-            let (address, exclusive) = group[0];
-            return Self::access_sorted(values, address, exclusive);
         }
         // Sort only the new addresses. Re-sorting/scanning the complete history
         // for every inner list makes nested input cost depend heavily on the
@@ -329,20 +326,6 @@ impl DynamicInputs {
         match &mut self.history {
             InputHistory::Indexed(index) => index.access(address, exclusive),
             InputHistory::Sorted(_) => unreachable!("promoted above"),
-        }
-    }
-    fn access_sorted(
-        values: &mut Vec<(usize, bool)>,
-        address: usize,
-        exclusive: bool,
-    ) -> Result<()> {
-        match values.binary_search_by_key(&address, |entry| entry.0) {
-            Ok(i) if values[i].1 || exclusive => Err("conflicting input aliases".into()),
-            Ok(_) => Ok(()),
-            Err(i) => {
-                values.insert(i, (address, exclusive));
-                Ok(())
-            }
         }
     }
     #[cfg(test)]
@@ -420,7 +403,7 @@ mod tests {
         history.reserve(1000);
         assert!(matches!(&history.history, InputHistory::Sorted(values) if values.capacity()==0));
         history.access(8, true).unwrap();
-        assert!(!history.snapshot().is_empty());
+        assert!(matches!(&history.history,InputHistory::Sorted(values) if values.capacity()>0));
     }
 
     #[test]
@@ -604,6 +587,7 @@ mod tests {
             panic!("index expected")
         };
         index.generation = u64::MAX - 1;
+        index.access(100128, true).unwrap();
         let before = history.snapshot();
         let mut group = history.begin_group(2);
         group.push((100000, true));
@@ -613,6 +597,7 @@ mod tests {
         history.access(64, false).unwrap();
         assert!(history.access(64, true).is_err());
         history.access(100000, true).unwrap();
+        assert!(history.access(100128, false).is_err());
     }
 
     #[test]
@@ -661,5 +646,47 @@ mod tests {
             }
             assert!(matches!(history.history, InputHistory::Indexed(_)));
         }
+    }
+    #[test]
+    fn index_threshold_preserves_small_shared_repeats_and_access_modes() {
+        let mut history = DynamicInputs::default();
+        for i in 0..127 {
+            history.access(i * 64, false).unwrap();
+        }
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.access(127 * 64, false).unwrap();
+        history.access(64, false).unwrap();
+        assert!(matches!(history.history, InputHistory::Sorted(_)));
+        history.access(128 * 64, true).unwrap();
+        assert!(matches!(history.history, InputHistory::Indexed(_)));
+        assert!(history.access(128 * 64, false).is_err());
+        let mut history = DynamicInputs::default();
+        let mut group = history.begin_group(128);
+        for i in 0..128 {
+            group.push((i * 64, false));
+        }
+        history.accept_group(group).unwrap();
+        let before = history.snapshot();
+        let mut repeats = history.begin_group(128);
+        for i in 0..128 {
+            repeats.push((i * 64, false));
+        }
+        history.accept_group(repeats).unwrap();
+        assert_eq!(history.snapshot(), before);
+    }
+
+    #[test]
+    fn address_hash_mixes_both_ends_of_aligned_addresses() {
+        let mut low = std::collections::HashSet::new();
+        let mut high = std::collections::HashSet::new();
+        for i in 0..4096 {
+            let mut hasher = AddressHasher::default();
+            hasher.write_usize(0x100000 + i * 64);
+            let hash = hasher.finish();
+            low.insert(hash & 255);
+            high.insert(hash >> 57);
+        }
+        assert!(low.len() > 240);
+        assert!(high.len() > 120);
     }
 }

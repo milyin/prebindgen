@@ -1,0 +1,33 @@
+{
+  "settings": {
+    "output": "/tmp/input-alias-final2",
+    "runtime": "/tmp/input-alias-baseline.rs",
+    "forks": 4,
+    "batches": 7,
+    "target_ms": 3,
+    "sizes": "0,1,4,16,32,64,128,256,512,2048,8192",
+    "skip_counts": false,
+    "quick": true,
+    "cpu": 0
+  },
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu_model": "AMD EPYC 7713 64-Core Processor",
+  "libc": [
+    "glibc",
+    "2.39"
+  ],
+  "hashes": {
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/examples/bench-input-aliases/bench.rs": "291bdf57ee0cc1eba1092043a08ddde90f0b603c5692eefa5a54f512d5a4ba1f",
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/examples/bench-input-aliases/run.py": "99b89d54f6fc463471d1ec59214f33e0eca10de84bf1c09b2a9ae92ac0bcd0c5",
+    "/tmp/input-alias-baseline.rs": "cd9ef940724840d03ac488cf9b144725775b0a0b593763214110c0aecde1c17d",
+    "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history/prebindgen-runtime/src/input.rs": "954e1c2f7c042d0ee524afe7c9a02db8f8fe87a4a3b473b3dbfc361b04b674fb",
+    "/tmp/input-alias-final2/time": "cd8dd42a9467dbbd7bd362248b9529b6b3eea9856ec58bc410d1b9847c7ba198",
+    "/tmp/input-alias-final2/counts": "38539c5c1c2abdafe6701fa33217fb56baa804d95444e3732ead891915ff1072"
+  },
+  "samples_sha256": "9b3b5f8a2471693f45980d209efe3c4e196c166b5080fd1d43dd93d970fb1065",
+  "source_commit": "41ad78e99",
+  "baseline_commit": "45933039a858ad31f56f7e213d9dd6aa9d5cb2da",
+  "note": "Comparison snapshot: initial production implementation. Final source cleanup is measured separately; no production conflict policy changed.",
+  "comparison_csv_sha256": "34406d196a405e696adb702dc42a7a0e45415ab868c77bd8522999ae2b5a0f35"
+}

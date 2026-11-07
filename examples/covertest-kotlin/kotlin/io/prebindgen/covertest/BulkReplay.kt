@@ -4,6 +4,7 @@ import io.prebindgen.covertest.bulk.*
 
 fun checkBulkReplay() {
     checkBulkReplayRaw()
+    checkLargeAliasHistory()
     fun rows(): List<BulkReplayRow> = listOf(
         BulkReplayRow(bulkHandleNew(1), "世界", byteArrayOf(0,-1), BulkKind.A, bulkHandleNew(2)),
         BulkReplayRow(bulkHandleNew(3), null, null, null, bulkHandleNew(4)),
@@ -35,6 +36,47 @@ fun checkBulkReplay() {
     bulkReplayReset(0uL)
     check(bulkReplayRows(emptyList())==0uL)
     println("bulk replay PASS: optional borrowed text/bytes/enums, constructors once, panic prefixes and callback unread-owner cleanup")
+}
+
+private fun checkLargeAliasHistory() {
+    // Two owned handles per inner list cross the runtime's vector/index boundary.
+    // Constructor failure occurs after promotion, covering callback unread-owner
+    // cleanup and ordinary-input ownership receipts through the actual JNI call.
+    val count = 256
+    for (callback in listOf(false, true)) for (fail in listOf(0uL, 100uL)) {
+        val rows = List(count) { i -> BulkReplayRow(
+            bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), BulkKind.A,
+            bulkHandleNew(2L * i + 2)
+        ) }
+        val handles = rows.flatMap { listOf(it.first, it.last) }
+        val nested = rows.map { listOf(it) }
+        val before = bulkDrops()
+        bulkReplayReset(fail)
+        var failed = false
+        val error = JniErrorHandler { failed = true; 0uL }
+        val result = if (callback) {
+            bulkReplayNestedCallback(BulkReplayNestedCallback { nested }, error)
+        } else {
+            bulkReplayNestedRows(nested, error)
+        }
+        check(failed == (fail != 0uL))
+        if (!failed) {
+            check(result == count.toULong() * (2uL * count.toULong() + 5uL))
+            check(bulkReplayCount(3uL) == 1uL)
+        } else {
+            check(result == 0uL && bulkReplayCount(0uL) == fail && bulkReplayCount(3uL) == 0uL)
+        }
+        val consumed = handles.count { it.isClosed }
+        if (callback || !failed) check(consumed == handles.size)
+        else check(consumed in 1 until handles.size)
+        check(bulkDrops() == before + consumed.toULong())
+        handles.forEachIndexed { i, handle ->
+            if (!handle.isClosed) check(bulkHandleValue(handle) == i.toLong() + 1)
+            handle.close()
+        }
+        check(bulkDrops() == before + handles.size.toULong())
+    }
+    bulkReplayReset(0uL)
 }
 
 private fun checkBulkReplayRaw() {

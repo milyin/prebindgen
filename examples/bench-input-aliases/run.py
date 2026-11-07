@@ -16,6 +16,7 @@ p.add_argument('--forks', type=int, default=4)
 p.add_argument('--batches', type=int, default=5)
 p.add_argument('--target-ms', type=int, default=2)
 p.add_argument('--sizes', default='0,1,4,16,32,64,128,256,512,2048,8192')
+p.add_argument('--candidates',default='all')
 p.add_argument('--skip-counts',action='store_true')
 p.add_argument('--quick', action='store_true')
 a = p.parse_args()
@@ -39,6 +40,9 @@ cases = [c for c in cases if c.split('/')[0] in a.sizes.split(',')]
 if a.quick:
     cases = [c for c in cases if '/access/' not in c and '/quads/' not in c and '/duplicate/' not in c]
 candidates = ['selected', 'sorted', 'linear', 'hash', 'hash_fast', 'btree', 'bloom512', 'bloom8192', 'blocked8192', 'bloom_grow', 'hybrid64', 'hybrid128']
+if a.candidates!='all':
+    candidates=[n for n in candidates if n in a.candidates.split(',')]
+    assert candidates
 cpu = min(os.sched_getaffinity(0))
 samples, counts = [], []
 for fork in range(a.forks):
@@ -70,6 +74,7 @@ if not a.skip_counts:
         fields=next(lines).split(',');assert fields.pop(0)=='COUNT'
         parsed.setdefault((case,candidate),[]).append([int(v) for v in fields])
     for (case,candidate),observations in parsed.items():
+        if candidate not in candidates: continue
         assert len(observations)==3 and all(v==observations[0] for v in observations)
         counts.append(dict(candidate=candidate,case=case,**dict(zip(['allocations','reallocations','requested_bytes','peak_heap_bytes','state_size_bytes','filter_queries','filter_positives','filter_false_positives','exact_entries_examined'],observations[0]))))
     assert len(counts)==len(cases)*len(candidates)
