@@ -79,6 +79,12 @@ pub enum ResourceIdentity {
 /// The adapter supplies identity; flat enforces call-wide access conflicts.
 #[derive(Clone, Debug)]
 pub struct Resource {
+    /// Independent root allocation class represented by this declared type.
+    /// Use None for interior loans, unknown ownership domains or custom identities.
+    /// Foreign-side alias preflight may replace native checks only when every
+    /// resource matches a handle wire of this type and access mode. The adapter
+    /// must establish that distinct allocation classes cannot alias.
+    pub allocation_type: Option<syn::Type>,
     /// This access has already been registered during input preparation.
     /// Its identity then describes cardinality for call setup, not a later read.
     pub registered: bool,

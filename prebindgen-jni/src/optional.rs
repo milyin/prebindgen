@@ -129,6 +129,12 @@ pub(crate) fn input_kotlin(
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
+            .chain(
+                c.handle_inputs
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+            )
             .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             *a = a
@@ -168,6 +174,12 @@ pub(crate) fn input_kotlin(
         .chain(c.locks.iter_mut())
         .chain(c.consumed.iter_mut())
         .chain(c.lock_groups.iter_mut())
+        .chain(
+            c.handle_inputs
+                .iter_mut()
+                .flatten()
+                .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+        )
         .chain(c.setup.iter_mut().map(|b| &mut b.expression))
     {
         // Every payload expression below runs only in the present branch.
@@ -231,6 +243,28 @@ pub(crate) fn input_kotlin(
             .into_iter()
             .map(|s| format!("if ({presence}) {s} else null")),
     );
+    out.handle_inputs = c.handle_inputs.map(|sources| {
+        sources
+            .into_iter()
+            .map(|mut source| {
+                if let Some(index) = &mut source.argument {
+                    *index += offset;
+                }
+                source.consumed = source
+                    .consumed
+                    .map(|s| format!("if ({presence}) {{ {s} }}"));
+                source.value = if source.many {
+                    format!(
+                        "if ({presence}) ({}) else kotlin.collections.emptyList()",
+                        source.value
+                    )
+                } else {
+                    format!("if ({presence}) ({}) else null", source.value)
+                };
+                source
+            })
+            .collect()
+    });
     out.consumed.extend(
         c.consumed
             .into_iter()

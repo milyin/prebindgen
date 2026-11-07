@@ -4,7 +4,7 @@ package io.prebindgen.covertest.resourceViews
 public fun <R> resourceBundleViews(onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (io.prebindgen.covertest.resources.ResourceBundle, String) -> R): R = run {
     val returnCapture = io.prebindgen.covertest.Return_String_Long_Long8_ErrorEmpty_74faddb97f994c93.acquire()
     try {
-val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_resource_bundle_views_98686c0f53809c0c(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val nativeResult = try { run { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_resource_bundle_views_98686c0f53809c0c(nativeArgument0) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);         var outputg0_g1_g0_g0_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputg0_g1_g0_g1_0: io.prebindgen.covertest.resources.OwnedResource? = null
         var outputg0_g2_0: io.prebindgen.covertest.resources.OwnedResource? = null

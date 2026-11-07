@@ -953,7 +953,8 @@ pub(crate) fn input_kotlin(
     if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
-    for (p, (field, _)) in c.parameters.iter().zip(&fields) {
+    let snapshot_fields = nodes.iter().any(|node| kotlin::input_handles(node, false));
+    for (index, (p, (field, _))) in c.parameters.iter().zip(&fields).enumerate() {
         let name = p.split_once(": ").unwrap().0;
         let receiver = if active == "true" {
             d.root.clone()
@@ -964,6 +965,43 @@ pub(crate) fn input_kotlin(
             "{receiver}.{}",
             kotlin_identifier(field.to_string().trim_start_matches("r#"))
         );
+        // Retain each field of a handle-bearing record once. Controls and
+        // handle values then describe the same input, even for handwritten
+        // property getters. Primitive locals stay unboxed in inactive arms.
+        let expr = if snapshot_fields {
+            let local = format!("__pb_{}_field{index}", d.root);
+            let ty = p.split_once(": ").unwrap().1;
+            let primitive = match ty.trim_start_matches("kotlin.") {
+                "Boolean" => Some("false"),
+                "Byte" => Some("0.toByte()"),
+                "Short" => Some("0.toShort()"),
+                "Int" => Some("0"),
+                "Long" => Some("0L"),
+                "Float" => Some("0.0f"),
+                "Double" => Some("0.0"),
+                "UInt" => Some("0u"),
+                "ULong" => Some("0uL"),
+                _ => None,
+            };
+            let absent = primitive.unwrap_or("null").to_owned();
+            let expression = if d.condition == "true" {
+                expr
+            } else {
+                format!("if ({}) {expr} else {absent}", d.condition)
+            };
+            out.setup.push(crate::KotlinBinding {
+                name: local.clone(),
+                expression,
+                absent,
+            });
+            if d.condition != "true" && primitive.is_none() && !ty.ends_with('?') {
+                format!("requireNotNull({local})")
+            } else {
+                local
+            }
+        } else {
+            expr
+        };
         for a in c
             .arguments
             .iter_mut()
@@ -971,6 +1009,12 @@ pub(crate) fn input_kotlin(
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
+            .chain(
+                c.handle_inputs
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+            )
             .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             *a = optional::replace(a, name, &expr);
@@ -1003,6 +1047,7 @@ pub(crate) fn input_kotlin(
     out.consumed.extend(c.consumed);
     out.setup.extend(c.setup);
     out.lock_groups.extend(c.lock_groups);
+    out.handle_inputs = c.handle_inputs;
     Ok(out)
 }
 pub(crate) fn output_kotlin(

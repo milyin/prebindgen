@@ -551,3 +551,6 @@ pub use alias_options::*;
 
 mod collection_cleanup;
 pub use collection_cleanup::*;
+
+mod type_inputs;
+pub use type_inputs::*;

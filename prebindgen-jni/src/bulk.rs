@@ -495,7 +495,13 @@ fn input_writer(layout: &BulkRecord) -> String {
 
 /// Recompute handle positions from measured record offsets and packed row ranges.
 /// Only handle-bearing ranges are visited; no source objects are read again.
-fn patch_handles(node: &JniNode, package: &str, base: &str, next: &mut usize) -> Result<String> {
+fn patch_handles(
+    node: &JniNode,
+    package: &str,
+    base: &str,
+    next: &mut usize,
+    kinds: &[BoxedWire],
+) -> Result<String> {
     let layout = record(node)?;
     let layout = format!(
         "{package}.BulkLayouts.r{:016x}",
@@ -505,8 +511,13 @@ fn patch_handles(node: &JniNode, package: &str, base: &str, next: &mut usize) ->
     for (field, wire) in crate::group::row_fields(node).enumerate() {
         let at = format!("({base}) + {layout}.offsets[{field}]");
         match &wire.kind {
-            JniWire::Handle { .. } => {
-                code.push_str(&format!("handleIndex = patchHandle({at}, handleIndex)\n"));
+            JniWire::Handle { handle, .. } => {
+                let group = kinds
+                    .iter()
+                    .position(|kind| crate::handles::key(kind) == crate::handles::key(handle))
+                    .ok_or("missing bulk handle group")?;
+                let index = format!("handleIndex{group}");
+                code.push_str(&format!("{index} = patchHandle({at}, {index}, {group})\n"));
             }
             JniWire::NativeRows { .. } => {
                 let child =
@@ -530,6 +541,7 @@ fn patch_handles(node: &JniNode, package: &str, base: &str, next: &mut usize) ->
                     package,
                     &format!("{start} + {index} * {child_layout}.size"),
                     next,
+                    kinds,
                 )?);
                 code.push_str(&format!("{index}++\n}}\n}}\n"));
             }
@@ -553,8 +565,13 @@ fn input_writers(
         } => {
             if input && crate::kotlin::input_handles(child, false) {
                 let name = input_writer(layout);
-                let patch = patch_handles(child, package, "0", &mut 0)?;
-                let class = format!("internal class {name} : BulkHandleWriter(BulkLayouts.r{:016x}.size) {{\noverride fun patchHandles() {{\nvar handleIndex = 0\n{patch}}}\n}}\n",prebindgen_reprc::schema_id(&layout.key));
+                let kinds = crate::handles::kinds(child);
+                let count = kinds.len();
+                let patch = patch_handles(child, package, "0", &mut 0, &kinds)?;
+                let indices = (0..count)
+                    .map(|i| format!("var handleIndex{i} = 0\n"))
+                    .collect::<String>();
+                let class = format!("internal class {name} : BulkHandleWriter(BulkLayouts.r{:016x}.size, {count}) {{\noverride fun patchHandles() {{\n{indices}{patch}}}\n}}\n",prebindgen_reprc::schema_id(&layout.key));
                 if let Some(previous) = out.get(&name) {
                     if previous != &class {
                         return Err(
@@ -591,6 +608,7 @@ fn pack(
     writer: &str,
     base: &str,
     context: &KotlinContext<'_>,
+    kinds: &[BoxedWire],
 ) -> Result<String> {
     let layout = record(node)?;
     let layout = kt_layout(&layout, context);
@@ -638,6 +656,7 @@ fn pack(
                         writer,
                         &format!("{start} + {index} * {child_layout}.size"),
                         context,
+                        kinds,
                     )?);
                     code.push_str("}\n");
                 }
@@ -655,10 +674,16 @@ fn pack(
             JniWire::Enum { .. } | JniWire::Selector { .. } => {
                 code.push_str(&format!("{writer}.int({at}, {arg})\n"))
             }
-            JniWire::Handle { handle, .. } => code.push_str(&format!(
-                "{writer}.handle({at}, {arg}, {})\n",
-                handle.access == Access::Move
-            )),
+            JniWire::Handle { handle, .. } => {
+                let group = kinds
+                    .iter()
+                    .position(|kind| crate::handles::key(kind) == crate::handles::key(handle))
+                    .ok_or("missing packed handle group")?;
+                code.push_str(&format!(
+                    "{writer}.handle({at}, {arg}, {}, {group})\n",
+                    handle.access == Access::Move
+                ));
+            }
             _ => return Err("unsupported field in bulk Kotlin writer".into()),
         }
     }
@@ -683,6 +708,11 @@ pub(crate) fn input_list(
         return Err("bulk sequence requires native rows".into());
     };
     Ok(KotlinInput {
+        handle_inputs: if crate::kotlin::input_handles(element, false) {
+            None
+        } else {
+            Some(Vec::new())
+        },
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
             if active == "true" { "" } else { "?" }
@@ -709,7 +739,14 @@ pub(crate) fn input_kotlin(
     let writer = format!("{}_writer", controls[0].name);
     let schema = kt_layout(layout, context);
     input.prepare_arguments(crate::kotlin::input_handles(child, false))?;
-    let body = pack(child, &input.prepared_arguments, &writer, "0", context)?;
+    let body = pack(
+        child,
+        &input.prepared_arguments,
+        &writer,
+        "0",
+        context,
+        &crate::handles::kinds(child),
+    )?;
     let handles = crate::kotlin::input_handles(child, false);
     let owned = crate::kotlin::input_handles(child, true);
     let condition = match &controls[0].kind {
@@ -729,6 +766,7 @@ pub(crate) fn input_kotlin(
         ];
         input.prepared_arguments = vec![state.clone(), format!("{state}?.length ?: 0")];
         input.locks.clear();
+        input.handle_inputs = Some(crate::handles::carrier_inputs(child, &state));
         input.lock_groups = vec![format!("{state}?.handles.orEmpty()")];
         input.consumed = if owned {
             vec![format!("{state}?.consume(__pb_consume)")]

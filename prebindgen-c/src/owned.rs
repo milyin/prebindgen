@@ -222,6 +222,7 @@ pub(crate) fn input(
         statements,
         argument,
         resources: vec![prebindgen_conversions::Resource {
+            allocation_type: None,
             registered: by_value,
             records_consumption: by_value,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#pointer.addr())),

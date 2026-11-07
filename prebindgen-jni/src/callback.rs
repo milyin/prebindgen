@@ -12,6 +12,7 @@ use std::rc::Rc;
 /// function accepting that callback.
 #[derive(Clone, Debug)]
 pub struct JniCallback {
+    kotlin_input_preflight: bool,
     package: String,
     name: String,
     arguments: Vec<Argument>,
@@ -253,6 +254,7 @@ pub(crate) fn input(
         });
     }
     let callback = Rc::new(JniCallback {
+        kotlin_input_preflight: flat.metadata.kotlin_input_preflight,
         package,
         name,
         arguments,
@@ -271,6 +273,17 @@ impl JniCallback {
             nodes.push((true, value.input.input_node()));
         }
         nodes
+    }
+
+    /// Pair native callback decoders that delegate aliases to Kotlin with
+    /// adapters that actually perform that preflight, even when registration
+    /// itself has no handle inputs.
+    pub(crate) fn requires_preflight(&self) -> bool {
+        self.kotlin_input_preflight
+            && self.return_value.as_ref().is_some_and(|value| {
+                !value.input.rust.resources.is_empty()
+                    && crate::handles::kotlin_preflight(&value.input)
+            })
     }
 
     pub(crate) fn fqn(&self) -> String {
@@ -297,6 +310,11 @@ impl JniCallback {
             domain_output: format_ident!("unused_domain"),
             return_sink: None,
             is_domain_error: false,
+            input_alias_checks: !self.kotlin_input_preflight
+                || self
+                    .return_value
+                    .as_ref()
+                    .is_some_and(|value| !crate::handles::kotlin_preflight(&value.input)),
             output_committed: quote!(),
         };
         let mut descriptor = String::from("(");
@@ -489,7 +507,11 @@ impl JniCallback {
             }
             (
                 format!(": {}", result.raw_kotlin_type()),
-                result.kotlin_encode("callbackReturned", context)?,
+                result.kotlin_encode(
+                    "callbackReturned",
+                    context,
+                    self.kotlin_input_preflight && crate::handles::kotlin_preflight(&result.input),
+                )?,
             )
         } else {
             (String::new(), String::new())
@@ -553,13 +575,26 @@ impl CallbackReturn {
             .1
             .into())
     }
-    fn kotlin_encode(&self, call: &str, context: &KotlinContext<'_>) -> Result<String> {
+    fn kotlin_encode(
+        &self,
+        call: &str,
+        context: &KotlinContext<'_>,
+        preflight: bool,
+    ) -> Result<String> {
         self.kotlin_type(context)?;
-        let input = self.input.kotlin(context)?;
+        let mut input = self.input.kotlin(context)?;
+        let locks = if preflight {
+            crate::handles::HandleLocks::new(std::slice::from_mut(&mut input), context)?
+        } else {
+            None
+        };
+        if preflight && locks.is_none() {
+            return Err("callback result lacks complete prepared handle inputs".into());
+        }
         let name = input.parameters[0].split_once(": ").unwrap().0;
         let binding = format!("val {name} = {call}\n");
         let mut setup = String::new();
-        for binding in input.setup {
+        for binding in &input.setup {
             setup.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
         }
         let raw = match input.arguments.as_slice() {
@@ -571,7 +606,9 @@ impl CallbackReturn {
             context.package,
             input.consumed.join("; ")
         );
-        if !input.locks.is_empty() || !input.lock_groups.is_empty() {
+        if let Some(plan) = locks {
+            body = plan.wrap(&body);
+        } else if !input.locks.is_empty() || !input.lock_groups.is_empty() {
             let prefix = &self.package;
             if input.lock_groups.is_empty() && input.locks.len() <= 3 {
                 // Kotlin evaluates all handle arguments before acquiring monitors.
@@ -725,7 +762,8 @@ impl CallbackReturn {
         }
         let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
         alias_check.include_parameter(context, &input.rust.resources)?;
-        let aliases = alias_check.initialize()?;
+        let aliases =
+            prebindgen_conversions::staged::input_alias_checks(alias_check.initialize()?, quote!());
         context.render(&quote!({
             let __pb_input_consumed=::core::cell::Cell::new(0usize);
             let __prebindgen_input_consumed=&__pb_input_consumed;

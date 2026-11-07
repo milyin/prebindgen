@@ -42,6 +42,7 @@ impl ParameterAliasCheck {
             .iter()
             .map(|resource| {
                 Ok(Resource {
+                    allocation_type: resource.allocation_type.clone(),
                     registered: resource.registered,
                     records_consumption: resource.records_consumption,
                     active: context.render(&resource.active)?,

@@ -248,11 +248,14 @@ pub(crate) fn input_list(
             "null".into()
         };
     let expression = if resources {
-        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {}.InputRows({rows}, {columns}) }} else null",context.package)
+        let count = crate::handles::kinds(element).len();
+        let groups = crate::handles::column_groups(element)?;
+        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {}.InputRows({rows}, {columns}, {count}, {groups}) }} else null",context.package)
     } else {
         format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {rows} }} else null")
     };
     Ok(KotlinInput {
+        handle_inputs: Some(crate::handles::carrier_inputs(element, &state)),
         parameter_paths: vec![prebindgen_declarations::ComponentPath::default()],
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",

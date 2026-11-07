@@ -65,7 +65,8 @@ fun checkOwnership() {
     rejected { summaryMerge(1, 0, 0.0, alias, 1, 0, 0.0, null) { _, _ -> } }
     check(!alias.isClosed) // Kotlin rejects a required null before entering JNI.
     rejected { summaryMerge(1, 0, 0.0, alias, 1, 0, 0.0, alias) { _, _ -> } }
-    check(alias.isClosed)
+    check(!alias.isClosed) // Kotlin preflight rejects aliases before native ownership transfer.
+    alias.close()
     val first = storageSummaryHandle(a)
     summaryMerge(1, 0, 0.0, first, 1, 0, 0.0, second) { count, total ->
         check(count == 2L && total == 6.5)

@@ -191,7 +191,35 @@ fn main() {
         views.field(fun!(jni_buffer_row_text))
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
+    let type_rows = || Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+    let type_nested = || Input::Sequence(Box::new(type_rows()));
     let binding = JniGen::builder()
+        .package(package!("typeinputs")
+            .class(ptr_class!(TypeInputA)).class(ptr_class!(TypeInputB))
+            .class(ptr_class!(TypeInputControl).gc_managed())
+            .class(data_class!(TypeInputRow)).class(data_class!(TypeInputHolder))
+            .fun(fun!(type_input_a_new)).fun(fun!(type_input_a_read))
+            .fun(fun!(type_input_b_new)).fun(fun!(type_input_b_read))
+            .fun(fun!(type_input_control_new)).fun(fun!(type_input_live)).fun(fun!(type_input_conversions))
+            .fun(fun!(type_input_fixed)).fun(fun!(type_input_fixed_mut))
+            .fun(fun!(type_input_shared_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_read)).bulk()))
+            .fun(fun!(type_input_mut_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_mut)).bulk()))
+            .fun(fun!(type_input_mixed)
+                .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
+            .fun(fun!(type_input_row).expand_param("value",Input::Record(vec![Input::Leaf;2])))
+            .fun(fun!(type_input_holder).expand_param("value",Input::Record(vec![Input::Optional(Box::new(Input::Record(vec![Input::Leaf;2])))])))
+            .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
+            .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
+            .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
+            .fun(fun!(type_input_callback).expand_param("callback",callback!(impl Fn()->Vec<TypeInputRow>).name("TypeInputCallback").expand_return(type_rows().bulk())))
+            .fun(fun!(type_input_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<TypeInputRow>>).name("TypeInputNestedCallback").expand_return(type_nested().bulk())))
+            .fun(fun!(type_input_optional).expand_param("values",expand_param!(Option<Vec<TypeInputA>>).variant_self().bulk()))
+            .fun(fun!(type_input_array).expand_param("values",expand_param!([TypeInputA;2]).variant_self().bulk())))
         .expand(expand_return!(&CallbackOwned).field_self_ref())
         .expand(expand_return!(&BorrowPacket).field_self_ref())
         .package(package!("borrowcopies")
@@ -1858,6 +1886,16 @@ fn main() {
         .kotlin
         .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
         .is_some());
+    // A handwritten read-only getter changes its result on a second read. This
+    // exercises input snapshots without changing the declared record surface.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputRow.kt")
+        .is_some());
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputHolder.kt")
+        .is_some());
     // Class/function placement survives moving the native runtime to another root.
     let relocated = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
@@ -1879,6 +1917,70 @@ fn main() {
         relocated.rust
     ));
     for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let checked = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .set_package_prefix("io.prebindgen.covertest.rawinputs")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .set_kotlin_input_preflight(false)
+        .package(
+            package!()
+                .class(ptr_class!(BulkHandle))
+                .class(data_class!(BulkReplayRow))
+                .class(enum_class!(BulkKind))
+                .class(data_class!(BulkPairText))
+                .fun(fun!(bulk_replay_rows).expand_param("rows", bulk_replay_input()))
+                .fun(
+                    fun!(bulk_nested_handles_input).expand_param(
+                        "values",
+                        Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
+                            Box::new(Input::Optional(Box::new(Input::Leaf.bulk()))),
+                        )))))
+                        .bulk(),
+                    ),
+                )
+                .fun(
+                    fun!(bulk_cleanup_nested_callback).expand_param(
+                        "callback",
+                        callback!(
+                            impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static
+                        )
+                        .name("BulkCleanupNestedCallback")
+                        .expand_return(
+                            Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
+                                Box::new(Input::Optional(Box::new(Input::Leaf))),
+                            )))))
+                            .bulk(),
+                        ),
+                    ),
+                )
+                .fun(
+                    fun!(bulk_cleanup_pair_callback).expand_param(
+                        "callback",
+                        callback!(impl Fn() -> BulkPairText)
+                            .name("BulkCleanupPairCallback")
+                            .expand_return(
+                                Input::Record(vec![
+                                    Input::Constructor {
+                                        function: "bulk_handle_copy".into(),
+                                        args: vec![Input::Leaf],
+                                    },
+                                    Input::Leaf,
+                                    Input::Leaf,
+                                ])
+                                .bulk(),
+                            ),
+                    ),
+                ),
+        )
+        .build()
+        .expect("generate checked raw-frame probes");
+    jni.rust.push_str(&format!(
+        "\nmod checked_raw_inputs {{ {} }}\n",
+        checked.rust
+    ));
+    for (path, source) in checked.kotlin {
         assert!(jni.kotlin.insert(path, source).is_none());
     }
     jni.write_rust("bindings.rs").unwrap();

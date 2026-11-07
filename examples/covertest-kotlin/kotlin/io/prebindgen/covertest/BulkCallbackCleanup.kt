@@ -62,7 +62,7 @@ fun checkBulkCallbackCleanup() {
     }
 
     // Ordinary inputs report their consumed prefix and leave unread owners to Kotlin.
-    val inputMethod=JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_nested_handles_input_")}.also {it.isAccessible=true}
+    val inputMethod=io.prebindgen.covertest.rawinputs.JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_nested_handles_input_")}.also {it.isAccessible=true}
     for(mode in 0..3) {
         val owners=List(2) {bulkHandleNew(500L+it)}
         val before=bulkDrops()
@@ -78,7 +78,7 @@ fun checkBulkCallbackCleanup() {
         check(bulkDrops()==before+2uL)
     }
 
-    val method = JNINative::class.java.declaredMethods.single {
+    val method = io.prebindgen.covertest.rawinputs.JNINative::class.java.declaredMethods.single {
         it.name.startsWith("call_bulk_cleanup_nested_callback_")
     }.also { it.isAccessible = true }
     for (worker in listOf(false, true)) {
@@ -132,7 +132,7 @@ fun checkBulkCallbackCleanup() {
     check(!validBorrow.isClosed && validOwner.isClosed && bulkDrops() == validDrops + 2uL)
     validBorrow.close()
 
-    val pairMethod = JNINative::class.java.declaredMethods.single {
+    val pairMethod = io.prebindgen.covertest.rawinputs.JNINative::class.java.declaredMethods.single {
         it.name.startsWith("call_bulk_cleanup_pair_callback_")
     }.also { it.isAccessible = true }
     val borrowed = bulkHandleNew(400)

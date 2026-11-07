@@ -57,3 +57,13 @@ internal inline fun <R> withGcHandleLocks(a: NativeHandle?, b: NativeHandle?, c:
 
 internal fun <R> withGcHandleLocks(handles: List<NativeHandle>, body: () -> R): R =
     try { withHandleLocks(handles, body) } finally { Reference.reachabilityFence(handles) }
+
+internal fun <R> withGcOrderedHandleLocks(handles: List<NativeHandle>, body: () -> R): R =
+    try { withOrderedHandleLocks(handles, body) } finally { Reference.reachabilityFence(handles) }
+internal fun <R> withGcInputHandleLocks(handles: List<NativeHandle>, exclusive: Boolean, body: () -> R): R =
+    try { withInputHandleLocks(handles, exclusive, body) } finally { Reference.reachabilityFence(handles) }
+internal fun <R> withGcMixedInputLocks(shared: List<NativeHandle>, exclusive: List<NativeHandle>, body: () -> R): R =
+    try { withMixedInputLocks(shared, exclusive, body) } finally {
+        Reference.reachabilityFence(shared)
+        Reference.reachabilityFence(exclusive)
+    }

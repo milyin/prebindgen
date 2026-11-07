@@ -205,7 +205,8 @@ fun checkOptions() {
     check(ownedResourceDrops() == start)
     val alias = optionResourceNew(true)!!
     try {optionResourcePair(alias, alias); error("aliased optional owners accepted")} catch (_: IllegalArgumentException) {}
-    check(alias.isClosed)
+    check(!alias.isClosed)
+    alias.close()
     val invalid = optionResourceNew(true)!!
     try { optionResourceEcho(invalid, 0xd800); error("invalid scalar accepted") } catch (_: IllegalArgumentException) {}
     check(invalid.isClosed)

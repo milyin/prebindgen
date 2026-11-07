@@ -82,12 +82,12 @@ fun checkCollections() {
         onBindingError = JniErrorHandler { closedRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(closedRouted)
-    // Group validation rejects a closed owner before acquiring any row.
+    // A closed later owner can fail after Rust consumed the valid prefix.
     val liveWithClosed = collectionResourceNew(103)
     val beforeClosedValidation = ownedResourceDrops()
     collectionInvalid { collectionHandles(listOf(liveWithClosed, aliasProbe), 65, 0, onError = throwResult) }
-    check(!liveWithClosed.isClosed)
-    check(ownedResourceDrops() == beforeClosedValidation)
+    check(liveWithClosed.isClosed)
+    check(ownedResourceDrops() == beforeClosedValidation + 1uL)
     liveWithClosed.close()
     check(ownedResourceDrops() == beforeClosedValidation + 1uL)
     val same = collectionResourceNew(42)
@@ -109,7 +109,8 @@ fun checkCollections() {
     repeated.close(); unread.close()
     val crossParameter = listOf(collectionResourceNew(1), collectionResourceNew(2))
     collectionInvalid { collectionAlias(crossParameter, crossParameter[1]) }
-    check(crossParameter.all { it.isClosed })
+    check(crossParameter.none { it.isClosed })
+    crossParameter.forEach { it.close() }
     val handles = listOf(collectionResourceNew(1), collectionResourceNew(2))
     check(collectionResourceIds(listOf(handles[0], handles[0])) == listOf(1L, 1L))
     check(handles.none { it.isClosed })
@@ -152,7 +153,8 @@ fun checkCollections() {
     check(optionalHandle.isClosed)
     val nestedHandle = collectionResourceNew(11)
     collectionInvalid { collectionNestedHandles(listOf(listOf(nestedHandle), listOf(nestedHandle))) }
-    check(nestedHandle.isClosed)
+    check(!nestedHandle.isClosed)
+    nestedHandle.close()
     val nestedLive = collectionResourceNew(12)
     collectionNestedHandles(listOf(emptyList(), listOf(nestedLive))).flatten().single().close()
     check(nestedHandle.isClosed)
