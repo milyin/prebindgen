@@ -1,4 +1,7 @@
 #define _GNU_SOURCE
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include "bindings.h"
 #include <assert.h>
 #include <dlfcn.h>
@@ -84,6 +87,21 @@ static uint64_t sample(struct fixture *borrowed,int kind,size_t n,size_t iterati
     return elapsed;
 }
 int main(int argc,char **argv) {
+    // Checked-only child-process probes deliberately fail after a large prefix.
+    // Never run malformed frames against an unchecked build.
+    if(argc==3 && !strcmp(argv[1],"reject")) {
+        int kind=!strcmp(argv[2],"flat")?0:!strcmp(argv[2],"nested")?1:!strcmp(argv[2],"groups8")?2:!strcmp(argv[2],"shared")?3:!strcmp(argv[2],"callback")?5:6;
+        struct fixture f=prepare(kind,256,1,"ascending");
+        size_t at=200;
+        switch(kind){
+        case 0:((bench_history_flat_p0_w1_row *)f.leaf)[at].v0=f.handles[0];break;
+        case 1:case 2:((bench_history_nested_p0_w5_row *)f.leaf)[at].v0=f.handles[0];break;
+        case 3:((bench_history_shared_p0_w5_row *)f.leaf)[at].v0=f.token;break;
+        default:((callback_leaf *)f.leaf)[at].v0=f.handles[0];break;
+        }
+        invoke(&f,1); // A checked binding must abort with its alias diagnostic.
+        return 90;
+    }
     assert(argc==8);
     bool counts=!strcmp(argv[1],"count");assert(counts||!strcmp(argv[1],"time"));assert(bench_counter_enabled()==counts);
     const char *names[]={"flat","nested","groups8","shared","readonly","callback","callback_single"};int kind=-1;

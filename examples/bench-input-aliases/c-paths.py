@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import random
+import resource
 import statistics
 import subprocess
 
@@ -25,13 +26,13 @@ p.add_argument('--batches',type=int)
 p.add_argument('--target-ms',type=int,default=20)
 p.add_argument('--order',choices=['ascending','descending','shuffled'],required=True)
 a=p.parse_args()
-assert a.forks>0
+assert a.forks>0 and a.forks%2==0
 root=a.output.resolve();root.mkdir(parents=True,exist_ok=True)
 assert not list(root.iterdir()),'Use an empty output directory'
 (root/'raw').mkdir()
 sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 builds={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before),('after',a.after)]}
-for key in ['fixture_sha256','rustc','cc','cargo_profile','lock_sha256','cargo_configs','profile_environment','header_abi_sha256']:
+for key in ['fixture_sha256','rustc','cc','cargo_profile','lock_sha256','cargo_configs','profile_environment','header_abi_sha256','alias_checks','bindings_sha256']:
     assert builds['before'][key]==builds['after'][key],key
 for d in builds.values():
     assert d['count_allocations']==(a.kind=='count')
@@ -46,6 +47,20 @@ cells=[(case,n) for case in cases for n in sizes]
 if a.smoke:cells=[('nested',8),('callback',8),('readonly',8),('flat',8)]
 batches=a.batches or (10 if a.kind=='count' else 12)
 if a.smoke:batches=2
+# A real duplicate probe distinguishes native rejection from an unchecked call.
+# Disable core dumps for the intentionally aborting C API, and require its exact
+# alias diagnostic rather than accepting any crash or checksum assertion.
+negative=[]
+if builds['before']['alias_checks']:
+    for version,d in builds.items():
+        for case in ['flat','nested','groups8','shared','callback','callback_single']:
+            command=[d['history_driver'],'reject',case]
+            result=subprocess.run(command,capture_output=True,text=True,
+                env=dict(os.environ,LD_LIBRARY_PATH=str(Path(d['library']).parent)),
+                preexec_fn=lambda:resource.setrlimit(resource.RLIMIT_CORE,(0,0)))
+            assert result.returncode!=0 and result.returncode!=90 and 'conflicting input aliases' in result.stderr,(version,case,result.returncode,result.stderr)
+            (root/'raw'/f'reject-{version}-{case}.log').write_text(result.stdout+result.stderr)
+            negative.append(dict(version=version,case=case,returncode=result.returncode))
 runs=[];samples=[]
 for fork in range(a.forks):
     order=cells.copy();random.Random(20261103+fork).shuffle(order)
@@ -93,7 +108,7 @@ with (root/'samples.csv').open('w') as out:
     writer=csv.DictWriter(out,fieldnames=list(samples[0]));writer.writeheader();writer.writerows(samples)
 for d in builds.values():
     assert sha(d['library'])==d['library_sha256'] and sha(d['history_driver'])==d['history_driver_sha256']
-report=dict(builds=builds,effective_builds=effective,driver_sha256=sha(driver),settings={k:str(v) if isinstance(v,Path) else v for k,v in vars(a).items()},cells=cells,runs=runs,summary=summary,
+report=dict(builds=builds,effective_builds=effective,driver_sha256=sha(driver),settings={k:str(v) if isinstance(v,Path) else v for k,v in vars(a).items()},cells=cells,runs=runs,summary=summary,negative_probes=negative,
             affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),
             cpu=subprocess.run(['lscpu'],capture_output=True,text=True).stdout,
             loader_environment={k:v for k,v in os.environ.items() if k in ['LD_PRELOAD','MALLOC_ARENA_MAX','GLIBC_TUNABLES']},

@@ -77,6 +77,23 @@ private fun checkLargeAliasHistory() {
         }
         check(bulkDrops() == before + handles.size.toULong())
     }
+    // A late duplicate must be rejected by Rust after constructors ran. Kotlin
+    // preflight would reject this before the native constructor counter advances.
+    for (callback in listOf(false,true)) {
+        val values=List(count) {i->io.prebindgen.covertest.rawinputs.BulkReplayRow(
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+1), "ok", byteArrayOf(7),
+            io.prebindgen.covertest.rawinputs.BulkKind.A,io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+2))}
+        val handles=values.flatMap {listOf(it.first,it.last)}
+        val last=values.last()
+        val rows=(values.dropLast(1)+io.prebindgen.covertest.rawinputs.BulkReplayRow(values.first().first,last.text,last.bytes,last.kind,last.last)).map{listOf(it)}
+        bulkReplayReset(0uL)
+        var rejected=false
+        val error=io.prebindgen.covertest.rawinputs.JniErrorHandler {rejected=true;0uL}
+        if(callback)io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback {rows},error)
+        else io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(rows,error)
+        check(rejected && bulkReplayCount(0uL)>128uL) {"native alias validation was bypassed"}
+        handles.forEach{it.close()}
+    }
     bulkReplayReset(0uL)
 }
 

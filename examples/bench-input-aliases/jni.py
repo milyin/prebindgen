@@ -7,6 +7,7 @@ p.add_argument('--after',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--forks',type=int,default=6)
 p.add_argument('--aa',action='store_true')
+p.add_argument('--policy',choices=['native','kotlin'],required=True)
 p.add_argument('--sizes',default='1,128,512,8192')
 p.add_argument('--warmup',type=int,default=10)
 p.add_argument('--batches',type=int,default=11)
@@ -19,6 +20,7 @@ info={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before)
 for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sha256','cargo_config_sha256','cargo_profile','profile_environment','native_input_checks']:
  assert info['before'][key]==info['after'][key],key
 for d in info.values():
+ assert d['native_input_checks']==(a.policy=='native'), 'unexpected alias-validation policy'
  assert not d['native_allocations'] and d['instrumentation_probe']=='NATIVE_ALLOCATIONS,false'
  assert sha(d['jar'])==d['jar_sha256'] and sha(d['library'])==d['native_sha256']
 flags=['-Xss16m','-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2']
@@ -53,5 +55,5 @@ for mode,case,size in sorted({(s['mode'],s['case'],s['size']) for s in samples})
   row[metric]['paired_after_before']=statistics.median(y/x if x else 1.0 for x,y in zip(fm['before'],fm['after']))
  summary.append(row)
 for d in info.values():assert sha(d['library'])==d['native_sha256'] and sha(d['jar'])==d['jar_sha256']
-(root/'results.json').write_text(json.dumps(dict(builds=info,settings=dict(forks=a.forks,aa=a.aa,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
+(root/'results.json').write_text(json.dumps(dict(builds=info,settings=dict(forks=a.forks,aa=a.aa,policy=a.policy,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
 print('Finished',root,flush=True)
