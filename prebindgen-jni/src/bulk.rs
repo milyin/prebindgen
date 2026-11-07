@@ -3,7 +3,7 @@ use super::*;
 use crate::kotlin::{JniNode, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 use prebindgen_flat::{Wire, WireNode};
-use std::rc::Rc;
+use std::{fmt::Write, rc::Rc};
 
 /// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
 #[derive(Clone, Debug)]
@@ -568,9 +568,10 @@ fn input_writers(
                 let kinds = crate::handles::kinds(child);
                 let count = kinds.len();
                 let patch = patch_handles(child, package, "0", &mut 0, &kinds)?;
-                let indices = (0..count)
-                    .map(|i| format!("var handleIndex{i} = 0\n"))
-                    .collect::<String>();
+                let mut indices = String::new();
+                for i in 0..count {
+                    writeln!(indices, "var handleIndex{i} = 0").unwrap();
+                }
                 let class = format!("internal class {name} : BulkHandleWriter(BulkLayouts.r{:016x}.size, {count}) {{\noverride fun patchHandles() {{\n{indices}{patch}}}\n}}\n",prebindgen_reprc::schema_id(&layout.key));
                 if let Some(previous) = out.get(&name) {
                     if previous != &class {
