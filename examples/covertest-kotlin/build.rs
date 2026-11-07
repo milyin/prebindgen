@@ -1931,6 +1931,23 @@ fn main() {
                 .class(enum_class!(BulkKind))
                 .class(data_class!(BulkPairText))
                 .fun(fun!(bulk_replay_rows).expand_param("rows", bulk_replay_input()))
+                .fun(fun!(bulk_handle_new))
+                .fun(fun!(bulk_handle_value))
+                .fun(fun!(bulk_replay_nested_rows).expand_param(
+                    "rows",
+                    Input::Sequence(Box::new(bulk_replay_input_with(true, true))).bulk(),
+                ))
+                .fun(
+                    fun!(bulk_replay_nested_callback).expand_param(
+                        "callback",
+                        callback!(impl Fn() -> Vec<Vec<BulkReplayRow>>)
+                            .name("BulkReplayNestedCallback")
+                            .expand_return(
+                                Input::Sequence(Box::new(bulk_replay_input_with(true, true)))
+                                    .bulk(),
+                            ),
+                    ),
+                )
                 .fun(
                     fun!(bulk_nested_handles_input).expand_param(
                         "values",

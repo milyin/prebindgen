@@ -12,7 +12,7 @@ import subprocess
 
 FIXTURE = Path(__file__).resolve().parent
 ROOT = FIXTURE.parents[1]
-FILES = ['flat.rs', 'bindings.rs', 'allocations.rs', 'driver.c', 'input-driver.c', 'build.py', 'Cargo.lock.snapshot']
+FILES = ['flat.rs', 'bindings.rs', 'allocations.rs', 'driver.c', 'input-driver.c', 'history-driver.c', 'build.py', 'Cargo.lock.snapshot']
 sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
@@ -97,6 +97,11 @@ def build(args):
     input_command[input_command.index(str(FIXTURE/'driver.c'))]=str(FIXTURE/'input-driver.c')
     input_command[-1]=str(input_driver)
     subprocess.run(input_command,check=True)
+    history_driver=output/'history-driver'
+    history_command=compile_command.copy()
+    history_command[history_command.index(str(FIXTURE/'driver.c'))]=str(FIXTURE/'history-driver.c')
+    history_command[-1]=str(history_driver)
+    subprocess.run(history_command,check=True)
     assert revisions=={str(p):revision(p) for p in {checkout,ROOT}}
     configs=[]
     for parent in [project,*project.parents,Path(os.environ.get('CARGO_HOME',Path.home()/'.cargo'))]:
@@ -111,6 +116,7 @@ def build(args):
                 lock_sha256=sha(project/'Cargo.lock'),cargo_configs={str(p):sha(p) for p in set(configs)},
                 profile_environment={k:v for k,v in os.environ.items() if k.startswith(('CARGO_PROFILE_','RUSTC')) or k in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','RUSTUP_TOOLCHAIN']},
                 library=str(library),library_sha256=sha(library),driver=str(driver),driver_sha256=sha(driver),input_driver=str(input_driver),input_driver_sha256=sha(input_driver),input_compile_command=input_command,
+                history_driver=str(history_driver),history_driver_sha256=sha(history_driver),history_compile_command=history_command,
                 header_sha256=sha(out/'bindings.h'),
                 header_abi_sha256=hashlib.sha256(re.sub(r"\s+", " ", re.sub(r"/\*.*?\*/", "", (out/'bindings.h').read_text(), flags=re.S)).strip().encode()).hexdigest(),
                 bindings_sha256=sha(out/'bindings.rs'))

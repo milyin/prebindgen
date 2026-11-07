@@ -1,6 +1,7 @@
 use prebindgen_declarations::{callback, expand_param, expand_return, fun, Input};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
+    println!("cargo:rerun-if-env-changed=BENCH_NATIVE_INPUT_CHECKS");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     for (mode, bulk) in [("plain", false), ("bulk", true)] {
         let scalar = fun!(scalar);
@@ -111,6 +112,7 @@ fn main() {
         let buffers=fun!(owned_buffer_records_echo).expand_param("values",if bulk {buffer_input.bulk()}else{buffer_input});
         let buffers=if bulk {buffers.expand_return(expand_return!(BufferRecord).field_self_into().bulk())}else{buffers};
         let generated = JniGen::builder()
+            .set_kotlin_input_preflight(std::env::var("BENCH_NATIVE_INPUT_CHECKS").as_deref() != Ok("1"))
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)

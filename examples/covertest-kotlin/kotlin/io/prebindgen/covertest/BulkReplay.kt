@@ -39,25 +39,26 @@ fun checkBulkReplay() {
 }
 
 private fun checkLargeAliasHistory() {
-    // Two owned handles per inner list cross the runtime's vector/index boundary.
+    // This binding explicitly retains native checks after Kotlin preflight became
+    // the default. Two owned handles per inner list cross the runtime's vector/index boundary.
     // Constructor failure occurs after promotion, covering callback unread-owner
     // cleanup and ordinary-input ownership receipts through the actual JNI call.
     val count = 256
     for (callback in listOf(false, true)) for (fail in listOf(0uL, 100uL)) {
-        val rows = List(count) { i -> BulkReplayRow(
-            bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), BulkKind.A,
-            bulkHandleNew(2L * i + 2)
+        val rows = List(count) { i -> io.prebindgen.covertest.rawinputs.BulkReplayRow(
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), io.prebindgen.covertest.rawinputs.BulkKind.A,
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 2)
         ) }
         val handles = rows.flatMap { listOf(it.first, it.last) }
         val nested = rows.map { listOf(it) }
         val before = bulkDrops()
         bulkReplayReset(fail)
         var failed = false
-        val error = JniErrorHandler { failed = true; 0uL }
+        val error = io.prebindgen.covertest.rawinputs.JniErrorHandler { failed = true; 0uL }
         val result = if (callback) {
-            bulkReplayNestedCallback(BulkReplayNestedCallback { nested }, error)
+            io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback { nested }, error)
         } else {
-            bulkReplayNestedRows(nested, error)
+            io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(nested, error)
         }
         check(failed == (fail != 0uL))
         if (!failed) {
@@ -71,7 +72,7 @@ private fun checkLargeAliasHistory() {
         else check(consumed in 1 until handles.size)
         check(bulkDrops() == before + consumed.toULong())
         handles.forEachIndexed { i, handle ->
-            if (!handle.isClosed) check(bulkHandleValue(handle) == i.toLong() + 1)
+            if (!handle.isClosed) check(io.prebindgen.covertest.rawinputs.bulkHandleValue(handle) == i.toLong() + 1)
             handle.close()
         }
         check(bulkDrops() == before + handles.size.toULong())
