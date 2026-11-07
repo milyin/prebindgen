@@ -719,6 +719,13 @@ validation to Kotlin only when these identities and access modes match its
 prepared handles. External adapter struct literals must supply this metadata;
 ordinary binding declarations do not change.
 
+Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
+gc_managed}`, `KotlinInput::handle_inputs`, `JniModule::kotlin_input_preflight`
+and `JniContext::input_alias_checks`. `KotlinInput::default()` leaves handle
+preflight metadata absent, preserving native checks. Keep
+`JniContext::input_alias_checks` true for native frames without matching Kotlin
+preflight. Normal binding declarations obtain all these settings from the builder.
+
 Consuming C Result calls return an ownership count through `size_t *ownership`.
 The count identifies the consumed prefix of active owned wire values in argument,
 row and field order, including on failure. A callback context counts as one value.

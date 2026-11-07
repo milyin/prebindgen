@@ -86,9 +86,13 @@ pub(crate) fn column_groups(node: &JniNode) -> Result<String> {
             let local = if let JniWire::Handle { handle, .. } = &wire.kind {
                 vec![(**handle).clone()]
             } else if matches!(wire.kind, JniWire::Rows { .. } | JniWire::BulkBuffer { .. }) {
-                controlled_child(node, &wire.name)
-                    .map(kinds)
-                    .unwrap_or_default()
+                let child = controlled_child(node, &wire.name).ok_or_else(|| {
+                    format!(
+                        "missing prepared child for handle-group column `{}`",
+                        wire.name
+                    )
+                })?;
+                kinds(child)
             } else {
                 vec![]
             };
@@ -98,14 +102,16 @@ pub(crate) fn column_groups(node: &JniNode) -> Result<String> {
                     groups
                         .iter()
                         .position(|g| key(g) == key(kind))
-                        .expect("carrier contains its column handles")
-                        .to_string()
+                        .map(|index| index.to_string())
+                        .ok_or_else(|| {
+                            format!("missing parent handle group for `{}`", type_key(&kind.ty))
+                        })
                 })
-                .collect::<Vec<_>>()
+                .collect::<Result<Vec<_>>>()?
                 .join(", ");
-            format!("intArrayOf({indices})")
+            Ok(format!("intArrayOf({indices})"))
         })
-        .collect::<Vec<_>>()
+        .collect::<Result<Vec<_>>>()?
         .join(", ");
     Ok(format!("arrayOf({columns})"))
 }
@@ -325,5 +331,77 @@ impl HandleLocks {
                 .map(|s| s.local.clone())
                 .collect::<Vec<_>>(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prebindgen_flat::Wire;
+
+    fn handle(name: &str, ty: syn::Type) -> Wire<JniWire> {
+        Wire {
+            name: syn::parse_str(name).unwrap(),
+            kind: JniWire::handle(
+                BoxedWire {
+                    ty,
+                    access: Access::Move,
+                },
+                "true",
+            ),
+        }
+    }
+    fn rows() -> Wire<JniWire> {
+        Wire {
+            name: syn::parse_quote!(rows),
+            kind: JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        }
+    }
+    #[test]
+    fn nested_column_groups_cover_every_child_allocation_class() {
+        let node = WireNode::Branch {
+            controls: vec![],
+            meta: JniBranch::Group(JniGroup::Values),
+            children: vec![
+                WireNode::Leaf(vec![handle("first", syn::parse_quote!(A))]),
+                WireNode::Chain {
+                    controls: vec![rows()],
+                    meta: JniChain::Sequence(JniSequence::Buffered),
+                    child: Box::new(WireNode::Leaf(vec![
+                        handle("a", syn::parse_quote!(A)),
+                        handle("b", syn::parse_quote!(B)),
+                    ])),
+                },
+            ],
+        };
+        assert_eq!(
+            column_groups(&node).unwrap(),
+            "arrayOf(intArrayOf(0), intArrayOf(0, 1))"
+        );
+    }
+    #[test]
+    fn missing_nested_column_metadata_is_a_generation_error() {
+        for column in [
+            rows(),
+            Wire {
+                name: syn::parse_quote!(buffer),
+                kind: JniWire::BulkBuffer {
+                    condition: "true".into(),
+                    null_niche_available: true,
+                },
+            },
+        ] {
+            let node = WireNode::Leaf(vec![
+                handle("a", syn::parse_quote!(A)),
+                handle("b", syn::parse_quote!(B)),
+                column,
+            ]);
+            assert!(column_groups(&node)
+                .unwrap_err()
+                .contains("missing prepared child"));
+        }
     }
 }
