@@ -92,9 +92,12 @@ internal object JNINative {
     @JvmStatic external fun call_default_bulk_callback_af0d489a7a6a5660(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_default_bulk_callback_mixed_d29393bf89d94532(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_bulk_replay_rows_647e979b1d69f1d8(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_bulk_replay_staged_rows_a056ab2b619ca37c(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_replay_redundant_rows_0b171460279d6c2d(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_replay_nested_rows_888a142b3d0bc092(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_replay_nested_callback_e01ab5cc8380c27a(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_replay_object_rows_cf0663b3fd10ec4e(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_replay_callback_113b6c1aa18018c3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_nested_handles_input_20a8692eaca21fba(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_cleanup_nested_callback_1167603045ff0977(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_bulk_cleanup_pair_callback_75c0d45b83cad591(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_replay_reset_ec26adbfb8cc43d7(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit

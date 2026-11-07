@@ -10,11 +10,12 @@ fun checkBulkReplay() {
         BulkReplayRow(bulkHandleNew(5), "ok", byteArrayOf(), BulkKind.B, bulkHandleNew(6))
     )
     fun owners(rows: List<BulkReplayRow>) = rows.flatMap { listOf(it.first,it.last) }
-    for (mode in 0..3) {
-        val returned=mode==1
+    for (mode in 0..5) {
+        val returned=mode==1 || mode==5
         val values=rows();val handles=owners(values);val drops=bulkDrops()
         bulkReplayReset(0uL)
-        val result=when(mode){3->bulkReplayObjectRows(values);1->bulkReplayCallback(BulkReplayCallback {values});2->bulkReplayStagedRows(values);else->bulkReplayRows(values)}
+        fun nested(rows: List<BulkReplayRow>) = listOf(emptyList(),rows.take(1),emptyList(),rows.drop(1),emptyList())
+        val result=when(mode){4->bulkReplayNestedRows(nested(values));5->bulkReplayNestedCallback(BulkReplayNestedCallback {nested(values)});3->bulkReplayObjectRows(values);1->bulkReplayCallback(BulkReplayCallback {values});2->bulkReplayRedundantRows(values);else->bulkReplayRows(values)}
         check(result==34uL && handles.all {it.isClosed})
         check(bulkDrops()==drops+6uL)
         check((0uL..2uL).all {bulkReplayCount(it)==2uL} && bulkReplayCount(3uL)==1uL)
@@ -22,7 +23,7 @@ fun checkBulkReplay() {
             val failing=rows();val pending=owners(failing);val before=bulkDrops()
             bulkReplayReset(fail);var rejected=false
             val error=JniErrorHandler {rejected=true;0uL}
-            val value=when(mode){3->bulkReplayObjectRows(failing,error);1->bulkReplayCallback(BulkReplayCallback {failing},error);2->bulkReplayStagedRows(failing,error);else->bulkReplayRows(failing,error)}
+            val value=when(mode){4->bulkReplayNestedRows(nested(failing),error);5->bulkReplayNestedCallback(BulkReplayNestedCallback {nested(failing)},error);3->bulkReplayObjectRows(failing,error);1->bulkReplayCallback(BulkReplayCallback {failing},error);2->bulkReplayRedundantRows(failing,error);else->bulkReplayRows(failing,error)}
             check(value==0uL && rejected && bulkReplayCount(3uL)==0uL)
             val consumed=if(returned || fail==2uL) 6 else 2
             check(pending.withIndex().all {(i,h)->h.isClosed==(i<consumed)})

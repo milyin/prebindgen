@@ -1786,9 +1786,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         _ => false,
                     }
                 }
-                let previous = self
-                    .grouped_input
-                    .replace(!contains_sequence(element_recipe));
+                let grouped_elements = !contains_sequence(element_recipe);
+                let previous = self.grouped_input.replace(grouped_elements);
                 let previous_bulk_row = self.bulk_input_row.replace(self.bulk.get());
                 let child = self.input(element, element_recipe, extra, &Condition::default());
                 self.bulk_input_row.set(previous_bulk_row);
@@ -1796,14 +1795,23 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let child = child?;
                 // An exhaustive recipe check keeps future validation-time
                 // operations out of row replay until their effects are audited.
-                fn deferred_construction(recipe: &Input) -> bool {
+                fn deferred_construction(recipe: &Input, bulk: bool) -> bool {
                     match recipe {
                         Input::Leaf => true,
-                        Input::Optional(inner) => deferred_construction(inner),
+                        Input::Optional(inner) => deferred_construction(inner, bulk),
+                        // With grouped element construction, input_named leaves
+                        // acquisition deferred. Inside an existing bulk frame the
+                        // modifier then adds no preparation. Outside bulk it can
+                        // create a new frame during validation.
+                        Input::Bulk(inner) if bulk => deferred_construction(inner, bulk),
                         Input::Fields(fields) | Input::Record(fields) | Input::Selector(fields) => {
-                            fields.iter().all(deferred_construction)
+                            fields
+                                .iter()
+                                .all(|field| deferred_construction(field, bulk))
                         }
-                        Input::Constructor { args, .. } => args.iter().all(deferred_construction),
+                        Input::Constructor { args, .. } => {
+                            args.iter().all(|arg| deferred_construction(arg, bulk))
+                        }
                         Input::Bulk(_) | Input::Sequence(_) | Input::Callback(_) => false,
                         Input::Request(never) => match *never {},
                     }
@@ -1819,7 +1827,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
-                    deferred_construction(element_recipe),
+                    deferred_construction(element_recipe, self.bulk.get() && grouped_elements),
                 );
             }
             Input::Optional(inner) => {

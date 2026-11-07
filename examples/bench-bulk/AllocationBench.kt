@@ -7,6 +7,12 @@ internal object Counters {
 private class Measured(val run: () -> Long, val close: () -> Unit)
 private fun makePlain(kind: String, size: Int): Measured {
     return when (kind) {
+        "callback_nested", "callback_nested_many" -> {
+            var rows=if(kind=="callback_nested") listOf(emptyList(),List(size) {bench.plain.inputHandleNew(it.toLong())},emptyList())
+                     else List(size) {listOf(bench.plain.inputHandleNew(it.toLong()))}
+            val callback=bench.plain.OwnedNestedCallback {rows}
+            Measured({rows=bench.plain.callbackNestedOwnedHandles(callback);rows.sumOf {it.size}.toLong()},{rows.forEach {group->group.forEach {it.close()}}})
+        }
         "numbers_input" -> {
             val rows=List(size) {it.toLong()}
             val total=size.toLong()*(size-1)/2
@@ -51,6 +57,12 @@ private fun makePlain(kind: String, size: Int): Measured {
 }
 private fun makeBulk(kind: String, size: Int): Measured {
     return when (kind) {
+        "callback_nested", "callback_nested_many" -> {
+            var rows=if(kind=="callback_nested") listOf(emptyList(),List(size) {bench.bulk.inputHandleNew(it.toLong())},emptyList())
+                     else List(size) {listOf(bench.bulk.inputHandleNew(it.toLong()))}
+            val callback=bench.bulk.OwnedNestedCallback {rows}
+            Measured({rows=bench.bulk.callbackNestedOwnedHandles(callback);rows.sumOf {it.size}.toLong()},{rows.forEach {group->group.forEach {it.close()}}})
+        }
         "numbers_input" -> {
             val rows=List(size) {it.toLong()}
             val total=size.toLong()*(size-1)/2

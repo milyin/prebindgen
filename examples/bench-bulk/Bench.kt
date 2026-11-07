@@ -127,6 +127,20 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
         cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
             Operation {_ ->buffers[0]=bench.plain.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.plain.inputHandleValue(buffers[0][0].handle)+size}))
     }
+    for(size in sizes) {
+        val many=arrayOf(List(size) {listOf(bench.plain.inputHandleNew(BASE+it))})
+        cycleCleanup.add(AutoCloseable {many[0].forEach {group->group.forEach {it.close()}}})
+        cases.add(Case("nested_many_owned_handles_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->many[0]=bench.plain.nestedOwnedHandlesEcho(many[0]);if(size==0)0L else bench.plain.inputHandleValue(many[0][0][0])+size}))
+        for(small in listOf(false,true)) {
+            val nested=arrayOf(if(small)List(size) {listOf(bench.plain.inputHandleNew(BASE+it))}
+                               else listOf(emptyList(),List(size) {bench.plain.inputHandleNew(BASE+it)},emptyList()))
+            val callback=bench.plain.OwnedNestedCallback {callbacks[0]++;nested[0]}
+            cycleCleanup.add(AutoCloseable {nested[0].forEach {group->group.forEach {it.close()}}})
+            cases.add(Case(if(small)"callback_many_nested_owned_handles" else "callback_nested_owned_handles",size,if(size==0)0L else BASE+size,0,
+                Operation {_ ->nested[0]=bench.plain.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.plain.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
+        }
+    }
     var callbackRecord = bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE),1L)
     val recordCallback = bench.plain.OwnedRecordCallback { callbacks[0]++; callbackRecord }
     cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
@@ -259,6 +273,20 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
         cycleCleanup.add(AutoCloseable {buffers[0].forEach {it.handle.close()}})
         cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
             Operation {_ ->buffers[0]=bench.bulk.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.bulk.inputHandleValue(buffers[0][0].handle)+size}))
+    }
+    for(size in sizes) {
+        val many=arrayOf(List(size) {listOf(bench.bulk.inputHandleNew(BASE+it))})
+        cycleCleanup.add(AutoCloseable {many[0].forEach {group->group.forEach {it.close()}}})
+        cases.add(Case("nested_many_owned_handles_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->many[0]=bench.bulk.nestedOwnedHandlesEcho(many[0]);if(size==0)0L else bench.bulk.inputHandleValue(many[0][0][0])+size}))
+        for(small in listOf(false,true)) {
+            val nested=arrayOf(if(small)List(size) {listOf(bench.bulk.inputHandleNew(BASE+it))}
+                               else listOf(emptyList(),List(size) {bench.bulk.inputHandleNew(BASE+it)},emptyList()))
+            val callback=bench.bulk.OwnedNestedCallback {callbacks[0]++;nested[0]}
+            cycleCleanup.add(AutoCloseable {nested[0].forEach {group->group.forEach {it.close()}}})
+            cases.add(Case(if(small)"callback_many_nested_owned_handles" else "callback_nested_owned_handles",size,if(size==0)0L else BASE+size,0,
+                Operation {_ ->nested[0]=bench.bulk.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.bulk.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
+        }
     }
     var callbackRecord = bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE),1L)
     val recordCallback = bench.bulk.OwnedRecordCallback { callbacks[0]++; callbackRecord }

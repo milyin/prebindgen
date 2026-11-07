@@ -296,3 +296,6 @@ pub fn owned_buffer_records_echo(values:Vec<BufferRecord>)->Vec<BufferRecord> {s
 
 #[prebindgen]
 pub fn callback_owned_record(callback:impl Fn()->HandleRecord)->HandleRecord {callback()}
+
+#[prebindgen]
+pub fn callback_nested_owned_handles(callback: impl Fn() -> Vec<Vec<InputHandle>>) -> Vec<Vec<InputHandle>> { callback() }

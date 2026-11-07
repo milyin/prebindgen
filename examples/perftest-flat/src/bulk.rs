@@ -549,7 +549,7 @@ pub fn bulk_replay_count(which: usize) -> usize {
     }
 }
 #[prebindgen]
-pub fn bulk_replay_staged_rows(rows: Vec<BulkReplayRow>) -> usize {
+pub fn bulk_replay_redundant_rows(rows: Vec<BulkReplayRow>) -> usize {
     bulk_replay_rows(rows)
 }
 
@@ -583,4 +583,19 @@ pub fn bulk_cleanup_nested_callback(
 pub fn bulk_cleanup_pair_callback(callback: impl Fn() -> BulkPairText) -> usize {
     let _ = callback();
     1
+}
+
+#[prebindgen]
+pub fn bulk_replay_nested_rows(rows: Vec<Vec<BulkReplayRow>>) -> usize {
+    bulk_replay_rows(rows.into_iter().flatten().collect())
+}
+
+#[prebindgen]
+pub fn bulk_replay_nested_callback(callback: impl Fn() -> Vec<Vec<BulkReplayRow>>) -> usize {
+    bulk_replay_nested_rows(callback())
+}
+
+#[prebindgen]
+pub fn bulk_nested_handles_input(values: Vec<Option<Vec<Option<BulkHandle>>>>) -> usize {
+    values.into_iter().flatten().flatten().flatten().count()
 }

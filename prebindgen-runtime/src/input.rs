@@ -149,22 +149,68 @@ impl DynamicInputs {
             capacity,
         }
     }
-    /// Sort the new batch together with previous accesses, then reject every
+    /// Check the batch against itself and previous accesses, rejecting every
     /// shared/exclusive or exclusive/exclusive duplicate before using the batch.
     pub fn accept_group(&mut self, group: InputGroup) -> Result<()> {
         let mut group = group.values;
-        if self.values.is_empty() {
-            ::core::mem::swap(&mut self.values, &mut group);
-        } else {
-            self.values.append(&mut group);
+        if group.is_empty() {
+            // Previously accepted accesses are already sorted and checked.
+            return Ok(());
         }
-        self.values.sort_unstable_by_key(|entry| entry.0);
-        for pair in self.values.windows(2) {
+        if group.len() == 1 && !self.values.is_empty() {
+            // No internal duplicate is possible; only history can conflict.
+            let (address, exclusive) = group[0];
+            return self.access(address, exclusive);
+        }
+        // Sort only the new addresses. Re-sorting/scanning the complete history
+        // for every inner list makes nested input cost depend heavily on the
+        // allocator's address order, even though earlier groups are unchanged.
+        group.sort_unstable_by_key(|entry| entry.0);
+        for pair in group.windows(2) {
             if pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1) {
                 return Err("conflicting input aliases".into());
             }
         }
-        self.values.dedup_by_key(|entry| entry.0);
+        group.dedup_by_key(|entry| entry.0);
+        if self.values.is_empty() {
+            // Reuse the first batch's allocation as the history.
+            self.values = group;
+            return Ok(());
+        }
+        if group[0].0 > self.values.last().expect("nonempty history").0 {
+            // Disjoint ascending batches can append without any history scan.
+            self.values.append(&mut group);
+            return Ok(());
+        }
+        let mut added = 0;
+        for i in 0..group.len() {
+            let (address, exclusive) = group[i];
+            match self.values.binary_search_by_key(&address, |entry| entry.0) {
+                Ok(previous) if exclusive || self.values[previous].1 => {
+                    return Err("conflicting input aliases".into());
+                }
+                Ok(_) => {} // A repeated shared access needs no new entry.
+                Err(_) => {
+                    group[added] = group[i];
+                    added += 1;
+                }
+            }
+        }
+        group.truncate(added);
+        // Merge backwards into the existing allocation. The already ordered
+        // prefix stays in place, and no temporary merged vector is needed.
+        let mut previous = self.values.len();
+        self.values.resize(previous + added, (0, false));
+        let mut write = self.values.len();
+        for entry in group.into_iter().rev() {
+            while previous > 0 && self.values[previous - 1].0 > entry.0 {
+                previous -= 1;
+                write -= 1;
+                self.values[write] = self.values[previous];
+            }
+            write -= 1;
+            self.values[write] = entry;
+        }
         Ok(())
     }
     /// Check an individual argument against the history of previous arguments.
@@ -239,5 +285,126 @@ mod tests {
         assert_eq!(history.values.capacity(), 0);
         history.access(8, true).unwrap();
         assert!(history.values.capacity() > 0);
+    }
+
+    #[test]
+    fn empty_and_singleton_groups_preserve_cross_group_conflicts() {
+        for previous_exclusive in [false, true] {
+            let mut history = DynamicInputs::default();
+            let mut first = history.begin_group(3);
+            first.push((24, previous_exclusive));
+            first.push((8, false));
+            first.push((16, false));
+            history.accept_group(first).unwrap();
+            history.accept_group(history.begin_group(0)).unwrap();
+            for address in [32, 4, 20] {
+                let mut next = history.begin_group(1);
+                next.push((address, true));
+                history.accept_group(next).unwrap();
+            }
+            let mut shared = history.begin_group(1);
+            shared.push((24, false));
+            assert_eq!(history.accept_group(shared).is_err(), previous_exclusive);
+            for (address, exclusive) in [(24, true), (32, false), (4, true), (20, false)] {
+                let mut next = history.begin_group(1);
+                next.push((address, exclusive));
+                assert!(history.accept_group(next).is_err());
+            }
+            assert_eq!(
+                history.values,
+                vec![
+                    (4, true),
+                    (8, false),
+                    (16, false),
+                    (20, true),
+                    (24, previous_exclusive),
+                    (32, true)
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn merge_compacts_shared_repeats_and_inserts_new_endpoints() {
+        let mut history = DynamicInputs::default();
+        history.access(16, false).unwrap();
+        history.access(32, false).unwrap();
+        let mut group = history.begin_group(5);
+        for value in [
+            (32, false),
+            (4, true),
+            (16, false),
+            (40, false),
+            (24, false),
+        ] {
+            group.push(value);
+        }
+        history.accept_group(group).unwrap();
+        assert_eq!(
+            history.values,
+            vec![
+                (4, true),
+                (16, false),
+                (24, false),
+                (32, false),
+                (40, false)
+            ]
+        );
+        let previous = history.values.clone();
+        let mut bad = history.begin_group(2);
+        bad.push((8, false));
+        bad.push((32, true));
+        assert!(history.accept_group(bad).is_err());
+        assert_eq!(history.values, previous);
+    }
+
+    #[test]
+    fn descending_batches_merge_into_long_history() {
+        let mut history = DynamicInputs::default();
+        let mut expected = Vec::new();
+        for batch in (0..128).rev() {
+            let mut group = history.begin_group(4);
+            for field in 0..=batch % 4 {
+                let value = ((batch * 4 + field + 1) * 8, batch % 3 == 0);
+                group.push(value);
+                expected.push(value);
+            }
+            history.accept_group(group).unwrap();
+            expected.sort_unstable_by_key(|entry| entry.0);
+            assert_eq!(history.values, expected);
+        }
+    }
+
+    #[test]
+    fn mixed_groups_match_combined_sort_validation() {
+        for initial_seed in 0u64..128 {
+            let mut seed = initial_seed;
+            let mut history = DynamicInputs::default();
+            for step in 0..64 {
+                let len = step % 5;
+                let mut group = history.begin_group(len);
+                let previous = history.values.clone();
+                let mut expected = previous.clone();
+                for _ in 0..len {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    let value = (((seed >> 32) as usize % 512) * 8, seed % 7 == 0);
+                    group.push(value);
+                    expected.push(value);
+                }
+                expected.sort_unstable_by_key(|entry| entry.0);
+                let conflict = expected
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1));
+                assert_eq!(history.accept_group(group).is_err(), conflict);
+                if conflict {
+                    assert_eq!(history.values, previous);
+                    // Generated conversion returns immediately on conflict.
+                    history = DynamicInputs::default();
+                } else {
+                    expected.dedup_by_key(|entry| entry.0);
+                    assert_eq!(history.values, expected);
+                }
+            }
+        }
     }
 }

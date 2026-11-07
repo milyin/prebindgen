@@ -19,6 +19,7 @@ internal object JNINative {
     @JvmStatic external fun call_callback_owned_record_990f8f2a11136fc7(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_owned_buffer_records_echo_d2839a0a4452a203(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_nested_owned_handles_echo_47d054d07c837967(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_callback_nested_owned_handles_af3eabfc6c44ae0b(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_row_make_bcd43e7b136151dd(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_wide_row_make_1dbd8ca2fd4616ac(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_wide_row_sum_861bdfef124a25ad(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

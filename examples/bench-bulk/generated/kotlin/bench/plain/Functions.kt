@@ -518,6 +518,124 @@ outputfailure = outputitem_failure
     } finally { returnCapture.release() }
 }
 
+public fun callbackNestedOwnedHandles(callback: bench.plain.OwnedNestedCallback, onError: bench.plain.JniErrorHandler<kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>>> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>> = run {
+    val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val callback_return_w5_elements = if (true) callback_return_w5?.toList()?.let { callback_return_w5_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w5_snapshot.size) { callback_return_w5_index -> val callback_return_w9 = callback_return_w5_snapshot[callback_return_w5_index]
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { callback_return_w9 }) }, intArrayOf(2)) } else null
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { callback_return_w5_elements }) }, null) } else null
+ bench.plain.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? Iterable<*>)?.forEach { returnedValue1 -> (returnedValue1 as? bench.plain.NativeHandle)?.let { returnedValue2 -> returnedHandles.add(returnedValue2); returnedOwners.add(returnedValue2) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_callback_nested_owned_handles_af3eabfc6c44ae0b(nativeArgument0, nativeArgument1) } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<kotlin.collections.List<bench.plain.InputHandle>>? = null
+ outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
+var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
+
+try {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
+var outputitem_failure: kotlin.Throwable? = outputfailure
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var outputitem_item_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row.c0) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+
+} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
+outputfailure = outputitem_failure
+}
+} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputowners: bench.plain.CollectionOwners? = null
+var outputlist: kotlin.collections.MutableList<kotlin.collections.List<bench.plain.InputHandle>>? = null
+        try {
+outputowners = bench.plain.CollectionOwners()
+outputlist = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
+var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
+
+outputitem_list = kotlin.collections.ArrayList((output_row.c0 as kotlin.Array<*>).size)
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
+val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var outputitem_item_0: bench.plain.InputHandle? = null
+
+            outputitem_item_0 = requireNotNull(outputowners).own(bench.plain.InputHandle(outputitem__row.c0))
+
+outputitem_list.add(requireNotNull(outputitem_item_0))
+}
+
+outputlist.add(requireNotNull(outputitem_list))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputlist)
+        } catch (failure: Throwable) {
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try {
+for (outputindex in (nativeResult as kotlin.Array<*>).indices) {
+var outputfailure: kotlin.Throwable? = failure
+try { val output_row = (nativeResult as kotlin.Array<*>)[outputindex] as bench.plain.JNINative.SequenceRow_Array_Any___1_00f39593b4ea53ea
+var outputitem_list: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
+
+try {
+for (outputitem_index in (output_row.c0 as kotlin.Array<*>).indices) {
+var outputitem_failure: kotlin.Throwable? = outputfailure
+try { val outputitem__row = (output_row.c0 as kotlin.Array<*>)[outputitem_index] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var outputitem_item_0: bench.plain.InputHandle? = null
+
+            try { if (outputowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(outputitem__row.c0) } } catch (cleanup: Throwable) { if (outputitem_failure == null) outputitem_failure = cleanup else if (outputitem_failure !== cleanup) outputitem_failure!!.addSuppressed(cleanup) }
+
+} catch (outputitem_cleanupError: Throwable) { if (outputitem_failure == null) outputitem_failure = outputitem_cleanupError else if (outputitem_failure !== outputitem_cleanupError) outputitem_failure!!.addSuppressed(outputitem_cleanupError) }
+outputfailure = outputitem_failure
+}
+} catch (outputitem_cleanupError: Throwable) { if (outputfailure == null) outputfailure = outputitem_cleanupError else if (outputfailure !== outputitem_cleanupError) outputfailure!!.addSuppressed(outputitem_cleanupError) }
+
+} catch (outputcleanupError: Throwable) { if (outputfailure == null) outputfailure = outputcleanupError else if (outputfailure !== outputcleanupError) outputfailure!!.addSuppressed(outputcleanupError) }
+
+}
+} catch (outputcleanupError: Throwable) { if (failure !== outputcleanupError) failure.addSuppressed(outputcleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
 public fun rowMake(seed: Long, onError: bench.plain.JniErrorHandler<bench.plain.Row> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.plain.Row = run {
     val returnCapture = bench.plain.Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509.acquire()
     try {
@@ -927,6 +1045,127 @@ val nativeResult = try { try { run { val handles = try { (p0_w1_elements?.handle
         val ownership = LongArray(1) { -1L }
         try { run { val nativeArgument0 = try { p0_w1_elements?.encode() } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_nested_owned_handles_echo_fold_55ebe6c8ba226f50(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_elements?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (bench.plain.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; p0_w1_elements?.consume(__pb_consume); handles.forEach { if (it.address in taken) it.markConsumed() } } }
     } } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
+        return@run onError.run(returnCapture.message) }
+
+    var __pb_accumulator: A? = null
+var __pb_processed = 0
+var __pb_foldOwners: bench.plain.CollectionOwners? = null
+        try {
+if (nativeResult == 0) {
+if (__pb_rows.size != 0) __pb_foldOwners = bench.plain.CollectionOwners()
+var current = initial
+for (__pb_rowIndex in 0 until __pb_rows.size) {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
+var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
+
+try {
+foldElementlist = kotlin.collections.ArrayList((__pb_fold_row.c0 as kotlin.Array<*>).size)
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
+val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var foldElementitem_0: bench.plain.InputHandle? = null
+
+            foldElementitem_0 = requireNotNull(__pb_foldOwners).own(bench.plain.InputHandle(foldElement_row.c0))
+
+foldElementlist.add(requireNotNull(foldElementitem_0))
+}
+
+__pb_foldOwners!!.complete = true
+current = fold(current, requireNotNull(foldElementlist))
+} catch (failure: Throwable) {
+__pb_processed++
+try {
+__pb_foldOwners?.close(failure)
+if (__pb_foldOwners?.complete != true) {
+try {
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
+var foldElementfailure: kotlin.Throwable? = failure
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var foldElementitem_0: bench.plain.InputHandle? = null
+
+            try { if (__pb_foldOwners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+
+} catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
+
+}
+} catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
+
+}
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+throw failure
+}
+__pb_processed++
+__pb_foldOwners!!.release()
+}
+__pb_accumulator = current
+}
+            __pb_accumulator as A
+        } catch (failure: Throwable) {
+if (nativeResult == 0) __pb_discard(failure, __pb_processed)
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun <A> callbackNestedOwnedHandlesFold(callback: bench.plain.OwnedNestedCallback, initial: A, onError: bench.plain.JniErrorHandler<A> = bench.plain.JniErrorHandler { message -> throw IllegalArgumentException(message) }, fold: (A, kotlin.collections.List<bench.plain.InputHandle>) -> A): A = run {
+    val __pb_sink = bench.plain.JNINative.SequenceCollector_callback_nested_owned_handles_fold_e69accf7e0c74c5f()
+val __pb_rows = __pb_sink.rows
+val __pb_outputAccepted = BooleanArray(1)
+fun __pb_discard(failure: Throwable, start: Int = 0) {
+for (__pb_rowIndex in start until __pb_rows.size) {
+try {
+val __pb_fold_row = __pb_rows[__pb_rowIndex]
+var foldElementowners: bench.plain.CollectionOwners? = null
+var foldElementlist: kotlin.collections.MutableList<bench.plain.InputHandle>? = null
+
+foldElementowners?.close(failure)
+if (foldElementowners?.complete != true) {
+try {
+for (foldElementindex in (__pb_fold_row.c0 as kotlin.Array<*>).indices) {
+var foldElementfailure: kotlin.Throwable? = failure
+try { val foldElement_row = (__pb_fold_row.c0 as kotlin.Array<*>)[foldElementindex] as bench.plain.JNINative.SequenceRow_Long_1_127a3c24b600dbe0
+        var foldElementitem_0: bench.plain.InputHandle? = null
+
+            try { if (foldElementowners?.unread() != false) { bench.plain.JNINative.drop_InputHandle_7cc67535bbd4a8ee(foldElement_row.c0) } } catch (cleanup: Throwable) { if (foldElementfailure == null) foldElementfailure = cleanup else if (foldElementfailure !== cleanup) foldElementfailure!!.addSuppressed(cleanup) }
+
+} catch (foldElementcleanupError: Throwable) { if (foldElementfailure == null) foldElementfailure = foldElementcleanupError else if (foldElementfailure !== foldElementcleanupError) foldElementfailure!!.addSuppressed(foldElementcleanupError) }
+
+}
+} catch (foldElementcleanupError: Throwable) { if (failure !== foldElementcleanupError) failure.addSuppressed(foldElementcleanupError) }
+
+}
+
+} catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+}
+}
+val returnCapture = bench.plain.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { try { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<kotlin.collections.List<bench.plain.InputHandle>>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val callback_return_w5_elements = if (true) callback_return_w5?.toList()?.let { callback_return_w5_snapshot -> bench.plain.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w5_snapshot.size) { callback_return_w5_index -> val callback_return_w9 = callback_return_w5_snapshot[callback_return_w5_index]
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { callback_return_w9 }) }, intArrayOf(2)) } else null
+kotlin.arrayOf<kotlin.Any?>(bench.plain.InputValidation.value { callback_return_w5_elements }) }, null) } else null
+ bench.plain.withHandleLocks((callback_return_w1_elements?.handles.orEmpty())) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (bench.plain.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<bench.plain.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? Iterable<*>)?.forEach { returnedValue1 -> (returnedValue1 as? bench.plain.NativeHandle)?.let { returnedValue2 -> returnedHandles.add(returnedValue2); returnedOwners.add(returnedValue2) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { __pb_sink } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { __pb_outputAccepted } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.plain.HandleValidationFailure(failure.message ?: "invalid input") }; bench.plain.JNINative.call_callback_nested_owned_handles_fold_a42f72ecec828e64(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } catch (failure: Throwable) { if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure } } catch (failure: bench.plain.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) { if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));
         return@run onError.run(returnCapture.message) }
 
