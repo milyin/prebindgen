@@ -96,3 +96,38 @@ After source review cleanup, a separate focused repeat imports the final runtime
 | 128/history/late/conflict | 0.571 | 1.804 |
 
 The selected threshold preserves the vector through 128 distinct individual entries and avoids building another index for one first batch. Thresholds 64 and 128 are broadly competitive; 128 is a conservative choice for small histories, not a claim of a universal optimum. Transition costs remain visible: the 128-address mixed case adds 16 direct prefix accesses, crosses the threshold near the end, and is 11% slower in the final repeat. A late conflict after a 128-address first batch costs 0.571 → 1.804 µs because promotion happens before rejection. Error-path throughput is not the optimization goal. Small shuffled singleton cases remain within a few percent, but that statement does not apply to every small input or failure shape.
+
+## Complete generated JNI calls
+
+Fresh frozen native libraries use the same baseline Kotlin JAR. The baseline library was built at `6e00520a7`; all runtime/generator/benchmark fixture sources match merged #824 at `45933039a`, verified by `git diff`. Candidate source is `4e4482ef5`. Native allocator instrumentation is verified on load, enabled only in separate counting libraries, and disabled for all latency runs. Builds, counting and timing run sequentially.
+
+These measurements include Kotlin packing/locking, JNI, Rust input validation/construction, source work, output encoding and Kotlin reconstruction. The ordinary argument consumes lists passed by the wrapper; callback cases first ask Kotlin for lists that Rust decodes as callback results. They are complete roundtrips, not isolated input-decoder or packet-throughput benchmarks.
+
+| Run | Transport | Case | Handles | µs/call before → after | Paired speedup |
+|---|---|---|---:|---:|---:|
+| latency | bulk | callback_many_nested_owned_handles | 512 | 186.21 → 171.41 | 1.15× |
+| latency | bulk | callback_nested_owned_handles | 512 | 61.62 → 62.24 | 1.00× |
+| latency | bulk | nested_many_owned_handles_roundtrip | 512 | 174.80 → 172.87 | 1.02× |
+| latency | bulk | nested_owned_handles_roundtrip | 512 | 65.93 → 67.57 | 1.01× |
+| latency | bulk | owned_handle_records_roundtrip | 512 | 73.45 → 76.08 | 0.97× |
+| latency | bulk | owned_handles_roundtrip | 512 | 64.92 → 65.42 | 0.99× |
+| latency | plain | callback_many_nested_owned_handles | 512 | 1,420.80 → 1,341.15 | 1.05× |
+| latency | plain | callback_nested_owned_handles | 512 | 532.18 → 525.79 | 1.02× |
+| latency | plain | nested_many_owned_handles_roundtrip | 512 | 1,081.32 → 1,076.78 | 1.00× |
+| latency | plain | nested_owned_handles_roundtrip | 512 | 365.43 → 354.43 | 1.05× |
+| large | bulk | callback_many_nested_owned_handles | 8192 | 4,743.61 → 2,816.80 | 1.69× |
+| large | bulk | callback_nested_owned_handles | 8192 | 995.00 → 991.56 | 0.95× |
+| large | bulk | nested_many_owned_handles_roundtrip | 8192 | 4,769.27 → 2,599.63 | 1.77× |
+| large | bulk | nested_owned_handles_roundtrip | 8192 | 1,087.24 → 944.31 | 1.12× |
+| large | bulk | owned_handle_records_roundtrip | 8192 | 1,169.27 → 1,192.48 | 0.98× |
+| large | bulk | owned_handles_roundtrip | 8192 | 1,122.75 → 1,028.17 | 1.06× |
+
+The default-stack run uses six balanced JVM pairs. The large run uses four balanced pairs; both use 10 warmup batches and 11 measured batches targeting 30 ms. Times are medians of fork medians; speedup is the reciprocal of the median paired after/before ratio, so it need not equal the ratio of the two displayed medians.
+
+The first 8,192-handle attempt failed before Rust with `StackOverflowError` in existing recursive Kotlin lock acquisition. The successful large comparison sets **`-Xss16m` on both versions**, with the same heap/GC settings as the main run. This PR does not change Kotlin locking or fix that existing default-stack limit. Large-array measurements therefore require the documented stack setting.
+
+Same-library A/A runs retain the entire procedure. At 512 handles, paired time drift is 2.4% for ordinary singleton-list arguments and 5.0% for callback singleton-list results in the main control run. At 8,192 handles the large-stack A/A drift reaches 4.1%. Small effects and slower controls remain in [jni-latency.csv](jni-latency.csv).
+
+Counting uses two JVMs per cell, 1,000 warmup calls and ten measured calls each; all twenty observations per cell agree. At 512 singleton lists, native allocations rise from 1,539 to 1,542 for arguments and from 1,542 to 1,545 for callback results; reallocations fall by two in each. Cumulative requested native bytes rise by 18,224 per call. Flat and single-inner-list allocation counts remain unchanged. This is the cost of replacing sorted-history movement with the incremental hash index, separate from the prepared-row allocations already removed by #885.
+
+[jni-allocations.csv](jni-allocations.csv) retains every count; [jni-provenance.json](jni-provenance.json) records verified instrumentation, binary/JAR/source-fixture hashes, JVM flags and sample hashes. Raw observations/logs stay outside Git. Reproduce the large comparison with [jni.py](jni.py) and the frozen libraries described above.

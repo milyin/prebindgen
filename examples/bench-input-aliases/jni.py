@@ -1,7 +1,7 @@
 """Confirm large-history changes through frozen generated JNI/Kotlin bindings."""
 import argparse, hashlib, json, os, platform, statistics, subprocess
 from pathlib import Path
-p=argparse.ArgumentParser(__doc__)
+p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--before',type=Path,required=True)
 p.add_argument('--after',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
@@ -20,7 +20,7 @@ for d in info.values():
 flags=['-Xss16m','-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2']
 groups=[('bulk','1,512,8192','nested_owned_handles_roundtrip,nested_many_owned_handles_roundtrip,callback_nested_owned_handles,callback_many_nested_owned_handles'),
         ('bulk','1,512,8192','owned_handles_roundtrip,owned_handle_records_roundtrip'),('plain','1','control')]
-if a.aa: groups=[('bulk','1,512','nested_many_owned_handles_roundtrip,callback_many_nested_owned_handles'),('plain','1','control')]
+if a.aa: groups=[('bulk','1,512,8192','nested_many_owned_handles_roundtrip,callback_many_nested_owned_handles'),('plain','1','control')]
 samples=[];runs=[]
 for fork in range(a.forks):
  for group,(mode,sizes,cases) in enumerate(groups):
