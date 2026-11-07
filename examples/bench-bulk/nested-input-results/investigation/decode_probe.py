@@ -71,6 +71,6 @@ if args.target_dir:env['CARGO_TARGET_DIR']=str(args.target_dir.resolve())
 subprocess.run(['cargo','build','--release','--offline','--manifest-path',str(project/'Cargo.toml')],env=env,check=True)
 metadata=json.loads(subprocess.check_output(['cargo','metadata','--offline','--no-deps','--format-version=1','--manifest-path',str(project/'Cargo.toml')],env=env,text=True))
 exe=Path(metadata['target_directory'])/'release/nested-decode-probe'
-shutil.copyfile(exe,project/'probe')
+shutil.copy2(exe,project/'probe')
 with (project/'samples.csv').open('w') as log:subprocess.run([str(project/'probe')],stdout=log,check=True)
 (project/'provenance.json').write_text(json.dumps(dict(runtime_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=runtime,text=True).strip(),baseline=args.baseline_ref,candidate=args.candidate_ref,probe_sha256=hashlib.sha256((project/'probe').read_bytes()).hexdigest(),samples_sha256=hashlib.sha256((project/'samples.csv').read_bytes()).hexdigest()),indent=2)+'\n')
