@@ -29,5 +29,5 @@
   "source_commit": "41ad78e99",
   "baseline_commit": "45933039a858ad31f56f7e213d9dd6aa9d5cb2da",
   "note": "Comparison snapshot: initial production implementation. Final source cleanup is measured separately; no production conflict policy changed.",
-  "comparison_csv_sha256": "34406d196a405e696adb702dc42a7a0e45415ab868c77bd8522999ae2b5a0f35"
+  "comparison_csv_sha256": "ad3ef744adfda04a2c7902d3841eefb6cdaf34378528c99bb1cc53a2ea4be2c8"
 }
