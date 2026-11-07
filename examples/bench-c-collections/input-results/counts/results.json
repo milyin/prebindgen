@@ -1,0 +1,3275 @@
+{
+  "builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "252a2e1c1bf2b1869cad6b468540b3d43eaa305c",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline": "718c45d8074225b24f1cbdd54e76e843461fc4e8"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-7ceacba74a53b125/out",
+        "-L/tmp/c-row-replay-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "library_sha256": "f41da19568ce59123f975cc9de450c6cf0bde1517060311c6351e961e1b5b6c0",
+      "driver": "/tmp/c-row-replay-before-count/driver",
+      "driver_sha256": "2c7252e66362f7e4e6d741cb94db3d427f1c245ae1e9dd128abfc8807a7d3dbb",
+      "input_driver": "/tmp/c-row-replay-before-count/input-driver",
+      "input_driver_sha256": "59146156c3532f4ea7cc3ddfb2d3f5dd05af0f0b8a490679da0df8ae48a2d6ed",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-7ceacba74a53b125/out",
+        "-L/tmp/c-row-replay-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-count/input-driver"
+      ],
+      "header_sha256": "dcc88c3e4fa16aef53e3b3d009ad11b0f219102fc3ddb317863854da2f90892e",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "fea4244cb62724ae93de381f31619f9168c8eab8d2759ec662e7f5b3916fc7ad"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "1f5c7743ce5a376b95ccb87e71b15443bbfecedc"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-65bc6d75bc49a86d/out",
+        "-L/tmp/c-row-replay-slice-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-slice-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-slice-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "library_sha256": "d8c6ead8bc1255bf6d54f0051aa405ef069a8e3ffd30d380bce62c1641348701",
+      "driver": "/tmp/c-row-replay-slice-count/driver",
+      "driver_sha256": "a13070839877900e78b661be47ae66039ffb8d58230562f723f939ba148609a2",
+      "input_driver": "/tmp/c-row-replay-slice-count/input-driver",
+      "input_driver_sha256": "7f4770e0b2858f712ce2112dea67c9511768047aaec21ff7935be5763f41c7b0",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-65bc6d75bc49a86d/out",
+        "-L/tmp/c-row-replay-slice-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-slice-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-slice-count/input-driver"
+      ],
+      "header_sha256": "2bbf5412af00030a9f571399ba8ebcd2c49e931316b71246a1cce0e05e896e56",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "70ee72416028f4778e0ebe4e1e9ec0425829193b2fd5cf8fc80635c7b60b284d"
+    }
+  },
+  "effective_builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "252a2e1c1bf2b1869cad6b468540b3d43eaa305c",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline": "718c45d8074225b24f1cbdd54e76e843461fc4e8"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-7ceacba74a53b125/out",
+        "-L/tmp/c-row-replay-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "library_sha256": "f41da19568ce59123f975cc9de450c6cf0bde1517060311c6351e961e1b5b6c0",
+      "driver": "/tmp/c-row-replay-before-count/driver",
+      "driver_sha256": "2c7252e66362f7e4e6d741cb94db3d427f1c245ae1e9dd128abfc8807a7d3dbb",
+      "input_driver": "/tmp/c-row-replay-before-count/input-driver",
+      "input_driver_sha256": "59146156c3532f4ea7cc3ddfb2d3f5dd05af0f0b8a490679da0df8ae48a2d6ed",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-7ceacba74a53b125/out",
+        "-L/tmp/c-row-replay-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-count/input-driver"
+      ],
+      "header_sha256": "dcc88c3e4fa16aef53e3b3d009ad11b0f219102fc3ddb317863854da2f90892e",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "fea4244cb62724ae93de381f31619f9168c8eab8d2759ec662e7f5b3916fc7ad"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "1f5c7743ce5a376b95ccb87e71b15443bbfecedc"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay",
+      "count_allocations": true,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-65bc6d75bc49a86d/out",
+        "-L/tmp/c-row-replay-slice-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-slice-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-slice-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "library_sha256": "d8c6ead8bc1255bf6d54f0051aa405ef069a8e3ffd30d380bce62c1641348701",
+      "driver": "/tmp/c-row-replay-slice-count/driver",
+      "driver_sha256": "a13070839877900e78b661be47ae66039ffb8d58230562f723f939ba148609a2",
+      "input_driver": "/tmp/c-row-replay-slice-count/input-driver",
+      "input_driver_sha256": "7f4770e0b2858f712ce2112dea67c9511768047aaec21ff7935be5763f41c7b0",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-65bc6d75bc49a86d/out",
+        "-L/tmp/c-row-replay-slice-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-slice-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-slice-count/input-driver"
+      ],
+      "header_sha256": "2bbf5412af00030a9f571399ba8ebcd2c49e931316b71246a1cce0e05e896e56",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "70ee72416028f4778e0ebe4e1e9ec0425829193b2fd5cf8fc80635c7b60b284d"
+    }
+  },
+  "driver_sha256": "59146156c3532f4ea7cc3ddfb2d3f5dd05af0f0b8a490679da0df8ae48a2d6ed",
+  "settings": {
+    "before": "/tmp/c-row-replay-before-count",
+    "after": "/tmp/c-row-replay-slice-count",
+    "output": "/tmp/c-row-replay-slice-counts",
+    "kind": "count",
+    "forks": 2,
+    "same_build": null,
+    "smoke": false,
+    "cases": "handles,records,wide,text,numbers,control",
+    "sizes": "0,1,8,64,512,4096",
+    "batches": null,
+    "target_ms": 20
+  },
+  "cells": [
+    [
+      "handles",
+      0
+    ],
+    [
+      "handles",
+      1
+    ],
+    [
+      "handles",
+      8
+    ],
+    [
+      "handles",
+      64
+    ],
+    [
+      "handles",
+      512
+    ],
+    [
+      "handles",
+      4096
+    ],
+    [
+      "records",
+      0
+    ],
+    [
+      "records",
+      1
+    ],
+    [
+      "records",
+      8
+    ],
+    [
+      "records",
+      64
+    ],
+    [
+      "records",
+      512
+    ],
+    [
+      "records",
+      4096
+    ],
+    [
+      "wide",
+      0
+    ],
+    [
+      "wide",
+      1
+    ],
+    [
+      "wide",
+      8
+    ],
+    [
+      "wide",
+      64
+    ],
+    [
+      "wide",
+      512
+    ],
+    [
+      "wide",
+      4096
+    ],
+    [
+      "text",
+      0
+    ],
+    [
+      "text",
+      1
+    ],
+    [
+      "text",
+      8
+    ],
+    [
+      "text",
+      64
+    ],
+    [
+      "text",
+      512
+    ],
+    [
+      "text",
+      4096
+    ],
+    [
+      "numbers",
+      0
+    ],
+    [
+      "numbers",
+      1
+    ],
+    [
+      "numbers",
+      8
+    ],
+    [
+      "numbers",
+      64
+    ],
+    [
+      "numbers",
+      512
+    ],
+    [
+      "numbers",
+      4096
+    ],
+    [
+      "control",
+      1
+    ]
+  ],
+  "runs": [
+    {
+      "id": "0-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "96cc8fbda91adbc2efb13aea554b359ebdc6a5cbd28f53dde67237db9aa69cda"
+    },
+    {
+      "id": "0-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5d8372127e9effd833b38999fa226372f0e37322ecd28ccef696eaf89c3eec67"
+    },
+    {
+      "id": "0-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b2f5239168988ba8aca9af53dacecfc578b8ba58554e9b803505c07db67d386b"
+    },
+    {
+      "id": "0-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e3c7416d2a5387c7ffb902a4a1337ba0918b67a45a2789b6eb03042e98f385a1"
+    },
+    {
+      "id": "0-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9dc8aa81d9c523d4145d73369f5cd9d6ea082e2ce88eb05342a09f2577353970"
+    },
+    {
+      "id": "0-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a88542364c129dab708cebcbe42ba00a3b193879f1c5b747a914d1dc3b348a30"
+    },
+    {
+      "id": "0-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "59bd8e697e4439a0119a1f30ed94e1bed8501ef5a8281526a48a2283128e13e1"
+    },
+    {
+      "id": "0-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc046cc10f034cef7a3a5691758f85942ab393bc4be526c92ef5a6648fb3dfc2"
+    },
+    {
+      "id": "0-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5c881b37889f11b117304ee2de36e36137a4b0dddcfbc98931d640f01f2f0287"
+    },
+    {
+      "id": "0-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "82f5c550ece1c44d07763279894c5dc6d880b018b985801d63496cf9e789c0ee"
+    },
+    {
+      "id": "0-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fbab7b4ed94cb061eb6297ffcd4c5e45691d20ec506798caec6e8d552d2a56dd"
+    },
+    {
+      "id": "0-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6bb8c84d426d05f5811fe8c32b2802657640e1f5ac5da8dc8eddc192df1ec1a2"
+    },
+    {
+      "id": "0-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3b6caf5e2cec9a5ec5db0cd73e51149c0f4f356a9c26d2bbcf9b53533edc63a9"
+    },
+    {
+      "id": "0-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6e14953f45bf8acd61182adba0c1e72294102880e5244fd05c103d7c70e58448"
+    },
+    {
+      "id": "0-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7d4c674cefc1b3a4201618462579639323cf3e2c6fc6ef4cfa46adc793ad9f6c"
+    },
+    {
+      "id": "0-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e268d5b7af3872c46406775f554e7767b5ccda470baa251066fb82fa9aae8bf8"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0c7b4c800f2d49a1ef013e57f5231bec98194db51b6e6feb4ada26358c684770"
+    },
+    {
+      "id": "0-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "58555e7763856aa168b72b0d4fe99977b2393a0fcaed7f399a4640977da80f11"
+    },
+    {
+      "id": "0-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "089e2e35e1ec4e2f4d8ba7dc9c9d5ffc4820ecebf37669089839cf3a8661dcc5"
+    },
+    {
+      "id": "0-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "db65ca11fd43e472c9b3432e7aeb4c89e5b61363445b3d4a9cf216442ce15147"
+    },
+    {
+      "id": "0-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d1b44628e73e2cae4a2a9cf27702465ef151d30da5c05467d5bdf97bf1ded274"
+    },
+    {
+      "id": "0-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "42edf0c92d24cc72b3fdba3e56d98f68250358fc20c323506eabbd05b76f73b0"
+    },
+    {
+      "id": "0-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "490e4f848029085e74a40923b57a2eac9fcfbeeb14fc349b36fd88e68bc3b044"
+    },
+    {
+      "id": "0-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "00a1881ad83596bb70d771e5956b3facd43617352ed1cb6d83825b1a6d32dd55"
+    },
+    {
+      "id": "0-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4969f06194b755d3bec071d53e241d716ae54199a0af85d6b2648f6b58b5fdba"
+    },
+    {
+      "id": "0-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "862822a22433aa6ebe7dc6e37e330eaa39e4d1f6ef068a9612236bad2d8794db"
+    },
+    {
+      "id": "0-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cd4a16684b4b46988f65a061a91a29850565fdd801d237470ab32cc78d1c2edd"
+    },
+    {
+      "id": "0-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1eac810e90eb64e418f3d7c24c215547d0b2b5e0dfdd1c48935f82f034287b45"
+    },
+    {
+      "id": "0-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ea240984db603fa614618428ac1691b142e89cbfef02aa6e291c79f3eff8b06b"
+    },
+    {
+      "id": "0-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ef7a9ab3f3fa5e3f3a0d4c77790d65b22e4f2adce8dcd5bc305b6cb1b8f94888"
+    },
+    {
+      "id": "0-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "08628da7ab1fc623c62d84fa47bc77f095a4018251fde3c1dbd01193a12742a5"
+    },
+    {
+      "id": "0-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "da306522d07a639e8237963fcd0abec4c0fc0705bdee86d03214562f9612e849"
+    },
+    {
+      "id": "0-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "63ffcbf917f1f80c64714cdd0987639dc8c9dbde8904598ea43b0f453d89fdf8"
+    },
+    {
+      "id": "0-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5455241fb8fdff3ca9e4a75c67ee4a3298bf8739f7578faadcfc7827473aaa9a"
+    },
+    {
+      "id": "0-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0c8bc6b771f8459ad8feecc8e5e277ccb75d6684a3cbf110c5158919039f2529"
+    },
+    {
+      "id": "0-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cf934263d719843fb476475b32b6c0ede69436668e37916f098aa351cf532f64"
+    },
+    {
+      "id": "0-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d0b6e6b83a1f29ee58400400e6a1444c4de41334d635665e4def33c264e6ddaa"
+    },
+    {
+      "id": "0-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "96dc2a0e1021a3f78a803ce90df089b40e3affb911e3511edf528a40dd151101"
+    },
+    {
+      "id": "0-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d78bb617ca2a36154e71ff5518794afc33f1a7113e07a63dff5c5972f31cbd18"
+    },
+    {
+      "id": "0-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2e6462ee7c8c9fe00659aa57fd2177a1b074cd3f0b8edea6ea7ecc10e6febb76"
+    },
+    {
+      "id": "0-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d298cf0972e8eeb86fc43d53de638529e3e9bb34f323a937932187bf9bd063f6"
+    },
+    {
+      "id": "0-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc7d8f77e98a1cc9c6e1e23aafcf75896273ee5cdad8d3350c81c3fe82bd70d7"
+    },
+    {
+      "id": "0-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "0-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "0-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "08a94b5c47fc7a70fe85b919d46a18f2ede68e19d13d607b95f55098d45f804e"
+    },
+    {
+      "id": "0-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "72503f401f9bac6cd649cf73f833e19c0bc5d0401880142e5cf3267b6bebf04f"
+    },
+    {
+      "id": "0-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "8f64797e36efa8d5e56e81cc24c9c51bc522719b1812cb5af772ab41dd865c35"
+    },
+    {
+      "id": "0-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "29bbc57f7be8462630eb2baead27a31b0ebcbce4ff0b46055719f98232bf4543"
+    },
+    {
+      "id": "0-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cc6154d1889559aa1675f28f5e0d0d25c3795d62882c6d95fb44cd894192ffeb"
+    },
+    {
+      "id": "0-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "caece155abcd5f74af9c00b6fc7d4d1e9e76add6fae54f781952af614c56e411"
+    },
+    {
+      "id": "0-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc7eac62cf1fe45e9b2a690dd04864902edb35bd116a1215483a516ae62b746a"
+    },
+    {
+      "id": "0-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "74ed511c5147c2849e06b3456876258441514260e5deab53b6be10d20bd4e2b0"
+    },
+    {
+      "id": "1-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cf934263d719843fb476475b32b6c0ede69436668e37916f098aa351cf532f64"
+    },
+    {
+      "id": "1-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0c8bc6b771f8459ad8feecc8e5e277ccb75d6684a3cbf110c5158919039f2529"
+    },
+    {
+      "id": "1-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc046cc10f034cef7a3a5691758f85942ab393bc4be526c92ef5a6648fb3dfc2"
+    },
+    {
+      "id": "1-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "59bd8e697e4439a0119a1f30ed94e1bed8501ef5a8281526a48a2283128e13e1"
+    },
+    {
+      "id": "1-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "29bbc57f7be8462630eb2baead27a31b0ebcbce4ff0b46055719f98232bf4543"
+    },
+    {
+      "id": "1-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "8f64797e36efa8d5e56e81cc24c9c51bc522719b1812cb5af772ab41dd865c35"
+    },
+    {
+      "id": "1-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "caece155abcd5f74af9c00b6fc7d4d1e9e76add6fae54f781952af614c56e411"
+    },
+    {
+      "id": "1-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cc6154d1889559aa1675f28f5e0d0d25c3795d62882c6d95fb44cd894192ffeb"
+    },
+    {
+      "id": "1-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a88542364c129dab708cebcbe42ba00a3b193879f1c5b747a914d1dc3b348a30"
+    },
+    {
+      "id": "1-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9dc8aa81d9c523d4145d73369f5cd9d6ea082e2ce88eb05342a09f2577353970"
+    },
+    {
+      "id": "1-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6bb8c84d426d05f5811fe8c32b2802657640e1f5ac5da8dc8eddc192df1ec1a2"
+    },
+    {
+      "id": "1-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fbab7b4ed94cb061eb6297ffcd4c5e45691d20ec506798caec6e8d552d2a56dd"
+    },
+    {
+      "id": "1-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "72503f401f9bac6cd649cf73f833e19c0bc5d0401880142e5cf3267b6bebf04f"
+    },
+    {
+      "id": "1-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "08a94b5c47fc7a70fe85b919d46a18f2ede68e19d13d607b95f55098d45f804e"
+    },
+    {
+      "id": "1-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1eac810e90eb64e418f3d7c24c215547d0b2b5e0dfdd1c48935f82f034287b45"
+    },
+    {
+      "id": "1-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cd4a16684b4b46988f65a061a91a29850565fdd801d237470ab32cc78d1c2edd"
+    },
+    {
+      "id": "1-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2e6462ee7c8c9fe00659aa57fd2177a1b074cd3f0b8edea6ea7ecc10e6febb76"
+    },
+    {
+      "id": "1-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d78bb617ca2a36154e71ff5518794afc33f1a7113e07a63dff5c5972f31cbd18"
+    },
+    {
+      "id": "1-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "da306522d07a639e8237963fcd0abec4c0fc0705bdee86d03214562f9612e849"
+    },
+    {
+      "id": "1-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "08628da7ab1fc623c62d84fa47bc77f095a4018251fde3c1dbd01193a12742a5"
+    },
+    {
+      "id": "1-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc7d8f77e98a1cc9c6e1e23aafcf75896273ee5cdad8d3350c81c3fe82bd70d7"
+    },
+    {
+      "id": "1-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d298cf0972e8eeb86fc43d53de638529e3e9bb34f323a937932187bf9bd063f6"
+    },
+    {
+      "id": "1-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "862822a22433aa6ebe7dc6e37e330eaa39e4d1f6ef068a9612236bad2d8794db"
+    },
+    {
+      "id": "1-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4969f06194b755d3bec071d53e241d716ae54199a0af85d6b2648f6b58b5fdba"
+    },
+    {
+      "id": "1-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5d8372127e9effd833b38999fa226372f0e37322ecd28ccef696eaf89c3eec67"
+    },
+    {
+      "id": "1-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "96cc8fbda91adbc2efb13aea554b359ebdc6a5cbd28f53dde67237db9aa69cda"
+    },
+    {
+      "id": "1-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "96dc2a0e1021a3f78a803ce90df089b40e3affb911e3511edf528a40dd151101"
+    },
+    {
+      "id": "1-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d0b6e6b83a1f29ee58400400e6a1444c4de41334d635665e4def33c264e6ddaa"
+    },
+    {
+      "id": "1-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5455241fb8fdff3ca9e4a75c67ee4a3298bf8739f7578faadcfc7827473aaa9a"
+    },
+    {
+      "id": "1-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "63ffcbf917f1f80c64714cdd0987639dc8c9dbde8904598ea43b0f453d89fdf8"
+    },
+    {
+      "id": "1-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ef7a9ab3f3fa5e3f3a0d4c77790d65b22e4f2adce8dcd5bc305b6cb1b8f94888"
+    },
+    {
+      "id": "1-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ea240984db603fa614618428ac1691b142e89cbfef02aa6e291c79f3eff8b06b"
+    },
+    {
+      "id": "1-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "00a1881ad83596bb70d771e5956b3facd43617352ed1cb6d83825b1a6d32dd55"
+    },
+    {
+      "id": "1-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "490e4f848029085e74a40923b57a2eac9fcfbeeb14fc349b36fd88e68bc3b044"
+    },
+    {
+      "id": "1-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "74ed511c5147c2849e06b3456876258441514260e5deab53b6be10d20bd4e2b0"
+    },
+    {
+      "id": "1-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bc7eac62cf1fe45e9b2a690dd04864902edb35bd116a1215483a516ae62b746a"
+    },
+    {
+      "id": "1-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "numbers",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "42edf0c92d24cc72b3fdba3e56d98f68250358fc20c323506eabbd05b76f73b0"
+    },
+    {
+      "id": "1-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d1b44628e73e2cae4a2a9cf27702465ef151d30da5c05467d5bdf97bf1ded274"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "control",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "82f5c550ece1c44d07763279894c5dc6d880b018b985801d63496cf9e789c0ee"
+    },
+    {
+      "id": "1-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "1",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5c881b37889f11b117304ee2de36e36137a4b0dddcfbc98931d640f01f2f0287"
+    },
+    {
+      "id": "1-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "handles",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e268d5b7af3872c46406775f554e7767b5ccda470baa251066fb82fa9aae8bf8"
+    },
+    {
+      "id": "1-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "wide",
+        "64",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7d4c674cefc1b3a4201618462579639323cf3e2c6fc6ef4cfa46adc793ad9f6c"
+    },
+    {
+      "id": "1-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6e14953f45bf8acd61182adba0c1e72294102880e5244fd05c103d7c70e58448"
+    },
+    {
+      "id": "1-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3b6caf5e2cec9a5ec5db0cd73e51149c0f4f356a9c26d2bbcf9b53533edc63a9"
+    },
+    {
+      "id": "1-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "db65ca11fd43e472c9b3432e7aeb4c89e5b61363445b3d4a9cf216442ce15147"
+    },
+    {
+      "id": "1-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "512",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "089e2e35e1ec4e2f4d8ba7dc9c9d5ffc4820ecebf37669089839cf3a8661dcc5"
+    },
+    {
+      "id": "1-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c5d2fcdf5e2747af36c855ee14f3a329e41bb43efbad5e68d670abc1f769dcdf"
+    },
+    {
+      "id": "1-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "records",
+        "0",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7079c41073e66578cadd9e782bf6147b0498ce80f3c47065b907e11d1bd036b2"
+    },
+    {
+      "id": "1-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "58555e7763856aa168b72b0d4fe99977b2393a0fcaed7f399a4640977da80f11"
+    },
+    {
+      "id": "1-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "8",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0c7b4c800f2d49a1ef013e57f5231bec98194db51b6e6feb4ada26358c684770"
+    },
+    {
+      "id": "1-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-slice-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e3c7416d2a5387c7ffb902a4a1337ba0918b67a45a2789b6eb03042e98f385a1"
+    },
+    {
+      "id": "1-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-count/input-driver",
+        "count",
+        "text",
+        "4096",
+        "10",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-count/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b2f5239168988ba8aca9af53dacecfc578b8ba58554e9b803505c07db67d386b"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 40.0,
+          "min": 40,
+          "max": 40
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 24.0,
+          "min": 24,
+          "max": 24
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 320.0,
+          "min": 320,
+          "max": 320
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 192.0,
+          "min": 192,
+          "max": 192
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 2560.0,
+          "min": 2560,
+          "max": 2560
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1536.0,
+          "min": 1536,
+          "max": 1536
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 20480.0,
+          "min": 20480,
+          "max": 20480
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 12288.0,
+          "min": 12288,
+          "max": 12288
+        }
+      }
+    },
+    {
+      "case": "handles",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 163840.0,
+          "min": 163840,
+          "max": 163840
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 98304.0,
+          "min": 98304,
+          "max": 98304
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 8.0,
+          "min": 8,
+          "max": 8
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 8.0,
+          "min": 8,
+          "max": 8
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 64.0,
+          "min": 64,
+          "max": 64
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 64.0,
+          "min": 64,
+          "max": 64
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 512.0,
+          "min": 512,
+          "max": 512
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 512.0,
+          "min": 512,
+          "max": 512
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 4096.0,
+          "min": 4096,
+          "max": 4096
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 4096.0,
+          "min": 4096,
+          "max": 4096
+        }
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 32768.0,
+          "min": 32768,
+          "max": 32768
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 32768.0,
+          "min": 32768,
+          "max": 32768
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 96.0,
+          "min": 96,
+          "max": 96
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 56.0,
+          "min": 56,
+          "max": 56
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 768.0,
+          "min": 768,
+          "max": 768
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 448.0,
+          "min": 448,
+          "max": 448
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 6144.0,
+          "min": 6144,
+          "max": 6144
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 3584.0,
+          "min": 3584,
+          "max": 3584
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 49152.0,
+          "min": 49152,
+          "max": 49152
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 28672.0,
+          "min": 28672,
+          "max": 28672
+        }
+      }
+    },
+    {
+      "case": "records",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 393216.0,
+          "min": 393216,
+          "max": 393216
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 229376.0,
+          "min": 229376,
+          "max": 229376
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 83.0,
+          "min": 83,
+          "max": 83
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 83.0,
+          "min": 83,
+          "max": 83
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 11.0,
+          "min": 11,
+          "max": 11
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 664.0,
+          "min": 664,
+          "max": 664
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 11.0,
+          "min": 11,
+          "max": 11
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 664.0,
+          "min": 664,
+          "max": 664
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 67.0,
+          "min": 67,
+          "max": 67
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 5312.0,
+          "min": 5312,
+          "max": 5312
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 67.0,
+          "min": 67,
+          "max": 67
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 5312.0,
+          "min": 5312,
+          "max": 5312
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 515.0,
+          "min": 515,
+          "max": 515
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 42496.0,
+          "min": 42496,
+          "max": 42496
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 515.0,
+          "min": 515,
+          "max": 515
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 42496.0,
+          "min": 42496,
+          "max": 42496
+        }
+      }
+    },
+    {
+      "case": "text",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 4099.0,
+          "min": 4099,
+          "max": 4099
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 339968.0,
+          "min": 339968,
+          "max": 339968
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 4099.0,
+          "min": 4099,
+          "max": 4099
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 339968.0,
+          "min": 339968,
+          "max": 339968
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 0,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 208.0,
+          "min": 208,
+          "max": 208
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 80.0,
+          "min": 80,
+          "max": 80
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 1664.0,
+          "min": 1664,
+          "max": 1664
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 640.0,
+          "min": 640,
+          "max": 640
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 64,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 13312.0,
+          "min": 13312,
+          "max": 13312
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 5120.0,
+          "min": 5120,
+          "max": 5120
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 512,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 106496.0,
+          "min": 106496,
+          "max": 106496
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 40960.0,
+          "min": 40960,
+          "max": 40960
+        }
+      }
+    },
+    {
+      "case": "wide",
+      "size": 4096,
+      "before": {
+        "allocations": {
+          "median": 3.0,
+          "min": 3,
+          "max": 3
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 851968.0,
+          "min": 851968,
+          "max": 851968
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 2.0,
+          "min": 2,
+          "max": 2
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 327680.0,
+          "min": 327680,
+          "max": 327680
+        }
+      }
+    }
+  ],
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "loader_environment": {},
+  "samples_sha256": "de635dece07807578e71bf3b8b6a05833c566b2176d48a794f0014106bbd32a1",
+  "runner_sha256": "69d6521885e4a18e51b9bd01a29f7241e3b62608a120dcc68c8259c327bbbec0"
+}

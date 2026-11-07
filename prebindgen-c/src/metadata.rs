@@ -16,19 +16,31 @@ impl prebindgen_flat::Schema for CSchema {
 /// Settings applying to the whole generated C module.
 #[derive(Clone, Debug)]
 pub struct CModule {
+    /// Default generation of input-handle alias conflict checks.
+    pub emit_alias_checks: bool,
     /// Prefix of generated symbols and declarations.
     pub prefix: String,
+    /// Generated source accessors callable by expansion recipes.
+    pub helpers: Vec<syn::ItemFn>,
+    pub(crate) target: Option<(String, u32, TokenStream)>,
+    pub(crate) opaque_layouts: std::collections::BTreeMap<String, crate::layouts::StorageLayout>,
 }
 impl Default for CModule {
     fn default() -> Self {
         Self {
+            emit_alias_checks: true,
             prefix: "pb".into(),
+            helpers: Vec::new(),
+            opaque_layouts: Default::default(),
+            target: None,
         }
     }
 }
 /// Export decisions belonging to one function binding.
 #[derive(Clone, Debug, Default)]
 pub struct CFunction {
+    /// Override the module's input-alias checks for this binding and its callbacks.
+    pub emit_alias_checks: Option<bool>,
     /// Whether conversion failure deliberately aborts this non-Result binding.
     pub abort_on_failure: bool,
     /// Whether these conversions can fail outside a Result error channel.
@@ -40,6 +52,8 @@ pub struct CFunction {
 pub struct CType {
     /// Unprefixed opaque C typedef name, when this type has a handle representation.
     pub pointer: Option<String>,
+    /// Inline owning representation, when configured or selected for Vec/String outputs.
+    pub owned: Option<Rc<COwned>>,
     pub(crate) pointer_order: usize,
     pub(crate) error_order: usize,
     /// Checked fieldless-enum declaration shared by all occurrences.

@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 use prebindgen_conversions::value::Value;
+pub use prebindgen_conversions::Access;
 use prebindgen_flat::{
     Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
 };
@@ -10,22 +11,26 @@ mod callback;
 pub use callback::CCallback;
 mod wire;
 pub use wire::CWire;
-/// Pointee type and mutability of a C boundary pointer.
+/// Pointee type and Rust ownership/access mode of a C boundary pointer.
 #[derive(Clone, Debug)]
 pub struct CPointer {
     /// Rust pointee type used in the ABI and the opaque C type declaration.
     pub ty: syn::Type,
-    /// Whether this carrier is a mutable pointer.
-    pub mutable: bool,
+    /// Move transfers ownership; shared/exclusive access carries a non-owning borrow.
+    pub access: Access,
 }
 impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
         Self {
             ty: value.ty,
-            mutable: value.access != prebindgen_conversions::Access::Shared,
+            access: value.access,
         }
     }
 }
+mod owned;
+pub use owned::COwned;
+mod layouts;
+pub use layouts::{OpaqueLayout, OpaqueLayouts};
 mod metadata;
 pub use metadata::{CEnum, CFunction, CModule, CSchema, CType};
 mod enums;
@@ -68,11 +73,20 @@ use quote::{format_ident, quote};
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct CCodec;
+fn explicit_copy_error(ty: &syn::Type) -> String {
+    format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_ref(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
+}
 impl Codec for CCodec {
     type Schema = CSchema;
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
+    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        owned::native_input(flat, ty)
+    }
+    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        owned::native_output(flat, ty)
+    }
     fn group_metadata(&self) -> CBranch {
         CBranch::Group(CGroup::Values)
     }
@@ -119,8 +133,7 @@ impl Codec for CCodec {
             || prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
                 .any(|w| matches!(w.kind, CWire::Callback { .. }))
         {
-            let accepted = prebindgen_conversions::template_parameter("acknowledgement");
-            plan.acknowledgement = Some(quote!(#accepted = true;));
+            plan.acknowledgement = Some(quote!());
         }
         Ok(())
     }
@@ -171,7 +184,8 @@ impl Codec for CCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {
@@ -214,8 +228,30 @@ impl Codec for CCodec {
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
         Ok(match wire {
             CWire::Callback { callback } => callback.absent_value(),
+            CWire::Pointer { pointer, .. } if pointer.access == Access::Shared => {
+                quote!(std::ptr::null())
+            }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
-            CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::View | CWire::Buffer | CWire::DeferredBuffer => {
+                quote!(#buffer_type {data:std::ptr::null(),len:0})
+            }
+            CWire::MutableView => quote!(__PbBufferMut {
+                data: std::ptr::null_mut(),
+                len: 0
+            }),
+            CWire::Owned {
+                owner,
+                by_value: true,
+                ..
+            } => {
+                let t = owner.ident();
+                quote!(#t::empty())
+            }
+            CWire::Owned {
+                access: Access::Shared,
+                ..
+            } => quote!(::core::ptr::null()),
+            CWire::Owned { .. } => quote!(::core::ptr::null_mut()),
             CWire::Rows => quote!(__PbRows {
                 data: std::ptr::null(),
                 len: 0
@@ -245,8 +281,12 @@ impl Codec for CCodec {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             return self.consumes(_flat, inner, &());
         }
-        Value::of(ty).is_none()
+        // Text and bytes own their storage just like opaque objects. Treating
+        // them as observations silently cloned them when another view was added.
+        !matches!(ty, syn::Type::Reference(_))
+            && (owned::native_output(_flat, ty) || !matches!(Value::of(ty), Some(Value::Scalar(_))))
     }
+
     fn input_leaf(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -256,21 +296,31 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
-        if prebindgen_flat::sequence_parts(ty).is_some() {
-            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
-        }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
-        let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
+        if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
+            return Ok(owned::input(owner, ty, w, v, active, false, false));
+        }
+        if owned::pointer_declared(_flat, ty) {
+            return prebindgen_conversions::boxed::input(
+                &prebindgen_conversions::boxed::Storage::Direct,
+                ty,
+                w,
+                v,
+                &active.rust(),
+                |b| CWire::pointer(b.into()),
+            );
+        }
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
-            Some(Value::Text) => (
-                quote!(std::str::from_utf8(unsafe {#read_buffer(#w)?}).map_err(|_|"invalid UTF-8")?),
-                CWire::Buffer,
-            ),
-            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CWire::Buffer),
+            Some(value @ (Value::Text | Value::Bytes)) => {
+                (sequence::decode_buffer(value, &w), CWire::Buffer)
+            }
             None => {
                 return prebindgen_conversions::boxed::input(
                     &prebindgen_conversions::boxed::Storage::Direct,
@@ -287,6 +337,19 @@ impl Codec for CCodec {
         plan.fallible = !matches!(Value::of(ty), Some(Value::Scalar(p)) if p != Primitive::Char);
         Ok(plan)
     }
+    fn input_row_leaf(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<CWire>> {
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
+        Ok(plan)
+    }
     fn output_leaf(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -296,6 +359,38 @@ impl Codec for CCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<CWire>> {
+        if let Some(owner) = owned::declaration(_flat, ty) {
+            if let syn::Type::Reference(r) = ty {
+                let access = if r.mutability.is_some() {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                };
+                let value = if borrowed { quote!(*#v) } else { v };
+                return Ok(owned::borrowed(owner, w, value, access));
+            }
+            if borrowed {
+                return Err(explicit_copy_error(ty));
+            }
+            return Ok(owned::output(owner, w, v));
+        }
+        if owned::pointer_declared(_flat, ty) {
+            if let syn::Type::Reference(r) = ty {
+                return Ok(self
+                    .output_return_reference(_flat, r, &(), w, v)?
+                    .expect("declared opaque reference"));
+            }
+            if borrowed {
+                return Err(explicit_copy_error(ty));
+            }
+            return Ok(owned_pointer_output(ty, w, v).0);
+        }
+        if let syn::Type::Reference(r) = ty {
+            let payload = prebindgen_flat::type_key(&r.elem);
+            if payload == "[u8]" || (payload == "str" && r.mutability.is_none()) {
+                return Ok(byte_view(w, v, r.mutability.is_some()));
+            }
+        }
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
@@ -357,22 +452,226 @@ impl Codec for CCodec {
                 )?;
                 out.fallible = false;
                 let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
+                let guard = format_ident!("{w}_owner");
+                out.statements
+                    .extend(quote!(let #w = Box::into_raw(#w); let #guard = __PbOutputOwner(#w);));
                 out.values = vec![(
                     w.clone(),
-                    quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()}),
+                    quote!(#buffer_type {data: #w as *const u8, len: #w.len()}),
                 )];
-                out.commit = quote!(let _ = Box::into_raw(#w););
+                out.commit = quote!(::core::mem::forget(#guard););
                 Ok(out)
             }
-            None => prebindgen_conversions::boxed::output(
-                &prebindgen_conversions::boxed::Storage::Direct,
-                ty,
-                w,
-                v,
-                borrowed,
-                |b| CWire::pointer(b.into()),
-            ),
+            None => {
+                if borrowed {
+                    return Err(explicit_copy_error(ty));
+                }
+                Ok(owned_pointer_output(ty, w, v).0)
+            }
         }
+    }
+
+    fn output_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        mut value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<CWire>> {
+        use prebindgen_declarations::ProjectionMode;
+        if !projection.fields.is_empty() {
+            return Err("opaque/scalar output projection has field overrides".into());
+        }
+        let borrowed = projection.mode == ProjectionMode::Borrowed;
+        let mut payload = ty;
+        while let syn::Type::Reference(reference) = payload {
+            if !borrowed {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            if reference.mutability.is_some() {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            if matches!(reference.elem.as_ref(), syn::Type::Slice(_))
+                || matches!(reference.elem.as_ref(),syn::Type::Path(p) if p.path.is_ident("str"))
+            {
+                break;
+            }
+            payload = &reference.elem;
+            value = quote!(*(#value));
+        }
+        if borrowed
+            && (owned::declaration(flat, payload).is_some()
+                || owned::pointer_declared(flat, payload)
+                || Value::of(payload).is_none())
+        {
+            return self.output_leaf(
+                flat,
+                payload,
+                &(),
+                wire,
+                quote!(::core::clone::Clone::clone(#value)),
+                false,
+            );
+        }
+        self.output_leaf(flat, payload, &(), wire, value, borrowed)
+    }
+
+    fn output_return_reference(
+        &self,
+        flat: &Bindings,
+        reference: &syn::TypeReference,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        let ty = &*reference.elem;
+        if let Some(owner) = owned::declaration(flat, ty) {
+            return Ok(Some(owned::borrowed(
+                owner,
+                wire,
+                value,
+                if reference.mutability.is_some() {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                },
+            )));
+        }
+        let payload = prebindgen_flat::type_key(ty);
+        if payload == "[u8]" || (payload == "str" && reference.mutability.is_none()) {
+            return Ok(Some(byte_view(wire, value, reference.mutability.is_some())));
+        }
+        // Scalars, enums and buffers retain their value conversions. Only an
+        // opaque source type has an address-preserving C representation.
+        if !owned::pointer_declared(flat, ty)
+            && (!matches!(ty, syn::Type::Path(_))
+                || prebindgen_flat::type_key(ty) == "str"
+                || Value::of(ty).is_some()
+                || prebindgen_flat::sequence_parts(ty).is_some()
+                || prebindgen_flat::option_inner(ty).is_some()
+                || flat
+                    .type_info(ty)
+                    .ok()
+                    .is_some_and(|t| t.metadata.enumeration.is_some()))
+        {
+            return Ok(None);
+        }
+        let access = if reference.mutability.is_some() {
+            Access::Exclusive
+        } else {
+            Access::Shared
+        };
+        let kind = CWire::pointer(CPointer {
+            ty: ty.clone(),
+            access,
+        });
+        let pointer_type = kind.rust_type();
+        Ok(Some(OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            commit: TokenStream::new(),
+            outcomes: prebindgen_flat::Outcomes {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: wire.clone(),
+                    kind,
+                }]),
+                source_error: None,
+                binding_failure: None,
+            },
+            statements: quote!(let #wire: #pointer_type = #value as #pointer_type;),
+            values: vec![(wire.clone(), quote!(#wire))],
+        }))
+    }
+
+    fn output_owner(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        if let Some(owner) = owned::declaration(flat, ty).filter(|_| owned::std_owner(ty)) {
+            let ident = owner.ident();
+            let mut plan = owned::output(owner, wire.clone(), value.clone());
+            plan.statements = quote!(let mut #wire=#ident::guard(#value););
+            let pointer = quote!(::core::ptr::addr_of_mut!(#wire.0).cast::<#ty>());
+            return Ok(Some((plan, pointer)));
+        }
+        if !flat
+            .type_info(ty)
+            .ok()
+            .is_some_and(|t| t.metadata.pointer.is_some() && t.metadata.enumeration.is_none())
+        {
+            return Ok(None);
+        }
+        Ok(Some(owned_pointer_output(ty, wire, value)))
+    }
+
+    fn validate_owner_getter(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        getter: &str,
+        plan: &OutputPlan<CWire>,
+    ) -> Result<()> {
+        if let Some(owner) = owned::declaration(flat, ty) {
+            let has_loan = crate::group::result_packet_fields(&plan.outcomes.success).any(|w| {
+                matches!(
+                    w.kind,
+                    CWire::View
+                        | CWire::MutableView
+                        | CWire::Owned {
+                            access: Access::Shared | Access::Exclusive,
+                            ..
+                        }
+                ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access!=Access::Move)
+            });
+            let heap_view = owner.helper("view") == getter
+                || (prebindgen_flat::type_key(&owner.ty) == "Vec < u8 >"
+                    && owner.helper("view_mut") == getter);
+            if has_loan && !heap_view {
+                return Err("inline owner getter loans require a generated heap view accessor; a reference into the movable descriptor cannot escape".into());
+            }
+        }
+        Ok(())
+    }
+    fn validate_getter_output(
+        &self,
+        _flat: &Bindings,
+        _receiver: &syn::Type,
+        borrowed: bool,
+        ty: &syn::Type,
+        plan: &OutputPlan<CWire>,
+        _: &(),
+    ) -> Result<()> {
+        let fields = crate::group::result_packet_fields(&plan.outcomes.success).collect::<Vec<_>>();
+        let mut reference_type = ty;
+        while let Some(inner) = prebindgen_flat::option_inner(reference_type) {
+            reference_type = inner;
+        }
+        if matches!(reference_type,syn::Type::Reference(r) if r.lifetime.as_ref().is_some_and(|l| l.ident=="static"))
+        {
+            return Ok(());
+        }
+        let loans = fields.iter().any(|w| {
+            matches!(
+                &w.kind,
+                CWire::View
+                    | CWire::MutableView
+                    | CWire::Owned {
+                        access: Access::Shared | Access::Exclusive,
+                        ..
+                    }
+            ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access != Access::Move)
+        });
+        if loans && !borrowed {
+            return Err("a borrowed getter output requires its opaque owner to be returned with field_self_into(); a temporary owner cannot lend output storage; use a generated heap view accessor with its inline owner, or borrow an owner already stored by C".into());
+        }
+        Ok(())
     }
 
     fn optional_niche(
@@ -426,6 +725,38 @@ impl Codec for CCodec {
         Ok(())
     }
 }
+// Every C opaque allocation has the direct Box<T> layout. Keep ownership in a
+// raw-pointer guard so packet delivery and commit never retag a live Box after
+// its address (or an interior address) has been placed in a result packet.
+fn owned_pointer_output(
+    ty: &syn::Type,
+    wire: syn::Ident,
+    value: TokenStream,
+) -> (OutputPlan<CWire>, TokenStream) {
+    let guard = format_ident!("{wire}_owner");
+    (
+        OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            outcomes: prebindgen_flat::Outcomes {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: wire.clone(),
+                    kind: CWire::pointer(CPointer {
+                        ty: ty.clone(),
+                        access: Access::Move,
+                    }),
+                }]),
+                source_error: None,
+                binding_failure: None,
+            },
+            statements: quote!(let #wire: *mut #ty = Box::into_raw(Box::new(#value)); let #guard = __PbOutputOwner(#wire);),
+            values: vec![(wire.clone(), quote!(#wire))],
+            commit: quote!(::core::mem::forget(#guard);),
+        },
+        quote!(#wire),
+    )
+}
 fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
     let ty = p.rust_type();
     match p {
@@ -478,15 +809,22 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// conversions require explicit [`Self::panic`] and abort on failure; source
 /// panics also abort. Destructors return void. Result calls report failures
 /// through their explicit error output.
-/// Owned pointer inputs transfer ownership after all active inputs validate;
-/// later source failures do not restore ownership. References borrow for the
+/// Each owned input transfers after its own validation and alias checks.
+/// Later failures do not restore consumed inputs. References borrow for the
 /// call and require the caller to obey Rust aliasing and lifetime rules.
 /// Result calls use an optional explicit error output, with owned messages or a
 /// declared error record. A success wire with an available niche is returned
 /// directly; otherwise the return is bool and success values use output pointers.
 /// Unit success needs no output pointer. Consuming Result calls additionally
-/// require a bool ownership output, indicating transfer even on failure.
-/// Returned pointers, buffers and errors require their matching destructors.
+/// require a `size_t` ownership output counting consumed owned values in
+/// argument, row and field order, including on failure.
+/// Owned returned pointers, buffers and errors require their matching destructors.
+/// Direct reference returns of opaque types use non-owning pointers: `const` for
+/// shared references and mutable for exclusive references. Options use null for absence.
+/// Never destroy or consume these pointers; keep their
+/// source storage alive and at a stable address, respecting Rust's aliasing rules.
+/// Mutable loans require exclusive access while in use. Getter expansions retain
+/// their existing ownership policy; mutable getter results remain unsupported.
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -496,9 +834,16 @@ pub struct Cbindgen {
     functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
+    owned: Vec<(String, syn::Type, OpaqueLayout, Option<String>)>,
+    layout_file: Option<std::path::PathBuf>,
+    layout_data: Option<OpaqueLayouts>,
+    layout_sources: Vec<prebindgen::Source>,
+    target: Option<String>,
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
+    emit_alias_checks: Option<bool>,
+    function_alias_checks: std::collections::BTreeMap<String, bool>,
 }
 impl Cbindgen {
     /// Create an unconfigured builder with the symbol prefix `pb`.
@@ -512,9 +857,16 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            emit_alias_checks: None,
+            function_alias_checks: Default::default(),
         }
     }
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
@@ -596,6 +948,33 @@ impl Cbindgen {
         self
     }
 
+    /// Set the project default for generated input-handle alias conflict checks.
+    /// Enabled by default. When disabled, callers must ensure moved/exclusive
+    /// inputs never alias another active input. Pointer/length/UTF-8 validation
+    /// and ownership cleanup remain enabled. This also governs callback results
+    /// for callbacks registered by the binding, including later worker calls.
+    pub fn set_emit_alias_checks(mut self, enabled: bool) -> Self {
+        self.emit_alias_checks = Some(enabled);
+        self
+    }
+
+    /// Override alias conflict checks for the last declared function and the
+    /// callbacks it registers. This overrides the project default in either
+    /// direction. A disabled check transfers Rust's aliasing obligations to C.
+    ///
+    /// # Panics
+    /// Panics if no function has been declared.
+    pub fn alias_checks(mut self, enabled: bool) -> Self {
+        let name = self
+            .functions
+            .last()
+            .expect("alias_checks() must follow function(...)")
+            .name
+            .clone();
+        self.function_alias_checks.insert(name, enabled);
+        self
+    }
+
     /// Allow binding conversion errors to abort the last declared non-Result
     /// function. Required for fallible conversions without a Result error channel.
     /// Result functions continue to report errors through their explicit output.
@@ -632,9 +1011,16 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            emit_alias_checks: None,
+            function_alias_checks: Default::default(),
         }
     }
     /// Set the prefix for exported functions, C types and destructors.
@@ -644,11 +1030,35 @@ impl Cbindgen {
         self.prefix = prefix.into();
         self
     }
+    /// Select the binding target outside Cargo, or override Cargo's `TARGET`.
+    /// Native measurements are used only for the generator's own platform.
+    pub fn target(mut self, target: impl Into<String>) -> Self {
+        self.target = Some(target.into());
+        self
+    }
+    /// Read external target layouts during preparation. An incomplete artifact
+    /// is an error even on native builds; no host fallback is used.
+    pub fn opaque_layouts_file(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.layout_file = Some(path.as_ref().to_owned());
+        self
+    }
+    /// Supply a parsed layout artifact instead of a file.
+    pub fn opaque_layouts(mut self, data: OpaqueLayouts) -> Self {
+        self.layout_data = Some(data);
+        self
+    }
+    /// Register a captured source for layout-artifact feature verification when
+    /// starting from a parsed Flat model. `.source(...)` registers automatically.
+    pub fn layout_source(mut self, source: prebindgen::Source) -> Self {
+        self.layout_sources.push(source);
+        self
+    }
     /// Declare an opaque C pointee and its typed destructor for a source type.
     ///
-    /// Every leaf type other than a primitive, text or bytes needs a matching
-    /// declaration. Owned values use `Box<T>` directly; they have no `Send`
-    /// requirement. This declaration alone does not export constructors.
+    /// Selects `Box<T>` storage for owned values in both directions, including
+    /// built-in and vector types that otherwise have value/collection defaults.
+    /// Named opaque types need an explicit pointer or inline-owner declaration.
+    /// There is no `Send` requirement. This alone does not export constructors.
     ///
     /// # Arguments
     ///
@@ -658,6 +1068,45 @@ impl Cbindgen {
     pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
         self.pointers.push((name.into(), ty));
         self
+    }
+    /// Declare an inline owning C value with generated target storage and drop.
+    /// `T::default()` must be a valid, resource-free empty value: the C caller
+    /// may discard it after a drop or consuming call. Use
+    /// [`Self::opaque_owned_struct_with_empty`] when another empty factory is needed.
+    /// Types without a resource-free empty state should use [`Self::opaque_ptr`].
+    pub fn opaque_owned_struct(mut self, name: &str, ty: syn::Type, layout: OpaqueLayout) -> Self {
+        self.owned.push((name.into(), ty, layout, None));
+        self
+    }
+    /// Declare an inline owner whose empty value is produced by a nullary source
+    /// function returning exactly this Rust type. The empty value must own no
+    /// resources, because callers may discard it after destruction or consumption.
+    /// This avoids a `Default` bound.
+    pub fn opaque_owned_struct_with_empty(
+        mut self,
+        name: &str,
+        ty: syn::Type,
+        layout: OpaqueLayout,
+        empty: prebindgen_declarations::FunctionDecl,
+    ) -> Self {
+        self.owned
+            .push((name.into(), ty, layout, Some(empty.source_name())));
+        self
+    }
+    /// Reference the generated length getter in an output expansion.
+    pub fn owned_len(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "len"))
+    }
+    /// Reference the generated byte-view getter for a `String` or `Vec<u8>` owner.
+    pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
+    }
+    /// Reference the generated exclusive byte-view getter for a `Vec<u8>` owner.
+    /// Use as the single getter alongside its owning identity in an output
+    /// expansion. The C caller keeps the owner alive and preserves exclusive
+    /// access until the view's last use. No copy or write-back is performed.
+    pub fn owned_view_mut(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view_mut"))
     }
     /// Bind a fieldless source enum as a named `int32_t` C type and constants.
     /// Source integer discriminants are preserved and checked on input. Register
@@ -673,28 +1122,66 @@ impl Cbindgen {
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn prepare(self) -> Result<Bindings> {
         prebindgen_declarations::ident(&self.prefix)?;
+        let target = self.target.unwrap_or_else(|| {
+            std::env::var("TARGET").unwrap_or_else(|_| env!("PREBINDGEN_C_GENERATOR_TARGET").into())
+        });
+        if target.trim().is_empty() {
+            return Err("binding target must not be empty".into());
+        }
+        let target_info = prebindgen::TargetTriple::parse(&target)
+            .map_err(|e| format!("invalid binding target `{target}`: {e}"))?;
+        let pointer_width = target_info
+            .pointer_width()
+            .ok_or("binding target has no pointer width")?;
+        let artifact = match (self.layout_file, self.layout_data) {
+            (Some(_), Some(_)) => {
+                return Err("supply one opaque layout artifact, as a file or parsed data".into())
+            }
+            (Some(path), None) => Some(OpaqueLayouts::read_json(path)?),
+            (None, data) => data,
+        };
+        let mut layout_sources = self.layout_sources;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
-            (None, Some(path)) => Flat::parse_selected(
-                prebindgen::Source::new(path).items_all(),
-                &prebindgen_declarations::declarations::source_functions(
-                    &self.inputs,
-                    &self.outputs,
-                    &self.error_mappers,
-                    &self.functions,
-                ),
-                &self
-                    .pointers
-                    .iter()
-                    .chain(&self.enums)
-                    .chain(&self.errors)
-                    .map(|(_, ty)| ty.clone())
-                    .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
+            (None, Some(path)) => {
+                let source = prebindgen::Source::builder(path)
+                    .enable_target_filtering(Some(&target))
+                    .build();
+                let flat = Flat::parse_selected(
+                    source.items_all(),
+                    &prebindgen_declarations::declarations::source_functions(
+                        &self.inputs,
+                        &self.outputs,
+                        &self.error_mappers,
+                        &self.functions,
+                    )
+                    .into_iter()
+                    .chain(
+                        self.owned
+                            .iter()
+                            .filter_map(|(_, _, _, empty)| empty.clone()),
+                    )
                     .collect::<Vec<_>>(),
-            )?,
+                    &self
+                        .pointers
+                        .iter()
+                        .chain(&self.enums)
+                        .chain(&self.errors)
+                        .map(|(_, ty)| ty.clone())
+                        .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
+                        .chain(self.owned.iter().map(|(_, ty, _, _)| ty.clone()))
+                        .collect::<Vec<_>>(),
+                )?;
+                layout_sources.push(source);
+                flat
+            }
             _ => return Err("supply exactly one source or flat model".into()),
         };
         flat.metadata.prefix = self.prefix;
+        if let Some(enabled) = self.emit_alias_checks {
+            flat.metadata.emit_alias_checks = enabled;
+        }
+        flat.metadata.target = Some((target.clone(), pointer_width, target_info.to_cfg_tokens()));
         let mut enum_names = std::collections::BTreeSet::new();
         for (name, ty) in self.enums {
             prebindgen_declarations::ident(&name)?;
@@ -753,12 +1240,72 @@ impl Cbindgen {
         for (order, (name, ty)) in self.pointers.into_iter().enumerate() {
             prebindgen_declarations::ident(&name)?;
             let ty = flat.resolve_type(&ty)?;
-            let info = &mut flat.type_info_mut(&ty)?.metadata;
+            owned::validate_type(&ty)?;
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.owned.is_some() || info.enumeration.is_some() {
+                return Err(
+                    "a source type cannot be both opaque_ptr and opaque_owned_struct".into(),
+                );
+            }
             if info.pointer.replace(name).is_some() {
                 return Err("duplicate C opaque source type".into());
             }
             info.pointer_order = order;
         }
+        for (name, ty, layout, empty) in self.owned {
+            prebindgen_declarations::ident(&name)?;
+            let ty = flat.resolve_type(&ty)?;
+            owned::validate_type(&ty)?;
+            let empty = if let Some(function) = empty {
+                let f = flat.function(&function)?;
+                if !f.params.is_empty() || !prebindgen_flat::same_type(&f.ret.ty, &ty) {
+                    return Err(
+                        "an opaque owner empty factory must be nullary and return its owner type"
+                            .into(),
+                    );
+                }
+                let path = &f.path;
+                quote!(#path())
+            } else {
+                quote!(<#ty as ::core::default::Default>::default())
+            };
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.pointer.is_some() || info.owned.is_some() || info.enumeration.is_some() {
+                return Err("duplicate or conflicting C owning representation".into());
+            }
+            info.owned = Some(std::rc::Rc::new(COwned {
+                name,
+                ty,
+                layout,
+                empty,
+                explicit: true,
+            }));
+        }
+        let mut automatic = std::collections::BTreeMap::new();
+        for f in flat.functions.values() {
+            owned::collect(&f.ret.ty, &mut automatic);
+            for p in &f.params {
+                owned::collect(&p.ty.ty, &mut automatic);
+            }
+        }
+        for record in flat.records.values() {
+            for field in &record.fields {
+                owned::collect(&field.ty, &mut automatic);
+            }
+        }
+        for ty in automatic.into_values() {
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.owned.is_none() && info.pointer.is_none() {
+                info.owned = Some(std::rc::Rc::new(COwned {
+                    name: owned::auto_name(&ty),
+                    ty: ty.clone(),
+                    layout: layouts::builtin(&ty),
+                    empty: quote!(<#ty as ::core::default::Default>::default()),
+                    explicit: false,
+                }));
+            }
+        }
+        owned::accessors(&mut flat)?;
         let declarations = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -777,6 +1324,7 @@ impl Cbindgen {
             flat.function_mut(&decl.name)?.metadata = Some(CFunction {
                 abort_on_failure: self.panics.contains(&decl.name),
                 requires_abort: false,
+                emit_alias_checks: self.function_alias_checks.get(&decl.name).copied(),
             });
         }
         errors::prepare(&mut flat, &codec, &declarations)
@@ -785,14 +1333,14 @@ impl Cbindgen {
             declarations.fill(&mut flat, &codec, &decl, &())?;
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
-                sequence::callback_target(
-                    &(flat.function(&decl.name)?.output_conversion()?)
-                        .output_outcomes()
-                        .success,
-                )?;
                 let variant =
                     declarations.callback_variant(&mut flat, &codec, &decl, &name, &())?;
                 declarations.fill(&mut flat, &codec, &variant, &())?;
+                sequence::callback_target(
+                    &(flat.function(&name)?.output_conversion()?)
+                        .output_outcomes()
+                        .success,
+                )?;
                 if decl.callback_return == Some(prebindgen_declarations::CallbackReturn::Only) {
                     let original = flat.functions.get_mut(&decl.name).unwrap();
                     original.ret.slot = None;
@@ -831,6 +1379,7 @@ impl Cbindgen {
                     .requires_abort = requires_abort;
             }
         }
+        layouts::prepare(&mut flat, &target, artifact.as_ref(), &layout_sources)?;
         Ok(flat)
     }
     /// Prepare a complete Flat model, then emit its C and Rust bindings.
@@ -861,6 +1410,54 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
+fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> OutputPlan<CWire> {
+    let (kind, buffer, pointer) = if mutable {
+        (
+            CWire::MutableView,
+            quote!(__PbBufferMut),
+            quote!(#wire.as_mut_ptr()),
+        )
+    } else {
+        (
+            CWire::View,
+            prebindgen_conversions::template_parameter("buffer_type"),
+            quote!(#wire.as_ptr()),
+        )
+    };
+    OutputPlan {
+        fallible: false,
+        context: Default::default(),
+        delivery: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                name: wire.clone(),
+                kind,
+            }]),
+            source_error: None,
+            binding_failure: None,
+        },
+        statements: quote!(let #wire = #value; let #wire = #buffer {data:#pointer.cast::<u8>(),len:#wire.len()};),
+        values: vec![(wire.clone(), quote!(#wire))],
+        commit: quote!(),
+    }
+}
+fn c_scalar(p: Primitive, prefix: &str) -> String {
+    match p {
+        Primitive::Bool | Primitive::U8 => "uint8_t".into(),
+        Primitive::Char | Primitive::U32 => "uint32_t".into(),
+        Primitive::I8 => "int8_t".into(),
+        Primitive::I16 => "int16_t".into(),
+        Primitive::I32 => "int32_t".into(),
+        Primitive::I64 => "int64_t".into(),
+        Primitive::U16 => "uint16_t".into(),
+        Primitive::U64 => "uint64_t".into(),
+        Primitive::Isize => "intptr_t".into(),
+        Primitive::Usize => "uintptr_t".into(),
+        Primitive::F32 => "float".into(),
+        Primitive::F64 => "double".into(),
+        Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
+    }
+}
 fn c_ty(
     wire: &Wire,
     prefix: &str,
@@ -870,31 +1467,42 @@ fn c_ty(
     match &wire.kind {
         CWire::Callback { callback } => callback.name.clone(),
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
-        CWire::Scalar { primitive: p, .. } => match p {
-            Primitive::Bool | Primitive::U8 => "uint8_t".into(),
-            Primitive::Char | Primitive::U32 => "uint32_t".into(),
-            Primitive::I8 => "int8_t".into(),
-            Primitive::I16 => "int16_t".into(),
-            Primitive::I32 => "int32_t".into(),
-            Primitive::I64 => "int64_t".into(),
-            Primitive::U16 => "uint16_t".into(),
-            Primitive::U64 => "uint64_t".into(),
-            Primitive::Isize => "intptr_t".into(),
-            Primitive::Usize => "uintptr_t".into(),
-            Primitive::F32 => "float".into(),
-            Primitive::F64 => "double".into(),
-            Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
-        },
+        CWire::Scalar { primitive: p, .. } => c_scalar(*p, prefix),
         CWire::Pointer { pointer: p, .. } => {
             let name = pointers
                 .values()
                 .find(|t| prebindgen_flat::same_type(&t.ty, &p.ty))
                 .and_then(|t| t.metadata.pointer.as_ref())
                 .expect("validated pointer declaration");
-            let qualifier = if !p.mutable { "const " } else { "" };
+            let qualifier = if p.access == Access::Shared {
+                "const "
+            } else {
+                ""
+            };
             format!("{qualifier}{prefix}_{name} *")
         }
-        CWire::Buffer => format!("{prefix}_buffer"),
+        CWire::View => format!("{prefix}_buffer_view"),
+        CWire::MutableView => format!("{prefix}_buffer_view_mut"),
+        CWire::Owned {
+            owner,
+            access,
+            by_value,
+        } => {
+            if *by_value {
+                format!("{prefix}_{}", owner.name)
+            } else {
+                format!(
+                    "{}{prefix}_{} *",
+                    if *access == Access::Shared {
+                        "const "
+                    } else {
+                        ""
+                    },
+                    owner.name
+                )
+            }
+        }
+        CWire::Buffer | CWire::DeferredBuffer => format!("{prefix}_buffer"),
         CWire::Rows => format!(
             "{prefix}_{}_rows",
             context.row_types[&wire.name.to_string()]
@@ -918,6 +1526,17 @@ fn validate_wire_declaration(
                     .eq(mapping.variants.iter().map(|(n, v)| (n.to_string(), v)))
         }) {
             return Err("declare a matching C enum type for this wire".into());
+        }
+    }
+    if let CWire::Owned { owner, .. } = &wire.kind {
+        if !pointers.values().any(|t| {
+            t.metadata.owned.as_ref().is_some_and(|o| {
+                o.name == owner.name
+                    && o.layout == owner.layout
+                    && prebindgen_flat::same_type(&o.ty, &owner.ty)
+            })
+        }) {
+            return Err("declare a matching opaque_owned_struct for this wire".into());
         }
     }
     if let CWire::Pointer { pointer, .. } = &wire.kind {
@@ -999,9 +1618,12 @@ where
     let mut symbols = std::collections::BTreeSet::from([
         free.to_string(),
         free_error.to_string(),
+        format!("{prefix}_buffer_view"),
+        format!("{prefix}_buffer_view_mut"),
         format!("{prefix}_buffer"),
         format!("{prefix}_int128"),
         format!("{prefix}_H"),
+        format!("{prefix}_TARGET"),
     ]);
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
@@ -1066,6 +1688,7 @@ where
         }
         let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
         let outcomes = f.output_conversion()?.output_outcomes();
+        validate_return_loans(f, &outcomes.success)?;
         for error in outcomes
             .source_error
             .iter()
@@ -1084,6 +1707,12 @@ where
             return Err("recoverable C delivery requires a binding-failure schema".into());
         }
         let context = CContext {
+            emit_alias_checks: Some(
+                f.metadata
+                    .as_ref()
+                    .and_then(|m| m.emit_alias_checks)
+                    .unwrap_or(flat.metadata.emit_alias_checks),
+            ),
             row_types: {
                 let mut schemas = Vec::new();
                 for slot in f.input_conversions()? {
@@ -1155,10 +1784,19 @@ where
         }
         calls.push((f, body, context));
     }
+    let helpers = &flat.metadata.helpers;
     let mut tokens = quote! {
+       #(#helpers)*
+       // Raw ownership preserves the allocation address and provenance while
+       // views are derived. Forgetting this guard commits the existing allocation.
+       #[allow(dead_code)] struct __PbOutputOwner<T: ?Sized>(*mut T);
+       impl<T: ?Sized> Drop for __PbOutputOwner<T> {
+           fn drop(&mut self) { unsafe { drop(Box::from_raw(self.0)); } }
+       }
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbRows {pub data:*const ::core::ffi::c_void,pub len:usize}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBufferMut {pub data:*mut u8,pub len:usize}
        unsafe fn __pb_report_message(message:String,error:*mut *mut std::ffi::c_char){
            if !error.is_null(){std::ptr::write(error,std::ffi::CString::new(message.replace('\0',"?")).unwrap().into_raw());}
        }
@@ -1175,6 +1813,16 @@ where
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
+    if let Some((target, width, cfg)) = &flat.metadata.target {
+        tokens.extend(quote!(
+            const _: () = {
+                assert!(cfg!(#cfg) && usize::BITS == #width,
+                "C binding target differs from the Rust compilation target");
+            };
+        ));
+        let target_literal = serde_json::to_string(target).map_err(|e| e.to_string())?;
+        header.push_str(&format!("/* Binding target identity; use the matching Rust library. */\n#define {prefix}_TARGET {target_literal}\n#ifdef __cplusplus\nstatic_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#else\n_Static_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#endif\n"));
+    }
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
@@ -1204,6 +1852,39 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!(
             "typedef struct {prefix}_{name} {prefix}_{name};\nvoid {drop}({prefix}_{name} *ptr);\n"
         ));
+    }
+    header.push_str(&format!(
+        "typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer_view;\n/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */\ntypedef struct {{ uint8_t *data; size_t len; }} {prefix}_buffer_view_mut;\n"
+    ));
+    for info in flat.types.values() {
+        if let Some(owner) = &info.metadata.owned {
+            prebindgen_declarations::ident(&owner.name)?;
+            let layout = *flat
+                .metadata
+                .opaque_layouts
+                .get(&owner.name)
+                .ok_or_else(|| {
+                    format!(
+                        "opaque owner `{}` has no prepared target layout",
+                        owner.name
+                    )
+                })?;
+            layout.validate()?;
+            if !symbols.insert(format!("{prefix}_{}", owner.name))
+                || !symbols.insert(format!("{prefix}_drop_{}", owner.name))
+            {
+                return Err("duplicate C inline owner name or destructor".into());
+            }
+            owned::emit(owner, layout, prefix, &mut tokens, &mut header);
+            owned::emit_accessors(
+                owner,
+                prefix,
+                &flat.types,
+                &mut symbols,
+                &mut tokens,
+                &mut header,
+            )?;
+        }
     }
     let mut callbacks = std::collections::BTreeMap::new();
     for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
@@ -1336,9 +2017,26 @@ The pointer must be null or a live allocation of the declared type returned by t
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let inputs = crate::group::function_parameters(f)?.collect::<Vec<_>>();
+        if context.emit_alias_checks == Some(false) {
+            header.push_str("/* Input alias conflict checks disabled. The caller must uphold Rust ownership and aliasing rules, including callback results registered by this binding. */\n");
+        }
         let outputs =
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .collect::<Vec<_>>();
+        if outputs.iter().any(|w| {
+            matches!(&w.kind, CWire::Pointer { pointer, .. } if pointer.access != Access::Move)
+                || matches!(
+                    w.kind,
+                    CWire::View
+                        | CWire::MutableView
+                        | CWire::Owned {
+                            access: Access::Shared | Access::Exclusive,
+                            ..
+                        }
+                )
+        }) {
+            header.push_str("/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */\n");
+        }
         let mut next_option_label = 0;
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
@@ -1409,18 +2107,15 @@ The pointer must be null or a live allocation of the declared type returned by t
             let fields = outputs
                 .iter()
                 .enumerate()
-                .map(|(i, wire)| {
-                    let field = format_ident!("v{i}");
-                    let ty = wire.rust_type();
-                    quote!(pub #field:#ty)
-                })
+                .map(|(i, wire)| (format_ident!("v{i}"), wire.rust_type()))
                 .collect::<Vec<_>>();
             let fields = if fields.is_empty() {
-                vec![quote!(pub unused:u8)]
+                vec![(syn::parse_quote!(unused), syn::parse_quote!(u8))]
             } else {
                 fields
             };
-            tokens.extend(quote!(#[repr(C)]pub struct #result {#(#fields),*}));
+            let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
+            tokens.extend(quote!(#definition));
             let comments = describe_groups(
                 &(f.ret.slot.as_ref().unwrap()).output_outcomes().success,
                 &outputs,
@@ -1454,7 +2149,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         for (i, wire) in outputs.iter().enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
-            fields.push(quote!(pub #field:#ty));
+            fields.push((field.clone(), ty.clone()));
             if i > 0 {
                 let pointer = format_ident!("out{i}");
                 params.push(quote!(#pointer:*mut #ty));
@@ -1469,7 +2164,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             }
         }
         if fields.is_empty() {
-            fields.push(quote!(pub unused:u8));
+            fields.push((syn::parse_quote!(unused), syn::parse_quote!(u8)));
         }
         let (return_type, c_return, returned) = match outputs.first() {
             Some(wire) => {
@@ -1495,12 +2190,13 @@ The pointer must be null or a live allocation of the declared type returned by t
                 cparams.join(", ")
             }
         ));
+        let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
         tokens.extend(quote! {
-         #[repr(C)] pub struct #result {#(#fields),*}
-         #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
-         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+         #definition
+         #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
+         #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
          #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {
-            #[allow(unused_mut)] let mut #accepted=false;
+            #[allow(unused_mut)] let #accepted=::core::cell::Cell::new(0usize);
             let mut storage=std::mem::MaybeUninit::<#result>::uninit();
             let #out=storage.as_mut_ptr();
             if let Err(error)=::prebindgen_runtime::boundary(||{#validate_outputs #body}) {panic!("C binding failed: {}",error);}
@@ -1517,6 +2213,104 @@ The pointer must be null or a live allocation of the declared type returned by t
         rust: prebindgen_flat::rust_source(tokens)?,
         header,
     })
+}
+
+// A Rust reference may refer to a wrapper-reconstructed input, rather than C's
+// persistent allocation. Such a pointer must not escape the generated call.
+fn pointer_owns_value(pointer: &syn::Type, returned: &syn::Type) -> bool {
+    let mut ty = prebindgen_flat::result_parts(returned).map_or(returned, |(ok, _)| ok);
+    while let Some(inner) = prebindgen_flat::option_inner(ty) {
+        ty = inner;
+    }
+    // Flat currently permits only nongeneric named owners. Do not silently
+    // extend this proof to future lifetime-bearing owner types.
+    matches!(ty, syn::Type::Path(p) if p.qself.is_none() && p.path.segments.iter().all(|s| matches!(s.arguments,syn::PathArguments::None)))
+        && prebindgen_flat::same_type(pointer, ty)
+}
+fn validate_return_loans<I, O, M>(
+    function: &prebindgen_flat::Function<I, O, M>,
+    output: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+) -> Result<()>
+where
+    I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
+{
+    if !crate::group::result_packet_fields(output).any(|w| {
+        matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move)
+            || matches!(
+                &w.kind,
+                CWire::View
+                    | CWire::MutableView
+                    | CWire::Owned {
+                        access: Access::Shared | Access::Exclusive,
+                        ..
+                    }
+            )
+    }) {
+        return Ok(());
+    }
+    // Owner-backed combinations create their loans only after this allocation
+    // has reached its final address. Temporary source inputs cannot own it.
+    // Getters take only the owner, and other non-static getter loans are rejected
+    // by validate_getter_output; both restrictions are required for this bypass.
+    if crate::group::result_packet_fields(output).any(|w| matches!(&w.kind,
+        CWire::Pointer {pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, &function.ret.ty))) {
+        return Ok(());
+    }
+    fn reference(ty: &syn::Type) -> Option<&syn::TypeReference> {
+        if let syn::Type::Reference(r) = ty {
+            return Some(r);
+        }
+        prebindgen_flat::option_inner(ty).and_then(reference)
+    }
+    let returned = prebindgen_flat::result_parts(&function.ret.ty)
+        .map_or(&function.ret.ty, |(success, _)| success);
+    if reference(returned).is_some_and(|r| r.lifetime.as_ref().is_some_and(|l| l.ident == "static"))
+    {
+        return Ok(());
+    }
+    fn stable_input(
+        ty: &syn::Type,
+        node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    ) -> bool {
+        if let (
+            Some(inner),
+            prebindgen_flat::WireNode::Chain {
+                meta: CChain::Optional(_),
+                child,
+                ..
+            },
+        ) = (prebindgen_flat::option_inner(ty), node)
+        {
+            return stable_input(inner, child);
+        }
+        match (ty, node) {
+            (syn::Type::Reference(r), prebindgen_flat::WireNode::Leaf(wires))
+                if wires.len() == 1 =>
+            {
+                matches!(&wires[0].kind,CWire::Pointer {pointer,..} if prebindgen_flat::same_type(&pointer.ty,&r.elem))
+                    || (matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
+                        && matches!(wires[0].kind, CWire::Buffer))
+                    || matches!(&wires[0].kind,CWire::Owned{owner,by_value:false,..} if prebindgen_flat::same_type(&owner.ty,&r.elem))
+            }
+            _ => false,
+        }
+    }
+    for parameter in &function.params {
+        if reference(&parameter.ty.ty).is_some()
+            && !stable_input(
+                &parameter.ty.ty,
+                parameter
+                    .ty
+                    .slot
+                    .as_ref()
+                    .ok_or("missing C input conversion")?
+                    .input_node(),
+            )
+        {
+            return Err(format!("C function `{}` cannot return a borrowed pointer with reconstructed reference input `{}`; use a direct opaque pointer input, an explicit owning output projection, or a 'static return", function.name,parameter.name));
+        }
+    }
+    Ok(())
 }
 
 fn describe_groups(
@@ -1669,18 +2463,1054 @@ mod generation_tests {
         .unwrap()
     }
     #[test]
-    fn opaque_declarations_reject_unregistered_builtin_and_composite_types() {
-        for ty in [
-            syn::parse_quote!(String),
-            syn::parse_quote!(Option<Item>),
-            syn::parse_quote!(Vec<Item>),
-        ] {
-            let error = Cbindgen::new(error_model("pub type Item=String;"))
-                .opaque_ptr("invalid", ty)
-                .prepare()
+    fn mutable_byte_views_preserve_ownership_and_optional_layers() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{} pub fn maybe(o:&mut Owner)->Option<&mut [u8]>{} pub fn nested(o:&mut Owner)->Option<Option<&mut [u8]>>{} pub fn fallible(o:&mut Owner)->Result<&mut [u8],String>{} pub fn optional(o:&mut Owner)->Result<Option<&mut [u8]>,String>{} pub fn message(e:&String)->String{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_error(syn::parse_quote!(String),fun!(message))
+            .function(fun!(bytes)).panic().function(fun!(maybe)).panic()
+            .function(fun!(nested)).panic().function(fun!(fallible)).function(fun!(optional))
+            .prepare().unwrap();
+        for name in ["bytes", "maybe", "nested", "fallible", "optional"] {
+            let plan = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            let views = crate::group::result_packet_fields(&plan.outcomes.success)
+                .filter(|w| matches!(w.kind, CWire::MutableView))
+                .count();
+            assert_eq!(views, 1, "{name}");
+            assert!(!plan.statements.to_string().contains("Clone"));
+            assert!(!plan.statements.to_string().contains("Box"));
+        }
+        let generated = generate(&flat).unwrap();
+        assert!(generated
+            .header
+            .contains("pb_buffer_view_mut pb_bytes(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("uint8_t *data; size_t len; } pb_buffer_view_mut"));
+        assert!(generated.header.contains("pb_buffer_view_mut *out"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_byte_views_reject_temporary_owners_and_duplicate_views() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model(
+                "pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{}",
+            ))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+        };
+        let error = Cbindgen::new(error_model("pub fn temp(o:&String)->&mut [u8]{}"))
+            .function(fun!(temp))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reconstructed reference input"), "{error}");
+        let error = model()
+            .function(
+                fun!(bytes).expand_return(expand_return!(&mut [u8]).field_self().field_self()),
+            )
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable reference cannot supply multiple output views"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn mutable_byte_views_reject_shared_getter_receivers_and_callback_arguments() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model("pub fn borrowed(v:&Vec<u8>)->&Vec<u8>{} pub fn rows(v:&Vec<Vec<u8>>)->&Vec<Vec<u8>>{}"))
+            .opaque_owned_struct("bytes",syn::parse_quote!(Vec<u8>),OpaqueLayout::auto::<Vec<u8>>())
+            .opaque_ptr("vectors",syn::parse_quote!(Vec<Vec<u8>>))
+        };
+        let getter = || expand_return!(Vec<u8>).field(Cbindgen::owned_view_mut("bytes"));
+        for function in [fun!(borrowed), fun!(rows)] {
+            let error = model()
+                .function(function.expand_return(getter()))
+                .panic()
+                .build()
                 .err()
                 .unwrap();
-            assert!(error.contains("unregistered source type"), "{error}");
+            assert!(
+                error.contains("getter") && error.contains("must take exactly"),
+                "{error}"
+            );
+        }
+        let error=Cbindgen::new(error_model("pub type Owner=String; pub fn bytes(v:&mut Owner)->&mut [u8]{} pub fn peek(v:&&mut [u8])->&[u8]{}"))
+            .opaque_ptr("owner",syn::parse_quote!(Owner))
+            .function(fun!(bytes).expand_return(expand_return!(&mut [u8]).field_self().field(fun!(peek))))
+            .panic().build().err().unwrap();
+        assert!(
+            error.contains("mutable reference cannot supply multiple output views"),
+            "{error}"
+        );
+        for argument in ["&mut [u8]", "Option<&mut [u8]>", "Vec<&mut [u8]>"] {
+            let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
+            let error = Cbindgen::new(error_model(&source))
+                .function(fun!(emit))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("mutable callback arguments are unsupported"),
+                "{argument}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_composite_callback_borrows_remain_generation_errors() {
+        use prebindgen_declarations::fun;
+        // Arrays use the same recursive collection guard. Other shapes have no
+        // declared C representation and must not silently accept borrowed data.
+        for argument in [
+            "[&mut [u8]; 1]",
+            "(&mut [u8],)",
+            "Box<&mut [u8]>",
+            "Result<&mut [u8],i64>",
+        ] {
+            let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
+            let parsed = syn::parse_file(&source).unwrap();
+            let result = Bindings::parse(
+                parsed
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .and_then(|flat| Cbindgen::new(flat).function(fun!(emit)).panic().build());
+            assert!(result.is_err(), "{argument}");
+        }
+    }
+
+    #[test]
+    fn mutable_owned_byte_view_requires_a_single_getter_and_vec_storage() {
+        use prebindgen_declarations::{expand_return, fun};
+        let model = || {
+            Cbindgen::new(error_model("pub fn make()->Vec<u8>{}")).opaque_owned_struct(
+                "bytes",
+                syn::parse_quote!(Vec<u8>),
+                OpaqueLayout::auto::<Vec<u8>>(),
+            )
+        };
+        let expansion = || {
+            expand_return!(Vec<u8>)
+                .field_self_into()
+                .field(Cbindgen::owned_view_mut("bytes"))
+        };
+        let generated = model()
+            .function(fun!(make).expand_return(expansion()))
+            .build()
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("pb_buffer_view_mut pb_bytes_view_mut(pb_bytes *value)"));
+        assert!(!generated.header.contains("pb_owned_string_view_mut"));
+        let error = model()
+            .function(fun!(make).expand_return(expansion().field(Cbindgen::owned_len("bytes"))))
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable owner getter must be the only getter view"),
+            "{error}"
+        );
+        let generated = Cbindgen::new(error_model("pub fn text()->String{}"))
+            .function(fun!(text))
+            .build()
+            .unwrap();
+        assert!(!generated.header.contains("pb_owned_string_view_mut"));
+        let error = Cbindgen::new(error_model(
+            "pub type Owner=String; pub fn text(o:&mut Owner)->&mut str{}",
+        ))
+        .opaque_ptr("owner", syn::parse_quote!(Owner))
+        .function(fun!(text))
+        .panic()
+        .build()
+        .err()
+        .unwrap();
+        assert!(
+            error.contains("mutable-reference outputs are unsupported"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn replay_audits_builtin_scalar_pointer_and_buffer_validation() {
+        let flat = Cbindgen::new(error_model("pub type Handle=String;"))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .prepare()
+            .unwrap();
+        // These are all Scalar/Pointer/Buffer leaf mappings provided by CCodec.
+        // User constructors are declarations, not leaf validators; they are
+        // checked separately for deferred, exactly-once execution below.
+        for ty in [
+            "bool",
+            "char",
+            "i8",
+            "i16",
+            "i32",
+            "i64",
+            "i128",
+            "isize",
+            "u8",
+            "u16",
+            "u32",
+            "u64",
+            "u128",
+            "usize",
+            "f32",
+            "f64",
+            "Handle",
+            "&Handle",
+            "&mut Handle",
+            "String",
+            "&String",
+            "&str",
+            "Vec<u8>",
+            "&Vec<u8>",
+            "&[u8]",
+        ] {
+            let ty = syn::parse_str(ty).unwrap();
+            let plan = CCodec
+                .input_row_leaf(
+                    &flat,
+                    &ty,
+                    &(),
+                    syn::parse_quote!(value),
+                    syn::parse_quote!(decoded),
+                    &prebindgen_declarations::Condition::default(),
+                )
+                .unwrap();
+            assert!(matches!(plan.node, prebindgen_flat::WireNode::Leaf(_)));
+            let transport = sequence::input(
+                syn::parse_quote!(rows),
+                syn::parse_quote!(len),
+                syn::parse_quote!(index),
+                &plan.node,
+            )
+            .unwrap();
+            assert!(transport.reread_rows);
+            assert!(transport.release.is_empty());
+            assert!(plan.resources.iter().all(|r| !r.registered));
+            if matches!(Value::of(&ty), Some(Value::Text | Value::Bytes)) {
+                assert!(plan.validation.is_empty());
+                assert!(!plan.acquire.to_string().contains("from_utf8"));
+                assert!(!plan.statements.is_empty());
+                let ordinary = CCodec
+                    .input_leaf(
+                        &flat,
+                        &ty,
+                        &(),
+                        syn::parse_quote!(value),
+                        syn::parse_quote!(decoded),
+                        &prebindgen_declarations::Condition::default(),
+                    )
+                    .unwrap();
+                let ordinary_transport = sequence::input(
+                    syn::parse_quote!(rows),
+                    syn::parse_quote!(len),
+                    syn::parse_quote!(index),
+                    &ordinary.node,
+                )
+                .unwrap();
+                assert!(
+                    !ordinary_transport.reread_rows,
+                    "ordinary buffer decoding must not be repeated"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nested_scalar_constructor_runs_once_after_group_validation() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type Handle=String;pub struct Inner{pub n:i64}pub struct Row{pub h:Handle,pub inner:Inner}pub fn inner(n:i64)->Inner{}pub fn row(h:Handle,inner:Inner)->Row{}pub fn rows(v:Vec<Row>)->i64{}";
+        let flat = Cbindgen::new(error_model(source))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .expand(expand_param!(Inner).variant(fun!(inner)))
+            .expand(expand_param!(Row).variant(fun!(row)))
+            .function(fun!(rows))
+            .panic()
+            .prepare()
+            .unwrap();
+        let code = flat.function("rows").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap()
+            .validation
+            .to_string();
+        let code = prebindgen_conversions::render_input_alias_checks(&code.parse().unwrap(), true)
+            .unwrap()
+            .to_string();
+        assert!(!code.contains("_prepared"));
+        for constructor in [":: inner (", ":: row ("] {
+            assert_eq!(code.matches(constructor).count(), 1, "{code}");
+            assert!(code.find("accept_group").unwrap() < code.find(constructor).unwrap());
+        }
+    }
+
+    #[test]
+    fn alias_policy_covers_fixed_nested_callback_and_fold_bindings() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type H=String;pub struct Row{pub h:H,pub text:String}pub fn row(h:H,text:String)->Row{} pub fn fixed(a:&mut H,b:&H)->i64{} pub fn many(v:Vec<Row>)->i64{} pub fn safe(v:Vec<Row>)->i64{} pub fn nested(v:Vec<Vec<H>>)->i64{} pub fn callback(cb:impl Fn()->Vec<H>)->i64{} pub fn checked_callback(cb:impl Fn()->Vec<H>)->i64{} pub fn checked_fixed(a:&mut H,b:&H)->i64{} pub fn folded(v:Vec<H>)->Vec<H>{}pub fn inherited(a:&mut H,b:&H)->i64{}";
+        for global in [true, false] {
+            let generated = Cbindgen::new(error_model(source))
+                .opaque_ptr("h", syn::parse_quote!(H))
+                .expand(expand_param!(Row).variant(fun!(row)))
+                .function(fun!(fixed))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(many))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(safe))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(nested))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(callback))
+                .alias_checks(false)
+                .panic()
+                .function(fun!(checked_callback))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(checked_fixed))
+                .alias_checks(true)
+                .panic()
+                .function(fun!(folded).callback_return_only())
+                .alias_checks(false)
+                .panic()
+                .function(fun!(inherited))
+                .panic()
+                .set_emit_alias_checks(global)
+                .build()
+                .unwrap();
+            assert!(!generated.rust.contains("__prebindgen_alias_checks"));
+            let parsed = syn::parse_file(&generated.rust).unwrap();
+            let body = |name: &str| {
+                parsed
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        syn::Item::Fn(f) if f.sig.ident == name => {
+                            Some(quote::ToTokens::to_token_stream(&f.block).to_string())
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            for name in [
+                "pb_fixed",
+                "pb_many",
+                "pb_nested",
+                "pb_callback",
+                "pb_folded_each",
+            ] {
+                let code = body(name);
+                assert!(
+                    !code.contains("__prebindgen_input_aliases"),
+                    "{name}: {code}"
+                );
+                assert!(!code.contains("_prepared"), "{name}: {code}");
+                assert!(!code.contains("accept_group"), "{name}: {code}");
+            }
+            assert!(body("pb_safe").contains("accept_group"));
+            assert!(body("pb_checked_callback").contains("accept_group"));
+            assert!(body("pb_checked_fixed").contains("FixedInputs"));
+            assert_eq!(body("pb_inherited").contains("FixedInputs"), global);
+            assert!(body("pb_many").contains("validate_pointer"));
+            assert!(body("pb_many").contains("from_utf8"));
+            assert!(body("pb_callback").contains("CallbackReturnAllocations"));
+        }
+    }
+
+    #[test]
+    fn fixed_callback_results_select_stack_capacity_and_keep_collection_fallback() {
+        use prebindgen_declarations::{expand_param, fun};
+        let mut source=String::from("pub type H=String; pub struct Pair {pub first:H,pub second:H} pub fn pair(first:H,second:H)->Pair{} pub fn one(first:H)->Pair{} pub fn fixed(cb:impl Fn()->Pair)->i64{} pub fn optional(cb:impl Fn()->Option<Pair>)->i64{} pub fn many(cb:impl Fn()->Vec<Pair>)->i64{} pub fn scalar(cb:impl Fn()->i64)->i64{}" );
+        source.push_str(" pub struct Names{pub h:H,pub names:Vec<i64>}pub fn names(h:H,names:Vec<i64>)->Names{} pub fn names_cb(cb:impl Fn()->Names)->i64{} pub struct Nested{pub h:H,pub rows:Vec<Pair>}pub fn nested(h:H,rows:Vec<Pair>)->Nested{} pub fn nested_cb(cb:impl Fn()->Nested)->i64{}");
+        let fields = (0..33)
+            .map(|i| format!("f{i}:H"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let record_fields = (0..33)
+            .map(|i| format!("pub f{i}:H"))
+            .collect::<Vec<_>>()
+            .join(",");
+        source.push_str(&format!("pub struct Wide{{{record_fields}}} pub fn wide({fields})->Wide{{}} pub fn wide_cb(cb:impl Fn()->Wide)->i64{{}}"));
+        for alternatives in [false, true] {
+            let expansion = expand_param!(Pair).variant(fun!(pair));
+            let expansion = if alternatives {
+                expansion.variant(fun!(one))
+            } else {
+                expansion
+            };
+            let generated = Cbindgen::new(error_model(&source))
+                .opaque_ptr("h", syn::parse_quote!(H))
+                .expand(expansion)
+                .expand(expand_param!(Names).variant(fun!(names)))
+                .expand(expand_param!(Nested).variant(fun!(nested)))
+                .expand(expand_param!(Wide).variant(fun!(wide)))
+                .function(fun!(names_cb))
+                .panic()
+                .function(fun!(nested_cb))
+                .panic()
+                .function(fun!(wide_cb))
+                .panic()
+                .function(fun!(fixed))
+                .panic()
+                .function(fun!(optional))
+                .panic()
+                .function(fun!(many))
+                .panic()
+                .function(fun!(scalar))
+                .panic()
+                .build()
+                .unwrap();
+            let parsed = syn::parse_file(&generated.rust).unwrap();
+            let body = |name: &str| {
+                parsed
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        syn::Item::Fn(f) if f.sig.ident == name => {
+                            Some(quote::ToTokens::to_token_stream(&f.block).to_string())
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            for name in ["pb_fixed", "pb_optional"] {
+                assert!(
+                    body(name).contains("FixedCallbackReturnAllocations :: < 2usize"),
+                    "{name}: {}",
+                    body(name)
+                );
+            }
+            assert!(body("pb_names_cb").contains("FixedCallbackReturnAllocations :: < 1usize"));
+            assert!(body("pb_nested_cb").contains("CallbackReturnCleanup :: new"));
+            assert!(body("pb_nested_cb").contains("callback_return_cleanup . commit"));
+            assert!(!body("pb_wide_cb").contains("CallbackReturnCleanup"));
+            for name in ["pb_nested_cb", "pb_wide_cb"] {
+                assert!(!body(name).contains("FixedCallbackReturnAllocations"));
+                assert!(body(name).contains("CallbackReturnAllocations :: tracking"));
+            }
+            assert!(body("pb_many").contains("CallbackReturnCleanup :: new"));
+            assert!(!body("pb_many").contains("FixedCallbackReturnAllocations"));
+            assert!(body("pb_many").contains("CallbackReturnAllocations :: tracking"));
+            assert!(!body("pb_scalar").contains("CallbackReturnAllocations"));
+        }
+    }
+
+    #[test]
+    fn project_alias_policy_also_applies_to_manually_bound_slots() {
+        use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+        let mut flat = error_model("pub type H=String;pub fn call(a:&mut H,b:&H)->i64{}");
+        flat = Cbindgen::new(flat)
+            .opaque_ptr("h", syn::parse_quote!(H))
+            .prepare()
+            .unwrap();
+        for param in ["a", "b"] {
+            bind_input(&mut flat, &CCodec, "call", param, &Input::Leaf, &()).unwrap();
+        }
+        bind_output(&mut flat, &CCodec, "call", &Output::Leaf, &()).unwrap();
+        flat.function_mut("call").unwrap().metadata = Some(CFunction {
+            abort_on_failure: true,
+            ..Default::default()
+        });
+        let generated = Cbindgen::new(flat)
+            .set_emit_alias_checks(false)
+            .build()
+            .unwrap();
+        assert!(!generated.rust.contains("__prebindgen_input_aliases"));
+    }
+
+    #[test]
+    fn scalar_and_buffer_handle_rows_reread_and_construct_once() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source="pub type Handle=String; pub enum Tag{A} pub struct Row{pub h:Handle,pub n:i64} pub fn row(h:Handle,n:i64)->Row{} pub fn text(h:Handle,n:String)->Row{} pub fn tagged(h:Handle,n:Option<&String>,bytes:Option<&Vec<u8>>,tag:Tag)->Row{} pub fn rows(v:Vec<Row>)->i64{} pub fn options(v:Vec<Option<Handle>>)->i64{}";
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("handle", syn::parse_quote!(Handle))
+                .enum_type("tag", syn::parse_quote!(Tag))
+        };
+        for constructor in ["row", "text", "tagged"] {
+            let expansion = match constructor {
+                "row" => expand_param!(Row).variant(fun!(row)),
+                "text" => expand_param!(Row).variant(fun!(text)),
+                _ => expand_param!(Row).variant(fun!(tagged)),
+            };
+            let flat = model()
+                .expand(expansion)
+                .function(fun!(rows))
+                .panic()
+                .prepare()
+                .unwrap();
+            let code = flat.function("rows").unwrap().params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .validation
+                .to_string();
+            let code =
+                prebindgen_conversions::render_input_alias_checks(&code.parse().unwrap(), true)
+                    .unwrap()
+                    .to_string();
+            assert!(!code.contains("_prepared"), "{code}");
+            assert!(code.contains("accept_group"));
+            let call = format!(":: {constructor} (");
+            assert_eq!(code.matches(&call).count(), 1, "{code}");
+            if constructor != "tagged" {
+                assert!(code.find("accept_group").unwrap() < code.find(&call).unwrap());
+            }
+            if constructor != "row" {
+                assert_eq!(code.matches("from_utf8").count(), 1, "{code}");
+                if constructor == "text" {
+                    assert!(code.find("accept_group").unwrap() < code.find("from_utf8").unwrap());
+                }
+            }
+            if constructor == "tagged" {
+                assert_eq!(
+                    code.matches("invalid enum discriminant").count(),
+                    1,
+                    "{code}"
+                );
+                assert!(
+                    code.find("accept_group").unwrap()
+                        < code.find("invalid enum discriminant").unwrap()
+                );
+            }
+        }
+        let flat = model().function(fun!(options)).panic().prepare().unwrap();
+        let code = flat.function("options").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap()
+            .validation
+            .to_string();
+        assert!(!code.contains("_prepared"));
+    }
+
+    #[test]
+    fn pointer_inline_owner_rows_prepare_empty_only_after_group_check() {
+        use prebindgen_declarations::{expand_param, fun};
+        let mut flat = Cbindgen::new(error_model("pub struct Owner{} pub type Handle=String; pub fn empty()->Owner{} pub fn row(first:Handle,owner:Owner,last:Handle)->i64{} pub fn rows(values:Vec<i64>)->i64{} pub fn direct(values:Vec<Owner>)->i64{}"))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .opaque_owned_struct_with_empty("owner", syn::parse_quote!(Owner), OpaqueLayout::auto::<u64>(), fun!(empty))
+            .expand(expand_param!(i64).variant(fun!(row)))
+            .function(fun!(rows)).panic().function(fun!(direct)).panic().prepare().unwrap();
+        let plan = flat.function("rows").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap();
+        let code = prebindgen_conversions::render_input_alias_checks(&plan.validation, true)
+            .unwrap()
+            .to_string();
+        assert!(!code.contains("_prepared"), "{code}");
+        assert_eq!(code.matches(":: empty (").count(), 1, "{code}");
+        assert_eq!(code.matches(":: row (").count(), 1, "{code}");
+        assert!(
+            code.find("accept_group").unwrap() < code.find(":: empty (").unwrap(),
+            "{code}"
+        );
+        assert_eq!(
+            code.matches("__prebindgen_input_consumed . set").count(),
+            3,
+            "{code}"
+        );
+        prebindgen_declarations::bind_input(
+            &mut flat,
+            &CCodec,
+            "direct",
+            "values",
+            &prebindgen_declarations::Input::auto(),
+            &(),
+        )
+        .unwrap();
+        let plan = flat.function("direct").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap();
+        let code = prebindgen_conversions::render_input_alias_checks(&plan.validation, true)
+            .unwrap()
+            .to_string();
+        assert!(!code.contains("_prepared"), "{code}");
+        assert_eq!(code.matches(":: empty (").count(), 1, "{code}");
+        assert!(
+            code.find("accept_group").unwrap() < code.find(":: empty (").unwrap(),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn mixed_inline_callback_rows_reread_without_prepared_closures() {
+        use prebindgen_declarations::{expand_param, fun};
+        let source = "pub struct Owner{} pub type Handle=String; pub struct Row{pub owner:Owner,pub handle:Handle} pub fn row(owner:Owner,handle:Handle)->Row{} pub fn call(callback:impl Fn()->Vec<Row>)->usize{}";
+        let generation = Cbindgen::new(error_model(source))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .opaque_owned_struct(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<u64>(),
+            )
+            .expand(expand_param!(Row).variant(fun!(row)))
+            .function(fun!(call))
+            .panic()
+            .build()
+            .unwrap();
+        syn::parse_file(&generation.rust).unwrap();
+        assert!(!generation.rust.contains("_prepared"));
+        assert_eq!(generation.rust.matches("for callback_return_").count(), 2);
+        assert!(generation.rust.contains("accept_group"));
+        assert!(generation.rust.contains("addr_of!"));
+    }
+
+    #[test]
+    fn direct_shared_returns_are_non_owning_nullable_const_pointers() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&Owner)->&Child{}pub fn maybe(owner:&Owner)->Option<&Child>{}pub fn nested(owner:&Owner)->Option<Option<&Child>>{}pub fn fallible(owner:&Owner)->Result<&Child,String>{}pub fn optional(owner:&Owner)->Result<Option<&Child>,String>{}pub fn message(error:&String)->String{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_ptr("child_t", syn::parse_quote!(Child))
+            .function(fun!(child)).panic()
+            .function(fun!(maybe)).panic()
+            .function(fun!(nested)).panic()
+            .function(fun!(fallible))
+            .function(fun!(optional))
+            .opaque_error(syn::parse_quote!(String), fun!(message))
+            .prepare().unwrap();
+        for name in ["child", "maybe", "nested", "fallible", "optional"] {
+            let output = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            assert!(!output.statements.to_string().contains("Clone"));
+            assert!(!output.statements.to_string().contains("Box"));
+            let pointers = crate::group::result_packet_fields(&output.outcomes.success)
+                .filter_map(|w| match &w.kind {
+                    CWire::Pointer { pointer, .. } => Some(pointer),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(pointers.len(), 1);
+            assert_eq!(pointers[0].access, Access::Shared);
+        }
+        assert_eq!(
+            crate::group::result_packet_fields(
+                &flat
+                    .function("nested")
+                    .unwrap()
+                    .ret
+                    .slot
+                    .as_ref()
+                    .unwrap()
+                    .outcomes
+                    .success
+            )
+            .count(),
+            2
+        );
+        let generated = generate(&flat).unwrap();
+        assert!(generated.header.contains("const pb_child_t * pb_child("));
+        assert!(generated.header.contains("const pb_child_t * pb_maybe("));
+        assert!(generated.header.contains("const pb_child_t * pb_fallible("));
+        assert!(generated.header.contains("bool pb_optional("));
+        assert!(generated.header.contains("const pb_child_t * *out0"));
+        assert!(generated.header.contains("never be freed or consumed"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_returns_preserve_exclusive_access_without_ownership_or_copying() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->&mut Child{}pub fn maybe(owner:&mut Owner)->Option<&mut Child>{}pub fn fallible(owner:&mut Owner)->Result<&mut Child,String>{}pub fn optional(owner:&mut Owner)->Result<Option<&mut Child>,String>{}pub fn message(error:&String)->String{}"))
+            .opaque_ptr("owner",syn::parse_quote!(Owner)).opaque_ptr("child_t",syn::parse_quote!(Child))
+            .opaque_error(syn::parse_quote!(String),fun!(message))
+            .function(fun!(child)).panic().function(fun!(maybe)).panic()
+            .function(fun!(fallible)).function(fun!(optional)).prepare().unwrap();
+        for name in ["child", "maybe", "fallible", "optional"] {
+            let function = flat.function(name).unwrap();
+            let output = function.ret.slot.as_ref().unwrap();
+            assert!(!output.statements.to_string().contains("Clone"));
+            assert!(!output.statements.to_string().contains("Box"));
+            assert!(crate::group::result_packet_fields(&output.outcomes.success)
+                .all(|w| matches!(&w.kind,CWire::Pointer {pointer,..} if pointer.access==Access::Exclusive)));
+        }
+        let generated = generate(&flat).unwrap();
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_child(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_maybe(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_fallible(pb_owner *"));
+        assert!(generated.header.contains("pb_child_t * *out0"));
+        assert!(generated
+            .header
+            .contains("mutable borrows require exclusive access"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_value_and_collection_outputs_have_no_copying_fallback() {
+        use prebindgen_declarations::fun;
+        for returned in ["&mut i64", "&mut str", "&mut [i64]"] {
+            let source =
+                format!("pub type Owner=String;pub fn value(owner:&mut Owner)->{returned}{{}}");
+            let error = Cbindgen::new(error_model(&source))
+                .opaque_ptr("owner", syn::parse_quote!(Owner))
+                .function(fun!(value))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains("mutable"), "{returned}: {error}");
+        }
+    }
+
+    #[test]
+    fn mutable_getter_expansions_are_rejected_instead_of_copied() {
+        use prebindgen_declarations::{expand_return, fun};
+        let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
+            .opaque_ptr("child_t",syn::parse_quote!(Child))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
+            .build().err().unwrap();
+        assert!(
+            error.contains("mutable-reference getter results are unsupported"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn owner_backed_getters_borrow_final_storage_and_keep_wire_order() {
+        use prebindgen_declarations::{expand_return, fun, Output};
+        for mutable in [false, true] {
+            let qualifier = if mutable { "mut " } else { "" };
+            let source=format!("pub type Owner=String;pub type Child=String;pub fn make()->Owner{{}}pub fn child(o:&{qualifier}Owner)->&{qualifier}Child{{}}");
+            for reversed in [false, true] {
+                let getter = Output::getter("child", Output::Leaf);
+                let expansion = if reversed {
+                    expand_return!(Owner).view(getter).field_self_into()
+                } else {
+                    expand_return!(Owner).field_self_into().view(getter)
+                };
+                let flat = Cbindgen::new(error_model(&source))
+                    .opaque_ptr("owner_t", syn::parse_quote!(Owner))
+                    .opaque_ptr("child_t", syn::parse_quote!(Child))
+                    .function(fun!(make).expand_return(expansion))
+                    .prepare()
+                    .unwrap();
+                let output = flat.function("make").unwrap().ret.slot.as_ref().unwrap();
+                let code = output.statements.to_string();
+                assert!(!code.contains("Clone"));
+                assert!(
+                    code.find("Box :: into_raw").unwrap() < code.find("crate :: child").unwrap()
+                );
+                let access = crate::group::result_packet_fields(&output.outcomes.success)
+                    .map(|w| match &w.kind {
+                        CWire::Pointer { pointer, .. } => pointer.access,
+                        _ => panic!(),
+                    })
+                    .collect::<Vec<_>>();
+                let loan = if mutable {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                };
+                assert_eq!(
+                    access,
+                    if reversed {
+                        vec![loan, Access::Move]
+                    } else {
+                        vec![Access::Move, loan]
+                    }
+                );
+                generate(&flat).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn owner_view_near_misses_are_diagnostics_not_implicit_clones() {
+        use prebindgen_declarations::{expand_return, fun, Output};
+        let source="pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(o:&Owner)->&Child{}pub fn mutate(o:&mut Owner)->&mut Child{}";
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("owner_t", syn::parse_quote!(Owner))
+                .opaque_ptr("child_t", syn::parse_quote!(Child))
+        };
+        let cases = [
+            (
+                expand_return!(Owner).field(fun!(child)),
+                "requires its opaque owner",
+            ),
+            (
+                expand_return!(Owner)
+                    .field_self_into()
+                    .field(fun!(child))
+                    .view(Output::Discard),
+                "supports only",
+            ),
+            (
+                expand_return!(Owner)
+                    .field_self_into()
+                    .view(Output::getter("mutate", Output::Leaf))
+                    .field(fun!(child)),
+                "only getter view",
+            ),
+        ];
+        for (expansion, message) in cases {
+            let error = model()
+                .function(fun!(make).expand_return(expansion))
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains(message), "{error}");
+        }
+    }
+
+    #[test]
+    fn getter_expansions_and_explicit_projections_keep_owned_clones() {
+        use prebindgen_declarations::{expand_return, fun};
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_ptr("child", syn::parse_quote!(Child))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
+            .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
+            .panic()
+            .prepare().unwrap();
+        for name in ["make", "child"] {
+            let output = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            assert!(
+                output.statements.to_string().contains("Clone"),
+                "{name}: {}",
+                output.statements
+            );
+            assert!(crate::group::result_packet_fields(&output.outcomes.success)
+                .all(|w| matches!(&w.kind,CWire::Pointer { pointer,..} if pointer.access == Access::Move)));
+        }
+    }
+
+    #[test]
+    fn loans_reject_reconstructed_inputs_but_allow_static_returns_and_owned_copies() {
+        use prebindgen_declarations::{expand_param, expand_return, fun};
+        let source = "pub type Child=String;pub fn peek(value:&String)->&Child{}pub fn fixed(value:&String)->&'static Child{}pub fn first(values:&[Child])->&Child{}pub fn copy_child(child:&Child)->Child{}";
+        let model =
+            || Cbindgen::new(error_model(source)).opaque_ptr("child_t", syn::parse_quote!(Child));
+        let bad = model().function(fun!(peek)).panic().build().err().unwrap();
+        assert!(
+            bad.contains("reconstructed reference input `value`"),
+            "{bad}"
+        );
+        let bad = model()
+            .expand(expand_param!(Child).variant(fun!(copy_child)))
+            .function(fun!(first))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            bad.contains("reconstructed reference input `values`"),
+            "{bad}"
+        );
+        model().function(fun!(fixed)).panic().build().unwrap();
+        model()
+            .function(fun!(peek).expand_return(expand_return!(Child).field_self_ref()))
+            .panic()
+            .build()
+            .unwrap();
+    }
+
+    #[test]
+    fn expanded_reference_to_option_keeps_ordinary_value_conversion() {
+        use prebindgen_declarations::{expand_return, fun};
+        let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn length(child:&Child)->i64{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,String>{}pub fn message(error:&String)->String{}";
+        let generated = Cbindgen::new(error_model(source))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .function(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+            .panic()
+            .function(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length))))
+            .opaque_error(syn::parse_quote!(String), fun!(message))
+            .build()
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("int32_t pb_maybe(const pb_owner *"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn callback_borrows_copies_and_expansions_have_distinct_stable_abis() {
+        use prebindgen_declarations::{callback, expand_return, fun};
+        fn prepared(reverse: bool, global_copy: bool) -> Bindings {
+            let mut declarations = vec![
+                fun!(borrowed),
+                fun!(copied).expand_param(
+                    "cb",
+                    callback!(impl Fn(&Handle))
+                        .expand_param(0, expand_return!(Handle).field_self_ref()),
+                ),
+                fun!(expanded).expand_param(
+                    "cb",
+                    callback!(impl Fn(&Handle))
+                        .expand_param(0, expand_return!(Handle).field(fun!(number))),
+                ),
+            ];
+            if reverse {
+                declarations.reverse();
+            }
+            let mut builder=Cbindgen::new(error_model("pub type Handle=String;pub fn borrowed(cb:impl Fn(&Handle)){}pub fn copied(cb:impl Fn(&Handle)){}pub fn expanded(cb:impl Fn(&Handle)){}pub fn number(h:&Handle)->i64{}"))
+                .opaque_ptr("handle",syn::parse_quote!(Handle));
+            if global_copy {
+                builder = builder.expand(expand_return!(&Handle).field_self_ref());
+            }
+            for function in declarations {
+                builder = builder.function(function).panic();
+            }
+            builder.prepare().unwrap()
+        }
+        fn callbacks(flat: &Bindings) -> std::collections::BTreeMap<String, String> {
+            ["borrowed","copied","expanded"].into_iter().map(|name| {
+                let wire=group::function_parameters(flat.function(name).unwrap()).unwrap().next().unwrap();
+                let CWire::Callback {callback}= &wire.kind else {panic!()};
+                let field=callback.argument_fields()[0];
+                match name {
+                    "borrowed" => assert!(matches!(&field.kind,CWire::Pointer{pointer,..} if pointer.access==Access::Shared)),
+                    "copied" => assert!(matches!(&field.kind,CWire::Pointer{pointer,..} if pointer.access==Access::Move)),
+                    _ => assert!(matches!(&field.kind,CWire::Scalar{primitive:Primitive::I64,..})),
+                }
+                (name.into(),callback.name.clone())
+            }).collect()
+        }
+        let first = callbacks(&prepared(false, false));
+        assert_eq!(
+            first
+                .values()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            3
+        );
+        assert_eq!(first, callbacks(&prepared(true, false)));
+        let global = prepared(false, true);
+        let wire = group::function_parameters(global.function("borrowed").unwrap())
+            .unwrap()
+            .next()
+            .unwrap();
+        let CWire::Callback { callback } = &wire.kind else {
+            panic!()
+        };
+        assert!(
+            matches!(&callback.argument_fields()[0].kind,CWire::Pointer{pointer,..} if pointer.access==Access::Move)
+        );
+        assert_eq!(callback.name, first["copied"]);
+    }
+
+    #[test]
+    fn optional_callback_references_preserve_their_borrow() {
+        use prebindgen_declarations::{compile_callback_argument, Output};
+        let output = compile_callback_argument(
+            &error_model("pub type Child=String;"),
+            &CCodec,
+            &syn::parse_quote!(Option<&Child>),
+            &Output::Optional(Box::new(Output::Leaf)),
+            0,
+            false,
+            &(),
+        )
+        .unwrap();
+        assert!(!output.statements.to_string().contains("Clone"));
+        assert!(
+            crate::group::result_packet_fields(&output.outcomes.success).all(
+                |w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access == Access::Shared)
+            )
+        );
+    }
+
+    #[test]
+    fn reclaiming_undelivered_outputs_does_not_destroy_loans() {
+        let context = CContext {
+            emit_alias_checks: Some(true),
+            row_types: Default::default(),
+            acknowledgement: syn::parse_quote!(accepted),
+            output_pointer: syn::parse_quote!(out),
+            output_type: syn::parse_quote!(Returned),
+            error_pointer: syn::parse_quote!(error),
+            error_reported: syn::parse_quote!(reported),
+            output_committed: quote!(),
+            buffer_type: syn::parse_quote!(Buffer),
+            wide_integer_type: syn::parse_quote!(Wide),
+            read_buffer: syn::parse_quote!(read),
+        };
+        for reference in [syn::parse_quote!(&Child), syn::parse_quote!(&mut Child)] {
+            let plan = CCodec
+                .output_return_reference(
+                    &error_model("pub type Child=String;"),
+                    &reference,
+                    &(),
+                    syn::parse_quote!(child),
+                    quote!(source),
+                )
+                .unwrap()
+                .unwrap();
+            let wire = crate::group::result_packet_fields(&plan.outcomes.success)
+                .next()
+                .unwrap();
+            let release = sequence::release(
+                &plan.outcomes.success,
+                &[(wire, quote!(child))],
+                &context,
+                false,
+            );
+            assert!(release.is_empty());
+            let mut owned = wire.clone();
+            if let CWire::Pointer { pointer, .. } = &mut owned.kind {
+                pointer.access = Access::Move;
+            }
+            assert!(!sequence::release(
+                &plan.outcomes.success,
+                &[(&owned, quote!(child))],
+                &context,
+                false
+            )
+            .is_empty());
+        }
+    }
+    #[test]
+    fn opaque_declarations_override_builtin_and_collection_types() {
+        use prebindgen_declarations::fun;
+        for ty in [syn::parse_quote!(String), syn::parse_quote!(Vec<Item>)] {
+            let generated = Cbindgen::new(error_model("pub type Item=String;"))
+                .opaque_ptr("native", ty)
+                .build()
+                .unwrap();
+            assert!(generated.header.contains("pb_native"));
+        }
+        let generated = Cbindgen::new(error_model("pub fn f()->String{}"))
+            .opaque_ptr("native", syn::parse_quote!(String))
+            .function(fun!(f))
+            .build()
+            .unwrap();
+        assert!(generated.header.contains("pb_native * pb_f("));
+        for ty in [
+            syn::parse_quote!(Option<Item>),
+            syn::parse_quote!(&Item),
+            syn::parse_quote!(Result<Item,Item>),
+        ] {
+            assert!(Cbindgen::new(error_model("pub type Item=String;"))
+                .opaque_ptr("bad", ty)
+                .prepare()
+                .is_err());
         }
     }
     #[test]
@@ -1712,6 +3542,7 @@ mod generation_tests {
             .unwrap()
             .pointer = Some("item".into());
         flat.function_mut("inspect").unwrap().metadata = Some(CFunction {
+            emit_alias_checks: None,
             abort_on_failure: true,
             requires_abort: false,
         });
@@ -1871,7 +3702,10 @@ mod generation_tests {
             )
             .panic()
             .build();
-        assert!(result.err().unwrap().contains("additional return"));
+        assert!(result
+            .err()
+            .unwrap()
+            .contains("callback_return requires exactly one outer sequence"));
     }
 
     #[test]
@@ -1978,7 +3812,7 @@ mod generation_tests {
         .function(fun!(f))
         .build()
         .unwrap();
-        assert!(generated.header.contains("pb_buffer v0;"));
+        assert!(generated.header.contains("pb_owned_string v0;"));
         assert!(generated.header.contains("int64_t v1;"));
         assert!(!generated.header.contains("pb_buffer char;"));
     }
@@ -2475,5 +4309,31 @@ mod abort_policy_tests {
             .panic()
             .build()
             .unwrap();
+    }
+    #[test]
+    fn bulk_callback_elements_are_explicitly_unsupported_by_the_c_codec() {
+        use prebindgen_declarations::{expand_return, fun};
+        let source = syn::parse_file("pub fn rows()->Vec<i64>{}").unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let error = Cbindgen::new(flat)
+            .function(
+                fun!(rows)
+                    .callback_return_only()
+                    .expand_return(expand_return!(i64).field_self().bulk()),
+            )
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("bulk outputs are unsupported by this codec"),
+            "{error}"
+        );
     }
 }

@@ -36,6 +36,12 @@ impl Codec for EnumCodec<'_> {
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
+    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
+        CCodec.input_collection_is_leaf(flat, ty, e)
+    }
+    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
+        CCodec.output_collection_is_leaf(flat, ty, e)
+    }
     fn group_metadata(&self) -> CBranch {
         CBranch::Group(CGroup::Values)
     }
@@ -184,11 +190,7 @@ impl Codec for EnumCodec<'_> {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
-        if callback.foreign.is_some()
-            || callback.namespace.is_some()
-            || !callback.explicit_arguments.is_empty()
-            || callback.explicit_return
-        {
+        if callback.foreign.is_some() || callback.namespace.is_some() || callback.explicit_return {
             return Err("configured callbacks are unsupported by the C adapter".into());
         }
         callback::input(flat, callback, wire, var, active)
@@ -211,6 +213,11 @@ impl Codec for EnumCodec<'_> {
         if let Some((name, m)) = self.mapping(flat, ty) {
             return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
         }
+        if self.return_owners.is_some() {
+            if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
+                return Ok(owned::input(owner, ty, w, v, active, true, false));
+            }
+        }
         let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
         if plan
             .resources
@@ -221,6 +228,36 @@ impl Codec for EnumCodec<'_> {
                 owners.borrow_mut().insert(w.to_string(), ty.clone());
             }
         }
+        Ok(plan)
+    }
+    fn input_row_leaf(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<CWire>> {
+        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        if let Some((_, mapping)) = self.mapping(flat, ty) {
+            let native = &mapping.ty;
+            let condition = active.rust();
+            let decode = mapping.decode(quote!(#wire));
+            debug_assert_eq!(
+                plan.validation.to_string(),
+                quote!(let #var = if #condition { Some(#decode) } else { None };).to_string(),
+                "audit deferred enum conversion when ordinary validation changes"
+            );
+            // Keep only the Copy integer tag during the address-group scan.
+            // Decode the Rust enum once, after aliases have been checked.
+            // Storage must outlive optional/selector branches borrowing it.
+            plan.validation = TokenStream::new();
+            plan.acquire.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#native> = None;));
+            let statements = std::mem::take(&mut plan.statements);
+            plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
+        }
+        sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
         Ok(plan)
     }
     fn output_leaf(
@@ -247,6 +284,73 @@ impl Codec for EnumCodec<'_> {
             ));
         }
         CCodec.output_leaf(flat, ty, e, w, v, borrowed)
+    }
+
+    fn output_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &prebindgen_declarations::Projection,
+    ) -> Result<OutputPlan<CWire>> {
+        if self.mapping(flat, ty).is_some() {
+            if !projection.fields.is_empty() {
+                return Err("enum values do not have projection fields".into());
+            }
+            return self.output_leaf(
+                flat,
+                ty,
+                &(),
+                wire,
+                value,
+                projection.mode == prebindgen_declarations::ProjectionMode::Borrowed,
+            );
+        }
+        CCodec.output_projected(flat, ty, &(), wire, value, projection)
+    }
+
+    fn output_return_reference(
+        &self,
+        flat: &Bindings,
+        reference: &syn::TypeReference,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        CCodec.output_return_reference(flat, reference, extra, wire, value)
+    }
+
+    fn output_owner(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        CCodec.output_owner(flat, ty, extra, wire, value)
+    }
+    fn validate_owner_getter(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        getter: &str,
+        plan: &OutputPlan<CWire>,
+    ) -> Result<()> {
+        CCodec.validate_owner_getter(flat, ty, getter, plan)
+    }
+    fn validate_getter_output(
+        &self,
+        flat: &Bindings,
+        receiver: &syn::Type,
+        borrowed: bool,
+        ty: &syn::Type,
+        plan: &OutputPlan<CWire>,
+        extra: &(),
+    ) -> Result<()> {
+        CCodec.validate_getter_output(flat, receiver, borrowed, ty, plan, extra)
     }
 
     fn optional_niche(
@@ -373,7 +477,7 @@ mod tests {
             .build()
             .err()
             .unwrap()
-            .contains("names collide"));
+            .contains("both opaque_ptr and opaque_owned_struct"));
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {

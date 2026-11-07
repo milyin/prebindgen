@@ -30,7 +30,7 @@
 // callback types mirror the C closure structs. Item-level allows would be
 // captured into the `#[prebindgen]` records and drift the committed golden
 // bindings, so silence these lints crate-wide instead.
-#![allow(clippy::ptr_arg, clippy::type_complexity)]
+#![allow(clippy::ptr_arg, clippy::type_complexity, clippy::too_many_arguments)]
 
 // Disabled: unsupported by the current binding subset
 // use std::mem::MaybeUninit;
@@ -41,8 +41,28 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
+mod bulk;
+mod enum_inputs;
+mod inline_inputs;
+pub use bulk::*;
+pub use enum_inputs::*;
+pub use inline_inputs::*;
+mod borrowed_getters;
+mod jni_buffers;
+mod return_results;
+pub use return_results::*;
+mod runtime_costs;
+mod typed_rows;
+pub use jni_buffers::*;
+pub use runtime_costs::*;
+pub use typed_rows::*;
 pub mod callback_returns;
+mod parameter_names;
+pub use parameter_names::*;
+mod gc_handles;
+pub use borrowed_getters::*;
 pub use callback_returns::*;
+pub use gc_handles::*;
 mod callback_config;
 pub use callback_config::*;
 mod callback_boundaries;
@@ -518,3 +538,16 @@ pub fn payload_to_struct(value: &Payload) -> Payload {
 
 mod callbacks;
 pub use callbacks::*;
+
+mod inline_owners;
+pub use inline_owners::*;
+
+pub mod nullability;
+pub use nullability::*;
+mod buffer_inputs;
+pub use buffer_inputs::*;
+mod alias_options;
+pub use alias_options::*;
+
+mod collection_cleanup;
+pub use collection_cleanup::*;

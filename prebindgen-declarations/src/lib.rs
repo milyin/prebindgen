@@ -35,6 +35,21 @@ fn contains_result(ty: &Type) -> bool {
         || sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
         || matches!(ty, Type::Reference(r) if contains_result(&r.elem))
 }
+// Sized shared outputs use the referent's ordinary recipe, with borrowing
+// carried by the compiler. Keep unsized string/slice views as their own types:
+// adapters and sequence transport already understand those reference shapes.
+fn output_referent(ty: &Type) -> Option<&Type> {
+    match ty {
+        Type::Reference(r)
+            if r.mutability.is_none()
+                && !matches!(r.elem.as_ref(), Type::Slice(_))
+                && !matches!(r.elem.as_ref(), Type::Path(p) if p.path.is_ident("str")) =>
+        {
+            Some(&r.elem)
+        }
+        _ => None,
+    }
+}
 mod projection;
 pub use projection::{Projection, ProjectionMode};
 mod record;
@@ -58,10 +73,13 @@ pub type CodecOutput<C> = OutputPlan<
 /// How a sequence return reaches the foreign caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SequenceDelivery {
-    /// Return a collection value using the language adapter's array/buffer representation.
+    /// Return a collection using the adapter's default materialized transport.
+    Auto,
+    /// Explicitly return ordinary expanded rows, without applying a transport default.
     #[default]
     Value,
     /// Deliver each element through the function's sequence callback.
+    /// Bulk packing inside an element stays inside this delivery boundary.
     Callback,
 }
 
@@ -95,6 +113,8 @@ pub enum Input<P = std::convert::Infallible> {
     Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
     Sequence(Box<Input<P>>),
+    /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
+    Bulk(Box<Input<P>>),
     /// Convert an optional payload, gating every conversion phase.
     Optional(Box<Input<P>>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
@@ -168,6 +188,10 @@ impl Input<InputRequest> {
     }
 }
 impl<P> Input<P> {
+    /// Group this explicit expansion into a bulk carrier.
+    pub fn bulk(self) -> Self {
+        Self::Bulk(Box::new(self))
+    }
     /// Construct a record from field recipes, or unit from an empty list.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration
@@ -227,6 +251,8 @@ impl<P> Input<P> {
 pub enum Output<P = std::convert::Infallible> {
     /// Omit this output value; source ownership still follows the enclosing operation.
     Discard,
+    /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
+    Bulk(Box<Output<P>>),
     /// Give a converted view an explicit destination-language field name.
     Named {
         /// Destination name of the delivered view.
@@ -241,8 +267,9 @@ pub enum Output<P = std::convert::Infallible> {
     Record {
         /// Explicit source-field conversions in declaration order.
         fields: Vec<Output<P>>,
-        /// Ownership of the foreign-record projection.
-        mode: ProjectionMode,
+        /// `None` follows the occurrence: move owned fields and observe borrowed
+        /// fields. `Some` explicitly selects and checks a projection policy.
+        mode: Option<ProjectionMode>,
     },
     /// Convert collection elements using ordinary or explicitly selected ownership.
     Sequence {
@@ -267,7 +294,8 @@ pub enum Output<P = std::convert::Infallible> {
     },
     /// Convert an optional payload without preparing absent values.
     Optional(Box<Output<P>>),
-    /// Convert the occurrence type itself with [`Codec::output_leaf`].
+    /// Convert the occurrence type itself with [`Codec::output_leaf`], or
+    /// [`Codec::output_return_reference`] for a direct reference return.
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
     Fields(Vec<Output<P>>),
@@ -275,18 +303,21 @@ pub enum Output<P = std::convert::Infallible> {
     OwnedFields(Vec<Output<P>>),
     /// Convert a leaf with an explicit ownership policy.
     Projected(Projection),
-    /// Call a consuming accessor, then convert its owned result.
+    /// Call a consuming accessor, then convert its result.
     Into {
         /// Source accessor taking exactly the owned occurrence type.
         function: String,
-        /// Conversion of its owned result.
+        /// Conversion of its result, retaining any shared-reference ownership.
         output: Box<Output<P>>,
     },
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         /// Source getter taking exactly one shared reference to the current type.
         function: String,
-        /// Conversion of the getter's owned result; borrowed results are unsupported.
+        /// Conversion of the getter's result. Shared results retain their borrow
+        /// while being observed or cloned; they cannot satisfy an owned projection.
+        /// An owning opaque copy requires an explicit shared projection or clone
+        /// accessor; Rust then checks `Clone`.
         output: Box<Output<P>>,
     },
     /// Produce several views of one value. At most one child may consume it.
@@ -402,6 +433,10 @@ impl Output<OutputRequest> {
     }
 }
 impl<P> Output<P> {
+    /// Group this explicit expansion into a bulk carrier.
+    pub fn bulk(self) -> Self {
+        Self::Bulk(Box::new(self))
+    }
     /// Observe record fields in declaration order; use an empty list for unit.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration order.
@@ -410,8 +445,9 @@ impl<P> Output<P> {
     }
     /// Observe a value through a source getter and convert the getter's result.
     ///
-    /// The getter must take exactly `&T` for the current type `T`, and return an
-    /// owned value. Binding rejects mismatched signatures.
+    /// The getter takes `&T` for the current type `T`; adapters retaining a final
+    /// output owner may also support `&mut T`. Its result uses the selected
+    /// output conversion, including supported reference results.
     ///
     /// # Arguments
     ///
@@ -427,7 +463,8 @@ impl<P> Output<P> {
     ///
     /// `parts` holds one recipe per view of the value; their wires appear in this
     /// order. Binding rejects an empty list or more than one consuming part. The
-    /// framework uses [`Codec::consumes`] to order observations before a move.
+    /// framework uses [`Codec::consumes`] to order observations before a move,
+    /// unless [`Codec::output_owner`] first retains the final output allocation.
     pub fn combine(parts: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
@@ -444,19 +481,22 @@ impl Output {
         match self {
             Self::Sequence { mode, .. } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
-                None => {
-                    !borrowed
-                        && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
-                }
+                None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
+            Self::Bulk(child) => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Named { output: child, .. } => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Optional(child) => {
                 child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
-            Self::Leaf => codec.consumes(flat, ty, extra),
+            Self::Leaf => {
+                !borrowed && output_referent(ty).is_none() && codec.consumes(flat, ty, extra)
+            }
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
-            Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
+            Self::Record { mode, .. } => mode
+                .map_or(!borrowed && output_referent(ty).is_none(), |m| {
+                    m == ProjectionMode::Owned
+                }),
             Self::Request(never) => match *never {},
             Self::Combine(p) => p
                 .iter()
@@ -584,6 +624,121 @@ pub trait Codec {
         Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
         Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
     >;
+    /// Compile a leaf used inside a bulk record, before choosing its outer transport.
+    #[allow(clippy::too_many_arguments)]
+    fn input_bulk_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _var: syn::Ident,
+        _active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        Err("bulk inputs are unsupported by this codec".into())
+    }
+    /// Convert a bulk leaf in a flat sequence row whose construction is deferred.
+    /// Like `input_row_leaf`, this lets an adapter create row-local borrowed
+    /// temporaries during construction while retaining resource validation for
+    /// the grouped check. The default uses ordinary bulk leaf conversion.
+    #[allow(clippy::too_many_arguments)]
+    fn input_bulk_row_leaf(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        self.input_bulk_leaf(flat, ty, extra, wire, var, active)
+    }
+    /// Prepare a native leaf for a bulk output without per-field foreign allocations.
+    #[allow(clippy::too_many_arguments)]
+    fn output_bulk_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+        _borrowed: bool,
+    ) -> Result<CodecOutput<Self>> {
+        Err("bulk outputs are unsupported by this codec".into())
+    }
+    /// Prepare an explicitly projected leaf inside bulk output storage.
+    #[allow(clippy::too_many_arguments)]
+    fn output_bulk_projected(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<CodecOutput<Self>> {
+        if !projection.fields.is_empty() {
+            return Err("bulk leaf projection has field overrides".into());
+        }
+        self.output_bulk_leaf(
+            flat,
+            ty,
+            extra,
+            wire,
+            value,
+            projection.mode == ProjectionMode::Borrowed,
+        )
+    }
+    /// Group a compiled native expansion into its physical bulk input carrier.
+    fn bulk_input(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _child: CodecInput<Self>,
+        _active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        Err("bulk inputs are unsupported by this codec".into())
+    }
+    /// Group a compiled native expansion into its physical bulk output carrier.
+    fn bulk_output(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _child: CodecOutput<Self>,
+    ) -> Result<CodecOutput<Self>> {
+        Err("bulk outputs are unsupported by this codec".into())
+    }
+    /// Read collection rows from native bulk storage.
+    #[allow(clippy::too_many_arguments)]
+    fn sequence_input_bulk(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _active: &Condition,
+    ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
+        Err("bulk collections are unsupported by this codec".into())
+    }
+    /// Store collection rows in native bulk storage.
+    #[allow(clippy::too_many_arguments)]
+    fn sequence_output_bulk(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _values: &[(syn::Ident, TokenStream)],
+        _delivery: SequenceDelivery,
+    ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
+        Err("bulk collections are unsupported by this codec".into())
+    }
     /// Compile a callback whose two conversion directions are already resolved.
     fn callback_input(
         &self,
@@ -616,6 +771,36 @@ pub trait Codec {
         _extra: &Self::Extra,
     ) -> Result<Option<Output<OutputRequest>>> {
         Ok(None)
+    }
+    /// Select bulk for automatically materialized output sequences.
+    /// Explicit ordinary rows and per-row callbacks bypass this default.
+    fn default_output_sequence_is_bulk(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
+    }
+    /// Keep a collection occurrence in one native input leaf instead of
+    /// decomposing it into element rows. Explicit `Input::Sequence` overrides
+    /// this preference; input defaults and whole-collection identities use it.
+    fn input_collection_is_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
+    }
+    /// Keep a collection occurrence in one native output leaf. Explicit
+    /// `Output::Sequence` and element-targeted expansions still produce rows.
+    fn output_collection_is_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
     }
     /// Annotate an already compiled foreign-record input; structural expansion is complete.
     fn input_record_metadata(
@@ -740,6 +925,28 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<CodecInput<Self>>;
+    /// Convert a leaf inside a flat collection row whose construction is deferred.
+    ///
+    /// Its statements and argument share the row constructor's scope, so an
+    /// adapter may decode row-local buffers there instead of retaining decoded
+    /// values during grouped validation. Resource identity and pointer validation
+    /// needed by the grouped check must remain in `validation`; every value must
+    /// still be validated before use. Deferred wire reads must remain valid after
+    /// the transport releases its per-row state, including when construction is
+    /// retained in a prepared-row closure rather than rereading source rows.
+    /// Nested sequences/callbacks retain their
+    /// ordinary input preparation. The default uses the usual leaf conversion.
+    fn input_row_leaf(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        self.input_leaf(flat, ty, extra, wire, var, active)
+    }
     /// Convert a leaf with explicit ownership, independently of its usual policy.
     ///
     /// The compiler supplies either an owned value or a shared reference according
@@ -780,8 +987,7 @@ pub trait Codec {
     /// `index`. Raw reads may defer errors until the active conversion.
     ///
     /// Choose additional names fresh against the element and outer boundary
-    /// values. The shared helper reserves `{wire}_staged`, `{wire}_acquired` and
-    /// `{wire}_identities_N` (for each resource index N) for its own locals.
+    /// values. The shared helper reserves `{wire}_element_built` for its row result.
     fn sequence_input(
         &self,
         _extra: &Self::Extra,
@@ -1011,6 +1217,69 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<CodecOutput<Self>>;
+    /// Convert a reference supplied directly by the Rust return value.
+    ///
+    /// Unlike observing an owned value through a getter, this reference already
+    /// has the source function's lifetime contract. Adapters may expose it as a
+    /// non-owning foreign pointer. `reference` preserves the referent and mutability;
+    /// `value` produces exactly that Rust reference.
+    /// This also applies inside optional and successful Result returns and to
+    /// getter results whose receiver remains alive. Callback arguments supplied as references
+    /// also use this hook: their loan lasts only for the foreign invocation.
+    /// The foreign caller must preserve the referenced storage and Rust aliasing
+    /// rules. No runtime lifetime tracking is implied.
+    ///
+    /// Return `None` to use ordinary borrowed leaf conversion (the default).
+    fn output_return_reference(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _reference: &syn::TypeReference,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+    ) -> Result<Option<CodecOutput<Self>>> {
+        Ok(None)
+    }
+    /// Place an owned value in its final foreign allocation before getter views.
+    ///
+    /// Returns its owning output conversion and a Rust `*mut ty` expression from
+    /// which getter receivers can be borrowed. That address must remain valid
+    /// across conversion, delivery and ownership commit. Until commit, the plan
+    /// must reclaim the allocation on failure. The default keeps ordinary output
+    /// conversion and observation-before-move ordering.
+    fn output_owner(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+    ) -> Result<Option<(CodecOutput<Self>, TokenStream)>> {
+        Ok(None)
+    }
+    /// Check a getter loan while its owning output is being delivered.
+    fn validate_owner_getter(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _owner: &Type,
+        _getter: &str,
+        _plan: &CodecOutput<Self>,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// Check whether a getter's converted outputs can outlive its temporary owner.
+    /// Owner-backed views are compiled separately and already retain their owner.
+    fn validate_getter_output(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _receiver: &Type,
+        _borrowed: bool,
+        _ty: &Type,
+        _plan: &CodecOutput<Self>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
@@ -1112,7 +1381,7 @@ pub fn compile_output_value<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Output> {
-    compile_output_at(flat, codec, ty, recipe, extra, "ret".into(), false)
+    compile_output_at(flat, codec, ty, recipe, extra, OutputPosition::Return)
 }
 
 /// Compile the foreign-to-Rust value returned by a source callback.
@@ -1157,9 +1426,13 @@ pub fn compile_callback_argument<C: Codec>(
         ty,
         recipe,
         extra,
-        format!("callback_arg_{index}"),
-        borrowed,
+        OutputPosition::CallbackArgument { index, borrowed },
     )
+}
+
+enum OutputPosition {
+    Return,
+    CallbackArgument { index: usize, borrowed: bool },
 }
 
 fn compile_output_at<C: Codec>(
@@ -1168,16 +1441,17 @@ fn compile_output_at<C: Codec>(
     ty: &Type,
     recipe: &Output,
     extra: &C::Extra,
-    prefix: String,
-    borrowed: bool,
+    position: OutputPosition,
 ) -> Result<<C::Schema as Schema>::Output> {
-    let mut plan = Compiler::new(flat, codec, prefix).output_root(
-        ty,
-        recipe,
-        extra,
-        prebindgen_conversions::source_result_expr(),
-        borrowed,
-    )?;
+    let value = prebindgen_conversions::source_result_expr();
+    let mut plan = match position {
+        OutputPosition::Return => Compiler::new(flat, codec, "ret".into())
+            .output_root(ty, recipe, extra, value, false, true)?,
+        OutputPosition::CallbackArgument { index, borrowed } => {
+            Compiler::new(flat, codec, format!("callback_arg_{index}"))
+                .output_root(ty, recipe, extra, value, borrowed, true)?
+        }
+    };
     finalize_output_schema(codec, &mut plan, extra)?;
     codec.finish_output(&mut plan, extra)?;
     codec.validate_output(&plan)?;
@@ -1285,6 +1559,17 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
+    bulk: std::cell::Cell<bool>,
+    // Explicit borrowed collection/record projections authorize owning copies
+    // of borrowed leaves, without changing conversions of owned getter results.
+    copy_borrowed: std::cell::Cell<bool>,
+    grouped_input: std::cell::Cell<bool>,
+    // Row temporaries may borrow only the enclosing sequence's cached frame,
+    // never a separate bulk field decoded inside an ordinary JVM object row.
+    bulk_input_row: std::cell::Cell<bool>,
+    ordinary_collections: std::cell::Cell<bool>,
+    // A Combine observation borrows a Rust temporary, not persistent foreign storage.
+    temporary_receiver: std::cell::Cell<bool>,
     flat: &'a Flat<C::Schema>,
     codec: &'a C,
     prefix: String,
@@ -1293,11 +1578,40 @@ struct Compiler<'a, C: Codec> {
 impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
+            bulk: std::cell::Cell::new(false),
+            copy_borrowed: std::cell::Cell::new(false),
+            grouped_input: std::cell::Cell::new(false),
+            bulk_input_row: std::cell::Cell::new(false),
+            ordinary_collections: std::cell::Cell::new(false),
+            temporary_receiver: std::cell::Cell::new(false),
             flat,
             codec,
             prefix,
             next: std::cell::Cell::new(0),
         }
+    }
+    fn with_temporary_receiver<T>(
+        &self,
+        temporary: bool,
+        prepare: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        let previous = self.temporary_receiver.get();
+        self.temporary_receiver.set(previous || temporary);
+        let result = prepare();
+        self.temporary_receiver.set(previous);
+        result
+    }
+    fn with_copy_permission<T>(
+        &self,
+        explicit: bool,
+        prepare: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        let previous = self
+            .copy_borrowed
+            .replace(self.copy_borrowed.get() || explicit);
+        let result = prepare();
+        self.copy_borrowed.set(previous);
+        result
     }
     fn name(&self) -> syn::Ident {
         let next = self.next.get();
@@ -1330,6 +1644,72 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
+        let ready = names
+            .map(|(_, var)| format_ident!("{var}_built"))
+            .unwrap_or_else(|| format_ident!("{}_w{}_built", self.prefix, self.next.get()));
+        let mut plan = self.input_unprepared_named(ty, recipe, extra, active, names)?;
+        if self.grouped_input.get() {
+            return Ok(plan);
+        }
+        let mut register = TokenStream::new();
+        let mut transferred = TokenStream::new();
+        for (index, resource) in plan.resources.iter_mut().enumerate() {
+            if resource.registered {
+                continue;
+            }
+            let condition = &resource.active;
+            let exclusive = resource.access != prebindgen_conversions::Access::Shared;
+            let count = format_ident!("{ready}_transferred_{index}");
+            let addresses = match &resource.identity {
+                prebindgen_conversions::ResourceIdentity::Single(value) => {
+                    quote!(::core::iter::once((#value) as usize))
+                }
+                prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
+            };
+            if resource.access == prebindgen_conversions::Access::Move
+                && !resource.records_consumption
+            {
+                let unchecked_count = match &resource.identity {
+                    prebindgen_conversions::ResourceIdentity::Single(_) => quote!(1usize),
+                    prebindgen_conversions::ResourceIdentity::Many(_) => {
+                        quote!((#addresses).count())
+                    }
+                };
+                register.extend(prebindgen_conversions::staged::input_alias_checks(
+                    quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}),
+                    quote!(let #count=if #condition {#unchecked_count} else {0usize};),
+                ));
+                transferred.extend(quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);));
+            } else {
+                register.extend(prebindgen_conversions::staged::input_alias_checks(
+                    quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}),TokenStream::new()));
+            }
+            resource.registered = true;
+        }
+        let validation = plan.validation;
+        let acquire = plan.acquire;
+        let statements = plan.statements;
+        let argument = plan.argument;
+        let condition = active.rust();
+        let built = if statements.is_empty() {
+            quote!(Some(#argument))
+        } else {
+            quote!(Some({#statements #argument}))
+        };
+        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #register #acquire #transferred #built } else {None};);
+        plan.acquire = quote!();
+        plan.statements = quote!();
+        plan.argument = quote!(#ready.expect("active input"));
+        Ok(plan)
+    }
+    fn input_unprepared_named(
+        &self,
+        ty: &Type,
+        recipe: &Input,
+        extra: &C::Extra,
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInput<C>> {
         if prebindgen_flat::callback_signature(ty)?.is_some()
             && !matches!(recipe, Input::Leaf | Input::Callback(_))
         {
@@ -1350,6 +1730,20 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Bulk(inner) => {
+                if self.bulk.get() {
+                    return self.input_named(ty, inner, extra, active, names);
+                }
+                let wire = self.name();
+                self.bulk.set(true);
+                let previous_row = self.bulk_input_row.replace(false);
+                let child = self.input_named(ty, inner, extra, active, names);
+                self.bulk_input_row.set(previous_row);
+                self.bulk.set(false);
+                return self
+                    .codec
+                    .bulk_input(self.flat, ty, extra, wire, child?, active);
+            }
             Input::Callback(callback) => {
                 callback.validate_for(self.flat, ty)?;
                 return self.codec.callback_input(
@@ -1364,14 +1758,76 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 );
             }
             Input::Sequence(element_recipe) => {
+                if !self.bulk.get() {
+                    if let Input::Bulk(inner) = element_recipe.as_ref() {
+                        return self.input_named(
+                            ty,
+                            &Input::Bulk(Box::new(Input::Sequence(inner.clone()))),
+                            extra,
+                            active,
+                            names,
+                        );
+                    }
+                }
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 let wire = self.name();
                 let length = self.name();
                 let index = self.name();
-                let child = self.input(element, element_recipe, extra, &Condition::default())?;
+                // Nested sequences manage their own resource lifetime and receipts.
+                fn contains_sequence(input: &Input) -> bool {
+                    match input {
+                        Input::Sequence(_) | Input::Callback(_) => true,
+                        Input::Bulk(inner) | Input::Optional(inner) => contains_sequence(inner),
+                        Input::Record(children)
+                        | Input::Fields(children)
+                        | Input::Selector(children) => children.iter().any(contains_sequence),
+                        Input::Constructor { args, .. } => args.iter().any(contains_sequence),
+                        _ => false,
+                    }
+                }
+                let grouped_elements = !contains_sequence(element_recipe);
+                let previous = self.grouped_input.replace(grouped_elements);
+                let previous_bulk_row = self.bulk_input_row.replace(self.bulk.get());
+                let child = self.input(element, element_recipe, extra, &Condition::default());
+                self.bulk_input_row.set(previous_bulk_row);
+                self.grouped_input.set(previous);
+                let child = child?;
+                // An exhaustive recipe check keeps future validation-time
+                // operations out of row replay until their effects are audited.
+                fn deferred_construction(recipe: &Input, bulk: bool) -> bool {
+                    match recipe {
+                        Input::Leaf => true,
+                        Input::Optional(inner) => deferred_construction(inner, bulk),
+                        // With grouped element construction, input_named leaves
+                        // acquisition deferred. Inside an existing bulk frame the
+                        // modifier then adds no preparation. Outside bulk it can
+                        // create a new frame during validation.
+                        Input::Bulk(inner) if bulk => deferred_construction(inner, bulk),
+                        Input::Fields(fields) | Input::Record(fields) | Input::Selector(fields) => {
+                            fields
+                                .iter()
+                                .all(|field| deferred_construction(field, bulk))
+                        }
+                        Input::Constructor { args, .. } => {
+                            args.iter().all(|arg| deferred_construction(arg, bulk))
+                        }
+                        Input::Bulk(_) | Input::Sequence(_) | Input::Callback(_) => false,
+                        Input::Request(never) => match *never {},
+                    }
+                }
                 return sequence::input(
-                    self.codec, ty, extra, wire, var, length, index, active, child,
+                    self.codec,
+                    ty,
+                    extra,
+                    wire,
+                    var,
+                    length,
+                    index,
+                    active,
+                    child,
+                    self.bulk.get(),
+                    deferred_construction(element_recipe, self.bulk.get() && grouped_elements),
                 );
             }
             Input::Optional(inner) => {
@@ -1396,7 +1852,18 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                return self.codec.input_leaf(self.flat, ty, extra, w, var, active);
+                return if self.bulk_input_row.get() && self.grouped_input.get() {
+                    self.codec
+                        .input_bulk_row_leaf(self.flat, ty, extra, w, var, active)
+                } else if self.bulk.get() {
+                    self.codec
+                        .input_bulk_leaf(self.flat, ty, extra, w, var, active)
+                } else if self.grouped_input.get() {
+                    self.codec
+                        .input_row_leaf(self.flat, ty, extra, w, var, active)
+                } else {
+                    self.codec.input_leaf(self.flat, ty, extra, w, var, active)
+                };
             }
             Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
@@ -1567,6 +2034,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
+        reference_return: bool,
     ) -> Result<CodecOutput<C>> {
         if let Output::Result { ok, error } = recipe {
             if borrowed {
@@ -1606,7 +2074,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mapped,
                 extra,
             )?;
-            let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
+            let mut child = if reference_return {
+                self.output_return(success_ty, ok, extra, quote!(#payload), false)?
+            } else {
+                self.output(success_ty, ok, extra, quote!(#payload), false)?
+            };
             let prepare = child.statements;
             child.statements = quote! {
                 let #payload = match #value {
@@ -1621,6 +2093,80 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 .source_error_layout(self.flat, error_ty, mapped_error, extra)?;
             child.outcomes.source_error = Some(error);
             return Ok(child);
+        }
+        if reference_return {
+            self.output_return(ty, recipe, extra, value, borrowed)
+        } else {
+            self.output(ty, recipe, extra, value, borrowed)
+        }
+    }
+    // Preserve reference semantics for source returns and getter results.
+    // The codec checks whether a getter's owner survives the generated call.
+    fn output_return(
+        &self,
+        ty: &Type,
+        recipe: &Output,
+        extra: &C::Extra,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<CodecOutput<C>> {
+        if !borrowed {
+            if matches!(ty, Type::Reference(_)) {
+                if let Output::Combine(parts) = recipe {
+                    if parts.is_empty() {
+                        return Err("an output combination needs at least one part".into());
+                    }
+                    if mutable_reference(ty) && parts.len() > 1 {
+                        return Err(
+                            "a mutable reference cannot supply multiple output views".into()
+                        );
+                    }
+                    let mut result = OutputPlan {
+                        fallible: false,
+                        context: Default::default(),
+                        delivery: Default::default(),
+                        commit: TokenStream::new(),
+                        statements: TokenStream::new(),
+                        values: vec![],
+                        outcomes: prebindgen_flat::Outcomes {
+                            success: WireNode::Branch {
+                                controls: vec![],
+                                children: vec![],
+                                meta: self.codec.group_metadata(),
+                            },
+                            source_error: None,
+                            binding_failure: None,
+                        },
+                    };
+                    for (index, part) in parts.iter().enumerate() {
+                        let mut child =
+                            self.output_return(ty, part, extra, value.clone(), false)?;
+                        self.prefix(&mut child.outcomes.success, ComponentSegment::View(index));
+                        append(&mut result, child)?;
+                    }
+                    return Ok(result);
+                }
+            }
+            if let (Type::Reference(reference), Output::Leaf) = (ty, recipe) {
+                let wire = self.name();
+                if let Some(plan) = self.codec.output_return_reference(
+                    self.flat,
+                    reference,
+                    extra,
+                    wire.clone(),
+                    value.clone(),
+                )? {
+                    return Ok(plan);
+                }
+                return self.output_named(ty, recipe, extra, value, false, Some(&wire));
+            }
+            if let (Some(payload_ty), Output::Optional(inner)) = (option_inner(ty), recipe) {
+                let tag = self.name();
+                let payload = self.name();
+                let child =
+                    self.output_return(payload_ty, inner, extra, quote!(#payload), false)?;
+                return optional_output(self.codec, extra, tag, payload, value, false, child);
+            }
         }
         self.output(ty, recipe, extra, value, borrowed)
     }
@@ -1643,6 +2189,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
     ) -> Result<CodecOutput<C>> {
+        if let Some(referent) = output_referent(ty) {
+            if matches!(recipe, Output::Projected(p) if p.mode == ProjectionMode::Owned) {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            let value = if borrowed { quote!(*(#value)) } else { value };
+            return self.output_named(referent, recipe, extra, value, true, wire_name);
+        }
         if contains_result(ty) {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
         }
@@ -1664,6 +2217,16 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Bulk(inner) => {
+                if self.bulk.get() {
+                    return self.output_named(ty, inner, extra, value, borrowed, wire_name);
+                }
+                let wire = self.name();
+                self.bulk.set(true);
+                let child = self.output_named(ty, inner, extra, value, borrowed, wire_name);
+                self.bulk.set(false);
+                return self.codec.bulk_output(self.flat, ty, extra, wire, child?);
+            }
             Output::Discard => return Ok(out),
             Output::Named { name, output } => {
                 let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
@@ -1679,10 +2242,44 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mode,
                 delivery,
             } => {
+                if self.bulk.get() && *delivery == SequenceDelivery::Callback {
+                    return Err("bulk cannot enclose callback delivery; apply bulk to the callback element expansion instead".into());
+                }
+                if *delivery == SequenceDelivery::Auto
+                    && !self.bulk.get()
+                    && !self.ordinary_collections.get()
+                    && self.codec.default_output_sequence_is_bulk(self.flat, extra)
+                {
+                    return self.output_named(
+                        ty,
+                        &Output::Bulk(Box::new(recipe.clone())),
+                        extra,
+                        value,
+                        borrowed,
+                        wire_name,
+                    );
+                }
+                if !self.bulk.get() && *delivery != SequenceDelivery::Callback {
+                    if let Output::Bulk(inner) = element.as_ref() {
+                        return self.output_named(
+                            ty,
+                            &Output::Bulk(Box::new(Output::Sequence {
+                                element: inner.clone(),
+                                mode: *mode,
+                                delivery: *delivery,
+                            })),
+                            extra,
+                            value,
+                            borrowed,
+                            wire_name,
+                        );
+                    }
+                }
                 let (element_type, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection")?;
+                let explicit_copy = *mode == Some(ProjectionMode::Borrowed);
                 let mode = mode.unwrap_or_else(|| {
-                    if borrowed || sequence_parts(ty).unwrap().1 != SequenceView::Owned {
+                    if borrowed || !sequence_parts(ty).unwrap().1.is_owned() {
                         ProjectionMode::Borrowed
                     } else {
                         ProjectionMode::Owned
@@ -1692,16 +2289,47 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let payload = self.name();
                 let length = self.name();
                 let index = self.name();
-                let child = self.output(
-                    element_type,
-                    element,
-                    extra,
-                    quote!(#payload),
-                    mode == ProjectionMode::Borrowed,
-                )?;
+                // An explicit ordinary collection (or a callback row) keeps
+                // nested automatic sequences ordinary. Explicit Bulk still wins.
+                let ordinary = self.ordinary_collections.replace(
+                    self.ordinary_collections.get() || *delivery != SequenceDelivery::Auto,
+                );
+                let child = self.with_copy_permission(explicit_copy, || {
+                    self.with_temporary_receiver(
+                        mode == ProjectionMode::Borrowed
+                            && !borrowed
+                            && sequence_parts(ty).unwrap().1.is_owned(),
+                        || {
+                            self.output(
+                                element_type,
+                                element,
+                                extra,
+                                quote!(#payload),
+                                mode == ProjectionMode::Borrowed,
+                            )
+                        },
+                    )
+                });
+                self.ordinary_collections.set(ordinary);
+                let child = child?;
                 return sequence::output(
-                    self.codec, ty, extra, wire, payload, length, index, value, borrowed, mode,
-                    child, *delivery,
+                    self.codec,
+                    ty,
+                    extra,
+                    wire,
+                    payload,
+                    length,
+                    index,
+                    value,
+                    borrowed,
+                    mode,
+                    child,
+                    if *delivery == SequenceDelivery::Auto {
+                        SequenceDelivery::Value
+                    } else {
+                        *delivery
+                    },
+                    self.bulk.get(),
                 );
             }
             Output::Result { .. } => {
@@ -1729,9 +2357,34 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Output::Request(never) => match *never {},
             Output::Leaf => {
                 let w = wire_name.cloned().unwrap_or_else(|| self.name());
-                return self
-                    .codec
-                    .output_leaf(self.flat, ty, extra, w, value, borrowed);
+                if borrowed && self.copy_borrowed.get() {
+                    return if self.bulk.get() {
+                        self.codec.output_bulk_projected(
+                            self.flat,
+                            ty,
+                            extra,
+                            w,
+                            value,
+                            &Projection::borrowed(),
+                        )
+                    } else {
+                        self.codec.output_projected(
+                            self.flat,
+                            ty,
+                            extra,
+                            w,
+                            value,
+                            &Projection::borrowed(),
+                        )
+                    };
+                }
+                return if self.bulk.get() {
+                    self.codec
+                        .output_bulk_leaf(self.flat, ty, extra, w, value, borrowed)
+                } else {
+                    self.codec
+                        .output_leaf(self.flat, ty, extra, w, value, borrowed)
+                };
             }
             Output::Projected(projection) => {
                 if borrowed && projection.mode == ProjectionMode::Owned {
@@ -1744,14 +2397,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 } else {
                     value
                 };
-                return self.codec.output_projected(
-                    self.flat,
-                    ty,
-                    extra,
-                    wire_name.cloned().unwrap_or_else(|| self.name()),
-                    value,
-                    projection,
-                );
+                let wire = wire_name.cloned().unwrap_or_else(|| self.name());
+                return if self.bulk.get() {
+                    self.codec
+                        .output_bulk_projected(self.flat, ty, extra, wire, value, projection)
+                } else {
+                    self.codec
+                        .output_projected(self.flat, ty, extra, wire, value, projection)
+                };
             }
             Output::Fields(children)
             | Output::OwnedFields(children)
@@ -1760,14 +2413,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
             } => {
                 let grouped = matches!(recipe, Output::Record { .. });
                 let wire = grouped.then(|| wire_name.cloned().unwrap_or_else(|| self.name()));
-                let owned = matches!(
-                    recipe,
-                    Output::OwnedFields(_)
-                        | Output::Record {
-                            mode: ProjectionMode::Owned,
-                            ..
-                        }
-                );
+                let owned = match recipe {
+                    Output::OwnedFields(_) => true,
+                    Output::Record { mode, .. } => {
+                        mode.map_or(!borrowed, |m| m == ProjectionMode::Owned)
+                    }
+                    _ => false,
+                };
                 if owned && borrowed {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
@@ -1799,23 +2451,34 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     .as_ref()
                     .map(|w| format_ident!("{w}_record"))
                     .unwrap_or_else(|| self.name());
-                let mut plan = if owned {
-                    record_output_owned(
-                        self.codec,
-                        var,
-                        value,
-                        r.fields.iter().map(|f| f.name.clone()),
-                        convert,
-                    )?
-                } else {
-                    record_output(
-                        self.codec,
-                        var,
-                        value,
-                        r.fields.iter().map(|f| f.name.clone()),
-                        convert,
-                    )?
-                };
+                let explicit_copy = matches!(
+                    recipe,
+                    Output::Record {
+                        mode: Some(ProjectionMode::Borrowed),
+                        ..
+                    }
+                );
+                let mut plan = self.with_copy_permission(explicit_copy, || {
+                    self.with_temporary_receiver(!owned && !borrowed, || {
+                        if owned {
+                            record_output_owned(
+                                self.codec,
+                                var,
+                                value,
+                                r.fields.iter().map(|f| f.name.clone()),
+                                convert,
+                            )
+                        } else {
+                            record_output(
+                                self.codec,
+                                var,
+                                value,
+                                r.fields.iter().map(|f| f.name.clone()),
+                                convert,
+                            )
+                        }
+                    })
+                })?;
                 if let Some(wire) = wire {
                     self.codec
                         .output_record_metadata(self.flat, ty, &wire, &mut plan, extra)?;
@@ -1841,8 +2504,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         type_key(&expected)
                     ));
                 }
-                if matches!(f.ret.ty, Type::Reference(_)) {
-                    return Err("borrowed getter results are outside this subset".into());
+                if matches!(&f.ret.ty, Type::Reference(r) if r.mutability.is_some()) {
+                    return Err("mutable-reference getter results are unsupported".into());
                 }
                 let v = self.name();
                 let path = &f.path;
@@ -1852,7 +2515,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     quote!(&#value)
                 };
                 out.statements = quote!(let #v=#path(#arg););
-                let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
+                let mut child = self.output_return(&f.ret.ty, output, extra, quote!(#v), false)?;
+                self.codec.validate_getter_output(
+                    self.flat,
+                    ty,
+                    borrowed && !self.temporary_receiver.get(),
+                    &f.ret.ty,
+                    &child,
+                    extra,
+                )?;
                 self.prefix(
                     &mut child.outcomes.success,
                     ComponentSegment::Getter(function.clone()),
@@ -1869,7 +2540,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     .count()
                     > 1
                 {
-                    return Err("a combination cannot consume the same value twice".into());
+                    return Err("a combination cannot consume the same value twice; use field_self_ref() for an explicit copy view".into());
+                }
+                if !borrowed {
+                    if let Some(plan) = self.output_owner_views(ty, parts, extra, value.clone())? {
+                        return Ok(plan);
+                    }
                 }
                 let mut bodies = Vec::new();
                 for (index, child) in parts.iter().enumerate() {
@@ -1879,7 +2555,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     } else {
                         quote!(&#value)
                     };
-                    let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
+                    let mut p = self.with_temporary_receiver(!borrowed && !consuming, || {
+                        self.output(ty, child, extra, arg, borrowed || !consuming)
+                    })?;
                     self.prefix(&mut p.outcomes.success, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
@@ -1894,6 +2572,132 @@ impl<'a, C: Codec> Compiler<'a, C> {
 
         Ok(out)
     }
+
+    fn output_owner_views(
+        &self,
+        ty: &Type,
+        parts: &[Output],
+        extra: &C::Extra,
+        value: TokenStream,
+    ) -> Result<Option<CodecOutput<C>>> {
+        let owner = parts.iter().position(|part| {
+            matches!(part,
+            Output::Projected(p) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
+                || matches!(part, Output::Leaf) && self.codec.consumes(self.flat, ty, extra)
+        });
+        let Some(owner) = owner else {
+            return Ok(None);
+        };
+        if parts.len() < 2 {
+            return Ok(None);
+        }
+        // Explicit copy projections use observation-before-move ordering. They
+        // do not require an address-preserving loan from the delivered owner.
+        if parts
+            .iter()
+            .any(|part| matches!(part,Output::Projected(p) if p.mode==ProjectionMode::Borrowed))
+        {
+            return Ok(None);
+        }
+        // Reserve the same owner wire that the ordinary consuming leaf uses.
+        let next = self.next.get();
+        let wire = self.name();
+        let Some((mut owned, pointer)) =
+            self.codec.output_owner(self.flat, ty, extra, wire, value)?
+        else {
+            self.next.set(next);
+            return Ok(None);
+        };
+        if parts
+            .iter()
+            .enumerate()
+            .any(|(i, part)| i != owner && !matches!(part, Output::Getter { .. }))
+        {
+            return Err("an owner-backed output combination supports only the owning identity and getter views".into());
+        }
+        let prepare_owner = std::mem::take(&mut owned.statements);
+        let mut result = OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            commit: TokenStream::new(),
+            statements: TokenStream::new(),
+            values: vec![],
+            outcomes: prebindgen_flat::Outcomes {
+                success: WireNode::Branch {
+                    controls: vec![],
+                    children: vec![],
+                    meta: self.codec.group_metadata(),
+                },
+                source_error: None,
+                binding_failure: None,
+            },
+        };
+        let mut owner_plan = Some(owned);
+        for (index, part) in parts.iter().enumerate() {
+            let mut plan = if index == owner {
+                owner_plan.take().unwrap()
+            } else {
+                let Output::Getter { function, output } = part else {
+                    unreachable!()
+                };
+                let f = self.flat.function(function)?;
+                if f.params.len() != 1 {
+                    return Err(format!(
+                        "getter `{function}` must borrow its returned owner"
+                    ));
+                }
+                let receiver = &f.params[0].ty.ty;
+                let mutable_receiver =
+                    matches!(receiver, Type::Reference(r) if r.mutability.is_some());
+                let mutable = mutable_receiver || mutable_reference(&f.ret.ty);
+                if mutable && parts.len() != 2 {
+                    return Err("a mutable owner getter must be the only getter view; simultaneous owner borrows could invalidate earlier views".into());
+                }
+                let expected: Type = if mutable_receiver {
+                    syn::parse_quote!(&mut #ty)
+                } else {
+                    syn::parse_quote!(&#ty)
+                };
+                if !same_type(receiver, &expected) {
+                    return Err(format!(
+                        "getter `{function}` must borrow its returned owner"
+                    ));
+                }
+                let source = self.name();
+                let path = &f.path;
+                let argument = if mutable_receiver {
+                    quote!(unsafe { &mut *(#pointer) })
+                } else {
+                    quote!(unsafe { &*(#pointer) })
+                };
+                let mut plan =
+                    self.output_return(&f.ret.ty, output, extra, quote!(#source), false)?;
+                self.codec
+                    .validate_owner_getter(self.flat, ty, function, &plan)?;
+                plan.statements = {
+                    let body = plan.statements;
+                    quote!(let #source = #path(#argument); #body)
+                };
+                self.prefix(
+                    &mut plan.outcomes.success,
+                    ComponentSegment::Getter(function.clone()),
+                );
+                plan
+            };
+            self.prefix(&mut plan.outcomes.success, ComponentSegment::View(index));
+            append(&mut result, plan)?;
+        }
+        result.statements = {
+            let views = result.statements;
+            quote!(#prepare_owner #views)
+        };
+        Ok(Some(result))
+    }
+}
+fn mutable_reference(ty: &Type) -> bool {
+    matches!(ty, Type::Reference(r) if r.mutability.is_some())
+        || option_inner(ty).is_some_and(mutable_reference)
 }
 fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
     plan: &OutputPlan<W, C, N, B>,

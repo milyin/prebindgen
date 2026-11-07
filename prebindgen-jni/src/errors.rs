@@ -29,6 +29,18 @@ impl ErrorBinding {
     }
 }
 
+fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result<syn::Ident> {
+    let mode = if mapped { "mapped" } else { "typed" };
+    Ok(format_ident!(
+        "{}",
+        names.name(
+            "__pb_jni_error",
+            &format!("{}_{mode}", names::type_label(ty)),
+            &[&names::type_identity(ty), mode]
+        )?
+    ))
+}
+
 /// Prepare each error once on its type and attach each function's selected binding.
 pub(crate) fn prepare(
     flat: &mut Bindings,
@@ -36,16 +48,27 @@ pub(crate) fn prepare(
     declarations: &prebindgen_declarations::Declarations,
     functions: &[FunctionDecl],
 ) -> Result<()> {
-    let mut result_count = 0usize;
+    let mut names = names::Names::default();
+    for ty in flat.types.values() {
+        for (mapped, binding) in &ty.metadata.errors {
+            names.reserve(
+                &binding.helper.to_string(),
+                "__pb_jni_error",
+                &[
+                    &names::type_identity(&ty.ty),
+                    if *mapped { "mapped" } else { "typed" },
+                ],
+            )?;
+        }
+    }
     for function in functions {
         let ret = flat.function(&function.name)?.ret.ty.clone();
         let Some((_, error)) = prebindgen_flat::result_parts(&ret) else {
             continue;
         };
         flat.type_metadata_mut(error)?;
+        let canonical_error = flat.type_info(error)?.ty.clone();
         let mapped = declarations.error_mapper_for(function, error).is_some();
-        let mut helper_index = result_count;
-        result_count += 1;
         let exception = flat.type_info(error)?.metadata.error_class.clone();
         if exception.is_some() && !mapped {
             return Err(
@@ -68,21 +91,11 @@ pub(crate) fn prepare(
             )
         } else {
             (
-                error.clone(),
-                declarations.output_recipe(flat, codec, error, &())?,
+                canonical_error.clone(),
+                declarations.output_recipe(flat, codec, &canonical_error, &())?,
             )
         };
-        let helper = loop {
-            let candidate = format_ident!("__pb_jni_error_{}", helper_index);
-            if !flat
-                .types
-                .values()
-                .any(|t| t.metadata.errors.values().any(|e| e.helper == candidate))
-            {
-                break candidate;
-            }
-            helper_index += 1;
-        };
+        let helper = helper_name(&mut names, &canonical_error, mapped)?;
         let output = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())
             .map_err(|e| {
                 format!(
@@ -91,15 +104,6 @@ pub(crate) fn prepare(
                     function.name
                 )
             })?;
-        let short = if let syn::Type::Path(path) = error {
-            path.path.segments.last().unwrap().ident.to_string()
-        } else {
-            let mut name = camel(&function.name);
-            if let Some(first) = name.get_mut(..1) {
-                first.make_ascii_uppercase();
-            }
-            format!("{name}Error")
-        };
         let pkg = flat
             .type_info(error)?
             .metadata
@@ -107,7 +111,35 @@ pub(crate) fn prepare(
             .as_ref()
             .map_or(flat.metadata.package.as_str(), |c| c.pkg.as_str());
         let suffix = if mapped { "MessageHandler" } else { "Handler" };
-        let handler = format!("{pkg}.{short}{suffix}");
+        let short = if let syn::Type::Path(path) = &canonical_error {
+            if path.qself.is_none()
+                && path
+                    .path
+                    .segments
+                    .iter()
+                    .all(|segment| matches!(segment.arguments, syn::PathArguments::None))
+            {
+                Some(format!(
+                    "{}{suffix}",
+                    path.path.segments.last().unwrap().ident
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let short = if let Some(short) = short {
+            short
+        } else {
+            let mode = if mapped { "mapped" } else { "typed" };
+            names.name(
+                "ErrorHandler",
+                &format!("{}_{mode}", names::type_label(&canonical_error)),
+                &[&names::type_identity(&canonical_error), mode],
+            )?
+        };
+        let handler = format!("{pkg}.{short}");
         if foreign_name_exists(flat, &handler) {
             return Err(format!("duplicate foreign name `{handler}`"));
         }
@@ -143,35 +175,51 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
             environment: format_ident!("env"),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),
+            return_sink: None,
             is_domain_error: true,
             output_committed: quote!(*reported = Some(result.as_raw());),
         };
-        let commit = error.output.code_fragment_slot(
-            OutputFragment::Commit {
-                context: &context,
-                source: &source,
-            },
-            &syn::parse_quote!(()),
-        )?;
-        let body = error.output.code_fragment_slot(
-            OutputFragment::Deliver {
-                context: &context,
-                source: &source,
-                next: quote!({let _: () = #commit; Ok(())}),
-            },
-            &syn::parse_quote!(::prebindgen_runtime::Result<()>),
-        )?;
-        let body = error.output.code_fragment_slot(
-            OutputFragment::Prepare {
-                context: &context,
-                source: &source,
-                next: body,
-            },
-            &syn::parse_quote!(::prebindgen_runtime::Result<()>),
-        )?;
+        let body_for = |context: &JniContext| -> Result<TokenStream> {
+            let commit = error.output.code_fragment_slot(
+                OutputFragment::Commit {
+                    context,
+                    source: &source,
+                },
+                &syn::parse_quote!(()),
+            )?;
+            let body = error.output.code_fragment_slot(
+                OutputFragment::Deliver {
+                    context,
+                    source: &source,
+                    next: quote!({let _: () = #commit; Ok(())}),
+                },
+                &syn::parse_quote!(::prebindgen_runtime::Result<()>),
+            )?;
+            error.output.code_fragment_slot(
+                OutputFragment::Prepare {
+                    context,
+                    source: &source,
+                    next: body,
+                },
+                &syn::parse_quote!(::prebindgen_runtime::Result<()>),
+            )
+        };
+        let body = body_for(&context)?;
+        let callback_context = JniContext {
+            return_sink: Some(format_ident!("__pb_return")),
+            output_committed: quote!(*reported = Some(std::ptr::null_mut());),
+            ..context
+        };
+        let callback_body = if error.output.native_return().is_some() {
+            body_for(&callback_context)?
+        } else {
+            quote!(Err("custom error output requires packet delivery".into()))
+        };
         code.extend(quote! {
-            #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-            fn #helper(mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>, source: #ty, reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>) -> ::prebindgen_runtime::Result<()> { #body }
+            #[allow(non_snake_case, clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+            fn #helper(mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>, source: #ty, reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>, return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>) -> ::prebindgen_runtime::Result<()> {
+                if let Some(__pb_return) = return_sink { #callback_body } else { #body }
+            }
         });
     }
     Ok(code)
@@ -241,7 +289,10 @@ pub(crate) fn delivery(error: &ErrorBinding, context: &KotlinContext<'_>) -> Res
     );
     let call = format!("onError.run({})", output.delivered.join(", "));
     if output.cleanup.is_empty() {
-        return Ok(format!("{}\n{call}", output.materialize));
+        return Ok(format!(
+            "{}{}\n{call}",
+            output.output_locals, output.materialize
+        ));
     }
     let cleanup = output.cleanup;
     Ok(format!("{}\nvar cleanupFailure: Throwable? = null\nvar callbackFailed = false\ntry {{\n{}\n{call}\n}} catch (failure: Throwable) {{ callbackFailed = true; cleanupFailure = failure; throw failure }} finally {{\n{cleanup}\nif (!callbackFailed) cleanupFailure?.let {{ throw it }}\n}}", output.output_locals, output.materialize))

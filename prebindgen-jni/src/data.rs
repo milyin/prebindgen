@@ -11,8 +11,9 @@ use std::rc::Rc;
 /// including returns and callback arguments; they remain unsupported as inputs.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
-/// field overrides. Legacy `field_self()` and unexpanded outputs keep a fixed
-/// borrowed policy, including for handles (which then require `Clone`).
+/// field overrides. `field_self()` and unexpanded outputs follow the source:
+/// owned records move fields, while borrowed records observe them. Copying opaque
+/// handle fields requires an explicit borrowed projection and Rust `Clone`.
 /// Moving Rust fields requires that the record itself does not implement `Drop`.
 /// Callers close each returned handle explicitly; data-class `copy` shares those
 /// handle objects and does not duplicate native ownership. References, empty
@@ -327,8 +328,8 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
         .iter()
         .map(|f| {
             format!(
-                "    public val `{}`: {}",
-                field_name(f),
+                "    public val {}: {}",
+                kotlin_identifier(&field_name(f)),
                 f.metadata.kotlin_type
             )
         })
@@ -348,15 +349,15 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let n = kotlin_identifier(&field_name(f));
                 match &f.metadata {
                     _ if f.metadata.bytes => {
-                        format!("this.`{n}`.contentEquals(other.`{n}`)")
+                        format!("this.{n}.contentEquals(other.{n})")
                     }
                     _ if f.metadata.floating => {
-                        format!("this.`{n}`.compareTo(other.`{n}`) == 0")
+                        format!("this.{n}.compareTo(other.{n}) == 0")
                     }
-                    _ => format!("this.`{n}` == other.`{n}`"),
+                    _ => format!("this.{n} == other.{n}"),
                 }
             })
             .collect::<Vec<_>>()
@@ -365,11 +366,11 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let n = kotlin_identifier(&field_name(f));
                 if f.metadata.bytes {
-                    format!("this.`{n}`.contentHashCode()")
+                    format!("this.{n}.contentHashCode()")
                 } else {
-                    format!("this.`{n}`.hashCode()")
+                    format!("this.{n}.hashCode()")
                 }
             })
             .collect::<Vec<_>>();
@@ -381,13 +382,14 @@ pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> R
             .fields
             .iter()
             .map(|f| {
-                let n = field_name(f);
+                let label = field_name(f);
+                let n = kotlin_identifier(&label);
                 let suffix = if f.metadata.bytes {
                     ".contentToString()"
                 } else {
                     ""
                 };
-                format!("{n}=${{this.`{n}`{suffix}}}")
+                format!("{label}=${{this.{n}{suffix}}}")
             })
             .collect::<Vec<_>>()
             .join(", ");
@@ -430,6 +432,112 @@ impl Class {
 }
 
 impl Codec for DataCodec<'_> {
+    fn input_bulk_row_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        let mut plan = self.input_bulk_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
+        crate::bulk::prepare_row_leaf(&mut plan, ty, &wire, &var, active);
+        Ok(plan)
+    }
+    fn input_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.input_leaf(flat, ty, &(), w, v, active)
+        } else {
+            crate::bulk::input_leaf(flat, ty, w, v, active)
+        }
+    }
+    fn output_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<OutputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.output_leaf(flat, ty, &(), w, v, borrowed)
+        } else {
+            crate::bulk::output_leaf(flat, ty, w, v, borrowed)
+        }
+    }
+    fn output_bulk_projected(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<OutputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.output_projected(flat, ty, &(), wire, value, projection)
+        } else {
+            JniCodec.output_bulk_projected(flat, ty, &(), wire, value, projection)
+        }
+    }
+    fn bulk_input(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: InputPlan<JniWire>,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        crate::bulk::input(w, child, active)
+    }
+    fn bulk_output(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: OutputPlan<JniWire>,
+    ) -> Result<OutputPlan<JniWire>> {
+        crate::bulk::output(w, child)
+    }
+    fn sequence_input_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        crate::bulk::sequence_input(w, n, i, element, active)
+    }
+    fn sequence_output_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        if delivery != prebindgen_declarations::SequenceDelivery::Value {
+            return Err("bulk collection delivery cannot also use per-element callbacks".into());
+        }
+        crate::bulk::sequence_output(w, n, i, element, values)
+    }
+
     type Schema = JniSchema;
     fn expand_input(
         &self,
@@ -463,15 +571,15 @@ impl Codec for DataCodec<'_> {
         _: &(),
     ) -> Result<Option<Output<OutputRequest>>> {
         let policy = match tree {
-            Output::Leaf => Projection::borrowed(),
-            Output::Projected(p) => p.clone(),
+            Output::Leaf => None,
+            Output::Projected(p) => Some(p.clone()),
             _ => return Ok(None),
         };
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
         };
         let fields = &flat.record(ty)?.fields;
-        for name in policy.fields.keys() {
+        for name in policy.iter().flat_map(|p| p.fields.keys()) {
             if !fields
                 .iter()
                 .any(|f| f.name.to_string().trim_start_matches("r#") == name)
@@ -482,10 +590,11 @@ impl Codec for DataCodec<'_> {
                 ));
             }
         }
-        let inherited = policy.inherited();
+        let inherited = policy.as_ref().map(Projection::inherited);
         let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(&inherited);
+            let Some(policy) = &policy else { return Ok(Output::Leaf); };
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
@@ -493,7 +602,7 @@ impl Codec for DataCodec<'_> {
         }).collect::<Result<Vec<_>>>()?;
         Ok(Some(Output::Record {
             fields: children,
-            mode: policy.mode,
+            mode: policy.map(|p| p.mode),
         }))
     }
     fn input_record_metadata(
@@ -528,6 +637,14 @@ impl Codec for DataCodec<'_> {
         JniBranch::Group(JniGroup::Values)
     }
 
+    fn prefix_layout(
+        &self,
+        node: &mut prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        JniCodec.prefix_layout(node, segment)
+    }
+
     fn named_output_group(&self, name: &str) -> Result<JniBranch> {
         JniCodec.named_output_group(name)
     }
@@ -556,6 +673,10 @@ impl Codec for DataCodec<'_> {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
+
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, extra: &()) -> bool {
+        JniCodec.default_output_sequence_is_bulk(flat, extra)
+    }
     fn sequence_input(
         &self,
         e: &(),
@@ -616,8 +737,9 @@ impl Codec for DataCodec<'_> {
             .ok_or("missing declared JNI error output")?;
         let env = prebindgen_conversions::template_parameter("environment");
         let reported = prebindgen_conversions::template_parameter("domain_output");
+        let sink = prebindgen_conversions::template_parameter("return_sink");
         let value = message.unwrap_or(value);
-        Ok(quote!({#helper(&mut #env, #value, &mut #reported)?; String::new()}))
+        Ok(quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}))
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
@@ -669,10 +791,6 @@ impl Codec for DataCodec<'_> {
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_output(plan, extra)?;
-        if sequence::callback_delivery(&plan.outcomes.success)? {
-            let env = prebindgen_conversions::template_parameter("environment");
-            plan.delivery.statements.extend(quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;));
-        }
         Ok(())
     }
     fn callback_input(
@@ -800,7 +918,7 @@ type FieldNode<'a> = (
     &'a syn::Ident,
     &'a prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 );
-fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
+pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
         .iter()
         .map(|node| match node {
@@ -816,6 +934,7 @@ pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let inner = nodes
         .iter()
@@ -823,42 +942,37 @@ pub(crate) fn input_kotlin(
         .collect::<Vec<_>>();
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_components(nodes, context)?;
+    c.prepare_arguments(nodes.iter().any(|n| kotlin::input_handles(n, false)))?;
     out.parameters.push(format!(
         "{}: {}{}",
         d.root,
         d.class_name,
-        if d.condition == "true" { "" } else { "?" }
+        if active == "true" { "" } else { "?" }
     ));
     let fields = fields(nodes)?;
     if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
-    for (p, (field, children)) in c.parameters.iter().zip(&fields) {
+    for (p, (field, _)) in c.parameters.iter().zip(&fields) {
         let name = p.split_once(": ").unwrap().0;
-        let receiver = if d.condition == "true" {
+        let receiver = if active == "true" {
             d.root.clone()
         } else {
             format!("requireNotNull({})", d.root)
         };
         let expr = format!(
-            "{receiver}.`{}`",
-            field.to_string().trim_start_matches("r#")
+            "{receiver}.{}",
+            kotlin_identifier(field.to_string().trim_start_matches("r#"))
         );
         for a in c
             .arguments
             .iter_mut()
+            .chain(c.prepared_arguments.iter_mut())
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
             .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
-            if matches!(kotlin::leaf_wires(children).as_slice(), [w] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
-            {
-                *a = a.replace(
-                    &format!("{name}?.toByteArray()"),
-                    &format!("{name}.toByteArray()"),
-                );
-            }
             *a = optional::replace(a, name, &expr);
         }
     }
@@ -873,6 +987,18 @@ pub(crate) fn input_kotlin(
             )
         });
     }
+    for (j, a) in c.prepared_arguments.into_iter().enumerate() {
+        out.prepared_arguments.push(if d.condition == "true" {
+            a
+        } else {
+            let absent = if matches!(inner[j].kind, JniWire::Handle { .. }) {
+                "null".into()
+            } else {
+                optional::default_kt(&inner[j].kind, None)
+            };
+            format!("if ({}) {a} else {absent}", d.condition)
+        });
+    }
     out.locks.extend(c.locks);
     out.consumed.extend(c.consumed);
     out.setup.extend(c.setup);
@@ -883,8 +1009,9 @@ pub(crate) fn output_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let mut c = kotlin::output_components(nodes, context)?;
+    let mut c = kotlin::output_components(nodes, context, owners)?;
     if c.delivered.len() != fields(nodes)?.len() {
         return Err("incomplete data-class output occurrence".into());
     }
@@ -954,6 +1081,7 @@ mod group_tests {
             data: true,
             enumeration: false,
             has_handles: false,
+            gc_managed: false,
             variant_names: vec![],
         }));
         prepare(&mut flat).unwrap();
@@ -975,7 +1103,7 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:ProjectionMode::Owned,fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:Some(ProjectionMode::Owned),fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
         );
         let round_trip = defaults
             .resolve_output(
@@ -1068,6 +1196,7 @@ mod group_tests {
         crate::group::validate_layout(&field).unwrap();
         let classes = BTreeMap::new();
         let context = KotlinContext {
+            package: "example",
             classes: &classes,
             result: "result",
             failure: "failure",
@@ -1076,7 +1205,7 @@ mod group_tests {
         };
         let input = kotlin::input_kotlin(&field, &context).unwrap();
         assert_eq!(input.parameters, ["point: example.Point"]);
-        assert!(input.arguments[0].contains("point.`type`"));
+        assert!(input.arguments[0].contains("point.type"));
         let output = kotlin::output_kotlin(&field, &context).unwrap();
         assert_eq!(output.result_types, ["example.Point"]);
         assert!(output.delivered[0].contains("example.Point(result[0]"));

@@ -16,6 +16,20 @@ pub enum CWire {
     /// One pointer/length carrier of generated ABI rows. Its element layout lives
     /// in the enclosing sequence chain; empty rows may use a null pointer.
     Rows,
+    /// One inline owning value or a pointer borrowing/taking that value.
+    Owned {
+        /// Original Rust value and its opaque storage.
+        owner: std::rc::Rc<COwned>,
+        /// Ownership or borrow of the Rust value.
+        access: Access,
+        /// A by-value carrier; false uses a pointer to caller storage.
+        by_value: bool,
+    },
+    /// Non-owning byte/text view. No allocation is transferred.
+    View,
+    /// Exclusive non-owning byte view. The caller preserves the source lifetime
+    /// and exclusive access; no allocation is transferred.
+    MutableView,
     /// A fieldless Rust enum represented by checked `int32_t` values.
     Enum {
         /// Unprefixed C typedef name.
@@ -36,7 +50,11 @@ pub enum CWire {
     /// A null pointer with zero length is a valid empty value, so no null niche
     /// is available for this representation.
     Buffer,
-    /// A typed opaque pointer to a boxed source value.
+    /// A caller-owned input buffer decoded during flat row construction. Same
+    /// carrier as `Buffer`; only this audited conversion permits row rereading.
+    DeferredBuffer,
+    /// A typed opaque pointer with independent move/shared/exclusive access.
+    /// Only move outputs transfer allocation ownership.
     Pointer {
         /// Pointee type and mutability.
         pointer: Box<CPointer>,
@@ -132,7 +150,13 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer | Self::Rows | Self::Callback { .. } => {}
+            Self::Buffer
+            | Self::DeferredBuffer
+            | Self::View
+            | Self::MutableView
+            | Self::Owned { .. }
+            | Self::Rows
+            | Self::Callback { .. } => {}
         }
     }
     // A reserved sentinel remains valid even after availability advances or clears.
@@ -197,13 +221,28 @@ impl WireKind for CWire {
             },
             CWire::Pointer { pointer: p, .. } => {
                 let ty = &p.ty;
-                if !p.mutable {
+                if p.access == Access::Shared {
                     syn::parse_quote!(*const #ty)
                 } else {
                     syn::parse_quote!(*mut #ty)
                 }
             }
-            CWire::Buffer => syn::parse_quote!(__PbBuffer),
+            CWire::View | CWire::Buffer | CWire::DeferredBuffer => syn::parse_quote!(__PbBuffer),
+            CWire::MutableView => syn::parse_quote!(__PbBufferMut),
+            CWire::Owned {
+                owner,
+                access,
+                by_value,
+            } => {
+                let ty = owner.ident();
+                if *by_value {
+                    syn::parse_quote!(#ty)
+                } else if *access == Access::Shared {
+                    syn::parse_quote!(*const #ty)
+                } else {
+                    syn::parse_quote!(*mut #ty)
+                }
+            }
             CWire::Rows => syn::parse_quote!(__PbRows),
         }
     }
@@ -213,10 +252,10 @@ impl WireKind for CWire {
 mod tests {
     use super::*;
 
-    fn pointer(mutable: bool) -> CWire {
+    fn pointer(access: Access) -> CWire {
         CWire::pointer(CPointer {
             ty: syn::parse_quote!(Widget),
-            mutable,
+            access,
         })
     }
     fn enumeration() -> CWire {
@@ -269,7 +308,10 @@ mod tests {
         }
         buffer.set_niche(None).unwrap();
         assert_eq!(buffer.available_niche(), None);
-        assert_eq!(pointer(false).available_niche(), Some(CNiche::Null));
+        assert_eq!(
+            pointer(Access::Shared).available_niche(),
+            Some(CNiche::Null)
+        );
         assert_eq!(enumeration().available_niche(), Some(CNiche::Integer(-2)));
     }
     #[test]
@@ -339,8 +381,8 @@ mod tests {
     }
     #[test]
     fn pointers_keep_their_abi_after_consuming_null() {
-        for mutable in [false, true] {
-            let mut wire = pointer(mutable);
+        for access in [Access::Shared, Access::Exclusive, Access::Move] {
+            let mut wire = pointer(access);
             let before = wire.rust_type();
             assert!(wire.set_niche(Some(CNiche::Integer(0))).is_err());
             assert_eq!(wire.available_niche(), Some(CNiche::Null));
@@ -353,7 +395,7 @@ mod tests {
             let CWire::Pointer { pointer, .. } = &wire else {
                 panic!()
             };
-            assert_eq!(pointer.mutable, mutable);
+            assert_eq!(pointer.access, access);
             assert!(prebindgen_flat::same_type(
                 &pointer.ty,
                 &syn::parse_quote!(Widget)

@@ -3,7 +3,7 @@ use prebindgen_flat::WireKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-/// An input conversion split into call-wide validation, acquisition and construction.
+/// An input conversion with preparation, acquisition and construction code.
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
@@ -16,15 +16,18 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the generator emits its signature.
     pub node: prebindgen_flat::WireNode<W, N, B>,
-    /// Shared call acknowledgement, if this input needs one.
+    /// Shared receipt-channel setup or acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
-    /// Validate and prepare every active leaf before any ownership transfer.
+    /// Validate this value before using it. Compiled recipes also acquire and
+    /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Infallible acquisition of all owned inputs, before constructors can run.
+    /// Acquire this leaf after validation and alias checks. Acquisition must be
+    /// infallible unless each moved resource records its own successful transfer
+    /// through `Resource::records_consumption`. Empty for eagerly built recipes.
     pub acquire: TokenStream,
     /// Active foreign resources whose identities must be checked across all arguments.
     pub resources: Vec<Resource>,
-    /// Argument construction after all acquisitions, including source constructor calls.
+    /// Construct this value from acquired inputs, including source constructor calls.
     pub statements: TokenStream,
     /// Prepared value expression assigned to the caller-supplied target after `statements`.
     pub argument: TokenStream,
@@ -47,6 +50,7 @@ pub struct OutputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
+    /// Commit code must be infallible and must not unwind after foreign delivery.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
     pub statements: TokenStream,
@@ -75,6 +79,14 @@ pub enum ResourceIdentity {
 /// The adapter supplies identity; flat enforces call-wide access conflicts.
 #[derive(Clone, Debug)]
 pub struct Resource {
+    /// This access has already been registered during input preparation.
+    /// Its identity then describes cardinality for call setup, not a later read.
+    pub registered: bool,
+    /// Acquisition updates `__prebindgen_input_consumed` after each successful
+    /// ownership transfer. The compiler must not also count this resource.
+    /// Use this for acquisition that can fail or unwind between transfers.
+    /// This does not register or suppress alias checks. Ignored for borrows.
+    pub records_consumption: bool,
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
     /// All identities compared within a call must share an equality-compatible domain.
     pub identity: ResourceIdentity,

@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/snap/kotlin/current/bin/kotlinc",
+    "-cp",
+    "/tmp/output-cleanup-after-v2/bench.jar",
+    "/tmp/output-cleanup-isolated-driver-v3/Bench.kt",
+    "-nowarn",
+    "-d",
+    "/tmp/output-cleanup-driver-after-check.jar"
+  ],
+  "compiler": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+  "source_sha256": "88035b24d4b4326d9714d7e59fdff3dc4ae2d3783e5e0d208defced55f3ffd35",
+  "before_driver_jar_sha256": "172c5a401f755f766e6445208d0b2475599271b7d3e17a7b5e7b17c32012dac6",
+  "after_driver_jar_sha256": "172c5a401f755f766e6445208d0b2475599271b7d3e17a7b5e7b17c32012dac6",
+  "equal_classes": {
+    "Operation.class": "ee830c8d33d47db68c72ed2601c2b215e76828b9a84da1c43a492a2792d150e8",
+    "Case.class": "9ac0652ffa20200801226f1a14908c7ffdd596704c035e01e61a8d2071008599",
+    "Sample.class": "1609a545b269981bf5de28cf1860590edd7d93c7dadf215743f4ddf6ed574191",
+    "BenchKt.class": "9bbb347564e04b24dd7c1f6dc8b1d2b07dc75e50cc431a05c1de5deb35b1c390",
+    "META-INF/main.kotlin_module": "652af57ebed70e6f9dd6c76b095176182c9dc4dc519afe3c1ba4556dd4dda68c"
+  }
+}

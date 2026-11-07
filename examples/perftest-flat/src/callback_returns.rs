@@ -287,3 +287,32 @@ pub fn callback_return_f32(callback: impl Fn(f32) -> f32 + Send + Sync + 'static
 pub fn callback_return_u128(callback: impl Fn(u128) -> u128 + Send + Sync + 'static) -> u128 {
     callback(u128::MAX)
 }
+
+#[prebindgen]
+pub struct CallbackWireRow {
+    pub resource: CallbackReturnResource,
+    pub character: char,
+}
+#[prebindgen]
+pub fn callback_return_wire_row_catch(
+    callback: impl Fn() -> CallbackWireRow + Send + Sync + 'static,
+) -> i64 {
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback)).is_err());
+    let row = callback();
+    assert_eq!(row.character, 'c');
+    row.resource.0
+}
+
+#[prebindgen]
+pub fn callback_return_wire_rows_catch(
+    callback: impl Fn() -> Vec<CallbackWireRow> + Send + Sync + 'static,
+) -> i64 {
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback)).is_err());
+    callback()
+        .into_iter()
+        .map(|row| {
+            assert_eq!(row.character, 'c');
+            row.resource.0
+        })
+        .sum()
+}

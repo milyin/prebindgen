@@ -5,7 +5,8 @@ import io.prebindgen.covertest.callbacks.*
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicReference
 
-private object CallbackFailureProbe {
+internal object CallbackFailureProbe {
+    @JvmStatic external fun progress(): Int
     init { NativeLibrary.ensureLoaded() }
     @JvmStatic external fun exercise(mode: Int): Int
 }
@@ -132,6 +133,6 @@ fun checkCallbackBoundaryFailures() {
 
     // Each probe fails exactly one allocation inside the generated Rust
     // callback, then proves the second invocation succeeds after OOME cleanup.
-    for (mode in 0..1) check(CallbackFailureProbe.exercise(mode) == 1)
+    for (mode in 0..9) check(CallbackFailureProbe.exercise(mode) == 1)
     println("callback boundary failures PASS: typed registration errors, captures, folds, borrowed values, strings, conversion panic and JNI allocation failures")
 }

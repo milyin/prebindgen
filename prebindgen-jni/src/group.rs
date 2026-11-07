@@ -10,6 +10,8 @@ pub enum JniChain {
     Optional(JniOptional),
     /// Zero or more element occurrences.
     Sequence(JniSequence),
+    /// Expanded fields grouped into one C-representation bulk frame.
+    Bulk(std::rc::Rc<crate::bulk::BulkRecord>),
 }
 /// Meaning of an ordered collection of child descriptions.
 #[derive(Clone, Debug)]
@@ -24,6 +26,8 @@ pub enum JniBranch {
 pub enum JniGroup {
     /// Ordered conversion components, such as constructor arguments or output views.
     Values,
+    /// A source constructor argument, retained for public Kotlin parameter naming.
+    Argument(String),
     /// An explicitly named output view.
     Named(String),
     /// Source record fields. JNI may associate the record with a Kotlin data class.
@@ -109,7 +113,7 @@ fn values(node: &WireNode<JniWire, JniChain, JniBranch>) -> std::vec::IntoIter<&
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniChain::Sequence(_),
+                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -143,7 +147,7 @@ fn values_mut(
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniChain::Sequence(_),
+                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -183,6 +187,16 @@ pub(crate) fn validate_layout(
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
     ) -> Result<()> {
         match node {
+            WireNode::Chain {
+                meta: JniChain::Bulk(_),
+                child,
+                controls,
+            } => {
+                if controls.is_empty() || !matches!(controls[0].kind, JniWire::BulkBuffer { .. }) {
+                    return Err("bulk scope requires a byte-array carrier".into());
+                }
+                visit(child, bindings, in_fields, reserved)?;
+            }
             WireNode::Leaf(wires) => {
                 for w in wires {
                     if matches!(w.kind, JniWire::Rows { .. }) {
@@ -218,15 +232,23 @@ pub(crate) fn validate_layout(
                     return Err("sequence requires one carrier control".into());
                 };
                 let valid = match metadata {
-                    JniSequence::Buffered => matches!(carrier.kind, JniWire::Rows { .. }),
+                    JniSequence::Buffered | JniSequence::TypedBuffered => {
+                        matches!(carrier.kind, JniWire::Rows { .. })
+                    }
+                    JniSequence::Bulk => matches!(carrier.kind, JniWire::NativeRows { .. }),
                     JniSequence::Callback => {
-                        matches!(&carrier.kind, JniWire::Rows { condition,.. } if condition=="true")
+                        matches!(&carrier.kind, JniWire::Selector { .. })
                     }
                 };
                 if !valid {
                     return Err("sequence carrier control is incompatible with its delivery".into());
                 }
-                if values(element).len() == 0 {
+                if *metadata == JniSequence::TypedBuffered && !typed_rows::supported(element) {
+                    return Err(
+                        "typed output row constructor exceeds 254 JVM parameter slots".into(),
+                    );
+                }
+                if values(element).len() == 0 && *metadata != JniSequence::Bulk {
                     return Err("sequence requires a nonempty element layout".into());
                 }
                 crate::sequence::validate_buffered(element)?;
@@ -610,7 +632,7 @@ mod tests {
             .contains("does not match"));
     }
     #[test]
-    fn callback_control_condition_is_unconditional() {
+    fn callback_control_requires_a_scalar_status() {
         let mut node: WireNode<JniWire, JniChain, JniBranch> = WireNode::Chain {
             controls: vec![Wire {
                 name: syn::parse_quote!(rows),
@@ -625,6 +647,11 @@ mod tests {
         assert!(validate_layout(&node)
             .unwrap_err()
             .contains("incompatible with its delivery"));
+        let WireNode::Chain { controls, .. } = &mut node else {
+            panic!()
+        };
+        controls[0].kind = JniWire::selector();
+        validate_layout(&node).unwrap();
         let WireNode::Chain {
             meta: JniChain::Sequence(metadata),
             ..
@@ -633,7 +660,9 @@ mod tests {
             panic!()
         };
         *metadata = JniSequence::Buffered;
-        validate_layout(&node).unwrap();
+        assert!(validate_layout(&node)
+            .unwrap_err()
+            .contains("incompatible with its delivery"));
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {

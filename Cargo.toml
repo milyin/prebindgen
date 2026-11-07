@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "prebindgen", "prebindgen-proc-macro", "prebindgen-flat", "prebindgen-declarations", "prebindgen-conversions",
+    "prebindgen", "prebindgen-reprc", "prebindgen-proc-macro", "prebindgen-flat", "prebindgen-declarations", "prebindgen-conversions",
     "prebindgen-runtime", "prebindgen-c", "prebindgen-jni", "prebindgen-jni-runtime",
     "examples/example-flat", "examples/example-cbindgen", "examples/covertest-kotlin",
     "examples/perftest-flat", "examples/perftest-c", "examples/perftest-kotlin",
@@ -42,3 +42,5 @@ rand = "0.9.2"
 prebindgen-declarations = { path = "prebindgen-declarations", version = "0.5.0" }
 prebindgen-runtime = { path = "prebindgen-runtime", version = "0.5.0" }
 prebindgen-conversions = { path = "prebindgen-conversions", version = "0.5.0" }
+
+prebindgen-reprc = { path = "prebindgen-reprc", version = "0.5.0" }

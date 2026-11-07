@@ -189,6 +189,14 @@ impl CfgFilter {
     pub fn builder() -> Builder {
         Builder::new()
     }
+    /// Extract the generated feature contract without relying on iterator order.
+    pub(crate) fn take_feature_guard(&mut self) -> Option<syn::ItemConst> {
+        self.prelude_emitted = true;
+        self.prelude_item.take().and_then(|(item, _)| match item {
+            syn::Item::Const(guard) => Some(guard),
+            _ => None,
+        })
+    }
     /// Process items from an iterator in batching mode
     ///
     /// Consumes items until it finds one that should be kept according to feature flags.
