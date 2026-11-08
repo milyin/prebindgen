@@ -10,6 +10,10 @@ typedef struct { uint64_t hi; uint64_t lo; } perftest_int128;
  typedef struct { const uint8_t *data; size_t len; } perftest_buffer;
 void perftest_free_buffer(perftest_buffer b);
 void perftest_free_error(char *error);
+/* Shared borrowed slice; never free or consume. Keep source storage alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. Empty views may have a non-null dangling data pointer; never dereference when len is zero. Callback argument views last only for that callback invocation. */
+typedef struct { const double *data; size_t len; } perftest_f64_slice_view;
+/* Shared borrowed slice; never free or consume. Keep source storage alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. Empty views may have a non-null dangling data pointer; never dereference when len is zero. Callback argument views last only for that callback invocation. */
+typedef struct { const int64_t *data; size_t len; } perftest_i64_slice_view;
 /* Binding target identity; use the matching Rust library. */
 #define perftest_TARGET "x86_64-unknown-linux-gnu"
 #ifdef __cplusplus
@@ -50,6 +54,8 @@ typedef int32_t perftest_code;
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
+typedef struct perftest_numeric_loan_owner perftest_numeric_loan_owner;
+void perftest_drop_numeric_loan_owner(perftest_numeric_loan_owner *ptr);
 typedef struct perftest_mutable_bytes perftest_mutable_bytes;
 void perftest_drop_mutable_bytes(perftest_mutable_bytes *ptr);
 typedef struct perftest_borrow_packet perftest_borrow_packet;
@@ -112,6 +118,21 @@ void perftest_drop_owned_string(perftest_owned_string *value);
 size_t perftest_owned_string_len(const perftest_owned_string *value);
 /* Borrowed view; never free it. The owner retains the allocation. A later mutable view invalidates earlier views. */
 perftest_buffer_view perftest_owned_string_view(const perftest_owned_string *value);
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} perftest_owned_vec_i64_8f793c725f29723e;
+/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
+void perftest_drop_owned_vec_i64_8f793c725f29723e(perftest_owned_vec_i64_8f793c725f29723e *value);
+size_t perftest_owned_vec_i64_8f793c725f29723e_len(const perftest_owned_vec_i64_8f793c725f29723e *value);
+/* Borrowed view; never free. Keep the owner alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. */
+perftest_i64_slice_view perftest_owned_vec_i64_8f793c725f29723e_view(const perftest_owned_vec_i64_8f793c725f29723e *value);
+/* Borrowed element; null for an out-of-range index. */
+const int64_t *perftest_owned_vec_i64_8f793c725f29723e_get(const perftest_owned_vec_i64_8f793c725f29723e *value,size_t index);
 typedef struct {
 #ifdef __cplusplus
     alignas(8)
@@ -183,6 +204,12 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } perftest_callback_1e259c5420a05522;
+/* Rust signature: (& [i64])->(). The callback context transfers after its run pointer validates and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    void (*run)(void *context, perftest_i64_slice_view arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_3832b9cb035dc725;
 typedef struct {
     int64_t v0;
     perftest_buffer v1;
@@ -497,6 +524,7 @@ typedef perftest_callback_0605b38a2f053a56 perftest_cleanup_optional_call_callba
 typedef perftest_callback_0605b38a2f053a56_result perftest_cleanup_optional_call_callback_return;
 typedef perftest_callback_a7558edd85392388 perftest_fixed_cleanup_call_callback;
 typedef perftest_callback_a7558edd85392388_result perftest_fixed_cleanup_call_callback_return;
+typedef perftest_callback_3832b9cb035dc725 perftest_numeric_loan_emit_callback;
 typedef struct {
     int64_t code;
     perftest_owned_string message;
@@ -1625,6 +1653,36 @@ perftest_owned_vec_u8_672e72343c1b4cb4 perftest_mutable_bytes_vector(uintptr_t p
 int64_t perftest_niche_choice_id(int32_t p0_w1, int32_t p0_w3, uint32_t p0_w8, perftest_niche_choice * p0_w10);
 /* Option option0: p0_w3 == 1114112 means None; other values encode Some and must be valid payloads. */
 perftest_niche_choice * perftest_niche_choice_new(uint32_t p0_w3);
+uintptr_t perftest_numeric_loan_address(const perftest_numeric_loan_owner * p0_w1, uint8_t p1_w1);
+uintptr_t perftest_numeric_loan_capacity(const perftest_numeric_loan_owner * p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_numeric_loan_checked(const perftest_numeric_loan_owner * p0_w1, uint8_t p1_w1, perftest_i64_slice_view *out0, char * *error);
+typedef struct {
+    int64_t v0;
+} perftest_numeric_loan_copy_ret_w0_row;
+typedef struct { perftest_numeric_loan_copy_ret_w0_row *data; size_t len; } perftest_numeric_loan_copy_ret_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_numeric_loan_copy_ret_w0_rows_free(perftest_numeric_loan_copy_ret_w0_rows rows);
+/* Collection return: ret_w0 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+perftest_numeric_loan_copy_ret_w0_rows perftest_numeric_loan_copy(const perftest_numeric_loan_owner * p0_w1);
+void perftest_numeric_loan_emit(const perftest_numeric_loan_owner * p0_w1, perftest_callback_3832b9cb035dc725 p1_callback, uintptr_t p2_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_f64_slice_view perftest_numeric_loan_fixed(const perftest_numeric_loan_owner * p0_w1);
+perftest_numeric_loan_owner * perftest_numeric_loan_new(uintptr_t p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+int32_t perftest_numeric_loan_optional(const perftest_numeric_loan_owner * p0_w1, uint8_t p1_w1, perftest_i64_slice_view *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_numeric_loan_owner * perftest_numeric_loan_owned(uintptr_t p0_w1, perftest_i64_slice_view *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_buffer_view perftest_numeric_loan_static_bytes(void);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_buffer_view perftest_numeric_loan_static_text(void);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_i64_slice_view perftest_numeric_loan_values(const perftest_numeric_loan_owner * p0_w1);
+perftest_owned_vec_i64_8f793c725f29723e perftest_numeric_loan_vector(uintptr_t p0_w1);
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: return value: 0 = None, 1 = Some; other active flags are errors. */
 int32_t perftest_option_bool(int32_t p0_w1, uint8_t p0_w3, uint8_t *out1);

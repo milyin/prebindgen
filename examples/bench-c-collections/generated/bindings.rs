@@ -77,8 +77,20 @@ fn __pb_owned_owned_vec_c_collection_flat_wideinput_b588c8309edafb5c_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_view(value: &Vec<i64>) -> &[i64] {
+    value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_u64_009441151d595b1a_len(value: &Vec<u64>) -> usize {
     value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_u64_009441151d595b1a_view(value: &Vec<u64>) -> &[u64] {
+    value.as_slice()
 }
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_len(value: &Vec<u8>) -> usize {
@@ -160,6 +172,13 @@ pub unsafe extern "C" fn bench_free_buffer(b: __PbBuffer) {
         );
     }
 }
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_i64 {
+    pub data: *const ::core::primitive::i64,
+    pub len: usize,
+}
 const _: () = {
     assert!(
         cfg!(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux",
@@ -167,6 +186,21 @@ const _: () = {
         "C binding target differs from the Rust compilation target"
     );
 };
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
+pub unsafe extern "C" fn bench_drop_borrowed_numbers(
+    ptr: *mut c_collection_flat::BorrowedNumbers,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -296,6 +330,15 @@ impl Drop for __PbCallbackOwner {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct bench_callback_3832b9cb035dc725 {
+    pub run: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbSliceView_i64) -> (),
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_callback_7fc0734290773f1a_callback_return_w1 {
     pub v0: *mut c_collection_flat::Resource,
 }
@@ -378,6 +421,280 @@ pub struct bench_callback_fc8e455d100e4602 {
     pub release_result: Option<
         unsafe extern "C" fn(*mut ::core::ffi::c_void, *const __PbRows),
     >,
+}
+#[repr(C)]
+pub struct bench_borrowed_emit_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_borrowed_emit(
+    p0_w1: *const c_collection_flat::BorrowedNumbers,
+    p1_callback: bench_callback_3832b9cb035dc725,
+    p2_w1: usize,
+) {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_borrowed_emit_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut c_collection_flat::BorrowedNumbers
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let p1_callback_run = if true {
+                Some(p1_callback.run.ok_or("null callback function")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_callback_value_built = if true {
+                let p1_callback_owner = if true {
+                    {
+                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
+                        Some(
+                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
+                        )
+                    }
+                } else {
+                    None
+                };
+                Some({
+                    let p1_callback_run = p1_callback_run
+                        .expect("validated active callback");
+                    let p1_callback_owner = p1_callback_owner
+                        .expect("validated active callback");
+                    let p1_callback_value = move |callback_source_0: &[i64]| {
+                        let result = ::prebindgen_runtime::boundary(|| {
+                            let callback_arg_0_w0_source = &(callback_source_0);
+                            let callback_arg_0_w0: &[::core::primitive::i64] = ::core::convert::AsRef::<
+                                [::core::primitive::i64],
+                            >::as_ref(callback_arg_0_w0_source);
+                            let callback_arg_0_w0 = __PbSliceView_i64 {
+                                data: <[::core::primitive::i64]>::as_ptr(callback_arg_0_w0),
+                                len: <[::core::primitive::i64]>::len(callback_arg_0_w0),
+                            };
+                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                            let __prebindgen_input_consumed = &__pb_callback_consumed;
+                            let callback_argument_0 = callback_arg_0_w0;
+                            {}
+                            let raw_result = unsafe {
+                                p1_callback_run(
+                                    p1_callback_owner.context(),
+                                    callback_argument_0,
+                                )
+                            };
+                            Ok(())
+                        });
+                        if let Err(error) = result {
+                            ::prebindgen_runtime::report_callback_error(
+                                "bench_callback_3832b9cb035dc725",
+                                "(& [i64])->()",
+                                &error,
+                            );
+                        }
+                    };
+                    p1_callback_value
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: usize = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = c_collection_flat::borrowed_emit(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let result = bench_borrowed_emit_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct bench_borrowed_numbers_new_result {
+    pub v0: *mut c_collection_flat::BorrowedNumbers,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_borrowed_numbers_new(
+    p0_w1: usize,
+) -> *mut c_collection_flat::BorrowedNumbers {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        bench_borrowed_numbers_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: usize = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::borrowed_numbers_new(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut c_collection_flat::BorrowedNumbers = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = bench_borrowed_numbers_new_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_borrowed_values_result {
+    pub v0: __PbSliceView_i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_borrowed_values(
+    p0_w1: *const c_collection_flat::BorrowedNumbers,
+) -> __PbSliceView_i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_borrowed_values_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let __prebindgen_input_consumed = &_ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut c_collection_flat::BorrowedNumbers
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
+                        &(*p0_w1_pointer)
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::borrowed_values(
+                __prebindgen_argument_0,
+            );
+            let ret_w0_source = &(source_value);
+            let ret_w0: &[::core::primitive::i64] = ::core::convert::AsRef::<
+                [::core::primitive::i64],
+            >::as_ref(ret_w0_source);
+            let ret_w0 = __PbSliceView_i64 {
+                data: <[::core::primitive::i64]>::as_ptr(ret_w0),
+                len: <[::core::primitive::i64]>::len(ret_w0),
+            };
+            let result = bench_borrowed_values_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
 }
 #[repr(C)]
 pub struct bench_callback_fixed_result {
@@ -5391,6 +5708,10 @@ const _: () = {
                         the necessary features."
     );
 };
+const _: () = assert!(
+    ::core::mem::size_of:: < c_collection_flat::BorrowedNumbers > () != 0,
+    "flat object `BorrowedNumbers` must have nonzero size"
+);
 const _: () = assert!(
     ::core::mem::size_of:: < c_collection_flat::BuffersInput > () != 0,
     "flat object `BuffersInput` must have nonzero size"

@@ -41,6 +41,10 @@ fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_view(value: &Vec<i64>) -> &[i64] {
+    value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_bufferinputrow_f62bf6f2ce9e50d2_len(
     value: &Vec<perftest_flat::BufferInputRow>,
 ) -> usize {
