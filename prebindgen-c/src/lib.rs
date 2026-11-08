@@ -33,6 +33,7 @@ mod layouts;
 pub use layouts::{OpaqueLayout, OpaqueLayouts};
 mod metadata;
 pub use metadata::{CEnum, CFunction, CModule, CSchema, CType};
+mod borrowed;
 mod enums;
 mod errors;
 mod group;
@@ -125,6 +126,14 @@ impl Codec for CCodec {
     type Wire = CWire;
     type Context = CContext;
     fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
+        if prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
+            .any(|w| matches!(w.kind, CWire::SliceView { .. }))
+        {
+            return Err(
+                "C slice views are output-only; input loans require a validated input conversion"
+                    .into(),
+            );
+        }
         validate_layout(&plan.node)?;
         if plan
             .resources
@@ -234,6 +243,10 @@ impl Codec for CCodec {
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::View | CWire::Buffer | CWire::DeferredBuffer => {
                 quote!(#buffer_type {data:std::ptr::null(),len:0})
+            }
+            CWire::SliceView { element } => {
+                let ty = borrowed::ident(*element);
+                quote!(#ty {data: ::core::ptr::null(), len: 0})
             }
             CWire::MutableView => quote!(__PbBufferMut {
                 data: std::ptr::null_mut(),
@@ -398,29 +411,6 @@ impl Codec for CCodec {
             if reference.mutability.is_some() {
                 return Err("mutable-reference outputs are unsupported".into());
             }
-            match prebindgen_flat::type_key(&reference.elem).as_str() {
-                "str" => {
-                    return self.output_leaf(
-                        _flat,
-                        &syn::parse_quote!(String),
-                        &(),
-                        w,
-                        quote!((#v).to_string()),
-                        false,
-                    )
-                }
-                "[u8]" => {
-                    return self.output_leaf(
-                        _flat,
-                        &syn::parse_quote!(Vec<u8>),
-                        &(),
-                        w,
-                        quote!((#v).to_vec()),
-                        false,
-                    )
-                }
-                _ => {}
-            }
             let value = if borrowed { quote!(*#v) } else { v };
             return self.output_leaf(_flat, &reference.elem, &(), w, value, true);
         }
@@ -441,6 +431,9 @@ impl Codec for CCodec {
                 Ok(plan)
             }
             Some(_) => {
+                if borrowed {
+                    return Err(explicit_copy_error(ty));
+                }
                 // The buffer stays owned by Rust until every output is delivered.
                 let mut out = prebindgen_conversions::value::output(
                     ty,
@@ -501,10 +494,26 @@ impl Codec for CCodec {
             payload = &reference.elem;
             value = quote!(*(#value));
         }
+        if borrowed {
+            let owned_buffer: Option<(syn::Type, TokenStream)> = match payload {
+                syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "str" => Some((
+                    syn::parse_quote!(String),
+                    quote!(::std::borrow::ToOwned::to_owned(::core::convert::AsRef::<str>::as_ref(#value))),
+                )),
+                syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "[u8]" => Some((
+                    syn::parse_quote!(Vec<u8>),
+                    quote!(::std::borrow::ToOwned::to_owned(::core::convert::AsRef::<[u8]>::as_ref(#value))),
+                )),
+                _ => None,
+            };
+            if let Some((ty, value)) = owned_buffer {
+                return self.output_leaf(flat, &ty, &(), wire, value, false);
+            }
+        }
         if borrowed
             && (owned::declaration(flat, payload).is_some()
                 || owned::pointer_declared(flat, payload)
-                || Value::of(payload).is_none())
+                || !matches!(Value::of(payload), Some(Value::Scalar(_))))
         {
             return self.output_leaf(
                 flat,
@@ -586,6 +595,20 @@ impl Codec for CCodec {
         }))
     }
 
+    fn output_borrowed_sequence(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        element: &prebindgen_declarations::Output,
+        delivery: prebindgen_declarations::SequenceDelivery,
+        temporary: bool,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        borrowed::sequence(flat, ty, wire, value, element, delivery, temporary)
+    }
+
     fn output_owner(
         &self,
         flat: &Bindings,
@@ -619,17 +642,7 @@ impl Codec for CCodec {
         plan: &OutputPlan<CWire>,
     ) -> Result<()> {
         if let Some(owner) = owned::declaration(flat, ty) {
-            let has_loan = crate::group::result_packet_fields(&plan.outcomes.success).any(|w| {
-                matches!(
-                    w.kind,
-                    CWire::View
-                        | CWire::MutableView
-                        | CWire::Owned {
-                            access: Access::Shared | Access::Exclusive,
-                            ..
-                        }
-                ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access!=Access::Move)
-            });
+            let has_loan = borrowed::has_loans(&plan.outcomes.success);
             let heap_view = owner.helper("view") == getter
                 || (prebindgen_flat::type_key(&owner.ty) == "Vec < u8 >"
                     && owner.helper("view_mut") == getter);
@@ -648,7 +661,6 @@ impl Codec for CCodec {
         plan: &OutputPlan<CWire>,
         _: &(),
     ) -> Result<()> {
-        let fields = crate::group::result_packet_fields(&plan.outcomes.success).collect::<Vec<_>>();
         let mut reference_type = ty;
         while let Some(inner) = prebindgen_flat::option_inner(reference_type) {
             reference_type = inner;
@@ -657,17 +669,7 @@ impl Codec for CCodec {
         {
             return Ok(());
         }
-        let loans = fields.iter().any(|w| {
-            matches!(
-                &w.kind,
-                CWire::View
-                    | CWire::MutableView
-                    | CWire::Owned {
-                        access: Access::Shared | Access::Exclusive,
-                        ..
-                    }
-            ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access != Access::Move)
-        });
+        let loans = borrowed::has_loans(&plan.outcomes.success);
         if loans && !borrowed {
             return Err("a borrowed getter output requires its opaque owner to be returned with field_self_into(); a temporary owner cannot lend output storage; use a generated heap view accessor with its inline owner, or borrow an owner already stored by C".into());
         }
@@ -1127,7 +1129,8 @@ impl Cbindgen {
     pub fn owned_len(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "len"))
     }
-    /// Reference the generated byte-view getter for a `String` or `Vec<u8>` owner.
+    /// Reference the generated shared view getter for a String, Vec<u8>, or
+    /// numeric Vec owner. Views preserve the original allocation without copying.
     pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
     }
@@ -1519,6 +1522,7 @@ fn c_ty(
             format!("{qualifier}{prefix}_{name} *")
         }
         CWire::View => format!("{prefix}_buffer_view"),
+        CWire::SliceView { element } => borrowed::c_name(*element, prefix),
         CWire::MutableView => format!("{prefix}_buffer_view_mut"),
         CWire::Owned {
             owner,
@@ -1855,6 +1859,28 @@ where
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
+    let mut slice_views = std::collections::BTreeMap::new();
+    for function in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+        for input in function.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
+            borrowed::collect(input.input_node(), &mut slice_views);
+        }
+        if let Some(output) = &function.ret.slot {
+            borrowed::collect(&output.output_outcomes().success, &mut slice_views);
+        }
+    }
+    for error in &errors {
+        borrowed::collect(&error.plan()?.outcomes.success, &mut slice_views);
+    }
+    for owner in pointers.values().filter_map(|t| t.metadata.owned.as_ref()) {
+        if let Some((ty, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
+            if let Some(element) = borrowed::primitive(ty, pointers) {
+                slice_views.insert(prebindgen_flat::type_key(&element.rust_type()), element);
+            }
+        }
+    }
+    for element in slice_views.values() {
+        borrowed::emit(*element, prefix, &mut symbols, &mut tokens, &mut header)?;
+    }
     if let Some((target, width, cfg)) = &flat.metadata.target {
         tokens.extend(quote!(
             const _: () = {
@@ -2070,6 +2096,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 || matches!(
                     w.kind,
                     CWire::View
+                        | CWire::SliceView { .. }
                         | CWire::MutableView
                         | CWire::Owned {
                             access: Access::Shared | Access::Exclusive,
@@ -2276,18 +2303,7 @@ fn validate_return_loans<I, O, M>(
 where
     I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
 {
-    if !crate::group::result_packet_fields(output).any(|w| {
-        matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move)
-            || matches!(
-                &w.kind,
-                CWire::View
-                    | CWire::MutableView
-                    | CWire::Owned {
-                        access: Access::Shared | Access::Exclusive,
-                        ..
-                    }
-            )
-    }) {
+    if !borrowed::has_loans(output) {
         return Ok(());
     }
     // Owner-backed combinations create their loans only after this allocation
@@ -2612,7 +2628,7 @@ mod generation_tests {
             .opaque_ptr("vectors",syn::parse_quote!(Vec<Vec<u8>>))
         };
         let getter = || expand_return!(Vec<u8>).field(Cbindgen::owned_view_mut("bytes"));
-        for function in [fun!(borrowed), fun!(rows)] {
+        for (function, collection) in [(fun!(borrowed), false), (fun!(rows), true)] {
             let error = model()
                 .function(function.expand_return(getter()))
                 .panic()
@@ -2620,7 +2636,11 @@ mod generation_tests {
                 .err()
                 .unwrap();
             assert!(
-                error.contains("getter") && error.contains("must take exactly"),
+                if collection {
+                    error.contains("cannot allocate converted rows implicitly")
+                } else {
+                    error.contains("getter") && error.contains("must take exactly")
+                },
                 "{error}"
             );
         }
@@ -3926,16 +3946,19 @@ mod generation_tests {
     #[test]
     fn multiple_collection_observations_follow_the_actual_borrow() {
         use prebindgen_declarations::{bind_output, Output};
-        let seq = || Output::Sequence {
+        let seq = |copy: bool| Output::Sequence {
             delivery: prebindgen_declarations::SequenceDelivery::Value,
             element: Box::new(Output::Leaf),
-            mode: None,
+            mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
         };
         for (source, recipe) in [
-            ("pub fn f()->&Vec<i64> {}", Output::combine([seq(), seq()])),
+            (
+                "pub fn f()->&Vec<i64> {}",
+                Output::combine([seq(false), seq(false)]),
+            ),
             (
                 "pub struct Record { pub values: Vec<i64> } pub fn f()->Record {}",
-                Output::fields([Output::combine([seq(), seq()])]),
+                Output::fields([Output::combine([seq(true), seq(true)])]),
             ),
         ] {
             let source = syn::parse_file(source).unwrap();

@@ -55,6 +55,9 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
                 CWire::Scalar { .. } => type_key(&wire.rust_type()),
                 CWire::Rows => "rows".into(),
                 CWire::View => "view".into(),
+                CWire::SliceView { element } => {
+                    format!("slice_view:{}", type_key(&element.rust_type()))
+                }
                 CWire::MutableView => "view_mut".into(),
                 CWire::Buffer | CWire::DeferredBuffer => "buffer".into(),
                 CWire::Callback { callback } => format!("callback:{}", callback.name),
@@ -272,6 +275,14 @@ fn has_reference(ty: &syn::Type) -> bool {
         || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, _)| has_reference(ty))
 }
 impl CCallback {
+    pub(crate) fn slice_views(&self, out: &mut BTreeMap<String, Primitive>) {
+        for argument in &self.arguments {
+            crate::borrowed::collect(&argument.output.outcomes.success, out);
+        }
+        if let Some((_, input)) = &self.returned {
+            crate::borrowed::collect(&input.node, out);
+        }
+    }
     pub(crate) fn layout_names(&self, names: &mut BTreeSet<String>) {
         for argument in &self.arguments {
             crate::layouts::output_names(&argument.output, names);

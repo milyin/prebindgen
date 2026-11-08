@@ -962,12 +962,72 @@ it already held a live owner.
 
 Loans into an inline object's own storage cannot accompany a newly returned owner:
 C may move that owner at any time. Such getter expansions are diagnosed. The
-generated String/Vec byte views point into heap allocations and may accompany
+generated String/Vec views point into heap allocations and may accompany
 `field_self_into()`. Borrowing an owner already stored by C is also supported;
 keep that storage alive and at a stable address for the duration of its loans.
 Explicit native-owner declarations also select by-value callback results.
 Owned callback arguments use their output representation; automatically selected
 owners keep the ordinary callback input buffer/row conversion for returns. They must not return a pointer to a local owner.
+
+## Borrowed C collection outputs
+
+A shared slice or fixed-array reference with an unchanged numeric element
+representation returns a borrowed view of the original storage:
+
+```rust,ignore
+pub fn values(owner: &Owner) -> &[i64] { &owner.values }
+```
+
+```c
+pb_i64_slice_view view = pb_values(owner);
+int64_t first = view.data[0]; /* only when view.len > 0 */
+/* No destructor: owner owns view.data. */
+```
+
+This path performs no allocation, element conversion or copying. It also applies
+to borrowed vector expansions, getters, optional/results and callback arguments.
+Numeric `Vec<T>` native owners provide `*_view` and
+`Cbindgen::owned_view("owner_name")` for use in owner expansions. Supported
+native elements are the C-compatible integer and floating-point primitives,
+including `usize`/`isize`; bool, char, 128-bit integers, enums, converted records,
+nested collections and configured opaque elements require a different output
+contract. Explicit callback sequence delivery can visit individual elements
+without allocating an enclosing row buffer.
+
+Keep the original owner alive and its storage stable until the view's last use.
+Do not mutate that storage or obtain overlapping exclusive/mutable access during
+the loan. Callback argument views last only for the callback invocation. An empty
+view may have a dangling non-null pointer, which must not be dereferenced.
+`None` clears its view to null/zero; a failed `Result` leaves success outputs
+untouched. Views into a temporary owner are rejected, including observations of
+owned records. Heap views can accompany the returned native Vec owner, since
+moving its descriptor does not move its elements. Borrowing a reconstructed
+collection input for an escaping return is rejected too.
+
+If conversion really needs an owning copy, authorize it at the collection:
+`expand_return!(&[T]).field_self_ref()`, globally or on the function's
+`.expand_return(...)`. A resolved `Output::Sequence` with
+`mode: Some(ProjectionMode::Borrowed)` expresses the same explicit copy choice.
+An element-only expansion does not authorize copying its enclosing collection.
+Explicit copy permission on an enclosing record or collection applies to its
+children. Non-copyable borrowed collections fail generation rather than gaining
+an implicit owning wrapper. A borrowed projection of an opaque value remains an
+explicit request to clone that value.
+
+Migration: numeric borrowed outputs previously used owning row buffers. Regenerate
+and rebuild the C header and native library together; replace `.data[i].v0` with
+`.data[i]` and remove the old `*_rows_free` call for borrowed views. Callback type
+hashes can change with the argument representation. New `*_view` accessor names
+participate in the usual symbol-collision diagnostics. Standard byte spellings
+(`&[u8]`, `Vec<u8>`) retain their existing byte-view types; qualified primitive
+spellings can select the numeric view type because declarations use syntactic
+type identity.
+
+The audit also covered scalar/enum snapshots (no allocation), byte/text views
+(original storage), explicit copies (owning results), nested output loans and
+callback-only view definitions. C expanded **inputs** still reconstruct Rust
+collections where required by their input recipe; that separate input conversion
+is unchanged. JNI object/array marshalling is also unchanged.
 
 ## Collections
 

@@ -6,6 +6,37 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("numeric_loan_owner", pq!(NumericLoanOwner))
+        .function(fun!(numeric_loan_new))
+        .panic()
+        .function(fun!(numeric_loan_values))
+        .panic()
+        .function(fun!(numeric_loan_fixed))
+        .panic()
+        .function(fun!(numeric_loan_optional))
+        .panic()
+        .function(fun!(numeric_loan_checked))
+        .function(fun!(numeric_loan_address))
+        .panic()
+        .function(fun!(numeric_loan_capacity))
+        .panic()
+        .function(fun!(numeric_loan_copy).expand_return(expand_return!(&[i64]).field_self_ref()))
+        .panic()
+        .function(
+            fun!(numeric_loan_owned).expand_return(
+                expand_return!(NumericLoanOwner)
+                    .field_self_into()
+                    .field(fun!(numeric_loan_values)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(numeric_loan_vector).expand_return(expand_return!(Vec<i64>).field_self_into()),
+        )
+        .function(fun!(numeric_loan_emit))
+        .panic()
+        .function(fun!(numeric_loan_static_bytes))
+        .function(fun!(numeric_loan_static_text))
         .opaque_ptr("mutable_bytes", pq!(MutableBytes))
         .function(fun!(mutable_bytes_new))
         .panic()
@@ -515,9 +546,18 @@ fn main() {
         .panic()
         .function(fun!(collection_nested_handles).callback_return())
         .panic()
-        .function(fun!(collection_numbers).expand_return(
-            expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
-        ))
+        .function(
+            fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(
+                fields!(collection_numbers_view).field_override(
+                    "values",
+                    prebindgen_declarations::Output::Sequence {
+                        element: Box::new(prebindgen_declarations::Output::auto()),
+                        mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+                        delivery: prebindgen_declarations::SequenceDelivery::Value,
+                    },
+                ),
+            )),
+        )
         .panic()
         .function(fun!(collection_resource_ids).expand_param(
             "values",
@@ -546,7 +586,11 @@ fn main() {
         .panic()
         .function(fun!(collection_probe))
         .panic()
-        .function(fun!(collection_borrow).callback_return())
+        .function(
+            fun!(collection_borrow)
+                .expand_return(expand_return!(&[i64]).field_self_ref())
+                .callback_return(),
+        )
         .panic()
         .function(fun!(collection_slice).callback_return())
         .panic()

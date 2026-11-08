@@ -344,6 +344,12 @@ pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
             };
             functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view(value: &#ty) -> &[u8] {#expression}));
         }
+        if let Some((element, _)) = prebindgen_flat::sequence_parts(ty) {
+            if crate::borrowed::primitive(element, &flat.types).is_some() {
+                let view = owner.helper("view");
+                functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view(value: &#ty) -> &[#element] {value.as_slice()}));
+            }
+        }
         if prebindgen_flat::type_key(ty) == "Vec < u8 >" {
             let view_mut = owner.helper("view_mut");
             functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view_mut(value: &mut #ty) -> &mut [u8] {value.as_mut_slice()}));
@@ -430,6 +436,17 @@ pub(crate) fn emit_accessors(
             header.push_str(&format!("/* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */\n{prefix}_buffer_view_mut {view_mut}({prefix}_{} *value);\n",owner.name));
         }
     } else if let Some((element, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
+        if let Some(primitive) = crate::borrowed::primitive(element, types) {
+            let view = format_ident!("{prefix}_{}_view", owner.name);
+            let helper = owner.helper("view");
+            if !symbols.insert(view.to_string()) {
+                return Err("generated owner view accessor collides with a C symbol".into());
+            }
+            let rust_view = crate::borrowed::ident(primitive);
+            let c_view = crate::borrowed::c_name(primitive, prefix);
+            tokens.extend(quote!(#[doc="# Safety\nKeep the owner alive; do not mutate it, obtain overlapping exclusive/mutable access, consume or destroy it until the returned view's last use."] #[no_mangle] pub unsafe extern "C" fn #view(value:*const #carrier)->#rust_view {let values=#helper((*value).as_rust()); #rust_view {data:values.as_ptr(),len:values.len()}}));
+            header.push_str(&format!("/* Borrowed view; never free. Keep the owner alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. */\n{c_view} {view}(const {prefix}_{} *value);\n", owner.name));
+        }
         let get = format_ident!("{prefix}_{}_get", owner.name);
         if !symbols.insert(get.to_string()) {
             return Err("generated owner element accessor collides with a C symbol".into());

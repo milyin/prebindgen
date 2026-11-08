@@ -1240,6 +1240,30 @@ pub trait Codec {
     ) -> Result<Option<CodecOutput<Self>>> {
         Ok(None)
     }
+    /// Select an address-preserving representation of a borrowed collection.
+    ///
+    /// Called before element conversion when a sequence is borrowed and neither
+    /// its own policy nor an enclosing projection explicitly permits copying.
+    /// `value` is a reference to the collection; `element` is its resolved output
+    /// recipe. An adapter may return a non-owning view or reject an unsupported
+    /// borrow instead of allocating converted rows. `None` retains ordinary
+    /// sequence conversion, which may be required by the foreign representation.
+    /// `temporary` means the receiver backing this observation is destroyed
+    /// after the generated call; a view must not escape that receiver.
+    #[allow(clippy::too_many_arguments)]
+    fn output_borrowed_sequence(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+        _element: &Output,
+        _delivery: SequenceDelivery,
+        _temporary: bool,
+    ) -> Result<Option<CodecOutput<Self>>> {
+        Ok(None)
+    }
     /// Place an owned value in its final foreign allocation before getter views.
     ///
     /// Returns its owning output conversion and a Rust `*mut ty` expression from
@@ -2286,6 +2310,20 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     }
                 });
                 let wire = self.name();
+                if mode == ProjectionMode::Borrowed && !explicit_copy && !self.copy_borrowed.get() {
+                    if let Some(plan) = self.codec.output_borrowed_sequence(
+                        self.flat,
+                        ty,
+                        extra,
+                        wire.clone(),
+                        value.clone(),
+                        element,
+                        *delivery,
+                        self.temporary_receiver.get(),
+                    )? {
+                        return Ok(plan);
+                    }
+                }
                 let payload = self.name();
                 let length = self.name();
                 let index = self.name();
