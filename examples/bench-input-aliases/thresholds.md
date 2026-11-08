@@ -30,8 +30,9 @@ Cbindgen::builder()
 
 The function override also applies when Rust decodes results from callbacks
 registered by that function, including callbacks invoked later. `usize::MAX`
-retains sorted vectors; zero allows immediate indexing when an addition needs
-movement. Neither setting changes alias validity or ownership.
+retains sorted vectors using the target platform’s maximum; zero allows immediate indexing when an addition needs
+movement. Neither setting changes alias validity or ownership. Explicit numeric settings
+must fit the target platform’s `usize`; otherwise compilation rejects them.
 
 JNI supports a native-history setting:
 

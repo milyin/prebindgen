@@ -31,10 +31,16 @@ out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
 limits=a.limits.split(',');builds={}
 sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
-def normalized(path):
-    text=re.sub(r'\s+','',Path(path).read_text())
+def normalized_text(text):
+    text=re.sub(r'\s+','',text)
     text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(?:[0-9]+usize|\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}),?>::default\(\)','NATIVE_HISTORY()',text)
     return text.replace('::prebindgen_runtime::DynamicInputs::default()','NATIVE_HISTORY()')
+
+def normalized(path):
+    return normalized_text(Path(path).read_text())
+
+for argument in ['128usize', '{128usize},', '{::core::primitive::usize::MAX}']:
+    assert normalized_text(f'::prebindgen_runtime::DynamicInputsWithThreshold::<{argument}>::default()')=='NATIVE_HISTORY()'
 
 for limit in limits:
     for kind in ['time','count']:
@@ -96,7 +102,9 @@ for limit in limits:
     d=builds[limit,'count']
     for case,size,order in cells:
         command=[d['history_driver'],'count',case,str(size),order,'5','1','verify']
-        result=subprocess.run(command,text=True,capture_output=True,check=True)
+        result=subprocess.run(command,text=True,capture_output=True,check=True,env=os.environ|{'LD_LIBRARY_PATH':str(Path(d['library']).parent)})
+        loaded=next(line.removeprefix('LIBRARY,') for line in result.stdout.splitlines() if line.startswith('LIBRARY,'))
+        assert Path(loaded).resolve()==Path(d['library']).resolve()
         (raw/f'count-{case}-{size}-{order}-{limit}.log').write_text(result.stdout+result.stderr)
         values=[tuple(map(int,line.split(',')[2:])) for line in result.stdout.splitlines() if line.startswith('COUNT,')]
         assert len(values)==5 and len(set(values))==1

@@ -29,7 +29,7 @@ if a.compare_thresholds:
  for name in ['plain.rs','bulk.rs']:
   assert normalized(a.before/name)==normalized(a.after/name), 'generated JNI Rust differs beyond threshold constructor'
 else:
- assert glue['before']==glue['after'], 'generated JNI Rust differs' 
+ assert glue['before']==glue['after'], 'generated JNI Rust differs'
 for d in info.values():
  assert d['native_input_checks']==(a.policy=='native'), 'unexpected alias-validation policy'
  assert not d['native_allocations'] and d['instrumentation_probe']=='NATIVE_ALLOCATIONS,false'

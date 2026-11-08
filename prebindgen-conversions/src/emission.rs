@@ -212,7 +212,7 @@ mod alias_tests {
 mod history_policy_tests {
     use super::*;
     #[test]
-    fn history_threshold_is_static_scoped_and_target_width_independent() {
+    fn history_threshold_is_static_scoped_and_maximum_uses_target_width() {
         let history = quote!(::prebindgen_runtime::__prebindgen_dynamic_inputs!());
         let code = crate::staged::input_alias_checks(quote!(let mut aliases=#history;), quote!());
         let configured = render_input_alias_checks_with_threshold(&code, true, Some(17))

@@ -2540,6 +2540,8 @@ mod generation_tests {
         assert!(body("pb_local").contains("17usize"));
         assert!(body("pb_global").contains("512usize"));
         assert!(body("pb_cb").contains("31usize"));
+        assert!(!body("pb_local").contains("512usize"));
+        assert!(!body("pb_cb").contains("512usize"));
         assert!(!body("pb_unchecked").contains("DynamicInputs"));
     }
     #[test]

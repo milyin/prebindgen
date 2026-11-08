@@ -4162,7 +4162,22 @@ fn native_history_limit_applies_to_arguments_and_callback_results_only_when_need
             .build().unwrap();
         assert_eq!(g.rust.contains("DynamicInputsWithThreshold"), !preflight);
         if !preflight {
-            assert!(g.rust.matches("23usize").count() >= 2);
+            let file = syn::parse_file(&g.rust).unwrap();
+            for source in ["call", "cb"] {
+                let prefix = format!("Java_test_JNINative_call_1{source}_1");
+                let bodies: Vec<_> = file
+                    .items
+                    .iter()
+                    .filter_map(|item| match item {
+                        syn::Item::Fn(item) if item.sig.ident.to_string().starts_with(&prefix) => {
+                            Some(quote!(#item).to_string())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(bodies.len(), 1, "{prefix}");
+                assert!(bodies[0].contains("23usize"), "{prefix}");
+            }
         }
     }
 }
