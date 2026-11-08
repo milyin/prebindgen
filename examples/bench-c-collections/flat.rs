@@ -358,3 +358,24 @@ pub fn borrowed_emit(owner: &BorrowedNumbers, callback: impl Fn(&[i64]), times: 
         callback(std::hint::black_box(&owner.values))
     }
 }
+
+#[prebindgen]
+pub fn shared_input_inspect(values: &[i64]) -> usize {
+    std::hint::black_box(values).as_ptr().addr()
+}
+#[prebindgen]
+pub fn shared_input_sum(values: &[i64]) -> i64 {
+    std::hint::black_box(values).iter().sum()
+}
+#[prebindgen]
+pub fn shared_input_array(values: &[i64; 4]) -> i64 {
+    std::hint::black_box(values).iter().sum()
+}
+#[prebindgen]
+pub fn shared_input_text(value: &str) -> usize {
+    std::hint::black_box(value).len()
+}
+#[prebindgen]
+pub fn shared_input_owned(value: String) -> usize {
+    std::hint::black_box(value).len()
+}

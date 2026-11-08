@@ -9,6 +9,7 @@ pub struct ExpandParamDecl {
     pub ty: syn::Type,
     input: Input<InputRequest>,
     bulk: bool,
+    reconstruct: bool,
 }
 impl ExpandParamDecl {
     /// Start an input declaration; add at least one alternative before use.
@@ -17,12 +18,20 @@ impl ExpandParamDecl {
             ty,
             input: Input::Selector(vec![]),
             bulk: false,
+            reconstruct: false,
         }
     }
     /// Group this expansion into a C-representation bulk carrier.
     /// The adapter chooses storage; constructor and local conversion rules are retained.
     pub fn bulk(mut self) -> Self {
         self.bulk = true;
+        self
+    }
+    /// Explicitly construct an owned temporary and borrow it for the source call.
+    /// With no alternatives, use the owned value's default input conversion.
+    /// Alternatives describe the owned referent, not the reference itself.
+    pub fn reconstruct(mut self) -> Self {
+        self.reconstruct = true;
         self
     }
     /// Append a constructor reference; its arguments use their type defaults.
@@ -38,14 +47,17 @@ impl ExpandParamDecl {
 }
 impl From<ExpandParamDecl> for Input<InputRequest> {
     fn from(decl: ExpandParamDecl) -> Self {
-        Input::for_type(
-            decl.ty,
-            if decl.bulk {
-                Input::Bulk(Box::new(decl.input))
-            } else {
-                decl.input
-            },
-        )
+        let mut input = decl.input;
+        if decl.reconstruct {
+            if matches!(&input, Input::Selector(arms) if arms.is_empty()) {
+                input = Input::auto();
+            }
+            input = Input::Temporary(Box::new(input));
+        }
+        if decl.bulk {
+            input = Input::Bulk(Box::new(input));
+        }
+        Input::for_type(decl.ty, input)
     }
 }
 

@@ -126,14 +126,6 @@ impl Codec for CCodec {
     type Wire = CWire;
     type Context = CContext;
     fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
-        if prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
-            .any(|w| matches!(w.kind, CWire::SliceView { .. }))
-        {
-            return Err(
-                "C slice views are output-only; input loans require a validated input conversion"
-                    .into(),
-            );
-        }
         validate_layout(&plan.node)?;
         if plan
             .resources
@@ -328,6 +320,11 @@ impl Codec for CCodec {
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
+        if matches!(ty,syn::Type::Reference(r) if r.mutability.is_none()
+            && matches!(Value::of(&r.elem),Some(Value::Text | Value::Bytes)))
+        {
+            return Err(format!("shared C input `{}` cannot construct an owning buffer implicitly; use &str / &[u8], a native opaque owner input, or explicitly select expand_param!({}).reconstruct()", prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty)));
+        }
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
@@ -349,6 +346,18 @@ impl Codec for CCodec {
             prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)?;
         plan.fallible = !matches!(Value::of(ty), Some(Value::Scalar(p)) if p != Primitive::Char);
         Ok(plan)
+    }
+    fn input_borrowed_sequence(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        element: &prebindgen_declarations::Input,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<Option<InputPlan<CWire>>> {
+        borrowed::input_sequence(flat, ty, wire, var, element, active).map(Some)
     }
     fn input_row_leaf(
         &self,
@@ -2359,6 +2368,12 @@ where
                 matches!(&wires[0].kind,CWire::Pointer {pointer,..} if prebindgen_flat::same_type(&pointer.ty,&r.elem))
                     || (matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
                         && matches!(wires[0].kind, CWire::Buffer))
+                    || matches!(&wires[0].kind,CWire::SliceView {element} if
+                    match r.elem.as_ref() {
+                        syn::Type::Slice(slice) => Primitive::from_type(&slice.elem)==Some(*element),
+                        syn::Type::Array(array) => Primitive::from_type(&array.elem)==Some(*element),
+                        _ => false,
+                    })
                     || matches!(&wires[0].kind,CWire::Owned{owner,by_value:false,..} if prebindgen_flat::same_type(&owner.ty,&r.elem))
             }
             _ => false,
@@ -2610,7 +2625,10 @@ mod generation_tests {
             .opaque_ptr("owner", syn::parse_quote!(Owner))
         };
         let error = Cbindgen::new(error_model("pub fn temp(o:&String)->&mut [u8]{}"))
-            .function(fun!(temp))
+            .function(fun!(temp).expand_param(
+                "o",
+                prebindgen_declarations::expand_param!(&String).reconstruct(),
+            ))
             .panic()
             .build()
             .err()
@@ -2784,10 +2802,8 @@ mod generation_tests {
             "&Handle",
             "&mut Handle",
             "String",
-            "&String",
             "&str",
             "Vec<u8>",
-            "&Vec<u8>",
             "&[u8]",
         ] {
             let ty = syn::parse_str(ty).unwrap();
@@ -3055,6 +3071,8 @@ mod generation_tests {
             Cbindgen::new(error_model(source))
                 .opaque_ptr("handle", syn::parse_quote!(Handle))
                 .enum_type("tag", syn::parse_quote!(Tag))
+                .expand(expand_param!(&String).reconstruct())
+                .expand(expand_param!(&Vec<u8>).reconstruct())
         };
         for constructor in ["row", "text", "tagged"] {
             let expansion = match constructor {
@@ -3419,16 +3437,26 @@ mod generation_tests {
     fn loans_reject_reconstructed_inputs_but_allow_static_returns_and_owned_copies() {
         use prebindgen_declarations::{expand_param, expand_return, fun};
         let source = "pub type Child=String;pub fn peek(value:&String)->&Child{}pub fn fixed(value:&String)->&'static Child{}pub fn first(values:&[Child])->&Child{}pub fn copy_child(child:&Child)->Child{}";
-        let model =
-            || Cbindgen::new(error_model(source)).opaque_ptr("child_t", syn::parse_quote!(Child));
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("child_t", syn::parse_quote!(Child))
+                .expand(expand_param!(&String).reconstruct())
+        };
         let bad = model().function(fun!(peek)).panic().build().err().unwrap();
         assert!(
             bad.contains("reconstructed reference input `value`"),
             "{bad}"
         );
         let bad = model()
-            .expand(expand_param!(Child).variant(fun!(copy_child)))
-            .function(fun!(first))
+            .function(
+                fun!(first).input(
+                    "values",
+                    prebindgen_declarations::Input::Sequence(Box::new(
+                        prebindgen_declarations::Input::call("copy_child"),
+                    ))
+                    .reconstruct(),
+                ),
+            )
             .panic()
             .build()
             .err()

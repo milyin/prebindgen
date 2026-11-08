@@ -230,6 +230,18 @@ impl Codec for EnumCodec<'_> {
         }
         Ok(plan)
     }
+    fn input_borrowed_sequence(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        element: &prebindgen_declarations::Input,
+        active: &Condition,
+    ) -> Result<Option<InputPlan<CWire>>> {
+        CCodec.input_borrowed_sequence(flat, ty, extra, wire, var, element, active)
+    }
     fn input_row_leaf(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,

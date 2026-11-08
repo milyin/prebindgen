@@ -9,6 +9,7 @@ impl Input {
             Input::Request(never) => match never {},
             Input::Leaf => Input::Leaf,
             Input::Bulk(child) => Input::Bulk(Box::new(child.into_preparation())),
+            Input::Temporary(child) => Input::Temporary(Box::new(child.into_preparation())),
             Input::Callback(callback) => Input::Callback(callback),
             Input::Optional(child) => Input::Optional(Box::new(child.into_preparation())),
             Input::Sequence(child) => Input::Sequence(Box::new(child.into_preparation())),

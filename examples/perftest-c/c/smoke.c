@@ -14,6 +14,7 @@ static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4
 #include "inline_owners.h"
 #include "mutable_byte_views.h"
 #include "numeric_loans.h"
+#include "shared_inputs.h"
 #include "output_owners.h"
 #include "buffer_inputs.h"
 #include "alias_options.h"
@@ -230,8 +231,8 @@ static void check_collections(void) {
     a = perftest_collection_resource_new(1); handles[0].v0 = a; handles[1].v0 = b;
     perftest_collection_alias_p0_w1_row aliases[] = {{a}};
     EXPECT_ABORT(perftest_collection_alias(((perftest_collection_alias_p0_w1_rows){aliases, 1}), a));
-    perftest_collection_resource_ids_p0_w1_row shared[] = {{a}, {a}};
-    perftest_collection_resource_ids_ret_w0_rows ids = perftest_collection_resource_ids((perftest_collection_resource_ids_p0_w1_rows){shared, 2});
+    perftest_collection_resource_ids_p0_w2_row shared[] = {{a}, {a}};
+    perftest_collection_resource_ids_ret_w0_rows ids = perftest_collection_resource_ids((perftest_collection_resource_ids_p0_w2_rows){shared, 2});
     assert(ids.len == 2 && ids.data[0].v0 == 1 && ids.data[1].v0 == 1);
     perftest_collection_resource_ids_ret_w0_rows_free(ids);
     assert(perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved, &ownership, &error));
@@ -281,8 +282,8 @@ static void check_collections(void) {
     perftest_storage *storage = perftest_storage_new();
     perftest_storage_get_vec_ret_w2_rows stored = {0};
     assert(perftest_storage_get_vec(storage, &stored) == 0);
-    perftest_storage_put_slice_p1_w1_row payloads[] = {{5, 2, 1.5, 1}, {9, -1, -2.0, 0}};
-    perftest_storage_put_slice(storage, (perftest_storage_put_slice_p1_w1_rows){payloads, 2});
+    perftest_storage_put_slice_p1_w2_row payloads[] = {{5, 2, 1.5, 1}, {9, -1, -2.0, 0}};
+    perftest_storage_put_slice(storage, (perftest_storage_put_slice_p1_w2_rows){payloads, 2});
     assert(perftest_storage_get_vec(storage, &stored) == 1 && stored.len == 2 && stored.data[0].v0 == 5 && stored.data[1].v2 == -2.0);
     perftest_storage_get_vec_ret_w2_rows_free(stored);
     perftest_drop_storage(storage);
@@ -593,6 +594,7 @@ static void check_results(void) {
 }
 int main(void) {
     check_numeric_loans();
+    check_shared_inputs();
     check_inline_owners();
     check_borrowed_getters();
     check_explicit_borrows();
