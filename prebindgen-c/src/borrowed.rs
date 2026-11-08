@@ -399,6 +399,36 @@ mod tests {
         assert!(error.contains("temporary owner"), "{error}");
     }
     #[test]
+    fn source_getter_cannot_impersonate_a_generated_heap_view() {
+        let source = "pub fn make()->[i64;3]{}pub fn __pb_owned_values_view(v:&[i64;3])->&[i64]{}";
+        let error = Cbindgen::new(model(source))
+            .opaque_owned_struct(
+                "values",
+                syn::parse_quote!([i64; 3]),
+                OpaqueLayout::auto::<[i64; 3]>(),
+            )
+            .function(
+                fun!(make).expand_return(
+                    expand_return!([i64; 3])
+                        .field_self_into()
+                        .field(fun!(__pb_owned_values_view)),
+                ),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("temporary owner"), "{error}");
+    }
+    #[test]
+    fn unsupported_c_bulk_does_not_bypass_borrow_rules() {
+        let error = Cbindgen::new(model("pub fn values()->&'static [i64]{}"))
+            .function(fun!(values).output(prebindgen_declarations::Output::auto().bulk()))
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("bulk outputs are unsupported"), "{error}");
+    }
+    #[test]
     fn loans_inside_rows_are_not_hidden_by_the_owning_container() {
         let node = prebindgen_flat::WireNode::Chain {
             controls: vec![Wire {

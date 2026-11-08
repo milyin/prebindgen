@@ -1025,9 +1025,10 @@ type identity.
 
 The audit also covered scalar/enum snapshots (no allocation), byte/text views
 (original storage), explicit copies (owning results), nested output loans and
-callback-only view definitions. C expanded **inputs** still reconstruct Rust
-collections where required by their input recipe; that separate input conversion
-is unchanged. JNI object/array marshalling is also unchanged.
+callback-only view definitions. Borrowed `String`/`Vec<u8>` field observations without a native-owner
+representation require an explicit copy or a getter returning `&str`/`&[u8]`.
+C expanded **inputs** still reconstruct Rust collections where required by their
+input recipe; that separate input conversion is unchanged. JNI object/array marshalling is also unchanged.
 
 ## Collections
 

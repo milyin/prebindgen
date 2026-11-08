@@ -643,7 +643,14 @@ impl Codec for CCodec {
     ) -> Result<()> {
         if let Some(owner) = owned::declaration(flat, ty) {
             let has_loan = borrowed::has_loans(&plan.outcomes.success);
-            let heap_view = owner.helper("view") == getter
+            let generated_view = owned::std_owner(&owner.ty)
+                && (matches!(
+                    prebindgen_flat::type_key(&owner.ty).as_str(),
+                    "String" | "Vec < u8 >"
+                ) || prebindgen_flat::sequence_parts(&owner.ty).is_some_and(|(element, _)| {
+                    borrowed::primitive(element, &flat.types).is_some()
+                }));
+            let heap_view = (generated_view && owner.helper("view") == getter)
                 || (prebindgen_flat::type_key(&owner.ty) == "Vec < u8 >"
                     && owner.helper("view_mut") == getter);
             if has_loan && !heap_view {
@@ -1871,7 +1878,11 @@ where
     for error in &errors {
         borrowed::collect(&error.plan()?.outcomes.success, &mut slice_views);
     }
-    for owner in pointers.values().filter_map(|t| t.metadata.owned.as_ref()) {
+    for owner in pointers
+        .values()
+        .filter_map(|t| t.metadata.owned.as_ref())
+        .filter(|owner| owned::std_owner(&owner.ty))
+    {
         if let Some((ty, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
             if let Some(element) = borrowed::primitive(ty, pointers) {
                 slice_views.insert(prebindgen_flat::type_key(&element.rust_type()), element);
