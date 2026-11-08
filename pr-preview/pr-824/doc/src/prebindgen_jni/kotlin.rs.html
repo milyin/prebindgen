@@ -84,8 +84,8 @@
 <a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Prepared Kotlin input code; the writer orders these operations across slots.
 <a href=#85 id=85 data-nosnippet>85</a></span><span class="attr">#[derive(Default)]
 <a href=#86 id=86 data-nosnippet>86</a></span><span class="kw">pub struct </span>KotlinInput {
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Complete handle inputs used for Kotlin alias preflight. None retains
-<a href=#88 id=88 data-nosnippet>88</a>    /// native alias checks for custom input emission without this information.
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Complete handle inputs used for Kotlin alias preflight. Custom input
+<a href=#88 id=88 data-nosnippet>88</a>    /// emission must provide this metadata; None is rejected during generation.
 <a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>handle_inputs: <span class="prelude-ty">Option</span>&lt;Vec&lt;KotlinHandleInput&gt;&gt;,
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// Input snapshots evaluated once before locking; handle addresses stay deferred.
 <a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub </span>setup: Vec&lt;KotlinBinding&gt;,
