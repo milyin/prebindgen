@@ -1,0 +1,254 @@
+{
+  "primary": {
+    "build": {
+      "libraries": {
+        "flat": "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so",
+        "cross": "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so",
+        "compact": "/tmp/type-bucket-c-detail-build-v3/compact.so",
+        "pairs": "/tmp/type-bucket-c-detail-build-v3/pairs.so",
+        "token": "/tmp/type-bucket-c-detail-build-v3/token.so",
+        "stable": "/tmp/type-bucket-c-detail-build-v3/stable.so"
+      },
+      "hashes": {
+        "flat": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+        "cross": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+        "compact": "cda39dc1424da5a27ac7eddf0e6a33f24fa667e4145d54a5911e8907b3df8437",
+        "pairs": "d429654f7da699d522c216a3036d70e62cb8d555c729b8beda89c97851b4cac7",
+        "token": "6b467c517da2891a1acf1694cead617caf5308681715015e900c5bdb83512d3f",
+        "stable": "294e31ff358d2721e50e842d91be8d117dd678444c77f183ecf0979a13377505"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "sources": {
+        "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+        "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+        "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+        "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+        "c-detail-build.py": "f1aaefe8cac426bb9dff47363980924c456b5d65f1c421777fd17fe2abe2b7c5",
+        "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+        "c-prototypes.rs": "c0ce13ee33e8cd53f942176bad149a3f100f0301b322303dabfbf04e728e5966",
+        "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+        "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+        "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+        "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+        "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+        "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+        "c-detail.rs": "484e85fcb8bd00ff7deadff36c83bd87d7839ffa3826d3db0d38125e38597a7c",
+        "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+      },
+      "baseline_commit": "776afedcf964cf753692f75c975d47c84c2d1505",
+      "production_commit": "f99f9d62fc9e51cbb1ba71e0420b0deb41f82713",
+      "production_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "provenance_validation": "Checked existing libraries against the frozen source toolchain and unchanged production git tree before the confirmation run."
+    },
+    "files": {
+      "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+      "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+      "/tmp/type-bucket-c-detail-build-v3/compact.so": "cda39dc1424da5a27ac7eddf0e6a33f24fa667e4145d54a5911e8907b3df8437",
+      "/tmp/type-bucket-c-detail-build-v3/pairs.so": "d429654f7da699d522c216a3036d70e62cb8d555c729b8beda89c97851b4cac7",
+      "/tmp/type-bucket-c-detail-build-v3/token.so": "6b467c517da2891a1acf1694cead617caf5308681715015e900c5bdb83512d3f",
+      "/tmp/type-bucket-c-detail-build-v3/stable.so": "294e31ff358d2721e50e842d91be8d117dd678444c77f183ecf0979a13377505"
+    },
+    "sources": {
+      "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+      "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+      "c-detail-study.py": "d5c2a89698758c8f9a1674634ade911abdd9860cca840857401cb9a163b9497f",
+      "c-detail-build.py": "7720865d798c8971f28f48972ec49831f47e735ba937d6c4bff545d6a03e0ac3",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+      "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+      "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "c-detail.rs": "e647c5929e12c1c99462529601bfc44f03209c7cfa7726e52edf1e543ac90f42",
+      "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+    },
+    "forks": 3,
+    "batches": 7,
+    "target_ms": 8,
+    "cpu": 1,
+    "aa": false,
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "checks": [
+      "checker equivalence: passed",
+      "generated C alias/shared-repeat/resource probes: passed"
+    ],
+    "note": "Stage timers are separate diagnostics; numeric microbenchmark addresses are never dereferenced.",
+    "executable_sha256": {
+      "checker": "02d81b7b0ea824625380a0174e0c0292227987dd5576bbdf7086e2fe9ffab918",
+      "count": "0b0cecd31e2461dc70cb58ac01ceced0f1dc44c8be4d6c4c82c581a2fc7757fd",
+      "native": "0af4deb440e29cd484b97bfbbb00d2abd3c2b40c27611f8ea3ca1155a85e12a0"
+    }
+  },
+  "spatial": {
+    "build": {
+      "libraries": {
+        "flat": "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so",
+        "cross": "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so",
+        "compact": "/tmp/type-bucket-c-detail-build-v3/compact.so",
+        "pairs": "/tmp/type-bucket-c-detail-build-v3/pairs.so",
+        "token": "/tmp/type-bucket-c-detail-build-v3/token.so",
+        "stable": "/tmp/type-bucket-c-detail-build-v3/stable.so"
+      },
+      "hashes": {
+        "flat": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+        "cross": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+        "compact": "cda39dc1424da5a27ac7eddf0e6a33f24fa667e4145d54a5911e8907b3df8437",
+        "pairs": "d429654f7da699d522c216a3036d70e62cb8d555c729b8beda89c97851b4cac7",
+        "token": "6b467c517da2891a1acf1694cead617caf5308681715015e900c5bdb83512d3f",
+        "stable": "294e31ff358d2721e50e842d91be8d117dd678444c77f183ecf0979a13377505"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "sources": {
+        "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+        "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+        "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+        "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+        "c-detail-build.py": "f1aaefe8cac426bb9dff47363980924c456b5d65f1c421777fd17fe2abe2b7c5",
+        "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+        "c-prototypes.rs": "c0ce13ee33e8cd53f942176bad149a3f100f0301b322303dabfbf04e728e5966",
+        "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+        "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+        "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+        "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+        "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+        "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+        "c-detail.rs": "484e85fcb8bd00ff7deadff36c83bd87d7839ffa3826d3db0d38125e38597a7c",
+        "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+      },
+      "baseline_commit": "776afedcf964cf753692f75c975d47c84c2d1505",
+      "production_commit": "f99f9d62fc9e51cbb1ba71e0420b0deb41f82713",
+      "production_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "provenance_validation": "Checked existing libraries against the frozen source toolchain and unchanged production git tree before the confirmation run."
+    },
+    "files": {
+      "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+      "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+      "/tmp/type-bucket-c-detail-build-v3/compact.so": "cda39dc1424da5a27ac7eddf0e6a33f24fa667e4145d54a5911e8907b3df8437",
+      "/tmp/type-bucket-c-detail-build-v3/pairs.so": "d429654f7da699d522c216a3036d70e62cb8d555c729b8beda89c97851b4cac7",
+      "/tmp/type-bucket-c-detail-build-v3/token.so": "6b467c517da2891a1acf1694cead617caf5308681715015e900c5bdb83512d3f",
+      "/tmp/type-bucket-c-detail-build-v3/stable.so": "294e31ff358d2721e50e842d91be8d117dd678444c77f183ecf0979a13377505"
+    },
+    "sources": {
+      "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+      "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+      "c-detail-study.py": "cc4d1566817e01bde8e020793f7dcfacd4f35b310aad92b7136bf3c595f35a69",
+      "c-detail-build.py": "7720865d798c8971f28f48972ec49831f47e735ba937d6c4bff545d6a03e0ac3",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+      "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+      "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "c-detail.rs": "95ad8899f581aa483c4284b449a6cccc26f1a143471647bbb92df96580fe9d0d",
+      "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+    },
+    "forks": 3,
+    "batches": 7,
+    "target_ms": 10,
+    "cpu": 1,
+    "aa": false,
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "checks": [
+      "checker equivalence: passed",
+      "generated C alias/shared-repeat/resource probes: passed"
+    ],
+    "note": "Stage timers are separate diagnostics; numeric microbenchmark addresses are never dereferenced.",
+    "executable_sha256": {
+      "checker": "a5c480504098512dc58b3ba7997b0fc647a589e059ea371f56e7c86d6012e5ee",
+      "count": "25e77c35a67f4c7e6bc3143513d17e42052de83d3d8da0e3db4d403c937111da",
+      "native": "0af4deb440e29cd484b97bfbbb00d2abd3c2b40c27611f8ea3ca1155a85e12a0"
+    }
+  },
+  "identical_path": {
+    "build": {
+      "libraries": {
+        "flat": "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so",
+        "cross": "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so",
+        "compact": "/tmp/type-bucket-c-detail-build-v4/compact.so",
+        "pairs": "/tmp/type-bucket-c-detail-build-v4/pairs.so",
+        "token": "/tmp/type-bucket-c-detail-build-v4/token.so",
+        "stable": "/tmp/type-bucket-c-detail-build-v4/stable.so"
+      },
+      "hashes": {
+        "flat": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+        "cross": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+        "compact": "94bf7b9f349d600a51c640bc6e4f6ff0e4b4b34d632d79bbeefd231cf4d9192f",
+        "pairs": "7778b878d0c81cad8694dbd4d2a44dee36cb41b87073afe51fe8d0bf8fa2d15c",
+        "token": "862264138179adbf975965cc89e5b649ee1c5faabc98d5d7a2e9880621082769",
+        "stable": "e02cbcf3ac0461f38eac512a371ed875668f164abbd9f4979ee6d48691eb7cae"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "baseline_commit": "776afedcf964cf753692f75c975d47c84c2d1505",
+      "production_commit": "f99f9d62fc9e51cbb1ba71e0420b0deb41f82713",
+      "production_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sources": {
+        "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+        "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+        "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+        "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+        "c-detail-study.py": "d5c2a89698758c8f9a1674634ade911abdd9860cca840857401cb9a163b9497f",
+        "c-detail-build.py": "7720865d798c8971f28f48972ec49831f47e735ba937d6c4bff545d6a03e0ac3",
+        "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+        "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+        "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+        "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+        "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+        "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+        "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+        "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+        "c-detail.rs": "e647c5929e12c1c99462529601bfc44f03209c7cfa7726e52edf1e543ac90f42",
+        "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+      }
+    },
+    "files": {
+      "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+      "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+      "/tmp/type-bucket-c-detail-build-v4/compact.so": "94bf7b9f349d600a51c640bc6e4f6ff0e4b4b34d632d79bbeefd231cf4d9192f",
+      "/tmp/type-bucket-c-detail-build-v4/pairs.so": "7778b878d0c81cad8694dbd4d2a44dee36cb41b87073afe51fe8d0bf8fa2d15c",
+      "/tmp/type-bucket-c-detail-build-v4/token.so": "862264138179adbf975965cc89e5b649ee1c5faabc98d5d7a2e9880621082769",
+      "/tmp/type-bucket-c-detail-build-v4/stable.so": "e02cbcf3ac0461f38eac512a371ed875668f164abbd9f4979ee6d48691eb7cae"
+    },
+    "sources": {
+      "paired.py": "bb2122e67741426953ac8a22b95ecec1371a4235fd68b7775975c75bf3bf2b9e",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "da22d6ab3875c8853bc37da46b2fd236cabe04617d5d647d0e72d0b95d0a2ed7",
+      "c-detail-driver.c": "83c07d1c81a284073e0f562c7dd9fa48ecc67f72c6b94ac4c19864ea7bace8fc",
+      "c-detail-study.py": "cc4d1566817e01bde8e020793f7dcfacd4f35b310aad92b7136bf3c595f35a69",
+      "c-detail-build.py": "7720865d798c8971f28f48972ec49831f47e735ba937d6c4bff545d6a03e0ac3",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "38f47ff401c8f92030b35a6a2deadd9c6e90b1257779208610f285e971d18fa8",
+      "build.py": "a334c6277ed9835c8e30724019c03c4c64d9c58cb70cef806a0a0fea43ba381b",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "c-algorithms.rs": "66cedef0df6640c296aad4fa3e9f47f350015e9e82ebede6fb526f44a2ce236b",
+      "README.md": "bca330523fc4065ea2964df4fb6e88fbdbcf5617fb8fc7d799750cf5b2528cb6",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "c-detail.rs": "95ad8899f581aa483c4284b449a6cccc26f1a143471647bbb92df96580fe9d0d",
+      "Checks.kt": "c45905a9bdeae2dc7469e4c8321e72c7b0e62be61b500de7deb474ede3216c11"
+    },
+    "forks": 3,
+    "batches": 7,
+    "target_ms": 20,
+    "cpu": 1,
+    "aa": true,
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "checks": [
+      "checker equivalence: passed",
+      "generated C alias/shared-repeat/resource probes: passed"
+    ],
+    "note": "Stage timers are separate diagnostics; numeric microbenchmark addresses are never dereferenced.",
+    "executable_sha256": {
+      "checker": "a5c480504098512dc58b3ba7997b0fc647a589e059ea371f56e7c86d6012e5ee",
+      "count": "25e77c35a67f4c7e6bc3143513d17e42052de83d3d8da0e3db4d403c937111da",
+      "native": "0af4deb440e29cd484b97bfbbb00d2abd3c2b40c27611f8ea3ca1155a85e12a0"
+    }
+  }
+}

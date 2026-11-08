@@ -1,0 +1,111 @@
+access,size,layout,allocator,group,descending_edges,overlapping_type_ranges,length
+mutable,262144,shuffled,interleaved,-1,"[""131079"", ""131279"", ""131045""]","[""6"", ""6"", ""6""]",262144
+mutable,262144,shuffled,interleaved,0,"[""32661"", ""32886"", ""32699""]",,65536
+mutable,262144,shuffled,interleaved,1,"[""32767"", ""32700"", ""32775""]",,65536
+mutable,262144,shuffled,interleaved,2,"[""32814"", ""32877"", ""32732""]",,65536
+mutable,262144,shuffled,interleaved,3,"[""32836"", ""32816"", ""32838""]",,65536
+mutable,262144,sorted,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",262144
+mutable,262144,sorted,interleaved,0,"[""0"", ""0"", ""0""]",,65536
+mutable,262144,sorted,interleaved,1,"[""0"", ""0"", ""0""]",,65536
+mutable,262144,sorted,interleaved,2,"[""0"", ""0"", ""0""]",,65536
+mutable,262144,sorted,interleaved,3,"[""0"", ""0"", ""0""]",,65536
+mutable,65536,creation,by_type,-1,"[""0"", ""0"", ""0""]","[""0"", ""0"", ""0""]",65536
+mutable,65536,creation,by_type,0,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,by_type,1,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,by_type,2,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,by_type,3,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,fragmented,-1,"[""32807"", ""32928"", ""32855""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,creation,fragmented,0,"[""8251"", ""8233"", ""8176""]",,16384
+mutable,65536,creation,fragmented,1,"[""8240"", ""8220"", ""8203""]",,16384
+mutable,65536,creation,fragmented,2,"[""8170"", ""8219"", ""8254""]",,16384
+mutable,65536,creation,fragmented,3,"[""8145"", ""8255"", ""8221""]",,16384
+mutable,65536,creation,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,creation,interleaved,0,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,interleaved,1,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,interleaved,2,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,creation,interleaved,3,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,near,interleaved,-1,"[""1278"", ""1290"", ""1281""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,near,interleaved,0,"[""320"", ""324"", ""318""]",,16384
+mutable,65536,near,interleaved,1,"[""316"", ""321"", ""321""]",,16384
+mutable,65536,near,interleaved,2,"[""319"", ""321"", ""318""]",,16384
+mutable,65536,near,interleaved,3,"[""320"", ""321"", ""321""]",,16384
+mutable,65536,shuffled,by_type,-1,"[""32788"", ""32884"", ""32867""]","[""0"", ""0"", ""0""]",65536
+mutable,65536,shuffled,by_type,0,"[""8185"", ""8180"", ""8217""]",,16384
+mutable,65536,shuffled,by_type,1,"[""8252"", ""8225"", ""8228""]",,16384
+mutable,65536,shuffled,by_type,2,"[""8212"", ""8208"", ""8232""]",,16384
+mutable,65536,shuffled,by_type,3,"[""8139"", ""8271"", ""8190""]",,16384
+mutable,65536,shuffled,fragmented,-1,"[""32778"", ""32879"", ""32656""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,shuffled,fragmented,0,"[""8194"", ""8260"", ""8154""]",,16384
+mutable,65536,shuffled,fragmented,1,"[""8212"", ""8188"", ""8200""]",,16384
+mutable,65536,shuffled,fragmented,2,"[""8195"", ""8215"", ""8146""]",,16384
+mutable,65536,shuffled,fragmented,3,"[""8175"", ""8216"", ""8156""]",,16384
+mutable,65536,shuffled,interleaved,-1,"[""32790"", ""32885"", ""32870""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,shuffled,interleaved,0,"[""8185"", ""8180"", ""8217""]",,16384
+mutable,65536,shuffled,interleaved,1,"[""8252"", ""8225"", ""8228""]",,16384
+mutable,65536,shuffled,interleaved,2,"[""8212"", ""8208"", ""8232""]",,16384
+mutable,65536,shuffled,interleaved,3,"[""8139"", ""8271"", ""8190""]",,16384
+mutable,65536,sorted,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",65536
+mutable,65536,sorted,interleaved,0,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,sorted,interleaved,1,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,sorted,interleaved,2,"[""0"", ""0"", ""0""]",,16384
+mutable,65536,sorted,interleaved,3,"[""0"", ""0"", ""0""]",,16384
+mutable,8192,creation,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",8192
+mutable,8192,creation,interleaved,0,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,creation,interleaved,1,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,creation,interleaved,2,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,creation,interleaved,3,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,near,interleaved,-1,"[""161"", ""161"", ""161""]","[""6"", ""6"", ""6""]",8192
+mutable,8192,near,interleaved,0,"[""39"", ""40"", ""40""]",,2048
+mutable,8192,near,interleaved,1,"[""40"", ""39"", ""39""]",,2048
+mutable,8192,near,interleaved,2,"[""40"", ""39"", ""39""]",,2048
+mutable,8192,near,interleaved,3,"[""39"", ""40"", ""40""]",,2048
+mutable,8192,shuffled,interleaved,-1,"[""4118"", ""4094"", ""4091""]","[""6"", ""6"", ""6""]",8192
+mutable,8192,shuffled,interleaved,0,"[""1030"", ""1025"", ""1032""]",,2048
+mutable,8192,shuffled,interleaved,1,"[""1023"", ""1027"", ""1032""]",,2048
+mutable,8192,shuffled,interleaved,2,"[""1027"", ""1015"", ""1009""]",,2048
+mutable,8192,shuffled,interleaved,3,"[""1037"", ""1025"", ""1018""]",,2048
+mutable,8192,sorted,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",8192
+mutable,8192,sorted,interleaved,0,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,sorted,interleaved,1,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,sorted,interleaved,2,"[""0"", ""0"", ""0""]",,2048
+mutable,8192,sorted,interleaved,3,"[""0"", ""0"", ""0""]",,2048
+shared,65536,creation,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",65536
+shared,65536,creation,interleaved,0,"[""0"", ""0"", ""0""]",,16384
+shared,65536,creation,interleaved,1,"[""0"", ""0"", ""0""]",,16384
+shared,65536,creation,interleaved,2,"[""0"", ""0"", ""0""]",,16384
+shared,65536,creation,interleaved,3,"[""0"", ""0"", ""0""]",,16384
+shared,65536,near,interleaved,-1,"[""1278"", ""1290"", ""1281""]","[""6"", ""6"", ""6""]",65536
+shared,65536,near,interleaved,0,"[""320"", ""324"", ""318""]",,16384
+shared,65536,near,interleaved,1,"[""316"", ""321"", ""321""]",,16384
+shared,65536,near,interleaved,2,"[""319"", ""321"", ""318""]",,16384
+shared,65536,near,interleaved,3,"[""320"", ""321"", ""321""]",,16384
+shared,65536,shuffled,interleaved,-1,"[""32790"", ""32885"", ""32870""]","[""6"", ""6"", ""6""]",65536
+shared,65536,shuffled,interleaved,0,"[""8185"", ""8180"", ""8217""]",,16384
+shared,65536,shuffled,interleaved,1,"[""8252"", ""8225"", ""8228""]",,16384
+shared,65536,shuffled,interleaved,2,"[""8212"", ""8208"", ""8232""]",,16384
+shared,65536,shuffled,interleaved,3,"[""8139"", ""8271"", ""8190""]",,16384
+shared,65536,sorted,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",65536
+shared,65536,sorted,interleaved,0,"[""0"", ""0"", ""0""]",,16384
+shared,65536,sorted,interleaved,1,"[""0"", ""0"", ""0""]",,16384
+shared,65536,sorted,interleaved,2,"[""0"", ""0"", ""0""]",,16384
+shared,65536,sorted,interleaved,3,"[""0"", ""0"", ""0""]",,16384
+shared,8192,creation,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",8192
+shared,8192,creation,interleaved,0,"[""0"", ""0"", ""0""]",,2048
+shared,8192,creation,interleaved,1,"[""0"", ""0"", ""0""]",,2048
+shared,8192,creation,interleaved,2,"[""0"", ""0"", ""0""]",,2048
+shared,8192,creation,interleaved,3,"[""0"", ""0"", ""0""]",,2048
+shared,8192,near,interleaved,-1,"[""161"", ""161"", ""161""]","[""6"", ""6"", ""6""]",8192
+shared,8192,near,interleaved,0,"[""39"", ""40"", ""40""]",,2048
+shared,8192,near,interleaved,1,"[""40"", ""39"", ""39""]",,2048
+shared,8192,near,interleaved,2,"[""40"", ""39"", ""39""]",,2048
+shared,8192,near,interleaved,3,"[""39"", ""40"", ""40""]",,2048
+shared,8192,shuffled,interleaved,-1,"[""4118"", ""4094"", ""4091""]","[""6"", ""6"", ""6""]",8192
+shared,8192,shuffled,interleaved,0,"[""1030"", ""1025"", ""1032""]",,2048
+shared,8192,shuffled,interleaved,1,"[""1023"", ""1027"", ""1032""]",,2048
+shared,8192,shuffled,interleaved,2,"[""1027"", ""1015"", ""1009""]",,2048
+shared,8192,shuffled,interleaved,3,"[""1037"", ""1025"", ""1018""]",,2048
+shared,8192,sorted,interleaved,-1,"[""3"", ""3"", ""3""]","[""6"", ""6"", ""6""]",8192
+shared,8192,sorted,interleaved,0,"[""0"", ""0"", ""0""]",,2048
+shared,8192,sorted,interleaved,1,"[""0"", ""0"", ""0""]",,2048
+shared,8192,sorted,interleaved,2,"[""0"", ""0"", ""0""]",,2048
+shared,8192,sorted,interleaved,3,"[""0"", ""0"", ""0""]",,2048

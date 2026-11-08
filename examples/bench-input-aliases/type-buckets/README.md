@@ -62,6 +62,9 @@ combined-array implementation must lose.
 
 ## C: cross-type validation changes the trade-off
 
+The [deeper C investigation](C-DETAIL.md) separates sorting, merge cost, allocation
+history and access-mode specialization, and tests cheaper exact cross-group checks.
+
 C's direct opaque pointers can point into another object's storage. In the fixture,
 `owner_child(owner)` returns the first field of a `#[repr(C)] Owner`; its `Child`
 pointer has the **same address** as its owner. Thus `&mut Owner` and `&Child`
