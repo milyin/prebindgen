@@ -98,8 +98,8 @@ regular cursor pattern; random placement removes that regularity. Branch
 prediction is a plausible contributor, but hardware counters were unavailable
 (`perf_event_paranoid=4`), so no branch-miss/cache attribution is claimed.
 
-This is consistent with shuffled freshly interleaved objects and fragmented objects
-can behave differently even though both have unordered input lists. Shuffling a
+This is consistent with the fact that shuffled freshly interleaved objects and
+fragmented objects can behave differently even though both have unordered input lists. Shuffling a
 list changes traversal order; it does not change the type distribution by address.
 
 ## Access modes can remove most of the work
@@ -178,8 +178,9 @@ latency. Allocation counters use a separate executable. Fixed-source wire values
 and resource checks remain in every generated call. The microbenchmark is built
 with `rustc -O`; native libraries use Cargo release, both rustc 1.98.0. The host is
 the same shared AMD EPYC VM as the earlier study; CPU frequency is not isolated.
-Selected identical-path controls stay within 2.2% of a paired median ratio of 1
-(both checker-only and native calls). The in-run mutable `token` candidate uses the same validation code as `flat`:
+The dedicated A/A runs, which repeat the same checker executable or load
+independent copies of the same native library, stay within 2.2% of a paired
+median ratio of 1. The in-run mutable `token` candidate uses the same validation code as `flat`:
 its paired median ratios range 0.986–1.041, with individual fork ratios
 0.888–1.110. That wider control spread also matters; small differences should not
 select an implementation. Main and spatial datasets have separate source/executable hashes;
