@@ -510,7 +510,7 @@ internal object JNINative {
     @JvmStatic external fun call_storage_get_b38090762950a015(p0_w1: Long, returns: Return_Int_Long_Int5_ErrorEmpty_1e88956ed04b15f0): Unit
     @JvmStatic external fun call_storage_put_opt_179bf292b0cec6bb(p0_w1: Long, p1_w1: Int, p1_w4: Long, p1_w6: Int, p1_w8: Double, p1_w10: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Boolean
     @JvmStatic external fun call_string_new_e13dcae0deb5ba72(p0_w1: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
-    @JvmStatic external fun call_string_len_0599f1bfcc1a4ae6(p0_w1: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_string_len_0599f1bfcc1a4ae6(p0_w2: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_i64_ref_double_fe479ebaa0f31f86(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_text_echo_219b404084eaf51f(p0_w1: String?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): String?
     @JvmStatic external fun call_bytes_echo_a8ab3cbd8140d73a(p0_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?

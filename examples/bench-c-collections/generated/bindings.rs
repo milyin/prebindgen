@@ -3953,6 +3953,327 @@ pub unsafe extern "C" fn bench_resource_value(
     value.v0
 }
 #[repr(C)]
+pub struct bench_shared_input_array_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_shared_input_array(p0_w1: __PbSliceView_i64) -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_shared_input_array_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 4 {
+                    return Err("wrong fixed array length".into());
+                }
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(
+                    <&[::core::primitive::i64; 4]>::try_from(p0_w0_slice)
+                        .map_err(|_| "wrong fixed array length".to_string())?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::shared_input_array(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_shared_input_array_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_shared_input_inspect_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_shared_input_inspect(p0_w1: __PbSliceView_i64) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        bench_shared_input_inspect_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::shared_input_inspect(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_shared_input_inspect_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_shared_input_owned_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_shared_input_owned(p0_w1: __PbBuffer) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_shared_input_owned_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                Some(
+                    std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
+                        .map_err(|_| "invalid UTF-8")?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: String = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::shared_input_owned(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_shared_input_owned_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_shared_input_sum_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_shared_input_sum(p0_w1: __PbSliceView_i64) -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_shared_input_sum_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::shared_input_sum(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_shared_input_sum_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct bench_shared_input_text_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn bench_shared_input_text(p0_w1: __PbBuffer) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<bench_shared_input_text_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                Some(
+                    std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
+                        .map_err(|_| "invalid UTF-8")?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(
+                    ::core::convert::AsRef::<
+                        str,
+                    >::as_ref(p0_w0.as_ref().expect("active value")),
+                )
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = c_collection_flat::shared_input_text(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = bench_shared_input_text_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __PbRow_take_buffers_p0_w1 {
     pub v0: *mut c_collection_flat::Resource,

@@ -98829,7 +98829,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: ::prebindgen_jni_runtime::jni::objects::JString<'local>,
+    p0_w2: ::prebindgen_jni_runtime::jni::objects::JString<'local>,
     __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
 ) -> i64 {
     #[allow(unused_mut)]
@@ -98840,20 +98840,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true {
-                Some(
-                    ::core::convert::Into::<
-                        String,
-                    >::into(
-                        ::prebindgen_jni_runtime::text(&mut jni_environment, &p0_w1)?,
-                    ),
-                )
+            let p0_w1 = if true {
+                Some(::prebindgen_jni_runtime::text(&mut jni_environment, &p0_w2)?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: String = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
             } else {
                 None
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                Some(p0_w0.as_ref().expect("active value"))
+                Some(p0_w3.as_ref().expect("active temporary"))
             } else {
                 None
             };

@@ -252,6 +252,11 @@ bench_make_records_ret_w0_rows bench_make_records(uintptr_t p0_w1);
 bench_native_packet bench_native_packet_new(uint64_t p0_w1);
 bench_resource * bench_resource_new(uint64_t p0_w1);
 uint64_t bench_resource_value(const bench_resource * p0_w1);
+int64_t bench_shared_input_array(bench_i64_slice_view p0_w1);
+uintptr_t bench_shared_input_inspect(bench_i64_slice_view p0_w1);
+uintptr_t bench_shared_input_owned(bench_buffer p0_w1);
+int64_t bench_shared_input_sum(bench_i64_slice_view p0_w1);
+uintptr_t bench_shared_input_text(bench_buffer p0_w1);
 typedef struct {
     bench_resource * v0;
     bench_buffer v1;
