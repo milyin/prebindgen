@@ -14,7 +14,7 @@ def save_csv(path,rows):
 def main():
     p=argparse.ArgumentParser(__doc__);p.add_argument('--build',required=True,type=Path);p.add_argument('--output',required=True,type=Path)
     p.add_argument('--forks',type=int,default=4);p.add_argument('--batches',type=int,default=7);p.add_argument('--target-ms',type=int,default=5)
-    p.add_argument('--cpu',type=int);p.add_argument('--quick',action='store_true');p.add_argument('--aa',action='store_true');a=p.parse_args()
+    p.add_argument('--verify-only',action='store_true');p.add_argument('--cpu',type=int);p.add_argument('--quick',action='store_true');p.add_argument('--aa',action='store_true');a=p.parse_args()
     assert a.forks>0 and a.forks%2==0
     out=a.output.resolve();out.mkdir(parents=True,exist_ok=True);assert not list(out.iterdir());(out/'raw').mkdir()
     build=json.loads((a.build/'builds.json').read_text());builds=build['builds'];core=a.cpu if a.cpu is not None else max(os.sched_getaffinity(0));assert core in os.sched_getaffinity(0)
@@ -42,13 +42,18 @@ def main():
     for v in KINDS:
         library=builds[v+'-time']['library']
         env=os.environ|{'LD_LIBRARY_PATH':str(Path(library).parent)}
-        for case in ['shared','null','range','overflow','callback-range']:
+        for case in ['shared','within-group','token-first','null','range','overflow','callback-range']:
             r=subprocess.run([str(probe),case],env=env,capture_output=True,text=True,preexec_fn=lambda:resource.setrlimit(resource.RLIMIT_CORE,(0,0)))
             (out/'raw'/f'probe-{v}-{case}.log').write_text(r.stdout+r.stderr)
             if case=='shared':assert r.returncode==0,(v,case,r.stderr)
+            elif case in ['within-group','token-first']:assert r.returncode!=0 and 'conflicting input aliases' in r.stderr,(v,case,r.stderr)
             else:
                 assert r.returncode!=0 and ('pointer' in r.stderr or 'range' in r.stderr),(v,case,r.stderr)
                 if case=='callback-range':assert r.stderr.count('RELEASED')==1,(v,r.stderr)
+    for v in KINDS:
+        d=builds[v+'-time']
+        for case in ['flat','nested','groups8','shared','readonly','callback','callback_single']:
+            command([builds['current-time']['driver'],'time',case,'8','shuffled','1','1','verify'],out/'raw'/f'valid-{v}-{case}.log',d['library'])
     print('Native alias rejection passed for all five candidates.',flush=True)
     # Compile the standalone checker against the same current runtime.
     for counted in [False,True]:
@@ -56,6 +61,8 @@ def main():
         if counted:cmd+=['--cfg','counts']
         command(cmd,out/'raw'/f'compile-{counted}.log')
     command([str(out/'time'),'verify'],out/'raw'/'verify.log');print('Standalone differential verification passed.',flush=True)
+    if a.verify_only:
+        print('All native and standalone correctness probes passed.',flush=True);return
     cells=[]
     for n in [0,1,8]:
         for case in ['flat','nested','callback','readonly']:cells.append((case,n,'ascending'))
