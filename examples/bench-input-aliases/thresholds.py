@@ -33,7 +33,7 @@ sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def normalized(path):
     text=re.sub(r'\s+','',Path(path).read_text())
-    text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}>::default\(\)','NATIVE_HISTORY()',text)
+    text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(?:[0-9]+usize|\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}),?>::default\(\)','NATIVE_HISTORY()',text)
     return text.replace('::prebindgen_runtime::DynamicInputs::default()','NATIVE_HISTORY()')
 
 for limit in limits:

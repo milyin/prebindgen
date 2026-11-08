@@ -322,7 +322,7 @@ impl<const INDEX_THRESHOLD: usize> DynamicInputsWithThreshold<INDEX_THRESHOLD> {
     /// Check an individual argument against previous accesses in this call.
     pub fn access(&mut self, address: usize, exclusive: bool) -> Result<()> {
         if let InputHistory::Sorted(values) = &mut self.history {
-            if values.last().map_or(true, |entry| address > entry.0) {
+            if values.last().is_none_or(|entry| address > entry.0) {
                 values.push((address, exclusive));
                 return Ok(());
             }

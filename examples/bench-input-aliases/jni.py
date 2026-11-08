@@ -1,5 +1,5 @@
 """Confirm large-history changes through frozen generated JNI/Kotlin bindings."""
-import argparse, hashlib, json, os, platform, statistics, subprocess
+import argparse, hashlib, json, os, platform, re, statistics, subprocess
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--before',type=Path,required=True)
@@ -7,6 +7,7 @@ p.add_argument('--after',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
 p.add_argument('--forks',type=int,default=6)
 p.add_argument('--aa',action='store_true')
+p.add_argument('--compare-thresholds',action='store_true',help='allow only the configured native history constructor to differ')
 p.add_argument('--policy',choices=['native','kotlin'],required=True)
 p.add_argument('--sizes',default='1,128,512,8192')
 p.add_argument('--warmup',type=int,default=10)
@@ -20,7 +21,15 @@ info={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before)
 for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sha256','cargo_config_sha256','cargo_profile','profile_environment','native_input_checks']:
  assert info['before'][key]==info['after'][key],key
 glue={v:{name:sha(directory/name) for name in ['plain.rs','bulk.rs']} for v,directory in [('before',a.before),('after',a.after)]}
-assert glue['before']==glue['after'], 'generated JNI Rust differs'
+if a.compare_thresholds:
+ def normalized(path):
+  text=re.sub(r'\s+','',path.read_text())
+  text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(?:[0-9]+usize|\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}),?>::default\(\)','NATIVE_HISTORY()',text)
+  return text.replace('::prebindgen_runtime::DynamicInputs::default()','NATIVE_HISTORY()')
+ for name in ['plain.rs','bulk.rs']:
+  assert normalized(a.before/name)==normalized(a.after/name), 'generated JNI Rust differs beyond threshold constructor'
+else:
+ assert glue['before']==glue['after'], 'generated JNI Rust differs' 
 for d in info.values():
  assert d['native_input_checks']==(a.policy=='native'), 'unexpected alias-validation policy'
  assert not d['native_allocations'] and d['instrumentation_probe']=='NATIVE_ALLOCATIONS,false'
@@ -57,5 +66,5 @@ for mode,case,size in sorted({(s['mode'],s['case'],s['size']) for s in samples})
   row[metric]['paired_after_before']=statistics.median(y/x if x else 1.0 for x,y in zip(fm['before'],fm['after']))
  summary.append(row)
 for d in info.values():assert sha(d['library'])==d['native_sha256'] and sha(d['jar'])==d['jar_sha256']
-(root/'results.json').write_text(json.dumps(dict(builds=info,rust_glue_sha256=glue,settings=dict(forks=a.forks,aa=a.aa,policy=a.policy,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
+(root/'results.json').write_text(json.dumps(dict(builds=info,rust_glue_sha256=glue,settings=dict(forks=a.forks,aa=a.aa,compare_thresholds=a.compare_thresholds,policy=a.policy,warmup=a.warmup,batches=a.batches,target_ms=a.target_ms),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
 print('Finished',root,flush=True)

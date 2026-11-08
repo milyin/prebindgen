@@ -120,11 +120,11 @@ pub fn render_input_alias_checks_with_threshold(
             }
             output.extend(if let Some(limit) = threshold {
                 let limit = if limit == usize::MAX {
-                    quote!(::core::primitive::usize::MAX)
+                    quote!({ ::core::primitive::usize::MAX })
                 } else {
                     quote!(#limit)
                 };
-                quote!(::prebindgen_runtime::DynamicInputsWithThreshold::<{#limit}>::default())
+                quote!(::prebindgen_runtime::DynamicInputsWithThreshold::<#limit>::default())
             } else {
                 quote!(::prebindgen_runtime::DynamicInputs::default())
             });
