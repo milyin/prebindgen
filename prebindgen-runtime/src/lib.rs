@@ -1,7 +1,10 @@
 //! Panic containment and pointer validation for foreign adapters.
 #![warn(missing_docs)]
 mod input;
-pub use input::{DynamicInputs, FixedInputs, SharedInputs};
+pub use input::{
+    DynamicInputs, DynamicInputsWithThreshold, FixedInputs, SharedInputs,
+    DEFAULT_INPUT_ALIAS_INDEX_THRESHOLD,
+};
 mod output;
 pub use output::OutputRows;
 mod callback;
@@ -21,6 +24,15 @@ pub type Result<T> = std::result::Result<T, String>;
 #[macro_export]
 macro_rules! __prebindgen_alias_checks {
     ({$($checked:tt)*} {$($unchecked:tt)*}) => { $($checked)* };
+}
+
+// Intermediate conversion plans defer the native-history policy to the wrapper.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __prebindgen_dynamic_inputs {
+    () => {
+        $crate::DynamicInputs::default()
+    };
 }
 
 /// Report a contained callback failure through the application's tracing subscriber.

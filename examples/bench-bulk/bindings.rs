@@ -2,6 +2,7 @@ use prebindgen_declarations::{callback, expand_param, expand_return, fun, Input}
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     println!("cargo:rerun-if-env-changed=BENCH_NATIVE_INPUT_CHECKS");
+    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_INDEX_THRESHOLD");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     for (mode, bulk) in [("plain", false), ("bulk", true)] {
         let scalar = fun!(scalar);
@@ -72,47 +73,138 @@ fn main() {
         } else {
             (row_make, wide_make, wide_sum, row_callback, wide_callback)
         };
-        let handle_values = fun!(handle_values_sum).expand_param("values", if bulk {
-            expand_param!(i64).variant(fun!(input_handle_value)).bulk()
-        } else { expand_param!(i64).variant(fun!(input_handle_value)) });
-        let record_input=Input::Sequence(Box::new(Input::Record(vec![
-            Input::Constructor { function:"input_handle_copy".into(),args:vec![Input::Leaf] },
+        let handle_values = fun!(handle_values_sum).expand_param(
+            "values",
+            if bulk {
+                expand_param!(i64).variant(fun!(input_handle_value)).bulk()
+            } else {
+                expand_param!(i64).variant(fun!(input_handle_value))
+            },
+        );
+        let record_input = Input::Sequence(Box::new(Input::Record(vec![
+            Input::Constructor {
+                function: "input_handle_copy".into(),
+                args: vec![Input::Leaf],
+            },
             Input::Leaf,
         ])));
-        let handle_records=fun!(handle_records_sum).expand_param("values",if bulk {record_input.bulk()}else{record_input});
+        let handle_records = fun!(handle_records_sum).expand_param(
+            "values",
+            if bulk {
+                record_input.bulk()
+            } else {
+                record_input
+            },
+        );
         let owned_handles = if bulk {
-            fun!(owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
+            fun!(owned_handles_echo)
+                .expand_param("values", expand_param!(InputHandle).variant_self().bulk())
                 .expand_return(expand_return!(InputHandle).field_self_into().bulk())
-        } else { fun!(owned_handles_echo) };
+        } else {
+            fun!(owned_handles_echo)
+        };
         let owned_records_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
-        let owned_records = fun!(owned_handle_records_echo).expand_param("values",if bulk {owned_records_input.bulk()} else {owned_records_input});
-        let owned_records = if bulk {owned_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {owned_records};
+        let owned_records = fun!(owned_handle_records_echo).expand_param(
+            "values",
+            if bulk {
+                owned_records_input.bulk()
+            } else {
+                owned_records_input
+            },
+        );
+        let owned_records = if bulk {
+            owned_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())
+        } else {
+            owned_records
+        };
         let nested_owners = if bulk {
-            fun!(nested_owned_handles_echo).expand_param("values",expand_param!(InputHandle).variant_self().bulk())
+            fun!(nested_owned_handles_echo)
+                .expand_param("values", expand_param!(InputHandle).variant_self().bulk())
                 .expand_return(expand_return!(InputHandle).field_self_into().bulk())
-        } else {fun!(nested_owned_handles_echo)};
+        } else {
+            fun!(nested_owned_handles_echo)
+        };
         let (owned_handles, nested_owners) = if bulk {
             (owned_handles, nested_owners)
         } else {
-            (owned_handles.callback_return(), nested_owners.callback_return())
+            (
+                owned_handles.callback_return(),
+                nested_owners.callback_return(),
+            )
         };
-        let nested_callback_input=Input::Sequence(Box::new(Input::Sequence(Box::new(if bulk {Input::Leaf.bulk()}else{Input::Leaf}))));
-        let nested_callback_input=if bulk {nested_callback_input.bulk()}else{nested_callback_input};
-        let nested_callback=fun!(callback_nested_owned_handles).expand_param("callback",callback!(impl Fn()->Vec<Vec<InputHandle>>).name("OwnedNestedCallback").expand_return(nested_callback_input));
-        let nested_callback=if bulk {nested_callback.expand_return(expand_return!(InputHandle).field_self_into().bulk())}else{nested_callback.callback_return()};
-        let callback_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2])));
-        let callback_input=if bulk {callback_input.bulk()} else {callback_input};
-        let callback_records=fun!(callback_owned_records).expand_param("callback",callback!(impl Fn()->Vec<HandleRecord>).name("OwnedRecordsCallback").expand_return(callback_input));
-        let callback_records=if bulk {callback_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {callback_records};
-        let record_input=Input::Record(vec![Input::Leaf;2]);
-        let record_input=if bulk {record_input.bulk()} else {record_input};
-        let callback_record=fun!(callback_owned_record).expand_param("callback",callback!(impl Fn()->HandleRecord).name("OwnedRecordCallback").expand_return(record_input));
-        let callback_record=if bulk {callback_record.expand_return(expand_return!(HandleRecord).field_self_into().bulk())} else {callback_record};
-        let buffer_input=Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;3])));
-        let buffers=fun!(owned_buffer_records_echo).expand_param("values",if bulk {buffer_input.bulk()}else{buffer_input});
-        let buffers=if bulk {buffers.expand_return(expand_return!(BufferRecord).field_self_into().bulk())}else{buffers};
-        let generated = JniGen::builder()
-            .set_kotlin_input_preflight(std::env::var("BENCH_NATIVE_INPUT_CHECKS").as_deref() != Ok("1"))
+        let nested_callback_input = Input::Sequence(Box::new(Input::Sequence(Box::new(if bulk {
+            Input::Leaf.bulk()
+        } else {
+            Input::Leaf
+        }))));
+        let nested_callback_input = if bulk {
+            nested_callback_input.bulk()
+        } else {
+            nested_callback_input
+        };
+        let nested_callback = fun!(callback_nested_owned_handles).expand_param(
+            "callback",
+            callback!(impl Fn() -> Vec<Vec<InputHandle>>)
+                .name("OwnedNestedCallback")
+                .expand_return(nested_callback_input),
+        );
+        let nested_callback = if bulk {
+            nested_callback.expand_return(expand_return!(InputHandle).field_self_into().bulk())
+        } else {
+            nested_callback.callback_return()
+        };
+        let callback_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let callback_input = if bulk {
+            callback_input.bulk()
+        } else {
+            callback_input
+        };
+        let callback_records = fun!(callback_owned_records).expand_param(
+            "callback",
+            callback!(impl Fn() -> Vec<HandleRecord>)
+                .name("OwnedRecordsCallback")
+                .expand_return(callback_input),
+        );
+        let callback_records = if bulk {
+            callback_records.expand_return(expand_return!(HandleRecord).field_self_into().bulk())
+        } else {
+            callback_records
+        };
+        let record_input = Input::Record(vec![Input::Leaf; 2]);
+        let record_input = if bulk {
+            record_input.bulk()
+        } else {
+            record_input
+        };
+        let callback_record = fun!(callback_owned_record).expand_param(
+            "callback",
+            callback!(impl Fn() -> HandleRecord)
+                .name("OwnedRecordCallback")
+                .expand_return(record_input),
+        );
+        let callback_record = if bulk {
+            callback_record.expand_return(expand_return!(HandleRecord).field_self_into().bulk())
+        } else {
+            callback_record
+        };
+        let buffer_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 3])));
+        let buffers = fun!(owned_buffer_records_echo).expand_param(
+            "values",
+            if bulk {
+                buffer_input.bulk()
+            } else {
+                buffer_input
+            },
+        );
+        let buffers = if bulk {
+            buffers.expand_return(expand_return!(BufferRecord).field_self_into().bulk())
+        } else {
+            buffers
+        };
+        let mut builder = JniGen::builder()
+            .set_kotlin_input_preflight(
+                std::env::var("BENCH_NATIVE_INPUT_CHECKS").as_deref() != Ok("1"),
+            )
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
@@ -126,7 +218,14 @@ fn main() {
                     .fun(fun!(input_handle_new))
                     .fun(fun!(input_handle_value))
                     .fun(fun!(buffer_sizes))
-                    .fun(fun!(selected_handle).expand_param("value", expand_param!(i64).variant_self().variant(fun!(input_handle_value))))
+                    .fun(
+                        fun!(selected_handle).expand_param(
+                            "value",
+                            expand_param!(i64)
+                                .variant_self()
+                                .variant(fun!(input_handle_value)),
+                        ),
+                    )
                     .fun(handle_values)
                     .fun(handle_records)
                     .fun(owned_handles)
@@ -160,9 +259,16 @@ fn main() {
                     .fun(packet)
                     .fun(handler)
                     .fun(fun!(fire)),
-            )
-            .build()
-            .expect("generate benchmark JNI");
+            );
+        if let Ok(value) = std::env::var("BENCH_ALIAS_INDEX_THRESHOLD") {
+            let value = if value == "max" {
+                usize::MAX
+            } else {
+                value.parse().expect("numeric native alias threshold")
+            };
+            builder = builder.set_native_input_alias_index_threshold(value);
+        }
+        let generated = builder.build().expect("generate benchmark JNI");
         generated
             .write_rust(out.join(format!("{mode}.rs")))
             .unwrap();

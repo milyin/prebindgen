@@ -242,6 +242,7 @@ type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
 #[derive(Default)]
 pub struct JniGenBuilder {
     kotlin_input_preflight: Option<bool>,
+    input_alias_index_threshold: Option<usize>,
     configure: Vec<Configure>,
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -430,6 +431,14 @@ impl JniGenBuilder {
         self.kotlin_input_preflight = Some(enabled);
         self
     }
+    /// Set the compile-time sorted-history limit for native alias validation.
+    /// Applies to native-checked arguments and callback results; Kotlin-preflight
+    /// inputs omit native history entirely. usize::MAX keeps vector storage.
+    pub fn set_native_input_alias_index_threshold(mut self, threshold: usize) -> Self {
+        self.input_alias_index_threshold = Some(threshold);
+        self
+    }
+
     /// Resolve declarations and return a complete Flat binding model for emission.
     ///
     /// Rejects ambiguous source selection, invalid or duplicate names, unsupported
@@ -479,6 +488,7 @@ impl JniGenBuilder {
         };
         validate_package(&self.prefix)?;
         flat.metadata = JniModule {
+            input_alias_index_threshold: self.input_alias_index_threshold,
             kotlin_input_preflight: self.kotlin_input_preflight.unwrap_or(true),
             package: self.prefix,
             native_init: self.init,
@@ -1696,6 +1706,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let mut context = JniContext {
+            input_alias_index_threshold: flat.metadata.input_alias_index_threshold,
             environment: env.clone(),
             acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),

@@ -7,6 +7,8 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct JniContext {
+    /// Compile-time native history limit; None uses the runtime default.
+    pub input_alias_index_threshold: Option<usize>,
     /// Mutable JNI environment parameter.
     pub environment: syn::Ident,
     /// Long-array parameter recording completed input transfers.
@@ -25,8 +27,11 @@ pub struct JniContext {
 }
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        let code =
-            prebindgen_conversions::render_input_alias_checks(code, self.input_alias_checks)?;
+        let code = prebindgen_conversions::render_input_alias_checks_with_threshold(
+            code,
+            self.input_alias_checks,
+            self.input_alias_index_threshold,
+        )?;
         render_template(&code, &|name| match name {
             "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),

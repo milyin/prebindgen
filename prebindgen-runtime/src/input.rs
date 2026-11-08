@@ -131,17 +131,22 @@ impl InputGroup {
         self.values.push(value);
     }
 }
-/// Address history for a call with dynamic collections. One complete batch and
-/// small incremental histories retain sorted storage. Larger incremental sets
-/// use an exact integer-hashed index rather than repeatedly moving old entries.
+/// Default sorted-history limit before a non-append access may build an index.
+pub const DEFAULT_INPUT_ALIAS_INDEX_THRESHOLD: usize = 128;
+
+/// Native input history using the default promotion threshold.
+pub type DynamicInputs = DynamicInputsWithThreshold<DEFAULT_INPUT_ALIAS_INDEX_THRESHOLD>;
+
+/// Native input history with a compile-time sorted-history limit.
+///
+/// The first batch and disjoint ascending additions retain sorted storage.
+/// Above `INDEX_THRESHOLD`, additions requiring sorted-history movement use an
+/// exact hash index. Zero allows immediate promotion when movement is needed;
+/// `usize::MAX` retains vector storage. All limits enforce the same alias rules.
 #[derive(Default)]
-pub struct DynamicInputs {
+pub struct DynamicInputsWithThreshold<const INDEX_THRESHOLD: usize> {
     history: InputHistory,
 }
-
-// A single batch can reuse its input allocation without building another index.
-// The threshold applies only when accepting additional distinct accesses/groups.
-const INDEX_THRESHOLD: usize = 128;
 enum InputHistory {
     Sorted(Vec<(usize, bool)>),
     Indexed(InputIndex),
@@ -195,7 +200,7 @@ impl InputIndex {
         Ok(())
     }
 }
-impl DynamicInputs {
+impl<const INDEX_THRESHOLD: usize> DynamicInputsWithThreshold<INDEX_THRESHOLD> {
     /// Dynamic exclusive accesses need a checked batch before construction.
     #[inline(always)]
     pub fn needs_group(&self) -> bool {
@@ -239,6 +244,16 @@ impl DynamicInputs {
             if !values.is_empty()
                 && values.len().saturating_add(group.values.len()) > INDEX_THRESHOLD
             {
+                let last = values.last().expect("nonempty history").0;
+                if group.values.iter().all(|entry| entry.0 > last) {
+                    // Sort/check the new group, then append without indexing
+                    // history that needs no movement. This also rejects aliases
+                    // inside the new group before changing accepted history.
+                    let InputHistory::Sorted(values) = &mut self.history else {
+                        unreachable!()
+                    };
+                    return Self::accept_sorted(values, group);
+                }
                 self.promote();
             }
         }
@@ -307,6 +322,10 @@ impl DynamicInputs {
     /// Check an individual argument against previous accesses in this call.
     pub fn access(&mut self, address: usize, exclusive: bool) -> Result<()> {
         if let InputHistory::Sorted(values) = &mut self.history {
+            if values.last().map_or(true, |entry| address > entry.0) {
+                values.push((address, exclusive));
+                return Ok(());
+            }
             let position = match values.binary_search_by_key(&address, |entry| entry.0) {
                 Ok(i) => {
                     return if values[i].1 || exclusive {
@@ -348,6 +367,8 @@ impl DynamicInputs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Boundary tests use an explicit policy independently of the chosen default.
+    type DynamicInputs = DynamicInputsWithThreshold<128>;
     #[test]
     fn fixed_and_dynamic_histories_check_before_every_use() {
         for exclusive in [false, true] {
@@ -540,7 +561,7 @@ mod tests {
         history.access(64, false).unwrap();
         assert!(history.access(0, false).is_err());
         assert!(matches!(history.history, InputHistory::Sorted(_)));
-        history.access(2048 * 64, true).unwrap();
+        history.access(32, true).unwrap();
         assert!(matches!(history.history, InputHistory::Indexed(_)));
         assert_eq!(history.snapshot().len(), 2049);
     }
@@ -548,7 +569,7 @@ mod tests {
     #[test]
     fn indexed_groups_roll_back_new_shared_and_exclusive_entries_only() {
         let mut history = DynamicInputs::default();
-        for i in 0..512 {
+        for i in (0..512).rev() {
             history.access(i * 64, i % 4 == 0).unwrap();
         }
         assert!(matches!(history.history, InputHistory::Indexed(_)));
@@ -580,7 +601,7 @@ mod tests {
     #[test]
     fn indexed_generation_wrap_preserves_older_modes_and_rollback() {
         let mut history = DynamicInputs::default();
-        for i in 0..512 {
+        for i in (0..512).rev() {
             history.access(i * 64, i % 4 == 0).unwrap();
         }
         let InputHistory::Indexed(index) = &mut history.history else {
@@ -650,16 +671,16 @@ mod tests {
     #[test]
     fn index_threshold_preserves_small_shared_repeats_and_access_modes() {
         let mut history = DynamicInputs::default();
-        for i in 0..127 {
+        for i in (1..128).rev() {
             history.access(i * 64, false).unwrap();
         }
         assert!(matches!(history.history, InputHistory::Sorted(_)));
-        history.access(127 * 64, false).unwrap();
+        history.access(0, false).unwrap();
         history.access(64, false).unwrap();
         assert!(matches!(history.history, InputHistory::Sorted(_)));
-        history.access(128 * 64, true).unwrap();
+        history.access(32, true).unwrap();
         assert!(matches!(history.history, InputHistory::Indexed(_)));
-        assert!(history.access(128 * 64, false).is_err());
+        assert!(history.access(32, false).is_err());
         let mut history = DynamicInputs::default();
         let mut group = history.begin_group(128);
         for i in 0..128 {
@@ -673,6 +694,47 @@ mod tests {
         }
         history.accept_group(repeats).unwrap();
         assert_eq!(history.snapshot(), before);
+    }
+
+    #[test]
+    fn configured_thresholds_preserve_append_paths_conflicts_and_rollback() {
+        fn check<const LIMIT: usize>() {
+            let mut history = DynamicInputsWithThreshold::<LIMIT>::default();
+            for base in (0..2048).step_by(8) {
+                let mut group = history.begin_group(8);
+                for i in (base..base + 8).rev() {
+                    group.push((i * 64, true));
+                }
+                history.accept_group(group).unwrap();
+            }
+            assert!(matches!(history.history, InputHistory::Sorted(_)));
+            let before = history.snapshot();
+            let mut invalid = history.begin_group(2);
+            invalid.push((200000, true));
+            invalid.push((200000, false));
+            assert!(history.accept_group(invalid).is_err());
+            assert_eq!(history.snapshot(), before);
+            assert!(history.access(64, false).is_err());
+            history.access(32, true).unwrap();
+            assert_eq!(
+                matches!(history.history, InputHistory::Indexed(_)),
+                LIMIT < 2048
+            );
+            let before = history.snapshot();
+            let mut invalid = history.begin_group(2);
+            invalid.push((300000, true));
+            invalid.push((64, true));
+            assert!(history.accept_group(invalid).is_err());
+            assert_eq!(history.snapshot(), before);
+        }
+        check::<0>();
+        check::<1>();
+        check::<128>();
+        check::<512>();
+        check::<{ usize::MAX }>();
+        let mut defaults = super::DynamicInputs::default();
+        defaults.access(8, true).unwrap();
+        assert!(defaults.access(8, false).is_err());
     }
 
     #[test]

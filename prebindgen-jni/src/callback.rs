@@ -13,6 +13,7 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 pub struct JniCallback {
     kotlin_input_preflight: bool,
+    input_alias_index_threshold: Option<usize>,
     package: String,
     name: String,
     arguments: Vec<Argument>,
@@ -255,6 +256,7 @@ pub(crate) fn input(
     }
     let callback = Rc::new(JniCallback {
         kotlin_input_preflight: flat.metadata.kotlin_input_preflight,
+        input_alias_index_threshold: flat.metadata.input_alias_index_threshold,
         package,
         name,
         arguments,
@@ -305,6 +307,7 @@ impl JniCallback {
         let retained = format_ident!("{wire}_retained");
         let environment = format_ident!("callback_environment");
         let context = JniContext {
+            input_alias_index_threshold: self.input_alias_index_threshold,
             environment: environment.clone(),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("unused_domain"),

@@ -32,8 +32,8 @@ impl Validator for Current {
     }
 }
 #[derive(Default)]
-struct Selected(production::DynamicInputs);
-impl Validator for Selected {
+struct Selected<const LIMIT: usize = {production::DEFAULT_INPUT_ALIAS_INDEX_THRESHOLD}>(production::DynamicInputsWithThreshold<LIMIT>);
+impl<const LIMIT: usize> Validator for Selected<LIMIT> {
     type Group = production::InputGroup;
     fn begin(&self, n: usize) -> Self::Group {
         self.0.begin_group(n)
@@ -574,7 +574,7 @@ fn run<V: Validator>(case: &Case) -> bool {
 }
 fn cases() -> Vec<Case> {
     let mut cases = Vec::new();
-    for n in [0, 1, 4, 16, 32, 64, 128, 256, 512, 2048, 8192] {
+    for n in [0, 1, 4, 16, 32, 64, 128, 256, 512, 1024, 2048, 8192] {
         for shape in ["batch", "quads", "singletons", "access"] {
             for order in ["ascending", "descending", "shuffled", "scattered"] {
                 let mut entries = (0..n)
@@ -675,6 +675,15 @@ fn cases() -> Vec<Case> {
 macro_rules! dispatch {
     ($name:expr, $func:ident $(,$arg:expr)*) => { match $name {
         "selected" => $func::<Selected>($($arg),*),
+        "limit0" => $func::<Selected<0>>($($arg),*),
+        "limit64" => $func::<Selected<64>>($($arg),*),
+        "limit128" => $func::<Selected<128>>($($arg),*),
+        "limit256" => $func::<Selected<256>>($($arg),*),
+        "limit512" => $func::<Selected<512>>($($arg),*),
+        "limit1024" => $func::<Selected<1024>>($($arg),*),
+        "limit2048" => $func::<Selected<2048>>($($arg),*),
+        "limit4096" => $func::<Selected<4096>>($($arg),*),
+        "limitmax" => $func::<Selected<{usize::MAX}>>($($arg),*),
         "sorted" => $func::<Current>($($arg),*),
         "linear" => $func::<Linear>($($arg),*),
         "hash" => $func::<Indexed<HashMap<usize,u64>>>($($arg),*),
@@ -856,7 +865,7 @@ fn correctness<V: Validator>() {
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let candidates = [
-        "selected",
+        "selected", "limit0", "limit64", "limit128", "limit256", "limit512", "limit1024", "limit2048", "limit4096", "limitmax",
         "sorted",
         "linear",
         "hash",

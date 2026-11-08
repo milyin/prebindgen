@@ -172,6 +172,7 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         let ty = &error.ty;
         let source = format_ident!("source");
         let context = JniContext {
+            input_alias_index_threshold: None,
             environment: format_ident!("env"),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),

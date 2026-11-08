@@ -4151,3 +4151,18 @@ fn native_symbols_pair_kotlin_preflight_with_its_rust_entry_points() {
         );
     }
 }
+
+#[test]
+fn native_history_limit_applies_to_arguments_and_callback_results_only_when_needed() {
+    for preflight in [false, true] {
+        let g=JniGen::builder().flat(flat("pub struct A{pub value:i64}pub fn call(values:Vec<A>)->i64{}pub fn cb(callback:impl Fn()->Vec<A>)->i64{}"))
+            .set_package_prefix("test").set_kotlin_input_preflight(preflight)
+            .set_native_input_alias_index_threshold(23)
+            .package(package!().class(ptr_class!(A)).fun(fun!(call)).fun(fun!(cb)))
+            .build().unwrap();
+        assert_eq!(g.rust.contains("DynamicInputsWithThreshold"), !preflight);
+        if !preflight {
+            assert!(g.rust.matches("23usize").count() >= 2);
+        }
+    }
+}

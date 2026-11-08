@@ -10,7 +10,8 @@ fn rows(element: Output<OutputRequest>) -> Output<OutputRequest> {
 }
 fn main() {
     println!("cargo:rerun-if-env-changed=BENCH_ALIAS_CHECKS");
-    let generation = prebindgen_c::Cbindgen::builder()
+    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_INDEX_THRESHOLD");
+    let mut builder = prebindgen_c::Cbindgen::builder()
         .source(c_collection_flat::PREBINDGEN_OUT_DIR)
         .prefix("bench")
         .set_emit_alias_checks(std::env::var("BENCH_ALIAS_CHECKS").as_deref() != Ok("0"))
@@ -103,9 +104,16 @@ fn main() {
         .function(fun!(make_many).output(rows(rows(Output::auto()))))
         .panic()
         .function(fun!(make_numbers).output(rows(Output::auto())))
-        .panic()
-        .build()
-        .expect("C collection benchmark bindings");
+        .panic();
+    if let Ok(value) = std::env::var("BENCH_ALIAS_INDEX_THRESHOLD") {
+        let value = if value == "max" {
+            usize::MAX
+        } else {
+            value.parse().expect("numeric native alias threshold")
+        };
+        builder = builder.set_input_alias_index_threshold(value);
+    }
+    let generation = builder.build().expect("C collection benchmark bindings");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();

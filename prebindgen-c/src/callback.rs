@@ -322,6 +322,7 @@ impl CCallback {
             sequence::schemas(&plan.node, &mut schemas);
         }
         CContext {
+            input_alias_index_threshold: None,
             emit_alias_checks: None,
             row_types: schemas
                 .into_iter()

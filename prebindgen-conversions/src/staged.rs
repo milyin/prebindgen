@@ -87,7 +87,7 @@ impl ParameterAliasCheck {
             } else if fixed {
                 quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::FixedInputs::<#count>::default();)
             } else {
-                quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::DynamicInputs::default();)
+                quote!(let mut __prebindgen_input_aliases=::prebindgen_runtime::__prebindgen_dynamic_inputs!();)
             },
         )
     }

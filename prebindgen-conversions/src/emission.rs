@@ -87,11 +87,50 @@ pub fn render_template(
 /// Intermediate template composition leaves these scopes intact; unresolved
 /// scopes use the runtime crate's checked compatibility macro.
 pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<TokenStream> {
+    render_input_alias_checks_with_threshold(code, enabled, None)
+}
+
+/// Select alias validation and its compile-time native history threshold.
+/// None uses the runtime default; usize::MAX keeps sorted history. The limit
+/// changes storage selection, never which accesses are accepted. Disabled
+/// checks omit both history and its threshold configuration.
+pub fn render_input_alias_checks_with_threshold(
+    code: &TokenStream,
+    enabled: bool,
+    threshold: Option<usize>,
+) -> Result<TokenStream> {
     let tokens: Vec<_> = code.clone().into_iter().collect();
     let mut output = TokenStream::new();
     let mut index = 0;
     while index < tokens.len() {
         let colon = |i| matches!(tokens.get(i), Some(TokenTree::Punct(p)) if p.as_char()==':');
+        if colon(index)
+            && colon(index + 1)
+            && matches!(tokens.get(index+2),Some(TokenTree::Ident(id)) if id=="prebindgen_runtime")
+            && colon(index + 3)
+            && colon(index + 4)
+            && matches!(tokens.get(index+5),Some(TokenTree::Ident(id)) if id=="__prebindgen_dynamic_inputs")
+            && matches!(tokens.get(index+6),Some(TokenTree::Punct(p)) if p.as_char()=='!')
+        {
+            let Some(TokenTree::Group(group)) = tokens.get(index + 7) else {
+                return Err("invalid input history marker".into());
+            };
+            if !group.stream().is_empty() {
+                return Err("input history marker takes no arguments".into());
+            }
+            output.extend(if let Some(limit) = threshold {
+                let limit = if limit == usize::MAX {
+                    quote!(::core::primitive::usize::MAX)
+                } else {
+                    quote!(#limit)
+                };
+                quote!(::prebindgen_runtime::DynamicInputsWithThreshold::<{#limit}>::default())
+            } else {
+                quote!(::prebindgen_runtime::DynamicInputs::default())
+            });
+            index += 8;
+            continue;
+        }
         if colon(index)
             && colon(index + 1)
             && matches!(tokens.get(index+2),Some(TokenTree::Ident(id)) if id=="prebindgen_runtime")
@@ -108,13 +147,14 @@ pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<To
             else {
                 return Err("invalid input alias branches".into());
             };
-            output.extend(render_input_alias_checks(
+            output.extend(render_input_alias_checks_with_threshold(
                 &if enabled {
                     checked.stream()
                 } else {
                     unchecked.stream()
                 },
                 enabled,
+                threshold,
             )?);
             index += 8;
             continue;
@@ -123,7 +163,7 @@ pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<To
             TokenTree::Group(group) => {
                 let mut rendered = Group::new(
                     group.delimiter(),
-                    render_input_alias_checks(&group.stream(), enabled)?,
+                    render_input_alias_checks_with_threshold(&group.stream(), enabled, threshold)?,
                 );
                 rendered.set_span(group.span());
                 output.extend([TokenTree::Group(rendered)]);
@@ -165,5 +205,39 @@ mod alias_tests {
                 .to_string(),
             literal.to_string()
         );
+    }
+}
+
+#[cfg(test)]
+mod history_policy_tests {
+    use super::*;
+    #[test]
+    fn history_threshold_is_static_scoped_and_target_width_independent() {
+        let history = quote!(::prebindgen_runtime::__prebindgen_dynamic_inputs!());
+        let code = crate::staged::input_alias_checks(quote!(let mut aliases=#history;), quote!());
+        let configured = render_input_alias_checks_with_threshold(&code, true, Some(17))
+            .unwrap()
+            .to_string();
+        assert!(configured.contains("DynamicInputsWithThreshold"));
+        assert!(configured.contains("17usize"));
+        assert!(
+            render_input_alias_checks_with_threshold(&code, false, Some(17))
+                .unwrap()
+                .is_empty()
+        );
+        let maximum = render_input_alias_checks_with_threshold(&code, true, Some(usize::MAX))
+            .unwrap()
+            .to_string();
+        assert!(maximum.contains("usize :: MAX"));
+        assert!(!maximum.contains(&usize::MAX.to_string()));
+        let default = render_input_alias_checks(&code, true).unwrap().to_string();
+        assert!(default.contains("DynamicInputs :: default"));
+        assert!(!default.contains("WithThreshold"));
+        assert!(render_input_alias_checks_with_threshold(
+            &quote!(::prebindgen_runtime::__prebindgen_dynamic_inputs!(invalid)),
+            true,
+            None
+        )
+        .is_err());
     }
 }

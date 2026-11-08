@@ -39,7 +39,7 @@ cases = subprocess.check_output([str(out/'time'), 'list'], text=True).splitlines
 cases = [c for c in cases if c.split('/')[0] in a.sizes.split(',')]
 if a.quick:
     cases = [c for c in cases if '/access/' not in c and '/quads/' not in c and '/duplicate/' not in c]
-candidates = ['selected', 'sorted', 'linear', 'hash', 'hash_fast', 'btree', 'bloom512', 'bloom8192', 'blocked8192', 'bloom_grow', 'hybrid64', 'hybrid128']
+candidates = ['selected', 'sorted', 'linear', 'hash', 'hash_fast', 'btree', 'bloom512', 'bloom8192', 'blocked8192', 'bloom_grow', 'hybrid64', 'hybrid128','limit0','limit64','limit128','limit256','limit512','limit1024','limit2048','limit4096','limitmax']
 if a.candidates!='all':
     candidates=[n for n in candidates if n in a.candidates.split(',')]
     assert candidates

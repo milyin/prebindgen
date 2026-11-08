@@ -6,6 +6,7 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .set_input_alias_index_threshold(256)
         .opaque_ptr("mutable_bytes", pq!(MutableBytes))
         .function(fun!(mutable_bytes_new))
         .panic()
@@ -379,6 +380,7 @@ fn main() {
         .function(fun!(callback_return_owned_optional))
         .panic()
         .function(fun!(callback_return_owned_vector))
+        .input_alias_index_threshold(0)
         .panic()
         .function(fun!(callback_return_spawn))
         .panic()
@@ -1205,6 +1207,7 @@ fn main() {
         .function(fun!(alias_handler_new))
         .panic()
         .function(fun!(alias_callback_rows))
+        .input_alias_index_threshold(0)
         .function(fun!(alias_handler_call))
         .alias_checks(true);
     if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {

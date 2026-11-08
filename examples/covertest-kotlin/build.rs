@@ -1924,6 +1924,7 @@ fn main() {
         .set_package_prefix("io.prebindgen.covertest.rawinputs")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         .set_kotlin_input_preflight(false)
+        .set_native_input_alias_index_threshold(128)
         .package(
             package!()
                 .class(ptr_class!(BulkHandle))
