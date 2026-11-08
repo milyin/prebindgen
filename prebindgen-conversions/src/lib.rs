@@ -14,7 +14,8 @@ pub mod value;
 
 mod emission;
 pub use emission::{
-    render_input_alias_checks, render_template, template_parameter, TemplateContext,
+    render_input_alias_checks, render_input_alias_checks_with_threshold, render_template,
+    template_parameter, TemplateContext,
 };
 
 mod plan;

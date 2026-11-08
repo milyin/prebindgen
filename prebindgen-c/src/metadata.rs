@@ -16,6 +16,8 @@ impl prebindgen_flat::Schema for CSchema {
 /// Settings applying to the whole generated C module.
 #[derive(Clone, Debug)]
 pub struct CModule {
+    /// Native history promotion limit; None uses the runtime default.
+    pub input_alias_index_threshold: Option<usize>,
     /// Default generation of input-handle alias conflict checks.
     pub emit_alias_checks: bool,
     /// Prefix of generated symbols and declarations.
@@ -28,6 +30,7 @@ pub struct CModule {
 impl Default for CModule {
     fn default() -> Self {
         Self {
+            input_alias_index_threshold: None,
             emit_alias_checks: true,
             prefix: "pb".into(),
             helpers: Vec::new(),
@@ -39,6 +42,8 @@ impl Default for CModule {
 /// Export decisions belonging to one function binding.
 #[derive(Clone, Debug, Default)]
 pub struct CFunction {
+    /// Override the project limit for this binding and its retained callbacks.
+    pub input_alias_index_threshold: Option<usize>,
     /// Override the module's input-alias checks for this binding and its callbacks.
     pub emit_alias_checks: Option<bool>,
     /// Whether conversion failure deliberately aborts this non-Result binding.

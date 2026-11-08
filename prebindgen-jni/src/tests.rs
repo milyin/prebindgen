@@ -4151,3 +4151,33 @@ fn native_symbols_pair_kotlin_preflight_with_its_rust_entry_points() {
         );
     }
 }
+
+#[test]
+fn native_history_limit_applies_to_arguments_and_callback_results_only_when_needed() {
+    for preflight in [false, true] {
+        let g=JniGen::builder().flat(flat("pub struct A{pub value:i64}pub fn call(values:Vec<A>)->i64{}pub fn cb(callback:impl Fn()->Vec<A>)->i64{}"))
+            .set_package_prefix("test").set_kotlin_input_preflight(preflight)
+            .set_native_input_alias_index_threshold(23)
+            .package(package!().class(ptr_class!(A)).fun(fun!(call)).fun(fun!(cb)))
+            .build().unwrap();
+        assert_eq!(g.rust.contains("DynamicInputsWithThreshold"), !preflight);
+        if !preflight {
+            let file = syn::parse_file(&g.rust).unwrap();
+            for source in ["call", "cb"] {
+                let prefix = format!("Java_test_JNINative_call_1{source}_1");
+                let bodies: Vec<_> = file
+                    .items
+                    .iter()
+                    .filter_map(|item| match item {
+                        syn::Item::Fn(item) if item.sig.ident.to_string().starts_with(&prefix) => {
+                            Some(quote!(#item).to_string())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(bodies.len(), 1, "{prefix}");
+                assert!(bodies[0].contains("23usize"), "{prefix}");
+            }
+        }
+    }
+}

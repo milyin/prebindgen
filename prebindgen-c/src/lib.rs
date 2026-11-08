@@ -842,6 +842,8 @@ pub struct Cbindgen {
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
+    input_alias_index_threshold: Option<usize>,
+    function_alias_index_thresholds: std::collections::BTreeMap<String, usize>,
     emit_alias_checks: Option<bool>,
     function_alias_checks: std::collections::BTreeMap<String, bool>,
 }
@@ -865,6 +867,8 @@ impl Cbindgen {
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            input_alias_index_threshold: None,
+            function_alias_index_thresholds: Default::default(),
             emit_alias_checks: None,
             function_alias_checks: Default::default(),
         }
@@ -958,6 +962,30 @@ impl Cbindgen {
         self
     }
 
+    /// Set the sorted-history limit for native alias validation.
+    /// The first batch and ascending additions keep vector storage. Other
+    /// additions above this limit may build a hash index. Zero allows immediate
+    /// promotion; usize::MAX keeps vectors. Alias checks remain enabled.
+    pub fn set_input_alias_index_threshold(mut self, threshold: usize) -> Self {
+        self.input_alias_index_threshold = Some(threshold);
+        self
+    }
+
+    /// Override the native history limit for the last function and its callbacks.
+    ///
+    /// # Panics
+    /// Panics if no function has been declared.
+    pub fn input_alias_index_threshold(mut self, threshold: usize) -> Self {
+        let name = self
+            .functions
+            .last()
+            .expect("input_alias_index_threshold() must follow function(...)")
+            .name
+            .clone();
+        self.function_alias_index_thresholds.insert(name, threshold);
+        self
+    }
+
     /// Override alias conflict checks for the last declared function and the
     /// callbacks it registers. This overrides the project default in either
     /// direction. A disabled check transfers Rust's aliasing obligations to C.
@@ -1019,6 +1047,8 @@ impl Cbindgen {
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
+            input_alias_index_threshold: None,
+            function_alias_index_thresholds: Default::default(),
             emit_alias_checks: None,
             function_alias_checks: Default::default(),
         }
@@ -1178,6 +1208,9 @@ impl Cbindgen {
             _ => return Err("supply exactly one source or flat model".into()),
         };
         flat.metadata.prefix = self.prefix;
+        if let Some(threshold) = self.input_alias_index_threshold {
+            flat.metadata.input_alias_index_threshold = Some(threshold);
+        }
         if let Some(enabled) = self.emit_alias_checks {
             flat.metadata.emit_alias_checks = enabled;
         }
@@ -1322,6 +1355,10 @@ impl Cbindgen {
                 return Err("C function renaming is outside this subset".into());
             }
             flat.function_mut(&decl.name)?.metadata = Some(CFunction {
+                input_alias_index_threshold: self
+                    .function_alias_index_thresholds
+                    .get(&decl.name)
+                    .copied(),
                 abort_on_failure: self.panics.contains(&decl.name),
                 requires_abort: false,
                 emit_alias_checks: self.function_alias_checks.get(&decl.name).copied(),
@@ -1707,6 +1744,11 @@ where
             return Err("recoverable C delivery requires a binding-failure schema".into());
         }
         let context = CContext {
+            input_alias_index_threshold: f
+                .metadata
+                .as_ref()
+                .and_then(|m| m.input_alias_index_threshold)
+                .or(flat.metadata.input_alias_index_threshold),
             emit_alias_checks: Some(
                 f.metadata
                     .as_ref()
@@ -2461,6 +2503,46 @@ mod generation_tests {
                 .map(|item| (item, Default::default())),
         )
         .unwrap()
+    }
+    #[test]
+    fn project_and_local_limits_reach_arguments_and_registered_callbacks() {
+        use prebindgen_declarations::fun;
+        let source="pub struct Item{pub value:i64}pub fn local(values:Vec<Item>)->i64{}pub fn global(values:Vec<Item>)->i64{}pub fn cb(callback:impl Fn()->Vec<Item>)->i64{}pub fn unchecked(values:Vec<Item>)->i64{}";
+        let generation = Cbindgen::new(error_model(source))
+            .opaque_ptr("item", syn::parse_quote!(Item))
+            .function(fun!(local))
+            .input_alias_index_threshold(17)
+            .panic()
+            .function(fun!(global))
+            .panic()
+            .function(fun!(cb))
+            .input_alias_index_threshold(31)
+            .panic()
+            .function(fun!(unchecked))
+            .input_alias_index_threshold(0)
+            .alias_checks(false)
+            .panic()
+            .set_input_alias_index_threshold(512)
+            .build()
+            .unwrap();
+        let file: syn::File = syn::parse_str(&generation.rust).unwrap();
+        let body = |name: &str| {
+            file.items
+                .iter()
+                .find_map(|item| match item {
+                    syn::Item::Fn(item) if item.sig.ident == name => {
+                        Some(quote!(#item).to_string())
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        assert!(body("pb_local").contains("17usize"));
+        assert!(body("pb_global").contains("512usize"));
+        assert!(body("pb_cb").contains("31usize"));
+        assert!(!body("pb_local").contains("512usize"));
+        assert!(!body("pb_cb").contains("512usize"));
+        assert!(!body("pb_unchecked").contains("DynamicInputs"));
     }
     #[test]
     fn mutable_byte_views_preserve_ownership_and_optional_layers() {
@@ -3440,6 +3522,7 @@ mod generation_tests {
     #[test]
     fn reclaiming_undelivered_outputs_does_not_destroy_loans() {
         let context = CContext {
+            input_alias_index_threshold: None,
             emit_alias_checks: Some(true),
             row_types: Default::default(),
             acknowledgement: syn::parse_quote!(accepted),
@@ -3542,6 +3625,7 @@ mod generation_tests {
             .unwrap()
             .pointer = Some("item".into());
         flat.function_mut("inspect").unwrap().metadata = Some(CFunction {
+            input_alias_index_threshold: None,
             emit_alias_checks: None,
             abort_on_failure: true,
             requires_abort: false,

@@ -4,6 +4,7 @@ import io.prebindgen.covertest.bulk.*
 
 fun checkBulkReplay() {
     checkBulkReplayRaw()
+    checkLargeAliasHistory()
     fun rows(): List<BulkReplayRow> = listOf(
         BulkReplayRow(bulkHandleNew(1), "世界", byteArrayOf(0,-1), BulkKind.A, bulkHandleNew(2)),
         BulkReplayRow(bulkHandleNew(3), null, null, null, bulkHandleNew(4)),
@@ -35,6 +36,73 @@ fun checkBulkReplay() {
     bulkReplayReset(0uL)
     check(bulkReplayRows(emptyList())==0uL)
     println("bulk replay PASS: optional borrowed text/bytes/enums, constructors once, panic prefixes and callback unread-owner cleanup")
+}
+
+private fun checkLargeAliasHistory() {
+    // This binding explicitly retains native checks after Kotlin preflight became
+    // the default. Two owned handles per inner list cross the runtime's vector/index boundary.
+    // Constructor failure occurs after promotion, covering callback unread-owner
+    // cleanup and ordinary-input ownership receipts through the actual JNI call.
+    val count = 256
+    for (callback in listOf(false, true)) for (fail in listOf(0uL, 100uL)) {
+        val rows = List(count) { i -> io.prebindgen.covertest.rawinputs.BulkReplayRow(
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), io.prebindgen.covertest.rawinputs.BulkKind.A,
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 2)
+        ) }
+        val handles = rows.flatMap { listOf(it.first, it.last) }
+        val nested = rows.map { listOf(it) }
+        val before = bulkDrops()
+        bulkReplayReset(fail)
+        var failed = false
+        val error = io.prebindgen.covertest.rawinputs.JniErrorHandler { failed = true; 0uL }
+        val result = if (callback) {
+            io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback { nested }, error)
+        } else {
+            io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(nested, error)
+        }
+        check(failed == (fail != 0uL))
+        if (!failed) {
+            check(result == count.toULong() * (2uL * count.toULong() + 5uL))
+            check(bulkReplayCount(3uL) == 1uL)
+        } else {
+            check(result == 0uL && bulkReplayCount(0uL) == fail && bulkReplayCount(3uL) == 0uL)
+        }
+        val consumed = handles.count { it.isClosed }
+        if (callback || !failed) check(consumed == handles.size)
+        else check(consumed in 1 until handles.size)
+        check(bulkDrops() == before + consumed.toULong())
+        handles.forEachIndexed { i, handle ->
+            if (!handle.isClosed) check(io.prebindgen.covertest.rawinputs.bulkHandleValue(handle) == i.toLong() + 1)
+            handle.close()
+        }
+        check(bulkDrops() == before + handles.size.toULong())
+    }
+    // A late duplicate must be rejected by Rust after constructors ran. Kotlin
+    // preflight would reject this before the native constructor counter advances.
+    for (callback in listOf(false,true)) {
+        val values=List(count) {i->io.prebindgen.covertest.rawinputs.BulkReplayRow(
+            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+1), "ok", byteArrayOf(7),
+            io.prebindgen.covertest.rawinputs.BulkKind.A,io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+2))}
+        val handles=values.flatMap {listOf(it.first,it.last)}
+        val last=values.last()
+        val rows=(values.dropLast(1)+io.prebindgen.covertest.rawinputs.BulkReplayRow(values.first().first,last.text,last.bytes,last.kind,last.last)).map{listOf(it)}
+        bulkReplayReset(0uL)
+        val before=bulkDrops()
+        var message: String?=null
+        val error=io.prebindgen.covertest.rawinputs.JniErrorHandler {message=it;0uL}
+        if(callback)io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback {rows},error)
+        else io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(rows,error)
+        // A source Fn cannot return a binding error. Its adapter aborts the
+        // Rust operation through the existing panic route; ordinary input
+        // validation preserves the specific alias diagnostic.
+        check((if(callback)message=="Rust operation panicked" else message?.contains("conflicting input aliases")==true) && bulkReplayCount(0uL)>128uL)
+
+        check(values.first().first.isClosed) // The duplicate refers to a consumed prefix owner.
+        check(!last.first.isClosed && io.prebindgen.covertest.rawinputs.bulkHandleValue(last.first)==2L*count-1)
+        handles.forEach{it.close()}
+        check(bulkDrops()==before+handles.size.toULong())
+    }
+    bulkReplayReset(0uL)
 }
 
 private fun checkBulkReplayRaw() {

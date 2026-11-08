@@ -379,6 +379,7 @@ fn main() {
         .function(fun!(callback_return_owned_optional))
         .panic()
         .function(fun!(callback_return_owned_vector))
+        .input_alias_index_threshold(0)
         .panic()
         .function(fun!(callback_return_spawn))
         .panic()
@@ -397,6 +398,7 @@ fn main() {
         .function(fun!(callback_return_char_catch))
         .panic()
         .function(fun!(callback_return_owned_vector_catch))
+        .input_alias_index_threshold(usize::MAX)
         .panic()
         .function(fun!(callback_return_unit))
         .panic()
@@ -1205,6 +1207,7 @@ fn main() {
         .function(fun!(alias_handler_new))
         .panic()
         .function(fun!(alias_callback_rows))
+        .input_alias_index_threshold(0)
         .function(fun!(alias_handler_call))
         .alias_checks(true);
     if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {

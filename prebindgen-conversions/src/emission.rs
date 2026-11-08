@@ -87,11 +87,61 @@ pub fn render_template(
 /// Intermediate template composition leaves these scopes intact; unresolved
 /// scopes use the runtime crate's checked compatibility macro.
 pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<TokenStream> {
+    render_input_alias_checks_with_threshold(code, enabled, None)
+}
+
+/// Select alias validation and its compile-time native history threshold.
+/// None uses the runtime default; usize::MAX keeps sorted history. The limit
+/// changes storage selection, never which accesses are accepted. Disabled
+/// checks omit both history and its threshold configuration.
+pub fn render_input_alias_checks_with_threshold(
+    code: &TokenStream,
+    enabled: bool,
+    threshold: Option<usize>,
+) -> Result<TokenStream> {
     let tokens: Vec<_> = code.clone().into_iter().collect();
     let mut output = TokenStream::new();
     let mut index = 0;
     while index < tokens.len() {
         let colon = |i| matches!(tokens.get(i), Some(TokenTree::Punct(p)) if p.as_char()==':');
+        if colon(index)
+            && colon(index + 1)
+            && matches!(tokens.get(index+2),Some(TokenTree::Ident(id)) if id=="prebindgen_runtime")
+            && colon(index + 3)
+            && colon(index + 4)
+            && matches!(tokens.get(index+5),Some(TokenTree::Ident(id)) if id=="__prebindgen_dynamic_inputs")
+            && matches!(tokens.get(index+6),Some(TokenTree::Punct(p)) if p.as_char()=='!')
+        {
+            let Some(TokenTree::Group(group)) = tokens.get(index + 7) else {
+                return Err("invalid input history marker".into());
+            };
+            if !group.stream().is_empty() {
+                return Err("input history marker takes no arguments".into());
+            }
+            output.extend(if let Some(limit) = threshold {
+                let limit = if limit == usize::MAX {
+                    quote!({ ::core::primitive::usize::MAX })
+                } else if limit > u16::MAX as usize {
+                    // A usize literal can silently wrap on a narrower target
+                    // when a dependency build caps lints. Const evaluation must
+                    // reject it before the cast, even with all lints allowed.
+                    let limit = limit as u128;
+                    quote!({
+                        const LIMIT: u128 = #limit;
+                        ::core::assert!(LIMIT <= ::core::primitive::usize::MAX as u128,
+                            "input alias index threshold exceeds target usize");
+                        LIMIT as usize
+                    })
+                } else {
+                    quote!(#limit)
+                };
+                quote!(::prebindgen_runtime::DynamicInputsWithThreshold::<#limit>::default())
+            } else {
+                quote!(::prebindgen_runtime::DynamicInputs::default())
+            });
+            index += 8;
+            continue;
+        }
         if colon(index)
             && colon(index + 1)
             && matches!(tokens.get(index+2),Some(TokenTree::Ident(id)) if id=="prebindgen_runtime")
@@ -108,13 +158,14 @@ pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<To
             else {
                 return Err("invalid input alias branches".into());
             };
-            output.extend(render_input_alias_checks(
+            output.extend(render_input_alias_checks_with_threshold(
                 &if enabled {
                     checked.stream()
                 } else {
                     unchecked.stream()
                 },
                 enabled,
+                threshold,
             )?);
             index += 8;
             continue;
@@ -123,7 +174,7 @@ pub fn render_input_alias_checks(code: &TokenStream, enabled: bool) -> Result<To
             TokenTree::Group(group) => {
                 let mut rendered = Group::new(
                     group.delimiter(),
-                    render_input_alias_checks(&group.stream(), enabled)?,
+                    render_input_alias_checks_with_threshold(&group.stream(), enabled, threshold)?,
                 );
                 rendered.set_span(group.span());
                 output.extend([TokenTree::Group(rendered)]);
@@ -165,5 +216,47 @@ mod alias_tests {
                 .to_string(),
             literal.to_string()
         );
+    }
+}
+
+#[cfg(test)]
+mod history_policy_tests {
+    use super::*;
+    #[test]
+    fn history_threshold_is_static_scoped_and_maximum_uses_target_width() {
+        let history = quote!(::prebindgen_runtime::__prebindgen_dynamic_inputs!());
+        let code = crate::staged::input_alias_checks(quote!(let mut aliases=#history;), quote!());
+        let configured = render_input_alias_checks_with_threshold(&code, true, Some(17))
+            .unwrap()
+            .to_string();
+        assert!(configured.contains("DynamicInputsWithThreshold"));
+        assert!(configured.contains("17usize"));
+        assert!(
+            render_input_alias_checks_with_threshold(&code, false, Some(17))
+                .unwrap()
+                .is_empty()
+        );
+        let maximum = render_input_alias_checks_with_threshold(&code, true, Some(usize::MAX))
+            .unwrap()
+            .to_string();
+        assert!(maximum.contains("usize :: MAX"));
+        assert!(!maximum.contains(&usize::MAX.to_string()));
+        if usize::BITS > 16 {
+            let large = render_input_alias_checks_with_threshold(&code, true, Some(65536))
+                .unwrap()
+                .to_string();
+            assert!(large.contains("const LIMIT : u128 = 65536u128"));
+            assert!(large.contains("assert !"));
+            assert!(large.contains("LIMIT as usize"));
+        }
+        let default = render_input_alias_checks(&code, true).unwrap().to_string();
+        assert!(default.contains("DynamicInputs :: default"));
+        assert!(!default.contains("WithThreshold"));
+        assert!(render_input_alias_checks_with_threshold(
+            &quote!(::prebindgen_runtime::__prebindgen_dynamic_inputs!(invalid)),
+            true,
+            None
+        )
+        .is_err());
     }
 }

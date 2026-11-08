@@ -11248,7 +11248,9 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                                0usize,
+                            >::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
@@ -11495,7 +11497,9 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                                { ::core::primitive::usize::MAX },
+                            >::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };

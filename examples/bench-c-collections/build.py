@@ -12,7 +12,7 @@ import subprocess
 
 FIXTURE = Path(__file__).resolve().parent
 ROOT = FIXTURE.parents[1]
-FILES = ['flat.rs', 'bindings.rs', 'allocations.rs', 'driver.c', 'input-driver.c', 'build.py', 'Cargo.lock.snapshot']
+FILES = ['flat.rs', 'bindings.rs', 'allocations.rs', 'driver.c', 'input-driver.c', 'history-driver.c', 'build.py', 'Cargo.lock.snapshot']
 sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
@@ -70,6 +70,8 @@ def build(args):
     revisions={str(p):revision(p) for p in {checkout,ROOT}}
     project=prepare(checkout,output)
     env=dict(os.environ,CARGO_TARGET_DIR=str(args.target_dir.resolve() if args.target_dir else output/'target'))
+    env.pop("BENCH_ALIAS_INDEX_THRESHOLD", None)
+    if args.alias_index_threshold is not None:env["BENCH_ALIAS_INDEX_THRESHOLD"]=args.alias_index_threshold
     env["BENCH_ALIAS_CHECKS"]="0" if args.disable_alias_checks else "1"
     rustc=subprocess.check_output(['rustc','-vV'],text=True)
     host=next(line.split(': ',1)[1] for line in rustc.splitlines() if line.startswith('host: '))
@@ -88,6 +90,8 @@ def build(args):
     (output/'frozen').mkdir()
     library=output/'frozen/libc_collection_bench.so'
     shutil.copyfile(built_library,library)
+    for name in ['bindings.rs','bindings.h']:
+        shutil.copyfile(out/name,output/name)
     driver=output/'driver'
     cc=shlex.split(os.environ.get('CC','cc'))
     compile_command=[*cc,'-std=gnu11','-O3','-fno-plt','-Wall','-Wextra','-Werror',str(FIXTURE/'driver.c'),'-I'+str(out),'-L'+str(library.parent),'-lc_collection_bench','-Wl,-rpath,'+str(library.parent),'-ldl','-o',str(driver)]
@@ -97,13 +101,18 @@ def build(args):
     input_command[input_command.index(str(FIXTURE/'driver.c'))]=str(FIXTURE/'input-driver.c')
     input_command[-1]=str(input_driver)
     subprocess.run(input_command,check=True)
+    history_driver=output/'history-driver'
+    history_command=compile_command.copy()
+    history_command[history_command.index(str(FIXTURE/'driver.c'))]=str(FIXTURE/'history-driver.c')
+    history_command[-1]=str(history_driver)
+    subprocess.run(history_command,check=True)
     assert revisions=={str(p):revision(p) for p in {checkout,ROOT}}
     configs=[]
     for parent in [project,*project.parents,Path(os.environ.get('CARGO_HOME',Path.home()/'.cargo'))]:
         for name in ['.cargo/config','.cargo/config.toml','config','config.toml']:
             path=parent/name
             if path.is_file():configs.append(path)
-    report=dict(revisions=revisions,checkout=str(checkout),count_allocations=args.count_allocations,alias_checks=not args.disable_alias_checks,
+    report=dict(alias_index_threshold=args.alias_index_threshold,revisions=revisions,checkout=str(checkout),count_allocations=args.count_allocations,alias_checks=not args.disable_alias_checks,
                 fixture_sha256={name:sha(FIXTURE/name) for name in FILES},
                 rustc=rustc,
                 cc=subprocess.check_output([*cc,'--version'],text=True),compile_command=compile_command,
@@ -111,6 +120,7 @@ def build(args):
                 lock_sha256=sha(project/'Cargo.lock'),cargo_configs={str(p):sha(p) for p in set(configs)},
                 profile_environment={k:v for k,v in os.environ.items() if k.startswith(('CARGO_PROFILE_','RUSTC')) or k in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','RUSTUP_TOOLCHAIN']},
                 library=str(library),library_sha256=sha(library),driver=str(driver),driver_sha256=sha(driver),input_driver=str(input_driver),input_driver_sha256=sha(input_driver),input_compile_command=input_command,
+                history_driver=str(history_driver),history_driver_sha256=sha(history_driver),history_compile_command=history_command,
                 header_sha256=sha(out/'bindings.h'),
                 header_abi_sha256=hashlib.sha256(re.sub(r"\s+", " ", re.sub(r"/\*.*?\*/", "", (out/'bindings.h').read_text(), flags=re.S)).strip().encode()).hexdigest(),
                 bindings_sha256=sha(out/'bindings.rs'))
@@ -128,6 +138,7 @@ if __name__=='__main__':
     p.add_argument('--checkout',type=Path,default=ROOT)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--count-allocations',action='store_true')
+    p.add_argument('--alias-index-threshold',help='sorted-history limit, or max to retain vectors')
     p.add_argument('--disable-alias-checks',action='store_true',help='omit C input alias validation; valid unique owners are still required')
     p.add_argument('--target-dir',type=Path,help='optional shared Cargo cache; libraries are copied into frozen output storage')
     p.add_argument('--fetch',action='store_true')
