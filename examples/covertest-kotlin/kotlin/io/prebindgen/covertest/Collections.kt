@@ -76,6 +76,9 @@ fun checkCollections() {
         onBindingError = JniErrorHandler { aliasRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(aliasRouted && !aliasProbe.isClosed)
+    // Allocate the valid prefix before freeing the later owner: otherwise its
+    // address can be reused and Kotlin rejects duplicate identities before JNI.
+    val liveWithClosed = collectionResourceNew(103)
     aliasProbe.close()
     var closedRouted = false
     check(collectionHandles(listOf(aliasProbe), 65, 0,
@@ -83,7 +86,6 @@ fun checkCollections() {
         onError = throwResult).isEmpty())
     check(closedRouted)
     // A closed later owner can fail after Rust consumed the valid prefix.
-    val liveWithClosed = collectionResourceNew(103)
     val beforeClosedValidation = ownedResourceDrops()
     collectionInvalid { collectionHandles(listOf(liveWithClosed, aliasProbe), 65, 0, onError = throwResult) }
     check(liveWithClosed.isClosed)
