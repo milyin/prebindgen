@@ -107,7 +107,9 @@ def direct_hash(checked,unchecked):
     for kind in ['flat','nested','shared','callback']:
         name='bench_history_'+kind
         _,_,fn=function(unchecked,name)
+        assert '__prebindgen_input_aliases' not in fn,name
         marker='let __prebindgen_input_consumed'
+        assert fn.count(marker)==1,name
         at=fn.index(marker)
         fn=fn[:at]+'let mut aliases=experiment::OnlineHash::default();\n'+fn[at:]
         def pointer(match):
@@ -115,8 +117,11 @@ def direct_hash(checked,unchecked):
             exclusive=kind!='shared' or not value.startswith('p0_')
             return match.group(0)+f' aliases.access({value} as usize,{str(exclusive).lower()})?;'
         fn,n=re.subn(r'::prebindgen_runtime::validate_pointer\(\s*(\w+)\s*,?\s*\)\?;',pointer,fn)
-        assert n>=1,(name,'pointer validation missing')
-        fn=re.sub(r'(\w+\.reserve_exact\((\w+)\);)',r'aliases.reserve_group(\2); \1',fn)
+        assert n==(2 if kind=='shared' else 1),(name,'pointer validation count changed')
+        # This prototype forwards vector capacity hints, including outer hints.
+        # The inner hint overwrites the outer hint before acquisition in these fixtures.
+        fn,n=re.subn(r'(\w+\.reserve_exact\((\w+)\);)',r'aliases.reserve_group(\2); \1',fn)
+        assert n==(1 if kind=='flat' else 2),(name,'reserve count changed')
         start,end,_=function(text,name);text=text[:start]+fn+text[end:]
     return text
 

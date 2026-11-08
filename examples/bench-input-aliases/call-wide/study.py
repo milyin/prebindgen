@@ -22,6 +22,7 @@ def main():
     def command(command,log,library=None,checked=True):
         env=os.environ.copy()
         if library:env['LD_LIBRARY_PATH']=str(Path(library).parent)
+        if library and not checked:env['LD_DEBUG']='libs'
         r=subprocess.run(command,capture_output=True,text=True,env=env,preexec_fn=lambda:resource.setrlimit(resource.RLIMIT_CORE,(0,0)))
         log.write_text(r.stdout+r.stderr)
         if checked:r.check_returncode()
@@ -29,6 +30,9 @@ def main():
             loaded=next((line.split(',',1)[1] for line in r.stdout.splitlines() if line.startswith('LIBRARY,')),None)
             if loaded:assert Path(loaded).resolve()==Path(library).resolve()
             elif checked:raise AssertionError('loaded-library identity absent')
+            else:
+                loaded=re.findall(r'calling init:\s*(\S*libc_collection_bench\.so)',r.stderr)
+                assert len(loaded)==1 and Path(loaded[0]).resolve()==Path(library).resolve(), 'rejection used wrong library'
         return r
     for variant in KINDS:
         d=builds[variant+'-time']
@@ -38,13 +42,15 @@ def main():
     # These probes exercise real native framing and allow repeated shared
     # aliases. Callback malformed-frame failure must still invoke C's row release.
     probe=out/'checks'
-    subprocess.run(['cc','-std=c11','-O2','-Wall','-Wextra','-Werror',str(HERE/'checks.c'),'-I'+str(a.build.resolve()),'-L'+str(Path(builds['current-time']['library']).parent),'-lc_collection_bench','-Wl,-rpath,'+str(Path(builds['current-time']['library']).parent),'-o',str(probe)],check=True)
+    subprocess.run(['cc','-std=c11','-O2','-Wall','-Wextra','-Werror',str(HERE/'checks.c'),'-I'+str(a.build.resolve()),'-L'+str(Path(builds['current-time']['library']).parent),'-lc_collection_bench','-Wl,-rpath,'+str(Path(builds['current-time']['library']).parent),'-ldl','-o',str(probe)],check=True)
     for v in KINDS:
         library=builds[v+'-time']['library']
         env=os.environ|{'LD_LIBRARY_PATH':str(Path(library).parent)}
         for case in ['shared','within-group','token-first','null','range','overflow','callback-range']:
             r=subprocess.run([str(probe),case],env=env,capture_output=True,text=True,preexec_fn=lambda:resource.setrlimit(resource.RLIMIT_CORE,(0,0)))
             (out/'raw'/f'probe-{v}-{case}.log').write_text(r.stdout+r.stderr)
+            loaded=next(line.split(',',1)[1] for line in r.stdout.splitlines() if line.startswith('LIBRARY,'))
+            assert Path(loaded).resolve()==Path(library).resolve()
             if case=='shared':assert r.returncode==0,(v,case,r.stderr)
             elif case in ['within-group','token-first']:assert r.returncode!=0 and 'conflicting input aliases' in r.stderr,(v,case,r.stderr)
             else:

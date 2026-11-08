@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Confirm borrowed C calls using shared addresses and one process per cell."""
-import argparse,csv,hashlib,json,os,random,statistics,subprocess
+import argparse,csv,hashlib,json,os,random,shutil,statistics,subprocess
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 KINDS=['current','hash_grouped','hash','sort','sort_sized']
@@ -11,6 +11,15 @@ subprocess.run(['cc','-std=gnu11','-O3','-fno-plt','-Wall','-Wextra','-Werror',s
 cells=[('flat',1,'ascending'),('flat',8,'ascending'),('flat',8192,'ascending'),('flat',8192,'shuffled'),('flat',65536,'ascending'),('flat',65536,'shuffled'),('nested',8192,'shuffled'),('groups8',8192,'shuffled'),('shared',8192,'shuffled'),('readonly',8192,'ascending')]
 if a.aa:cells=[('flat',8192,'shuffled'),('nested',8192,'shuffled'),('readonly',8192,'ascending')]
 rows=[];cases=['flat','nested','groups8','shared','readonly'];libraries=[builds[('current' if a.aa else v)+'-time']['library'] for v in KINDS]
+for d in builds.values():
+ assert sha(d['library'])==d['library_sha256']
+ relocations=subprocess.check_output(['readelf','-rW',d['library']],text=True)
+ assert not any('bench_' in line for line in relocations.splitlines()), 'exported benchmark symbol interposition'
+if a.aa:
+ libraries=[]
+ for i in range(5):
+  path=out/f'current-{i}.so';shutil.copyfile(builds['current-time']['library'],path)
+  assert sha(path)==builds['current-time']['library_sha256'];libraries.append(str(path))
 for fork in range(a.forks):
  order=cells.copy();random.Random(20261109+fork).shuffle(order)
  for case,n,ordering in order:
@@ -18,7 +27,7 @@ for fork in range(a.forks):
   r=subprocess.run(cmd,capture_output=True,text=True);(out/'raw'/f'{fork}-{case}-{n}-{ordering}.log').write_text(r.stdout+r.stderr);r.check_returncode()
   paths=[line.split(',')[2] for line in r.stdout.splitlines() if line.startswith('LIBRARY,')];assert paths==libraries
   data=[line.split(',') for line in r.stdout.splitlines() if line.startswith('TIME,')];assert len(data)==55
-  if a.aa:assert len({line.split(',')[3] for line in r.stdout.splitlines() if line.startswith('LIBRARY,')})==1
+  if a.aa:assert len({line.split(',')[3] for line in r.stdout.splitlines() if line.startswith('LIBRARY,')})==5
   for _,index,batch,it,ns in data:rows.append(dict(fork=fork,case=case,size=n,order=ordering,candidate=KINDS[int(index)],batch=int(batch),ns_per_call=int(ns)/int(it)))
   print(fork,case,n,ordering,flush=True)
 summary=[]

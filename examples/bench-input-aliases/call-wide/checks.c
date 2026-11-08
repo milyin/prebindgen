@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "bindings.h"
 #include <assert.h>
+#include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +14,8 @@ static void released(void *context,const bench_history_callback_callback_return 
 }
 int main(int argc,char **argv) {
     assert(argc==2);
+    Dl_info library;assert(dladdr((void *)bench_history_flat,&library));
+    printf("LIBRARY,%s\n",library.dli_fname);fflush(stdout);
     if(!strcmp(argv[1],"shared")) {
         bench_resource *handle=bench_resource_new(7),*token=bench_resource_new(9);
         bench_history_readonly_p0_w5_row leaf[]={{handle},{handle}};

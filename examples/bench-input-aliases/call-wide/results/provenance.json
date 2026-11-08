@@ -1,0 +1,728 @@
+{
+  "production_base": "ab57d20502117539c598c9116d7936d923e83760",
+  "measured_prototype_sources": "b3cbf3586",
+  "confirmation_sources": "258a578a4",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu_model": "AMD EPYC 7713 64-Core Processor",
+  "study": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/c-call-wide-final2/current-time/libc_collection_bench.so",
+          "library_sha256": "cbb111d120913ebbf4c2343c20f1075ce4638de8a8a1c49bc5384a3fb37bac46",
+          "driver": "/tmp/c-call-wide-final2/current-time/driver",
+          "driver_sha256": "c0b0061fd98a2a1743e3f37259d6ce4616e4c355f887d12d7c34f84dc463cfa2",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "current-count": {
+          "library": "/tmp/c-call-wide-final2/current-count/libc_collection_bench.so",
+          "library_sha256": "3beddb6a60a102034fd121f9d84491bd4fd77cacc189aec3b8bb63bce07c88bb",
+          "driver": "/tmp/c-call-wide-final2/current-count/driver",
+          "driver_sha256": "2552d19837c2a4146255b2d8abcfdaeda77539926b13c653cae0e43c50b5010a",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-time": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-time/libc_collection_bench.so",
+          "library_sha256": "9d041280969621797656b3d0d2d8e87f6496b1592a1f1e4ddac50a441043b767",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-time/driver",
+          "driver_sha256": "0411a7a1476f8e8c7630f4bdd113039f8515bee7cb3591114e00b078535311bb",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-count": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-count/libc_collection_bench.so",
+          "library_sha256": "861f3737296240862e13f9538e6722d61d44a14146ff9d0163e576fde6cbc19b",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-count/driver",
+          "driver_sha256": "60c02078b4e1c72039a3a325a73558428b1d66dc1be0347ce53a821ccb84f412",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-time": {
+          "library": "/tmp/c-call-wide-final2/hash-time/libc_collection_bench.so",
+          "library_sha256": "16b42f1af774ff6dfdefacfe9c64a819b936c42042893e52c53de1b2ffeea0f8",
+          "driver": "/tmp/c-call-wide-final2/hash-time/driver",
+          "driver_sha256": "25887f8dd96ba8d89b992c2b077770f955b98cb25250a1cc9fb9f5a8eccf436f",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-count": {
+          "library": "/tmp/c-call-wide-final2/hash-count/libc_collection_bench.so",
+          "library_sha256": "65ab096d70a1aa591af1a87390251c688b72314aaa5139a45cb1bae3f063914e",
+          "driver": "/tmp/c-call-wide-final2/hash-count/driver",
+          "driver_sha256": "63074bec30dae88d9da27c52f162be723ab4cd6d5a12558fc0945a9ad3f8ddf7",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-time": {
+          "library": "/tmp/c-call-wide-final2/sort-time/libc_collection_bench.so",
+          "library_sha256": "344359b3dcf06007b356dee5f6d26f8bf642c6c2e0cc42aec2b15cf8723cf2dc",
+          "driver": "/tmp/c-call-wide-final2/sort-time/driver",
+          "driver_sha256": "c9eb9651273dfedcbea45e65235117d121d95dc348c7156579238814020156cb",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-count": {
+          "library": "/tmp/c-call-wide-final2/sort-count/libc_collection_bench.so",
+          "library_sha256": "6f5d2b03868e87dd09e1dd0fd1c27bb799f6572946aa2a987059971be9d5ee12",
+          "driver": "/tmp/c-call-wide-final2/sort-count/driver",
+          "driver_sha256": "64e86fe1e02daa2fe6dab98d8f32756adedab3fdc981f767a81f17dcf449fa26",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-time": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-time/libc_collection_bench.so",
+          "library_sha256": "8592cff72c8d64117d48cc1fc651a35e488b9b75df67ca5949c4c86b828b7aef",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-time/driver",
+          "driver_sha256": "b99417caaea4530711a16d83856fc0d57c06b2b94268a17b54d4361bcc07a5e2",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-count": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-count/libc_collection_bench.so",
+          "library_sha256": "b4619a28a2967356d75230828b863a0398361d2506de7fa10eb4f0711544a986",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-count/driver",
+          "driver_sha256": "2028f79d49756c8cb41e31f39c0cbd46770c65d4328e9433eeaeb3044ed73fdb",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        }
+      },
+      "commit": "ab57d20502117539c598c9116d7936d923e83760",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "dirty_paths": [
+        "?? examples/bench-input-aliases/call-wide/"
+      ],
+      "env": {
+        "RUSTFLAGS": "-C llvm-args=-align-all-functions=6",
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "hashes": {
+        "examples/bench-input-aliases/call-wide/build.py": "29a138e65e24f1520bf9f80ced7a2105dc4747c72108c327bf9c70194339d947",
+        "examples/bench-input-aliases/call-wide/prototypes.rs": "641517e012210ef2ad7439e5e3d6b8139cb219e7f3b0f00efe83d460cb5d8a3d",
+        "examples/bench-c-collections/flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "examples/bench-c-collections/bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "examples/bench-c-collections/history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "examples/bench-c-collections/allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "examples/bench-c-collections/Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f"
+    },
+    "settings": {
+      "forks": 4,
+      "batches": 7,
+      "target_ms": 5,
+      "aa": false
+    },
+    "cpu": 1,
+    "cpu_settings": {},
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "sources": {
+      "examples/bench-input-aliases/call-wide/study.py": "df61259f91d300867ef1c7174167242e0f3082c3068233e0cefdab8e0ab6563d",
+      "examples/bench-input-aliases/call-wide/standalone.rs": "a7035871f0336c22f61a3d700c198eb7ca260aa1283fa1198093d0a221e450af",
+      "examples/bench-input-aliases/call-wide/prototypes.rs": "641517e012210ef2ad7439e5e3d6b8139cb219e7f3b0f00efe83d460cb5d8a3d",
+      "examples/bench-input-aliases/call-wide/checks.c": "69daa8a5b3d3defb0c5218b17a349a9b46b02273cffc3f6680c4f13a74558781",
+      "prebindgen-runtime/src/input.rs": "eea358d1389343ec82f672118f172529f98b2c1365a250eaf13213c26395933c"
+    },
+    "files": {
+      "native-latency.csv": "c026581fe0e1406c3de84ce71d31ea30477e7d12ba8b6277c1786ba4f6626863",
+      "native-allocations.csv": "b5600174e2bfbe40e7373c8ac1e80baeafaaf0fccb5ab14489257cc45ff0fe4a",
+      "standalone-latency.csv": "a8036bb94fdd7dcf101a448e86dc5178cded774045be317ffa5d2d65d9a9443f",
+      "standalone-allocations.csv": "12e2a92dd0825037a94a246d9d99d218e92fd4dc43c9543b9bb6264ec947c9b5"
+    }
+  },
+  "confirmation": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/c-call-wide-final2/current-time/libc_collection_bench.so",
+          "library_sha256": "cbb111d120913ebbf4c2343c20f1075ce4638de8a8a1c49bc5384a3fb37bac46",
+          "driver": "/tmp/c-call-wide-final2/current-time/driver",
+          "driver_sha256": "c0b0061fd98a2a1743e3f37259d6ce4616e4c355f887d12d7c34f84dc463cfa2",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "current-count": {
+          "library": "/tmp/c-call-wide-final2/current-count/libc_collection_bench.so",
+          "library_sha256": "3beddb6a60a102034fd121f9d84491bd4fd77cacc189aec3b8bb63bce07c88bb",
+          "driver": "/tmp/c-call-wide-final2/current-count/driver",
+          "driver_sha256": "2552d19837c2a4146255b2d8abcfdaeda77539926b13c653cae0e43c50b5010a",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-time": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-time/libc_collection_bench.so",
+          "library_sha256": "9d041280969621797656b3d0d2d8e87f6496b1592a1f1e4ddac50a441043b767",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-time/driver",
+          "driver_sha256": "0411a7a1476f8e8c7630f4bdd113039f8515bee7cb3591114e00b078535311bb",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-count": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-count/libc_collection_bench.so",
+          "library_sha256": "861f3737296240862e13f9538e6722d61d44a14146ff9d0163e576fde6cbc19b",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-count/driver",
+          "driver_sha256": "60c02078b4e1c72039a3a325a73558428b1d66dc1be0347ce53a821ccb84f412",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-time": {
+          "library": "/tmp/c-call-wide-final2/hash-time/libc_collection_bench.so",
+          "library_sha256": "16b42f1af774ff6dfdefacfe9c64a819b936c42042893e52c53de1b2ffeea0f8",
+          "driver": "/tmp/c-call-wide-final2/hash-time/driver",
+          "driver_sha256": "25887f8dd96ba8d89b992c2b077770f955b98cb25250a1cc9fb9f5a8eccf436f",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-count": {
+          "library": "/tmp/c-call-wide-final2/hash-count/libc_collection_bench.so",
+          "library_sha256": "65ab096d70a1aa591af1a87390251c688b72314aaa5139a45cb1bae3f063914e",
+          "driver": "/tmp/c-call-wide-final2/hash-count/driver",
+          "driver_sha256": "63074bec30dae88d9da27c52f162be723ab4cd6d5a12558fc0945a9ad3f8ddf7",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-time": {
+          "library": "/tmp/c-call-wide-final2/sort-time/libc_collection_bench.so",
+          "library_sha256": "344359b3dcf06007b356dee5f6d26f8bf642c6c2e0cc42aec2b15cf8723cf2dc",
+          "driver": "/tmp/c-call-wide-final2/sort-time/driver",
+          "driver_sha256": "c9eb9651273dfedcbea45e65235117d121d95dc348c7156579238814020156cb",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-count": {
+          "library": "/tmp/c-call-wide-final2/sort-count/libc_collection_bench.so",
+          "library_sha256": "6f5d2b03868e87dd09e1dd0fd1c27bb799f6572946aa2a987059971be9d5ee12",
+          "driver": "/tmp/c-call-wide-final2/sort-count/driver",
+          "driver_sha256": "64e86fe1e02daa2fe6dab98d8f32756adedab3fdc981f767a81f17dcf449fa26",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-time": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-time/libc_collection_bench.so",
+          "library_sha256": "8592cff72c8d64117d48cc1fc651a35e488b9b75df67ca5949c4c86b828b7aef",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-time/driver",
+          "driver_sha256": "b99417caaea4530711a16d83856fc0d57c06b2b94268a17b54d4361bcc07a5e2",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-count": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-count/libc_collection_bench.so",
+          "library_sha256": "b4619a28a2967356d75230828b863a0398361d2506de7fa10eb4f0711544a986",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-count/driver",
+          "driver_sha256": "2028f79d49756c8cb41e31f39c0cbd46770c65d4328e9433eeaeb3044ed73fdb",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        }
+      },
+      "commit": "ab57d20502117539c598c9116d7936d923e83760",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "dirty_paths": [
+        "?? examples/bench-input-aliases/call-wide/"
+      ],
+      "env": {
+        "RUSTFLAGS": "-C llvm-args=-align-all-functions=6",
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "hashes": {
+        "examples/bench-input-aliases/call-wide/build.py": "29a138e65e24f1520bf9f80ced7a2105dc4747c72108c327bf9c70194339d947",
+        "examples/bench-input-aliases/call-wide/prototypes.rs": "641517e012210ef2ad7439e5e3d6b8139cb219e7f3b0f00efe83d460cb5d8a3d",
+        "examples/bench-c-collections/flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "examples/bench-c-collections/bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "examples/bench-c-collections/history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "examples/bench-c-collections/allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "examples/bench-c-collections/Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f"
+    },
+    "aa": false,
+    "cpu": 1,
+    "forks": 4,
+    "batches": 11,
+    "target_ms": 20,
+    "driver_sha256": "a3ea11231845cc0c8c862c81bd421c2f1d3edf5f77329e91d297ffd4881e8306",
+    "source_sha256": {
+      "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-preflight/examples/bench-input-aliases/call-wide/confirm.py": "64d08b042e2be6a3a274129822f1e907969f8110cbb0c939f18dd8d0104ffabc",
+      "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-preflight/examples/bench-input-aliases/call-wide/same-process.c": "b4381f24fb574308cc6b87d7c5dad3f70c30716bdd9f49fc1ed76cf685c0c7f6"
+    },
+    "summary_sha256": "1d23346ee73638571f55f11a06273a12ca546331a0bb5d026b458cd91b0cd265"
+  },
+  "mapped_identical_library_control": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/c-call-wide-final2/current-time/libc_collection_bench.so",
+          "library_sha256": "cbb111d120913ebbf4c2343c20f1075ce4638de8a8a1c49bc5384a3fb37bac46",
+          "driver": "/tmp/c-call-wide-final2/current-time/driver",
+          "driver_sha256": "c0b0061fd98a2a1743e3f37259d6ce4616e4c355f887d12d7c34f84dc463cfa2",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "current-count": {
+          "library": "/tmp/c-call-wide-final2/current-count/libc_collection_bench.so",
+          "library_sha256": "3beddb6a60a102034fd121f9d84491bd4fd77cacc189aec3b8bb63bce07c88bb",
+          "driver": "/tmp/c-call-wide-final2/current-count/driver",
+          "driver_sha256": "2552d19837c2a4146255b2d8abcfdaeda77539926b13c653cae0e43c50b5010a",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-time": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-time/libc_collection_bench.so",
+          "library_sha256": "9d041280969621797656b3d0d2d8e87f6496b1592a1f1e4ddac50a441043b767",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-time/driver",
+          "driver_sha256": "0411a7a1476f8e8c7630f4bdd113039f8515bee7cb3591114e00b078535311bb",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-count": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-count/libc_collection_bench.so",
+          "library_sha256": "861f3737296240862e13f9538e6722d61d44a14146ff9d0163e576fde6cbc19b",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-count/driver",
+          "driver_sha256": "60c02078b4e1c72039a3a325a73558428b1d66dc1be0347ce53a821ccb84f412",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-time": {
+          "library": "/tmp/c-call-wide-final2/hash-time/libc_collection_bench.so",
+          "library_sha256": "16b42f1af774ff6dfdefacfe9c64a819b936c42042893e52c53de1b2ffeea0f8",
+          "driver": "/tmp/c-call-wide-final2/hash-time/driver",
+          "driver_sha256": "25887f8dd96ba8d89b992c2b077770f955b98cb25250a1cc9fb9f5a8eccf436f",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-count": {
+          "library": "/tmp/c-call-wide-final2/hash-count/libc_collection_bench.so",
+          "library_sha256": "65ab096d70a1aa591af1a87390251c688b72314aaa5139a45cb1bae3f063914e",
+          "driver": "/tmp/c-call-wide-final2/hash-count/driver",
+          "driver_sha256": "63074bec30dae88d9da27c52f162be723ab4cd6d5a12558fc0945a9ad3f8ddf7",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-time": {
+          "library": "/tmp/c-call-wide-final2/sort-time/libc_collection_bench.so",
+          "library_sha256": "344359b3dcf06007b356dee5f6d26f8bf642c6c2e0cc42aec2b15cf8723cf2dc",
+          "driver": "/tmp/c-call-wide-final2/sort-time/driver",
+          "driver_sha256": "c9eb9651273dfedcbea45e65235117d121d95dc348c7156579238814020156cb",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-count": {
+          "library": "/tmp/c-call-wide-final2/sort-count/libc_collection_bench.so",
+          "library_sha256": "6f5d2b03868e87dd09e1dd0fd1c27bb799f6572946aa2a987059971be9d5ee12",
+          "driver": "/tmp/c-call-wide-final2/sort-count/driver",
+          "driver_sha256": "64e86fe1e02daa2fe6dab98d8f32756adedab3fdc981f767a81f17dcf449fa26",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-time": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-time/libc_collection_bench.so",
+          "library_sha256": "8592cff72c8d64117d48cc1fc651a35e488b9b75df67ca5949c4c86b828b7aef",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-time/driver",
+          "driver_sha256": "b99417caaea4530711a16d83856fc0d57c06b2b94268a17b54d4361bcc07a5e2",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-count": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-count/libc_collection_bench.so",
+          "library_sha256": "b4619a28a2967356d75230828b863a0398361d2506de7fa10eb4f0711544a986",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-count/driver",
+          "driver_sha256": "2028f79d49756c8cb41e31f39c0cbd46770c65d4328e9433eeaeb3044ed73fdb",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        }
+      },
+      "commit": "ab57d20502117539c598c9116d7936d923e83760",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "dirty_paths": [
+        "?? examples/bench-input-aliases/call-wide/"
+      ],
+      "env": {
+        "RUSTFLAGS": "-C llvm-args=-align-all-functions=6",
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "hashes": {
+        "examples/bench-input-aliases/call-wide/build.py": "29a138e65e24f1520bf9f80ced7a2105dc4747c72108c327bf9c70194339d947",
+        "examples/bench-input-aliases/call-wide/prototypes.rs": "641517e012210ef2ad7439e5e3d6b8139cb219e7f3b0f00efe83d460cb5d8a3d",
+        "examples/bench-c-collections/flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "examples/bench-c-collections/bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "examples/bench-c-collections/history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "examples/bench-c-collections/allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "examples/bench-c-collections/Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f"
+    },
+    "aa": true,
+    "cpu": 1,
+    "forks": 4,
+    "batches": 11,
+    "target_ms": 20,
+    "driver_sha256": "a3ea11231845cc0c8c862c81bd421c2f1d3edf5f77329e91d297ffd4881e8306",
+    "source_sha256": {
+      "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-preflight/examples/bench-input-aliases/call-wide/confirm.py": "1439e4efa3ee8bff7cbecf97884c4d90227ddc89404457051a07ffb491ff3a66",
+      "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-alias-preflight/examples/bench-input-aliases/call-wide/same-process.c": "b4381f24fb574308cc6b87d7c5dad3f70c30716bdd9f49fc1ed76cf685c0c7f6"
+    },
+    "summary_sha256": "51cb0a6868f4a6d83c43d53688ed6bea58ab929f4fb4f99ebe03ecb2dc47b5b8"
+  },
+  "separate_process_control": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/c-call-wide-final2/current-time/libc_collection_bench.so",
+          "library_sha256": "cbb111d120913ebbf4c2343c20f1075ce4638de8a8a1c49bc5384a3fb37bac46",
+          "driver": "/tmp/c-call-wide-final2/current-time/driver",
+          "driver_sha256": "c0b0061fd98a2a1743e3f37259d6ce4616e4c355f887d12d7c34f84dc463cfa2",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "current-count": {
+          "library": "/tmp/c-call-wide-final2/current-count/libc_collection_bench.so",
+          "library_sha256": "3beddb6a60a102034fd121f9d84491bd4fd77cacc189aec3b8bb63bce07c88bb",
+          "driver": "/tmp/c-call-wide-final2/current-count/driver",
+          "driver_sha256": "2552d19837c2a4146255b2d8abcfdaeda77539926b13c653cae0e43c50b5010a",
+          "rust_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-time": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-time/libc_collection_bench.so",
+          "library_sha256": "9d041280969621797656b3d0d2d8e87f6496b1592a1f1e4ddac50a441043b767",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-time/driver",
+          "driver_sha256": "0411a7a1476f8e8c7630f4bdd113039f8515bee7cb3591114e00b078535311bb",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash_grouped-count": {
+          "library": "/tmp/c-call-wide-final2/hash_grouped-count/libc_collection_bench.so",
+          "library_sha256": "861f3737296240862e13f9538e6722d61d44a14146ff9d0163e576fde6cbc19b",
+          "driver": "/tmp/c-call-wide-final2/hash_grouped-count/driver",
+          "driver_sha256": "60c02078b4e1c72039a3a325a73558428b1d66dc1be0347ce53a821ccb84f412",
+          "rust_sha256": "068029e0a38aec25ffe5d1c631ca2488db7e4652800f8c7a8daeb7ddfae0a346",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-time": {
+          "library": "/tmp/c-call-wide-final2/hash-time/libc_collection_bench.so",
+          "library_sha256": "16b42f1af774ff6dfdefacfe9c64a819b936c42042893e52c53de1b2ffeea0f8",
+          "driver": "/tmp/c-call-wide-final2/hash-time/driver",
+          "driver_sha256": "25887f8dd96ba8d89b992c2b077770f955b98cb25250a1cc9fb9f5a8eccf436f",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "hash-count": {
+          "library": "/tmp/c-call-wide-final2/hash-count/libc_collection_bench.so",
+          "library_sha256": "65ab096d70a1aa591af1a87390251c688b72314aaa5139a45cb1bae3f063914e",
+          "driver": "/tmp/c-call-wide-final2/hash-count/driver",
+          "driver_sha256": "63074bec30dae88d9da27c52f162be723ab4cd6d5a12558fc0945a9ad3f8ddf7",
+          "rust_sha256": "4258858adcd0b561390f2c662532d0c7ae37f80b6c1cc04e27b6e6f0ddfe08b0",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-time": {
+          "library": "/tmp/c-call-wide-final2/sort-time/libc_collection_bench.so",
+          "library_sha256": "344359b3dcf06007b356dee5f6d26f8bf642c6c2e0cc42aec2b15cf8723cf2dc",
+          "driver": "/tmp/c-call-wide-final2/sort-time/driver",
+          "driver_sha256": "c9eb9651273dfedcbea45e65235117d121d95dc348c7156579238814020156cb",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort-count": {
+          "library": "/tmp/c-call-wide-final2/sort-count/libc_collection_bench.so",
+          "library_sha256": "6f5d2b03868e87dd09e1dd0fd1c27bb799f6572946aa2a987059971be9d5ee12",
+          "driver": "/tmp/c-call-wide-final2/sort-count/driver",
+          "driver_sha256": "64e86fe1e02daa2fe6dab98d8f32756adedab3fdc981f767a81f17dcf449fa26",
+          "rust_sha256": "ed10f6374b00e0bc58d30afa98579e666c05a3d684d17f613a4562259bc7e2b3",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-time": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-time/libc_collection_bench.so",
+          "library_sha256": "8592cff72c8d64117d48cc1fc651a35e488b9b75df67ca5949c4c86b828b7aef",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-time/driver",
+          "driver_sha256": "b99417caaea4530711a16d83856fc0d57c06b2b94268a17b54d4361bcc07a5e2",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        },
+        "sort_sized-count": {
+          "library": "/tmp/c-call-wide-final2/sort_sized-count/libc_collection_bench.so",
+          "library_sha256": "b4619a28a2967356d75230828b863a0398361d2506de7fa10eb4f0711544a986",
+          "driver": "/tmp/c-call-wide-final2/sort_sized-count/driver",
+          "driver_sha256": "2028f79d49756c8cb41e31f39c0cbd46770c65d4328e9433eeaeb3044ed73fdb",
+          "rust_sha256": "812815a6deae839a8640aa99a1e916994aee0888279b3b3d3a164ca555e5bd3e",
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        }
+      },
+      "commit": "ab57d20502117539c598c9116d7936d923e83760",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "dirty_paths": [
+        "?? examples/bench-input-aliases/call-wide/"
+      ],
+      "env": {
+        "RUSTFLAGS": "-C llvm-args=-align-all-functions=6",
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "hashes": {
+        "examples/bench-input-aliases/call-wide/build.py": "29a138e65e24f1520bf9f80ced7a2105dc4747c72108c327bf9c70194339d947",
+        "examples/bench-input-aliases/call-wide/prototypes.rs": "641517e012210ef2ad7439e5e3d6b8139cb219e7f3b0f00efe83d460cb5d8a3d",
+        "examples/bench-c-collections/flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "examples/bench-c-collections/bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "examples/bench-c-collections/history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "examples/bench-c-collections/allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "examples/bench-c-collections/Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f"
+    },
+    "settings": {
+      "aa": true,
+      "forks": 4,
+      "batches": 7,
+      "target_ms": 5
+    },
+    "cpu": 1,
+    "runner_sha256": "df61259f91d300867ef1c7174167242e0f3082c3068233e0cefdab8e0ab6563d"
+  },
+  "result_sha256": {
+    "native-allocations.csv": "b5600174e2bfbe40e7373c8ac1e80baeafaaf0fccb5ab14489257cc45ff0fe4a",
+    "native-latency.csv": "c026581fe0e1406c3de84ce71d31ea30477e7d12ba8b6277c1786ba4f6626863",
+    "process-aa.csv": "e75e61b304dafdc28dda00fd9914cb318872cfab809e5c67fa1ef1ef62fb39f0",
+    "same-address-aa.csv": "51cb0a6868f4a6d83c43d53688ed6bea58ab929f4fb4f99ebe03ecb2dc47b5b8",
+    "same-address-latency.csv": "1d23346ee73638571f55f11a06273a12ca546331a0bb5d026b458cd91b0cd265",
+    "standalone-allocations.csv": "12e2a92dd0825037a94a246d9d99d218e92fd4dc43c9543b9bb6264ec947c9b5",
+    "standalone-latency.csv": "a03fa4f03caaed8b68d912a829f41e07f5cf7df181973df9ab9e82885677ffa1"
+  }
+}
