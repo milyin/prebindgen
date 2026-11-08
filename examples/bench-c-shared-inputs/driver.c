@@ -28,8 +28,8 @@ static uint64_t invoke(int kind,const struct inputs *in){
     if(kind==4)return bench_control(n);
     if(kind==2){assert(bench_shared_input_text((bench_buffer){(const uint8_t*)in->text,n})==n);return n;}
     if(kind==3){assert(bench_shared_input_owned((bench_buffer){(const uint8_t*)in->text,n})==n);return n;}
-    if(kind==5){assert(n==4);int64_t value=bench_shared_input_array((ARRAY_CARRIER){(const void*)in->rows,n});assert(value==34);return (uint64_t)value;}
-    if(kind==1){int64_t value=bench_shared_input_sum((SUM_CARRIER){(const void*)in->rows,n});assert(value==(int64_t)(n*(n+13)/2));return (uint64_t)value;}
+    if(kind==5){assert(n==4);int64_t value=bench_shared_input_array((ARRAY_CARRIER){(void*)in->rows,n});assert(value==34);return (uint64_t)value;}
+    if(kind==1){int64_t value=bench_shared_input_sum((SUM_CARRIER){(void*)in->rows,n});assert(value==(int64_t)(n*(n+13)/2));return (uint64_t)value;}
     uintptr_t address=bench_shared_input_inspect((INPUT_CARRIER){in->rows,n});
     if(n){assert((address==(uintptr_t)in->rows)==DIRECT_VIEW);}return address;
 }
