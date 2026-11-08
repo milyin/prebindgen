@@ -11,6 +11,10 @@ fn main() {
         .expand(expand_param!(&String).reconstruct())
         .expand(expand_param!(&Vec<u8>).reconstruct())
         .expand(expand_param!(&Vec<i64>).reconstruct())
+        .function(
+            fun!(shared_input_move)
+                .expand_param("value", expand_param!(&OwnedResource).reconstruct()),
+        )
         .function(fun!(shared_input_checked))
         .function(fun!(shared_input_echo))
         .panic()

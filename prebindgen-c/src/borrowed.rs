@@ -149,7 +149,9 @@ pub(crate) fn input_sequence(
         }]),
         validation: quote!(let #var = if #condition {
             #length_check
-            ::prebindgen_runtime::validate_slice::<#native>(#wire.data,#wire.len)?;
+            // Avoid an outlined validation call on the empty path; the runtime
+            // helper accepts every empty descriptor and pointer normalization follows.
+            if #wire.len != 0 {::prebindgen_runtime::validate_slice::<#native>(#wire.data,#wire.len)?;}
             // Empty foreign views need not provide a valid aligned pointer.
             // Preserve legitimate empty source pointers, normalize the rest.
             let #pointer = if #wire.len == 0 && (#wire.data.is_null() || !#wire.data.is_aligned()) {

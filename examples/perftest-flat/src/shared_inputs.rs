@@ -1,4 +1,5 @@
 //! Shared C inputs retain foreign storage; temporary reconstruction is explicit.
+use crate::OwnedResource;
 use prebindgen_proc_macro::prebindgen;
 
 #[prebindgen]
@@ -118,4 +119,9 @@ pub fn shared_input_f32(values: &[f32]) -> usize {
 #[prebindgen]
 pub fn shared_input_f64(values: &[f64]) -> usize {
     values.as_ptr().addr()
+}
+
+#[prebindgen]
+pub fn shared_input_move(value: &OwnedResource, valid: char) -> Result<i64, String> {
+    Ok(crate::owned_resource_id(value) + i64::from(u32::from(valid)))
 }
