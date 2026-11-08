@@ -40,7 +40,7 @@ include their respective preparation/reservation code, not just pass count.
 Times are microseconds per call. The strongest borrowed-input comparison loads
 all five native libraries into one C process and reuses exactly the same native
 objects and C rows for each candidate. Four fresh process forks, 11 measured
-batches targeting 20 ms, equal iteration counts, balanced per-batch order,
+batches targeting 20 ms, equal iteration counts, rotated/alternating per-batch order,
 pinned CPU 1. Every call verifies its checksum. Native functions have verified
 64-byte alignment. No compilation or allocation instrumentation runs during timing.
 
@@ -111,6 +111,10 @@ function addresses and reuses the same input objects. Candidate/current ratios
 are within approximately 0.5% of one across the tested flat, nested and shared-only
 cells: [mapped-library controls](results/same-address-aa.csv). There are no
 relocations against exported `bench_*` symbols in the measured native libraries.
+The main run's current library is linked globally and creates the fixtures;
+the copied control libraries load locally. The main shared-only cell differs by
+approximately 0.2–0.9%, indicating a small possible mapping/startup bias. That is
+well below the large effects used for the recommendation.
 
 The simpler designs have real costs. Direct hashing raises the 65,536-element
 ascending flat median from 389.374 to 861.846 µs, and its eight-element flat case
