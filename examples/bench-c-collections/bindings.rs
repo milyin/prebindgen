@@ -15,6 +15,13 @@ fn main() {
         .source(c_collection_flat::PREBINDGEN_OUT_DIR)
         .prefix("bench")
         .set_emit_alias_checks(std::env::var("BENCH_ALIAS_CHECKS").as_deref() != Ok("0"))
+        .opaque_ptr("borrowed_numbers", syn::parse_quote!(BorrowedNumbers))
+        .function(fun!(borrowed_numbers_new))
+        .panic()
+        .function(fun!(borrowed_values))
+        .panic()
+        .function(fun!(borrowed_emit))
+        .panic()
         .opaque_ptr("resource", syn::parse_quote!(Resource))
         .opaque_owned_struct(
             "native_packet",

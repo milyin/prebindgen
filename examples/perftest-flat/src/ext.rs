@@ -4030,3 +4030,81 @@ pub fn mutable_bytes_vector(size: usize) -> Vec<u8> {
 pub fn mutable_bytes_vector_expanded(size: usize) -> Vec<u8> {
     mutable_bytes_vector(size)
 }
+
+// Borrowed numeric outputs retain this owner's original allocations.
+#[prebindgen]
+pub struct NumericLoanOwner {
+    pub values: Vec<i64>,
+    pub fixed: [f64; 3],
+}
+#[prebindgen]
+pub fn numeric_loan_new(size: usize) -> NumericLoanOwner {
+    let mut values = Vec::with_capacity(size + 37);
+    values.extend((0..size).map(|i| i as i64 + 7));
+    NumericLoanOwner {
+        values,
+        fixed: [1.25, -0.0, f64::INFINITY],
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_values(owner: &NumericLoanOwner) -> &[i64] {
+    &owner.values
+}
+#[prebindgen]
+pub fn numeric_loan_fixed(owner: &NumericLoanOwner) -> &[f64; 3] {
+    &owner.fixed
+}
+#[prebindgen]
+pub fn numeric_loan_optional(owner: &NumericLoanOwner, kind: u8) -> Option<&[i64]> {
+    match kind {
+        0 => None,
+        1 => Some(&owner.values[..0]),
+        _ => Some(&owner.values),
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_checked(owner: &NumericLoanOwner, fail: bool) -> Result<&[i64], String> {
+    if fail {
+        Err("no numeric loan".into())
+    } else {
+        Ok(&owner.values)
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_address(owner: &NumericLoanOwner, fixed: bool) -> usize {
+    if fixed {
+        owner.fixed.as_ptr().addr()
+    } else {
+        owner.values.as_ptr().addr()
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_capacity(owner: &NumericLoanOwner) -> usize {
+    owner.values.capacity()
+}
+#[prebindgen]
+pub fn numeric_loan_copy(owner: &NumericLoanOwner) -> &[i64] {
+    numeric_loan_values(owner)
+}
+#[prebindgen]
+pub fn numeric_loan_owned(size: usize) -> NumericLoanOwner {
+    numeric_loan_new(size)
+}
+#[prebindgen]
+pub fn numeric_loan_vector(size: usize) -> Vec<i64> {
+    numeric_loan_new(size).values
+}
+#[prebindgen]
+pub fn numeric_loan_emit(owner: &NumericLoanOwner, callback: impl Fn(&[i64]), times: usize) {
+    for _ in 0..times {
+        callback(&owner.values)
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_static_bytes() -> &'static [u8] {
+    b"original bytes"
+}
+#[prebindgen]
+pub fn numeric_loan_static_text() -> &'static str {
+    "original text"
+}

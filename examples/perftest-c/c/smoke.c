@@ -13,6 +13,7 @@ static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4
 #include "runtime_costs.h"
 #include "inline_owners.h"
 #include "mutable_byte_views.h"
+#include "numeric_loans.h"
 #include "output_owners.h"
 #include "buffer_inputs.h"
 #include "alias_options.h"
@@ -591,6 +592,7 @@ static void check_results(void) {
     perftest_free_error(NULL);
 }
 int main(void) {
+    check_numeric_loans();
     check_inline_owners();
     check_borrowed_getters();
     check_explicit_borrows();

@@ -322,6 +322,19 @@ impl Codec for EnumCodec<'_> {
         CCodec.output_return_reference(flat, reference, extra, wire, value)
     }
 
+    fn output_borrowed_sequence(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        element: &prebindgen_declarations::Output,
+        delivery: prebindgen_declarations::SequenceDelivery,
+        temporary: bool,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        CCodec.output_borrowed_sequence(flat, ty, extra, wire, value, element, delivery, temporary)
+    }
     fn output_owner(
         &self,
         flat: &Bindings,

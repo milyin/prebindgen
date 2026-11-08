@@ -337,3 +337,24 @@ pub fn history_callback(callback: impl Fn() -> Vec<Vec<Resource>>) -> u64 {
 pub fn history_readonly(values: Vec<Vec<u64>>) -> u64 {
     history_nested(values)
 }
+
+#[prebindgen]
+pub struct BorrowedNumbers {
+    pub values: Vec<i64>,
+}
+#[prebindgen]
+pub fn borrowed_numbers_new(size: usize) -> BorrowedNumbers {
+    BorrowedNumbers {
+        values: (0..size).map(|i| i as i64 + 7).collect(),
+    }
+}
+#[prebindgen]
+pub fn borrowed_values(owner: &BorrowedNumbers) -> &[i64] {
+    std::hint::black_box(&owner.values)
+}
+#[prebindgen]
+pub fn borrowed_emit(owner: &BorrowedNumbers, callback: impl Fn(&[i64]), times: usize) {
+    for _ in 0..times {
+        callback(std::hint::black_box(&owner.values))
+    }
+}

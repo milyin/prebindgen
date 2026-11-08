@@ -27,6 +27,11 @@ pub enum CWire {
     },
     /// Non-owning byte/text view. No allocation is transferred.
     View,
+    /// Shared numeric slice in its original Rust storage. No owner is transferred.
+    SliceView {
+        /// Element with identical Rust and C scalar representation.
+        element: Primitive,
+    },
     /// Exclusive non-owning byte view. The caller preserves the source lifetime
     /// and exclusive access; no allocation is transferred.
     MutableView,
@@ -155,6 +160,7 @@ impl CWire {
             | Self::View
             | Self::MutableView
             | Self::Owned { .. }
+            | Self::SliceView { .. }
             | Self::Rows
             | Self::Callback { .. } => {}
         }
@@ -177,6 +183,11 @@ impl CWire {
     pub(crate) fn validate(&self) -> Result<()> {
         if let Self::Enum { mapping, .. } = self {
             mapping.validate()?;
+        }
+        if let Self::SliceView { element } = self {
+            if !crate::borrowed::compatible(*element) {
+                return Err("C slice views require an identical numeric representation".into());
+            }
         }
         match self.available_niche() {
             Some(niche) => self.validate_niche(&niche),
@@ -208,6 +219,10 @@ impl CWire {
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
         match self {
+            CWire::SliceView { element } => {
+                let ident = crate::borrowed::ident(*element);
+                syn::parse_quote!(#ident)
+            }
             CWire::Callback { callback } => {
                 let name = format_ident!("{}", callback.name);
                 syn::parse_quote!(#name)

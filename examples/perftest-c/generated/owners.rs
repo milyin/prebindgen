@@ -31,6 +31,10 @@ fn __pb_owned_numbers_len(value: &Vec<i64>) -> usize {
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_numbers_view(value: &Vec<i64>) -> &[i64] {
+    value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_inlinecallbackrow_7629716a78339b6a_len(
     value: &Vec<perftest_flat::InlineCallbackRow>,
 ) -> usize {
@@ -69,6 +73,10 @@ fn __pb_owned_bytes_view_mut(value: &mut Vec<u8>) -> &mut [u8] {
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_len(value: &Vec<usize>) -> usize {
     value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_view(value: &Vec<usize>) -> &[usize] {
+    value.as_slice()
 }
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
@@ -137,6 +145,13 @@ pub unsafe extern "C" fn owner_free_buffer(b: __PbBuffer) {
             Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8, b.len)),
         );
     }
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_i64 {
+    pub data: *const ::core::primitive::i64,
+    pub len: usize,
 }
 const _: () = {
     assert!(
@@ -419,6 +434,18 @@ The owner must be live, aligned, and of this exact type.*/
 #[no_mangle]
 pub unsafe extern "C" fn owner_numbers_len(value: *const __PbOwned_numbers) -> usize {
     (*value).as_rust().len()
+}
+/**# Safety
+Keep the owner alive; do not mutate it, obtain overlapping exclusive/mutable access, consume or destroy it until the returned view's last use.*/
+#[no_mangle]
+pub unsafe extern "C" fn owner_numbers_view(
+    value: *const __PbOwned_numbers,
+) -> __PbSliceView_i64 {
+    let values = __pb_owned_numbers_view((*value).as_rust());
+    __PbSliceView_i64 {
+        data: values.as_ptr(),
+        len: values.len(),
+    }
 }
 /**# Safety
 The owner must remain live and unmodified while an element pointer is used.*/

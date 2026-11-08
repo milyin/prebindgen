@@ -758,3 +758,101 @@ fn collection_callback_results_allocate_only_the_final_rust_vector() {
         32 * 512 * core::mem::size_of::<perftest_flat::OwnedResource>()
     );
 }
+
+#[test]
+fn numeric_loans_preserve_addresses_and_allocate_only_for_explicit_copies() {
+    unsafe extern "C" fn receive(
+        context: *mut core::ffi::c_void,
+        values: super::__PbSliceView_i64,
+    ) {
+        let owner = context.cast::<perftest_flat::NumericLoanOwner>();
+        assert_eq!(
+            values.data.addr(),
+            super::perftest_numeric_loan_address(owner, 0)
+        );
+        if values.len != 0 {
+            assert_eq!(*values.data, 7);
+        }
+    }
+    unsafe {
+        let reads = if cfg!(miri) { 3 } else { 1000 };
+        let copy_calls = if cfg!(miri) { 3 } else { 100 };
+        for n in [0, 1, if cfg!(miri) { 64 } else { 65536 }] {
+            let owner = super::perftest_numeric_loan_new(n);
+            let original = super::perftest_numeric_loan_address(owner, 0);
+            let count = allocations(|| {
+                for _ in 0..reads {
+                    let view = super::perftest_numeric_loan_values(owner);
+                    assert_eq!(view.len, n);
+                    assert_eq!(view.data.addr(), original);
+                    let array = super::perftest_numeric_loan_fixed(owner);
+                    assert_eq!(array.len, 3);
+                    assert_eq!(*array.data, 1.25);
+                    let mut optional = super::__PbSliceView_i64 {
+                        data: core::ptr::null(),
+                        len: 0,
+                    };
+                    assert_eq!(
+                        super::perftest_numeric_loan_optional(owner, 1, &mut optional),
+                        1
+                    );
+                    assert_eq!(optional.len, 0);
+                    assert_eq!(optional.data.addr(), original);
+                }
+            });
+            assert_eq!(count, 0, "borrowing {n} elements must never allocate");
+            let callback = allocations(|| {
+                super::perftest_numeric_loan_emit(
+                    owner,
+                    super::perftest_callback_3832b9cb035dc725 {
+                        run: Some(receive),
+                        context: owner.cast(),
+                        drop: None,
+                    },
+                    reads,
+                )
+            });
+            assert_eq!(callback, 0, "callback loans must not allocate row buffers");
+            let copies = allocations(|| {
+                for _ in 0..copy_calls {
+                    let rows = super::perftest_numeric_loan_copy(owner);
+                    if n != 0 {
+                        assert_ne!(rows.data.addr(), original);
+                    }
+                    super::perftest_numeric_loan_copy_ret_w0_rows_free(rows);
+                }
+            });
+            assert_eq!(copies, if n == 0 { 0 } else { copy_calls });
+            assert_eq!(ALLOCATED_BYTES.with(Cell::get), n * 8 * copy_calls);
+            super::perftest_drop_numeric_loan_owner(owner);
+        }
+    }
+}
+
+#[test]
+fn numeric_vec_view_survives_a_descriptor_move_and_static_views_retain_storage() {
+    unsafe {
+        let vector = super::perftest_numeric_loan_vector(3);
+        let view = super::perftest_owned_vec_i64_8f793c725f29723e_view(&vector);
+        let mut moved = vector;
+        assert_eq!(
+            view.data,
+            super::perftest_owned_vec_i64_8f793c725f29723e_view(&moved).data
+        );
+        assert_eq!(core::slice::from_raw_parts(view.data, view.len), &[7, 8, 9]);
+        super::perftest_drop_owned_vec_i64_8f793c725f29723e(&mut moved);
+        let count = allocations(|| {
+            let bytes = super::perftest_numeric_loan_static_bytes();
+            let text = super::perftest_numeric_loan_static_text();
+            assert_eq!(
+                bytes.data,
+                perftest_flat::numeric_loan_static_bytes().as_ptr()
+            );
+            assert_eq!(
+                text.data,
+                perftest_flat::numeric_loan_static_text().as_ptr()
+            );
+        });
+        assert_eq!(count, 0);
+    }
+}

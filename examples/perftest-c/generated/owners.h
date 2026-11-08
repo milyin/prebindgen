@@ -10,6 +10,8 @@ typedef struct { uint64_t hi; uint64_t lo; } owner_int128;
  typedef struct { const uint8_t *data; size_t len; } owner_buffer;
 void owner_free_buffer(owner_buffer b);
 void owner_free_error(char *error);
+/* Shared borrowed slice; never free or consume. Keep source storage alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. Empty views may have a non-null dangling data pointer; never dereference when len is zero. Callback argument views last only for that callback invocation. */
+typedef struct { const int64_t *data; size_t len; } owner_i64_slice_view;
 /* Binding target identity; use the matching Rust library. */
 #define owner_TARGET "x86_64-unknown-linux-gnu"
 #ifdef __cplusplus
@@ -67,6 +69,8 @@ typedef struct {
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_numbers(owner_numbers *value);
 size_t owner_numbers_len(const owner_numbers *value);
+/* Borrowed view; never free. Keep the owner alive; do not mutate it or obtain overlapping exclusive/mutable access until the view's last use. */
+owner_i64_slice_view owner_numbers_view(const owner_numbers *value);
 /* Borrowed element; null for an out-of-range index. */
 const int64_t *owner_numbers_get(const owner_numbers *value,size_t index);
 typedef struct {

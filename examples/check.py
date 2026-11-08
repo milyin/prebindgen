@@ -47,6 +47,13 @@ mutable_drop.write_text('#include "bindings.h"\nvoid wrong(perftest_buffer_view_
 rejected=subprocess.run(cc+["-fsyntax-only","-I"+str(outputs["perftest-c"]),str(mutable_drop)],capture_output=True,text=True)
 if rejected.returncode==0 or "incompatible" not in rejected.stderr:
     raise RuntimeError("C compiler did not reject destroying a mutable borrowed view: "+rejected.stderr)
+# Numeric views retain shared access and cannot be passed to an owning destructor.
+for expression in ["perftest_free_buffer(view)", "view.data[0] = 1"]:
+    invalid_view = build / "wrong-numeric-view.c"
+    invalid_view.write_text('#include "bindings.h"\nvoid wrong(perftest_i64_slice_view view) { '+expression+'; }\n')
+    rejected = subprocess.run(cc+["-fsyntax-only", "-I"+str(outputs["perftest-c"]), str(invalid_view)], capture_output=True, text=True)
+    if rejected.returncode == 0:
+        raise RuntimeError("C compiler accepted invalid numeric view access: "+expression)
 # The C compiler must reject crossing distinct opaque pointer types.
 wrong_type = build / "wrong-pointer.c"
 wrong_type.write_text('#include "bindings.h"\nvoid wrong(perftest_storage *p) { perftest_drop_blob(p); }\n')
