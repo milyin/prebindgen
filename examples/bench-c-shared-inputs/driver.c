@@ -45,7 +45,7 @@ int main(int argc,char **argv){
     Dl_info loaded;assert(dladdr((void*)bench_shared_input_inspect,&loaded));printf("LIBRARY,%s\n",loaded.dli_fname);
     struct inputs in={.n=n};in.rows=calloc(n?n:1,sizeof(*in.rows));in.text=malloc(n?n:1);assert(in.rows&&in.text);for(size_t i=0;i<n;i++){WRITE_INPUT(in.rows,i);in.text[i]='a';}
     size_t it=count?1:64;uint64_t counts[3];
-    if(!count)for(int i=0;i<3;i++){uint64_t elapsed=sample(kind,&in,it,false,counts);double scale=(double)target/(elapsed?elapsed:1);if(scale<.25)scale=.25;if(scale>16)scale=16;it=(size_t)(it*scale);if(!it)it=1;if(it>10000000)it=10000000;}
+    if(!count)for(int i=0;i<5;i++){uint64_t elapsed=sample(kind,&in,it,false,counts);double scale=(double)target/(elapsed?elapsed:1);if(scale<.25)scale=.25;if(scale>16)scale=16;it=(size_t)(it*scale);if(!it)it=1;if(it>10000000)it=10000000;}
     if(!count)for(int i=0;i<3;i++)sample(kind,&in,it,false,counts);
     for(size_t i=0;i<batches;i++){uint64_t elapsed=sample(kind,&in,it,count,counts);if(count)printf("COUNT,%zu,%"PRIu64",%"PRIu64",%"PRIu64"\n",i,counts[0],counts[1],counts[2]);else printf("TIME,%zu,%zu,%"PRIu64"\n",i,it,elapsed);}
     free(in.rows);free(in.text);return 0;
