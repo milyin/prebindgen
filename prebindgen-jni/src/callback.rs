@@ -12,8 +12,6 @@ use std::rc::Rc;
 /// function accepting that callback.
 #[derive(Clone, Debug)]
 pub struct JniCallback {
-    kotlin_input_preflight: bool,
-    input_alias_index_threshold: Option<usize>,
     package: String,
     name: String,
     arguments: Vec<Argument>,
@@ -255,8 +253,6 @@ pub(crate) fn input(
         });
     }
     let callback = Rc::new(JniCallback {
-        kotlin_input_preflight: flat.metadata.kotlin_input_preflight,
-        input_alias_index_threshold: flat.metadata.input_alias_index_threshold,
         package,
         name,
         arguments,
@@ -281,11 +277,9 @@ impl JniCallback {
     /// adapters that actually perform that preflight, even when registration
     /// itself has no handle inputs.
     pub(crate) fn requires_preflight(&self) -> bool {
-        self.kotlin_input_preflight
-            && self.return_value.as_ref().is_some_and(|value| {
-                !value.input.rust.resources.is_empty()
-                    && crate::handles::kotlin_preflight(&value.input)
-            })
+        self.return_value
+            .as_ref()
+            .is_some_and(|value| !value.input.rust.resources.is_empty())
     }
 
     pub(crate) fn fqn(&self) -> String {
@@ -298,6 +292,10 @@ impl JniCallback {
         var: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<JniWire>> {
+        if let Some(value) = &self.return_value {
+            crate::handles::require_preflight(&value.input)
+                .map_err(|error| format!("callback `{}` return value: {error}", self.name))?;
+        }
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
             prebindgen_flat::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
@@ -307,17 +305,11 @@ impl JniCallback {
         let retained = format_ident!("{wire}_retained");
         let environment = format_ident!("callback_environment");
         let context = JniContext {
-            input_alias_index_threshold: self.input_alias_index_threshold,
             environment: environment.clone(),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("unused_domain"),
             return_sink: None,
             is_domain_error: false,
-            input_alias_checks: !self.kotlin_input_preflight
-                || self
-                    .return_value
-                    .as_ref()
-                    .is_some_and(|value| !crate::handles::kotlin_preflight(&value.input)),
             output_committed: quote!(),
         };
         let mut descriptor = String::from("(");
@@ -510,11 +502,7 @@ impl JniCallback {
             }
             (
                 format!(": {}", result.raw_kotlin_type()),
-                result.kotlin_encode(
-                    "callbackReturned",
-                    context,
-                    self.kotlin_input_preflight && crate::handles::kotlin_preflight(&result.input),
-                )?,
+                result.kotlin_encode("callbackReturned", context)?,
             )
         } else {
             (String::new(), String::new())
@@ -578,22 +566,12 @@ impl CallbackReturn {
             .1
             .into())
     }
-    fn kotlin_encode(
-        &self,
-        call: &str,
-        context: &KotlinContext<'_>,
-        preflight: bool,
-    ) -> Result<String> {
+    fn kotlin_encode(&self, call: &str, context: &KotlinContext<'_>) -> Result<String> {
         self.kotlin_type(context)?;
         let mut input = self.input.kotlin(context)?;
-        let locks = if preflight {
-            crate::handles::HandleLocks::new(std::slice::from_mut(&mut input), context)?
-        } else {
-            None
-        };
-        if preflight && locks.is_none() {
-            return Err("callback result lacks complete prepared handle inputs".into());
-        }
+        let locks =
+            crate::handles::HandleLocks::new(std::iter::once((&self.input, &mut input)), context)
+                .map_err(|error| format!("callback return value: {error}"))?;
         let name = input.parameters[0].split_once(": ").unwrap().0;
         let binding = format!("val {name} = {call}\n");
         let mut setup = String::new();
@@ -609,22 +587,7 @@ impl CallbackReturn {
             context.package,
             input.consumed.join("; ")
         );
-        if let Some(plan) = locks {
-            body = plan.wrap(&body);
-        } else if !input.locks.is_empty() || !input.lock_groups.is_empty() {
-            let prefix = &self.package;
-            if input.lock_groups.is_empty() && input.locks.len() <= 3 {
-                // Kotlin evaluates all handle arguments before acquiring monitors.
-                // Reuse the ordinary-call overloads without allocating a lock list.
-                body = format!(
-                    "{prefix}.withHandleLocks({}) {{ {body} }}",
-                    input.locks.join(", ")
-                );
-            } else {
-                let handles = crate::kotlin::lock_list(&input.locks, &input.lock_groups);
-                body = format!("{prefix}.withHandleLocks({handles}) {{ {body} }}");
-            }
-        }
+        body = locks.wrap(&body);
         body = format!("{setup} {body}");
         if let Some(cleanup) = self.kotlin_cleanup(name, context)? {
             body = format!(
@@ -742,13 +705,6 @@ impl CallbackReturn {
             },
             &expected,
         )?;
-        let checks = input.code_fragment_slot(
-            InputFragment::CheckInternalAliases { context },
-            &syn::parse_quote!(()),
-        )?;
-        if checks.to_string() != quote!(()).to_string() {
-            body = quote!({let _: () = #checks; #body});
-        }
         body = input.code_fragment_slot(
             InputFragment::Validate {
                 context,
@@ -763,14 +719,9 @@ impl CallbackReturn {
                 Ok::<_,String>(callback_return_decoded)
             });
         }
-        let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
-        alias_check.include_parameter(context, &input.rust.resources)?;
-        let aliases =
-            prebindgen_conversions::staged::input_alias_checks(alias_check.initialize()?, quote!());
         context.render(&quote!({
             let __pb_input_consumed=::core::cell::Cell::new(0usize);
             let __prebindgen_input_consumed=&__pb_input_consumed;
-            #aliases
             let #result = unsafe { #retained.invoke_return(#env, #return_type, &arguments) }?;
             #decode
             #cache
@@ -1076,5 +1027,56 @@ fn argument_local(name: &str, ty: &str) -> String {
     match default {
         Some(default) => format!("        var {name}: {ty} = {default}\n"),
         None => format!("        lateinit var {name}: {ty}\n"),
+    }
+}
+
+#[cfg(test)]
+mod preflight_tests {
+    use super::*;
+
+    #[test]
+    fn callback_results_reject_incomplete_native_resource_metadata() {
+        let source =
+            syn::parse_file("pub struct Handle{pub n:i64}pub fn consume(value:Handle){}").unwrap();
+        let model = JniGen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(consume)))
+            .prepare()
+            .unwrap();
+        let mut input = model.function("consume").unwrap().params[0]
+            .ty
+            .slot
+            .clone()
+            .unwrap();
+        input.rust.resources[0].allocation_type = None;
+        let callback = Rc::new(JniCallback {
+            package: "test".into(),
+            name: "ReturnHandle".into(),
+            arguments: vec![],
+            return_value: Some(CallbackReturn {
+                package: "test".into(),
+                source_type: syn::parse_quote!(Handle),
+                input,
+            }),
+        });
+        let error = callback
+            .input(
+                format_ident!("wire"),
+                format_ident!("value"),
+                &Default::default(),
+            )
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("callback `ReturnHandle` return value"),
+            "{error}"
+        );
+        assert!(error.contains("allocation type"), "{error}");
     }
 }

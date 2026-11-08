@@ -1,8 +1,6 @@
 use prebindgen_declarations::{callback, expand_param, expand_return, fun, Input};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
-    println!("cargo:rerun-if-env-changed=BENCH_NATIVE_INPUT_CHECKS");
-    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_INDEX_THRESHOLD");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     for (mode, bulk) in [("plain", false), ("bulk", true)] {
         let scalar = fun!(scalar);
@@ -201,10 +199,7 @@ fn main() {
         } else {
             buffers
         };
-        let mut builder = JniGen::builder()
-            .set_kotlin_input_preflight(
-                std::env::var("BENCH_NATIVE_INPUT_CHECKS").as_deref() != Ok("1"),
-            )
+        let builder = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
@@ -260,14 +255,6 @@ fn main() {
                     .fun(handler)
                     .fun(fun!(fire)),
             );
-        if let Ok(value) = std::env::var("BENCH_ALIAS_INDEX_THRESHOLD") {
-            let value = if value == "max" {
-                usize::MAX
-            } else {
-                value.parse().expect("numeric native alias threshold")
-            };
-            builder = builder.set_native_input_alias_index_threshold(value);
-        }
         let generated = builder.build().expect("generate benchmark JNI");
         generated
             .write_rust(out.join(format!("{mode}.rs")))

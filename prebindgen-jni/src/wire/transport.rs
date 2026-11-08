@@ -163,13 +163,11 @@ impl JniWire {
     /// use prebindgen_jni::{JniContext, JniWire};
     /// use quote::quote;
     /// let context = JniContext {
-    ///     input_alias_index_threshold: None,
     ///     environment: syn::parse_quote!(env),
     ///     acknowledgement: syn::parse_quote!(accepted),
     ///     domain_output: syn::parse_quote!(domain_output),
     ///     return_sink: None,
     ///     is_domain_error: false,
-    ///     input_alias_checks: true,
     ///     output_committed: quote!(),
     /// };
     /// let argument = JniWire::text().output_argument(

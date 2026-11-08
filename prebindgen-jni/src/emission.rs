@@ -7,8 +7,6 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct JniContext {
-    /// Compile-time native history limit; None uses the runtime default.
-    pub input_alias_index_threshold: Option<usize>,
     /// Mutable JNI environment parameter.
     pub environment: syn::Ident,
     /// Long-array parameter recording completed input transfers.
@@ -20,18 +18,14 @@ pub struct JniContext {
     pub return_sink: Option<syn::Ident>,
     /// Whether this delivery belongs to the typed domain-error channel.
     pub is_domain_error: bool,
-    /// Keep native alias validation for inputs without generated Kotlin preflight.
-    pub input_alias_checks: bool,
     /// Infallible statements recording completed output ownership transfer.
     pub output_committed: TokenStream,
 }
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        let code = prebindgen_conversions::render_input_alias_checks_with_threshold(
-            code,
-            self.input_alias_checks,
-            self.input_alias_index_threshold,
-        )?;
+        // Generated Kotlin validates aliases while acquiring handle locks.
+        // Shared conversion templates also serve C, which can retain native checks.
+        let code = prebindgen_conversions::render_input_alias_checks(code, false)?;
         render_template(&code, &|name| match name {
             "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),

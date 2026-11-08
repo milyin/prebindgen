@@ -4015,54 +4015,28 @@ fn selector_reference_slots_are_nullable_for_plain_and_bulk_inputs() {
 }
 
 #[test]
-fn kotlin_preflight_replaces_native_checks_and_uses_retained_handles() {
-    let source="pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(read:&A,write:&mut A,other:&B){}";
-    for enabled in [false, true] {
-        let generated = JniGen::builder()
-            .flat(flat(source))
-            .set_package_prefix("test")
-            .set_kotlin_input_preflight(enabled)
-            .package(
-                package!()
-                    .class(ptr_class!(A))
-                    .class(ptr_class!(B))
-                    .fun(fun!(call)),
-            )
-            .build()
-            .unwrap();
-        let kotlin = &generated.kotlin["test/Functions.kt"];
-        assert_eq!(
-            generated.rust.contains("__prebindgen_input_aliases"),
-            !enabled
-        );
-        assert_eq!(kotlin.contains("conflicting input aliases"), enabled);
-        if enabled {
-            assert!(kotlin.contains("__pb_handle0?.raw ?: 0L"));
-            assert!(kotlin.contains("__pb_handle1?.raw ?: 0L"));
-            assert!(!kotlin.contains("read.raw"));
-        }
-    }
+fn kotlin_preflight_is_required_and_uses_retained_handles() {
+    let generated = JniGen::builder()
+        .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(read:&A,write:&mut A,other:&B){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(!generated.rust.contains("__prebindgen_input_aliases"));
+    assert!(kotlin.contains("conflicting input aliases"));
+    assert!(kotlin.contains("__pb_handle0?.raw ?: 0L"));
+    assert!(kotlin.contains("__pb_handle1?.raw ?: 0L"));
+    assert!(!kotlin.contains("read.raw"));
 }
 
 #[test]
-fn opaque_custom_resource_types_keep_native_validation() {
-    let source =
-        "pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(first:&mut A,second:&A){}";
-    let make = || {
-        JniGen::builder()
-            .flat(flat(source))
+fn incomplete_custom_resource_metadata_is_rejected() {
+    for missing in ["allocation", "mismatch", "access", "deferred"] {
+        let mut model = JniGen::builder()
+            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(first:&mut A,second:&A){}"))
             .set_package_prefix("test")
-            .package(
-                package!()
-                    .class(ptr_class!(A))
-                    .class(ptr_class!(B))
-                    .fun(fun!(call)),
-            )
-            .prepare()
-            .unwrap()
-    };
-    for unknown in [false, true] {
-        let mut model = make();
+            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
+            .prepare().unwrap();
         let first = &mut model.function_mut("call").unwrap().params[0]
             .ty
             .slot
@@ -4070,114 +4044,59 @@ fn opaque_custom_resource_types_keep_native_validation() {
             .unwrap()
             .rust
             .resources[0];
-        first.allocation_type = if unknown {
-            None
-        } else {
-            Some(syn::parse_quote!(B))
-        };
-        let generated = generate(&model).unwrap();
-        assert!(generated.rust.contains("__prebindgen_input_aliases"));
-        assert!(!generated.kotlin["test/Functions.kt"].contains("conflicting input aliases"));
-    }
-}
-
-#[test]
-fn callback_results_use_the_same_preflight_policy_as_arguments() {
-    let source="pub struct A{pub n:i64}pub struct B{pub n:i64}pub struct Row{pub a:A,pub b:B}pub fn call(cb:impl Fn()->Vec<Row>){}";
-    for enabled in [false, true] {
-        let generated = JniGen::builder()
-            .flat(flat(source))
-            .set_package_prefix("test")
-            .set_kotlin_input_preflight(enabled)
-            .package(
-                package!()
-                    .class(ptr_class!(A))
-                    .class(ptr_class!(B))
-                    .class(data_class!(Row))
-                    .fun(fun!(call).expand_param(
-                        "cb",
-                        callback!(impl Fn() -> Vec<Row>).expand_return(
-                            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
-                        ),
-                    )),
-            )
-            .build()
-            .unwrap();
-        assert_eq!(
-            generated.rust.contains("__prebindgen_input_aliases"),
-            !enabled
-        );
-        let kotlin = &generated.kotlin["test/Functions.kt"];
-        assert_eq!(kotlin.contains("prepareInputHandles("), enabled);
-        assert!(kotlin.contains("callbackReturnWire"));
-    }
-}
-
-#[test]
-fn native_symbols_pair_kotlin_preflight_with_its_rust_entry_points() {
-    let source = "pub struct A{pub n:i64}pub fn read(value:&A){}pub fn scalar(value:i64){}pub fn callback(cb:impl Fn()->A){}";
-    let build = |enabled| {
-        JniGen::builder()
-            .flat(flat(source))
-            .set_package_prefix("test")
-            .set_kotlin_input_preflight(enabled)
-            .package(
-                package!()
-                    .class(ptr_class!(A))
-                    .fun(fun!(read))
-                    .fun(fun!(scalar))
-                    .fun(fun!(callback)),
-            )
-            .build()
-            .unwrap()
-    };
-    let checked = build(false);
-    let delegated = build(true);
-    let native = |kotlin: &BTreeMap<String, String>, function: &str| -> String {
-        kotlin["test/JNINative.kt"]
-            .lines()
-            .find(|line| line.contains(&format!("fun call_{function}_")))
-            .unwrap()
-            .to_owned()
-    };
-    assert_eq!(
-        native(&checked.kotlin, "scalar"),
-        native(&delegated.kotlin, "scalar")
-    );
-    for function in ["read", "callback"] {
-        assert_ne!(
-            native(&checked.kotlin, function),
-            native(&delegated.kotlin, function)
-        );
-    }
-}
-
-#[test]
-fn native_history_limit_applies_to_arguments_and_callback_results_only_when_needed() {
-    for preflight in [false, true] {
-        let g=JniGen::builder().flat(flat("pub struct A{pub value:i64}pub fn call(values:Vec<A>)->i64{}pub fn cb(callback:impl Fn()->Vec<A>)->i64{}"))
-            .set_package_prefix("test").set_kotlin_input_preflight(preflight)
-            .set_native_input_alias_index_threshold(23)
-            .package(package!().class(ptr_class!(A)).fun(fun!(call)).fun(fun!(cb)))
-            .build().unwrap();
-        assert_eq!(g.rust.contains("DynamicInputsWithThreshold"), !preflight);
-        if !preflight {
-            let file = syn::parse_file(&g.rust).unwrap();
-            for source in ["call", "cb"] {
-                let prefix = format!("Java_test_JNINative_call_1{source}_1");
-                let bodies: Vec<_> = file
-                    .items
-                    .iter()
-                    .filter_map(|item| match item {
-                        syn::Item::Fn(item) if item.sig.ident.to_string().starts_with(&prefix) => {
-                            Some(quote!(#item).to_string())
-                        }
-                        _ => None,
-                    })
-                    .collect();
-                assert_eq!(bodies.len(), 1, "{prefix}");
-                assert!(bodies[0].contains("23usize"), "{prefix}");
+        let expected = match missing {
+            "allocation" => {
+                first.allocation_type = None;
+                "allocation type"
             }
+            "mismatch" => {
+                first.allocation_type = Some(syn::parse_quote!(B));
+                "matching allocation types and access modes"
+            }
+            "access" => {
+                first.access = Access::Shared;
+                "matching allocation types and access modes"
+            }
+            _ => {
+                first.registered = false;
+                "eagerly prepared"
+            }
+        };
+        let error = generate(&model).err().unwrap();
+        assert!(
+            error.contains("function `call` parameter `first`"),
+            "{error}"
+        );
+        assert!(
+            error.contains("Kotlin handle preflight") && error.contains(expected),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn callback_results_and_arguments_omit_all_native_alias_history() {
+    for bulk in [false, true] {
+        let rows = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let rows = if bulk { rows.bulk() } else { rows };
+        let generated = JniGen::builder()
+            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub struct Row{pub a:A,pub b:B}pub fn call(values:Vec<Row>,cb:impl Fn()->Vec<Row>){}"))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).class(data_class!(Row))
+                .fun(fun!(call).expand_param("values", rows.clone())
+                    .expand_param("cb", callback!(impl Fn() -> Vec<Row>).expand_return(rows))))
+            .build().unwrap();
+        for history in [
+            "__prebindgen_input_aliases",
+            "DynamicInputs",
+            "FixedInputs",
+            "SharedInputs",
+            "conflicting input aliases",
+        ] {
+            assert!(!generated.rust.contains(history), "{history}");
         }
+        let kotlin = &generated.kotlin["test/Functions.kt"];
+        assert!(kotlin.matches("prepareInputHandles(").count() >= 2);
+        assert!(kotlin.contains("callbackReturnWire"));
     }
 }

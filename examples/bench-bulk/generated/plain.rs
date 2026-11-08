@@ -253,7 +253,7 @@ fn __pb_cleanup_typed_Rows_fe4a4c800c91ea9c<'local>(
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1input_1handle_1new_1d7aa473c3cabcfa5<
     'local,
@@ -349,7 +349,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1input_1handle_1ne
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1input_1handle_1value_1ae1ea4e2f311cdb7<
     'local,
@@ -448,7 +448,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1input_1handle_1va
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1buffer_1sizes_109330eed51da0791<
     'local,
@@ -561,7 +561,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1buffer_1sizes_109
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1selected_1handle_15e0482e736d8e05c<
     'local,
@@ -701,7 +701,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1selected_1handle_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handle_1values_1sum_10c275022668af098<
     'local,
@@ -841,7 +841,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handle_1values_1s
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handle_1records_1sum_14d3c2822396924df<
     'local,
@@ -1011,7 +1011,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handle_1records_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1echo_1e97ab382b6bce5df<
     'local,
@@ -1241,7 +1241,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1records_1echo_17223d199891bf713<
     'local,
@@ -1503,7 +1503,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1records_159a5e85070935754<
     'local,
@@ -1852,7 +1852,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1record_1c829b73c0af8c75b<
     'local,
@@ -2089,7 +2089,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1buffer_1records_1echo_132801b2928e6b02f<
     'local,
@@ -2401,7 +2401,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1buffer_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1handles_1echo_1656072b3182d8e7b<
     'local,
@@ -2744,7 +2744,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_1owned_1handles_145191dd02ebf0e07<
     'local,
@@ -3208,7 +3208,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1make_1bcd43e7b136151dd<
     'local,
@@ -3333,7 +3333,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1make_1bcd43e
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1make_11dbd8ca2fd4616ac<
     'local,
@@ -3554,7 +3554,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1make_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1sum_1861bdfef124a25ad<
     'local,
@@ -4089,7 +4089,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1sum_18
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1handler_1new_19a8fcadcab7b9640<
     'local,
@@ -4412,7 +4412,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1hand
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return_1handler_1new_167f38d7168020371<
     'local,
@@ -5263,7 +5263,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1fire_1434e8dbfa624de44<
     'local,
@@ -5381,7 +5381,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1return_1fire
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return_1fire_1ea0468a8c78895fe<
     'local,
@@ -5499,7 +5499,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1wide_1row_1return
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1control_1b0073ee32096caea<
     'local,
@@ -5589,7 +5589,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1control_1b0073ee3
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1scalar_1a4a5da3f79ebbcaf<
     'local,
@@ -5679,7 +5679,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1scalar_1a4a5da3f7
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1sum_1db65517187cece4c<
     'local,
@@ -5878,7 +5878,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1row_1sum_1db65517
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_147543406a5cdf588<
     'local,
@@ -6010,7 +6010,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ecfa43bf26b9<
     'local,
@@ -6284,7 +6284,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb2a3ee93e0ae<
     'local,
@@ -6457,7 +6457,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1make_16f7eb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c8cf4751c454<
     'local,
@@ -6797,7 +6797,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1packet_1sum_1c07ede9eb5de050f<
     'local,
@@ -7025,7 +7025,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1packet_1sum_1c07e
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916a49ec8343b596<
     'local,
@@ -7264,7 +7264,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1handler_1new_1916
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1fire_1ff69607332471b89<
     'local,
@@ -7425,7 +7425,7 @@ pub extern "system" fn Java_bench_plain_JNINative_init_1SequenceCapacity_1e067e9
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1echo_1fold_1de46f033d154a724<
     'local,
@@ -7684,7 +7684,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1handles_1echo_1fold_1f1a4a186e9c98620<
     'local,
@@ -8057,7 +8057,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_1owned_1handles_1fold_1496cd4317fea585c<
     'local,
@@ -8551,7 +8551,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1for_1reduce_1fold_1587a8aef1d9a0485<
     'local,

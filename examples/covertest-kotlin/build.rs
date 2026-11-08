@@ -1919,87 +1919,16 @@ fn main() {
     for (path, source) in relocated.kotlin {
         assert!(jni.kotlin.insert(path, source).is_none());
     }
-    let checked = JniGen::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .set_package_prefix("io.prebindgen.covertest.rawinputs")
-        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        .set_kotlin_input_preflight(false)
-        .set_native_input_alias_index_threshold(64)
-        .package(
-            package!()
-                .class(ptr_class!(BulkHandle))
-                .class(data_class!(BulkReplayRow))
-                .class(enum_class!(BulkKind))
-                .class(data_class!(BulkPairText))
-                .fun(fun!(bulk_replay_rows).expand_param("rows", bulk_replay_input()))
-                .fun(fun!(bulk_handle_new))
-                .fun(fun!(bulk_handle_value))
-                .fun(fun!(bulk_replay_nested_rows).expand_param(
-                    "rows",
-                    Input::Sequence(Box::new(bulk_replay_input_with(true, true))).bulk(),
-                ))
-                .fun(
-                    fun!(bulk_replay_nested_callback).expand_param(
-                        "callback",
-                        callback!(impl Fn() -> Vec<Vec<BulkReplayRow>>)
-                            .name("BulkReplayNestedCallback")
-                            .expand_return(
-                                Input::Sequence(Box::new(bulk_replay_input_with(true, true)))
-                                    .bulk(),
-                            ),
-                    ),
-                )
-                .fun(
-                    fun!(bulk_nested_handles_input).expand_param(
-                        "values",
-                        Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
-                            Box::new(Input::Optional(Box::new(Input::Leaf.bulk()))),
-                        )))))
-                        .bulk(),
-                    ),
-                )
-                .fun(
-                    fun!(bulk_cleanup_nested_callback).expand_param(
-                        "callback",
-                        callback!(
-                            impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static
-                        )
-                        .name("BulkCleanupNestedCallback")
-                        .expand_return(
-                            Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
-                                Box::new(Input::Optional(Box::new(Input::Leaf))),
-                            )))))
-                            .bulk(),
-                        ),
-                    ),
-                )
-                .fun(
-                    fun!(bulk_cleanup_pair_callback).expand_param(
-                        "callback",
-                        callback!(impl Fn() -> BulkPairText)
-                            .name("BulkCleanupPairCallback")
-                            .expand_return(
-                                Input::Record(vec![
-                                    Input::Constructor {
-                                        function: "bulk_handle_copy".into(),
-                                        args: vec![Input::Leaf],
-                                    },
-                                    Input::Leaf,
-                                    Input::Leaf,
-                                ])
-                                .bulk(),
-                            ),
-                    ),
-                ),
-        )
-        .build()
-        .expect("generate checked raw-frame probes");
-    jni.rust.push_str(&format!(
-        "\nmod checked_raw_inputs {{ {} }}\n",
-        checked.rust
-    ));
-    for (path, source) in checked.kotlin {
-        assert!(jni.kotlin.insert(path, source).is_none());
+    for native_check in [
+        "__prebindgen_input_aliases",
+        "DynamicInputs",
+        "FixedInputs",
+        "SharedInputs",
+    ] {
+        assert!(
+            !jni.rust.contains(native_check),
+            "JNI must not emit native alias validation: {native_check}"
+        );
     }
     jni.write_rust("bindings.rs").unwrap();
     std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();

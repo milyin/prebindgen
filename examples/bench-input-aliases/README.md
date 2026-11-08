@@ -10,9 +10,10 @@ history, including ordinary arguments and callback results covered by that
 preparation. The JNI timings near the end of this document predate #887 and no
 longer describe the default JNI path.
 
-This runtime change still applies to C with alias checks enabled, JNI configured
-with `set_kotlin_input_preflight(false)`, and custom conversions retaining native
-validation. Its intended case is a history built incrementally by nested
+This runtime change applies to C with alias checks enabled. JniGen now always
+uses Kotlin preflight and rejects custom conversions with incomplete handle
+metadata. The former native-checked JNI mode has been removed; its measurements
+below are historical. Its intended case is a history built incrementally by nested
 collections or successive arguments. One first batch keeps sorted storage;
 shared-only and fixed sets use other runtime implementations. C's check opt-out
 also bypasses this history.
@@ -24,8 +25,7 @@ retains slower controls and identical-library comparisons.
 
 [The threshold investigation](thresholds.md) compares configurable limits using
 complete C calls. The current implementation preserves disjoint ascending append
-and retains 128 as the default; C supports project/local overrides and JNI has a
-native-history setting. This fixes the ascending regression documented in the
+and retains 128 as the default; C supports project/local overrides. This fixes the ascending regression documented in the
 earlier remaining-path study. The tables below record the earlier algorithm
 comparison before that append fix, rather than the new threshold sweep.
 

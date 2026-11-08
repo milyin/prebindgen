@@ -19,7 +19,7 @@ root=a.output.resolve();root.mkdir(parents=True,exist_ok=True);assert not list(r
 sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 info={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before),('after',a.after)]}
 for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sha256','cargo_config_sha256','cargo_profile','profile_environment','native_input_checks']:
- assert info['before'][key]==info['after'][key],key
+ assert info['before'].get(key)==info['after'].get(key),key
 glue={v:{name:sha(directory/name) for name in ['plain.rs','bulk.rs']} for v,directory in [('before',a.before),('after',a.after)]}
 if a.compare_thresholds:
  def normalized(path):
@@ -27,7 +27,7 @@ if a.compare_thresholds:
   text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(?:[0-9]+usize|\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}),?>::default\(\)','NATIVE_HISTORY()',text)
   return text.replace('::prebindgen_runtime::DynamicInputs::default()','NATIVE_HISTORY()')
  for version,directory in [('before',a.before),('after',a.after)]:
-  threshold=info[version]['alias_index_threshold']
+  threshold=info[version].get('alias_index_threshold')
   assert threshold is not None, 'threshold comparison requires explicit limits'
   assert threshold=='max' or 0<=int(threshold)<=65535, 'threshold comparison supports portable small limits or max'
   expected='::core::primitive::usize::MAX' if threshold=='max' else threshold+'usize'
@@ -40,7 +40,7 @@ if a.compare_thresholds:
 else:
  assert glue['before']==glue['after'], 'generated JNI Rust differs'
 for d in info.values():
- assert d['native_input_checks']==(a.policy=='native'), 'unexpected alias-validation policy'
+ assert d.get('native_input_checks', False)==(a.policy=='native'), 'unexpected alias-validation policy'
  assert not d['native_allocations'] and d['instrumentation_probe']=='NATIVE_ALLOCATIONS,false'
  assert sha(d['jar'])==d['jar_sha256'] and sha(d['library'])==d['native_sha256']
 flags=['-Xss16m','-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2']

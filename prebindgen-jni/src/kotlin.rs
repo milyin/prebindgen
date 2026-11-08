@@ -84,8 +84,8 @@ pub struct KotlinHandleInput {
 /// Prepared Kotlin input code; the writer orders these operations across slots.
 #[derive(Default)]
 pub struct KotlinInput {
-    /// Complete handle inputs used for Kotlin alias preflight. None retains
-    /// native alias checks for custom input emission without this information.
+    /// Complete handle inputs used for Kotlin alias preflight. Custom input
+    /// emission must provide this metadata; None is rejected during generation.
     pub handle_inputs: Option<Vec<KotlinHandleInput>>,
     /// Input snapshots evaluated once before locking; handle addresses stay deferred.
     pub setup: Vec<KotlinBinding>,
