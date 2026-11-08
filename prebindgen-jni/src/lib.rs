@@ -241,8 +241,6 @@ type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
 /// configuration callbacks run in registration order before declarations fill slots.
 #[derive(Default)]
 pub struct JniGenBuilder {
-    kotlin_input_preflight: Option<bool>,
-    input_alias_index_threshold: Option<usize>,
     configure: Vec<Configure>,
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -419,26 +417,6 @@ impl JniGenBuilder {
         self.packages.push(package);
         self
     }
-    /// Choose where input-handle aliases are checked. Defaults to Kotlin:
-    /// generated wrappers reuse lock ordering for preflight and native decoding
-    /// omits duplicate alias history. False retains native alias validation for
-    /// consumers constructing JNI frames themselves. Pointer/length/value checks,
-    /// ownership receipts and Kotlin locking remain in both modes. Custom plans
-    /// without complete allocation/preparation metadata retain native checking.
-    /// Internal JNI names pair preflight-dependent entry points with their Kotlin
-    /// wrappers; regenerate and deploy both sides together.
-    pub fn set_kotlin_input_preflight(mut self, enabled: bool) -> Self {
-        self.kotlin_input_preflight = Some(enabled);
-        self
-    }
-    /// Set the compile-time sorted-history limit for native alias validation.
-    /// Applies to native-checked arguments and callback results; Kotlin-preflight
-    /// inputs omit native history entirely. usize::MAX keeps vector storage.
-    pub fn set_native_input_alias_index_threshold(mut self, threshold: usize) -> Self {
-        self.input_alias_index_threshold = Some(threshold);
-        self
-    }
-
     /// Resolve declarations and return a complete Flat binding model for emission.
     ///
     /// Rejects ambiguous source selection, invalid or duplicate names, unsupported
@@ -488,8 +466,6 @@ impl JniGenBuilder {
         };
         validate_package(&self.prefix)?;
         flat.metadata = JniModule {
-            input_alias_index_threshold: self.input_alias_index_threshold,
-            kotlin_input_preflight: self.kotlin_input_preflight.unwrap_or(true),
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
@@ -1705,14 +1681,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let throws = error.map_or_else(String::new, |error| error.throws(exception));
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
-        let mut context = JniContext {
-            input_alias_index_threshold: flat.metadata.input_alias_index_threshold,
+        let context = JniContext {
             environment: env.clone(),
             acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
             return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
-            input_alias_checks: true,
             output_committed: if native_return.is_some() {
                 if matches!(native_return, Some(returns::NativeReturn::Direct(_))) {
                     quote!(direct_output = __pb_direct_result; success_transferred = true;)
@@ -1796,20 +1770,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         };
         let mut kt_params = Vec::new();
         let mut kt_args = Vec::new();
-        let mut locks = Vec::new();
-        let mut lock_groups = Vec::new();
         let mut setup = String::new();
         let mut consumed = Vec::new();
-        let lock_function = if f.input_conversions()?.iter().any(|input| {
-            prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
-                matches!(&wire.kind, JniWire::Handle { handle, .. }
-                    if classes.get(&type_key(&handle.ty)).is_some_and(|(_, c)| c.gc_managed))
-            })
-        }) {
-            "withGcHandleLocks"
-        } else {
-            "withHandleLocks"
-        };
         for w in crate::group::function_parameters(f)? {
             let n = &w.name;
             let rt = w.kind.rust_type();
@@ -1829,22 +1791,25 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             &mut kotlin_inputs,
             &parameter_package_roots,
         )?;
-        let handle_locks = if flat.metadata.kotlin_input_preflight
-            && inputs.iter().all(|input| handles::kotlin_preflight(input))
-        {
-            handles::HandleLocks::new(&mut kotlin_inputs, &kotlin_context)?
-        } else {
-            None
-        };
-        context.input_alias_checks =
-            handle_locks.is_none() || !inputs.iter().all(|input| handles::kotlin_preflight(input));
+        for (parameter, input) in f.params.iter().zip(&inputs) {
+            handles::require_preflight(input).map_err(|error| {
+                format!(
+                    "function `{}` parameter `{}`: {error}",
+                    f.name, parameter.name
+                )
+            })?;
+        }
+        let handle_locks = handles::HandleLocks::new(
+            inputs.iter().copied().zip(&mut kotlin_inputs),
+            &kotlin_context,
+        )
+        .map_err(|error| format!("function `{}`: {error}", f.name))?;
         let delegated_callbacks = inputs.iter().any(|input| {
             prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
                 matches!(&wire.kind,JniWire::Callback{callback} if callback.requires_preflight())
             })
         });
-        let delegated_handles = !context.input_alias_checks
-            && inputs.iter().any(|input| !input.rust.resources.is_empty());
+        let delegated_handles = inputs.iter().any(|input| !input.rust.resources.is_empty());
         let path_identity = names::path_identity(&f.path);
         let function_identity = f.name.to_string();
         let mut identity = vec![path_identity.as_str(), function_identity.as_str()];
@@ -1856,8 +1821,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         for code in kotlin_inputs {
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
-            locks.extend(code.locks);
-            lock_groups.extend(code.lock_groups);
             for binding in code.setup {
                 setup.push_str(&format!("val {} = try {{ {} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}\n", binding.name, binding.expression));
             }
@@ -2087,7 +2050,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         ));
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[doc = "# Safety\nThe caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point."]
+   #[doc = "# Safety\nThe caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*) #native_signature_return {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
@@ -2153,23 +2116,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let call = if has_consumes {
             {
                 let consume = consumed.join("; ");
-                let alias_cleanup = if lock_groups.is_empty() && locks.len() <= 3 {
-                    (0..locks.len())
-                        .map(|i| {
-                            format!(
-                                "handle{i}?.let {{ if (it.address in taken) it.markConsumed() }}"
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                } else {
-                    "handles.forEach { if (it.address in taken) it.markConsumed() }".into()
-                };
-                if !context.input_alias_checks {
-                    format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ handle.markConsumed(); remaining-- }} }}; {consume} }} }}")
-                } else {
-                    format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ taken.add(handle.address); handle.markConsumed(); remaining-- }} else if (handle.address in taken) handle.markConsumed() }}; {consume}; {} }} }}", alias_cleanup)
-                }
+                format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ handle.markConsumed(); remaining-- }} }}; {consume} }} }}")
             }
         } else {
             call
@@ -2189,28 +2136,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         if let Some(fold) = &fold {
             kt_params.push(fold.parameter.clone());
         }
-        let call = if let Some(plan) = &handle_locks {
-            plan.wrap(&call)
-        } else if locks.is_empty() && lock_groups.is_empty() {
-            call
-        } else if lock_groups.is_empty() && locks.len() <= 3 {
-            use std::fmt::Write as _;
-            // Evaluate and validate each expression before taking any monitor.
-            let names = (0..locks.len())
-                .map(|i| format!("handle{i}"))
-                .collect::<Vec<_>>();
-            let mut locals = String::new();
-            for (name, value) in names.iter().zip(&locks) {
-                write!(locals, "val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ").expect("writing to a String");
-            }
-            format!(
-                "run {{ {locals}{prefix}.{lock_function}({}) {{\n        {call}\n    }} }}",
-                names.join(", ")
-            )
-        } else {
-            let all_locks = kotlin::lock_list(&locks, &lock_groups);
-            format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.{lock_function}(handles) {{\n        {call}\n    }} }}")
-        };
+        let call = handle_locks.wrap(&call);
         let call = if callback_cleanup {
             format!("try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}")
         } else {

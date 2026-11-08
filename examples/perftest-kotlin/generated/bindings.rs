@@ -20,7 +20,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop_1Storag
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1new_1a15b46920214a065<
     'local,
@@ -102,7 +102,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1get_1b38090762950a015<
     'local,
@@ -241,7 +241,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payload_1new_14db541865be00283<
     'local,
@@ -402,7 +402,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1with_1payload_1b44f150bf309e573<
     'local,
@@ -553,7 +553,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1put_1opt_1179bf292b0cec6bb<
     'local,

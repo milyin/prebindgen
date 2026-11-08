@@ -7873,7 +7873,7 @@ fn __pb_cleanup_typed_Rows_fd4a2346f820bb90<'local>(
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1a_1new_1a666cfeb0749bacc<
     'local,
@@ -7969,7 +7969,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1a_1read_1752e87ac619cd2ab<
     'local,
@@ -8070,7 +8070,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1b_1new_10ac223fcf1a09c24<
     'local,
@@ -8166,7 +8166,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1b_1read_12a0fffe1bd334d9d<
     'local,
@@ -8267,7 +8267,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1control_1new_1c01186712acd5471<
     'local,
@@ -8365,7 +8365,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1live_103e8c255db4b9ee9<
     'local,
@@ -8441,7 +8441,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1conversions_11b6cd416be082059<
     'local,
@@ -8517,7 +8517,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1fixed_1157e836568a582a4<
     'local,
@@ -8765,7 +8765,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1fixed_1mut_11469d98e8752a26b<
     'local,
@@ -8918,7 +8918,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1shared_1lists_182c951ffa3f2a084<
     'local,
@@ -9185,7 +9185,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1mut_1lists_130242e7654d4250f<
     'local,
@@ -9427,7 +9427,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1mixed_17b268c9e6948a110<
     'local,
@@ -9669,7 +9669,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1row_1d1ca0f73c8d133b6<
     'local,
@@ -9845,7 +9845,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1holder_14673e9a6dda65297<
     'local,
@@ -10059,7 +10059,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1rows_11943c070e2ef84cb<
     'local,
@@ -10300,7 +10300,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1rows_1plain_18d430d0aa0f4b840<
     'local,
@@ -10521,7 +10521,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1nested_1d53c1e8c8b8963c9<
     'local,
@@ -10799,7 +10799,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1callback_1e567d8ed47f4c01f<
     'local,
@@ -11192,7 +11192,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1nested_1callback_191c187ec446a933d<
     'local,
@@ -11655,7 +11655,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1optional_16826ec5cb3fb4351<
     'local,
@@ -11876,7 +11876,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1array_18fb1d0d4f19b9470<
     'local,
@@ -12081,7 +12081,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1enum_1rows_1fbee7d589d39a15c<
     'local,
@@ -12246,7 +12246,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1new_187a8c3bbfa51949d<
     'local,
@@ -12349,7 +12349,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1len_16cbb722741c58243<
     'local,
@@ -12450,7 +12450,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1ref_1770d4322f0c247a7<
     'local,
@@ -12557,7 +12557,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1optional_1d64541d84155036d<
     'local,
@@ -12697,7 +12697,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1ref_1expanded_192a58b0514f2fea9<
     'local,
@@ -12801,7 +12801,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1emit_1366f113bb0a1bdca<
     'local,
@@ -12967,7 +12967,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1emit_1copy_112e2378690dda8c6<
     'local,
@@ -13133,7 +13133,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1emit_1optional_1f12e8c1950468f84<
     'local,
@@ -13312,7 +13312,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1emit_1expanded_1e83c8cf8dcff206e<
     'local,
@@ -13473,7 +13473,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1emit_1worker_1dca4822cf131fe16<
     'local,
@@ -13617,7 +13617,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1packet_1counter_14b9e951a734376ce<
     'local,
@@ -13716,7 +13716,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1no_1clone_1new_162088c19c27300c5<
     'local,
@@ -13798,7 +13798,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1no_1clone_1value_1d9e7b7aca40dea2e<
     'local,
@@ -13901,7 +13901,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borrow_1no_1clone_1emit_1452f216be3572703<
     'local,
@@ -14040,7 +14040,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1plain_149edb34e988dff39<
     'local,
@@ -14193,7 +14193,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1bulk_17564a92b14e3a524<
     'local,
@@ -14360,7 +14360,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1custom_13f5932b5fe2bdeb0<
     'local,
@@ -14514,7 +14514,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1custom_1bulk_180b5719b93fcace3<
     'local,
@@ -14682,7 +14682,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1narrow_1a2e0942031835410<
     'local,
@@ -14822,7 +14822,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1narrow_1bulk_101859c8a0312491b<
     'local,
@@ -14980,7 +14980,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1constructions_107412dbe4e08ef68<
     'local,
@@ -15056,7 +15056,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1slice_1009ff8f8b9e77cd5<
     'local,
@@ -15190,7 +15190,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1array_1517465a977f1d8a5<
     'local,
@@ -15336,7 +15336,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1optional_1array_1c11bc48fb5ea6c63<
     'local,
@@ -15496,7 +15496,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1optional_1array_1bulk_1c810a58a5f8b13ca<
     'local,
@@ -15682,7 +15682,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1input_1optional_19f143cf5440a4074<
     'local,
@@ -15856,7 +15856,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1echo_119271b2932c312bb<
     'local,
@@ -16076,7 +16076,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1array_1f969bde7cc1c432a<
     'local,
@@ -16212,7 +16212,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1optional_1ea20da6fc813acee<
     'local,
@@ -16378,7 +16378,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1nested_1799f9a1fa2a2a9a1<
     'local,
@@ -16527,7 +16527,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1borrowed_17528ee78c961424e<
     'local,
@@ -16673,7 +16673,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1numbers_1677f84d2a60bc3b3<
     'local,
@@ -16791,7 +16791,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1units_112bee997ef805cee<
     'local,
@@ -16900,7 +16900,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1texts_1db6a5274075ed7aa<
     'local,
@@ -17023,7 +17023,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1optional_1texts_153f1ccde499e0f96<
     'local,
@@ -17170,7 +17170,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1buffers_1c8800191206cf047<
     'local,
@@ -17291,7 +17291,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1plain_1e53a41329b22bbda<
     'local,
@@ -17409,7 +17409,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1callback_1af0d489a7a6a5660<
     'local,
@@ -17589,7 +17589,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1callback_1mixed_1d29393bf89d94532<
     'local,
@@ -17903,7 +17903,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1rows_1aafaa0d2a20132d8<
     'local,
@@ -18281,7 +18281,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1redundant_1rows_153c9ef64704ee61d<
     'local,
@@ -18667,7 +18667,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1nested_1rows_1fd3636f6cc750f4e<
     'local,
@@ -19102,7 +19102,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1nested_1callback_143b7f2dcc306c446<
     'local,
@@ -19732,7 +19732,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1object_1rows_1be4c714a838acb22<
     'local,
@@ -20112,7 +20112,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1callback_1929e98d2cfd600ef<
     'local,
@@ -20666,7 +20666,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1nested_1handles_1input_1dba24072c6255486<
     'local,
@@ -20951,7 +20951,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1cleanup_1nested_1callback_15f8da21ad356132b<
     'local,
@@ -21485,7 +21485,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1cleanup_1pair_1callback_1f2f2462e96f2da09<
     'local,
@@ -21838,7 +21838,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1reset_1ec26adbfb8cc43d7<
     'local,
@@ -21925,7 +21925,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1replay_1count_10e31779505af7ccf<
     'local,
@@ -22022,7 +22022,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1patch_1rows_1d32fa8a44880666b<
     'local,
@@ -22468,7 +22468,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1patch_1callback_122fbb64046f78357<
     'local,
@@ -22972,7 +22972,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1nested_1envelope_1fac9f0f836298b23<
     'local,
@@ -23214,7 +23214,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1pair_1text_1callback_145fa8b29f215e390<
     'local,
@@ -23596,7 +23596,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1texts_1415eab299e560837<
     'local,
@@ -23906,7 +23906,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1collection_1lock_1groups_17fe8555600f1dcf6<
     'local,
@@ -24246,7 +24246,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1nested_1ee0f317e439c05be<
     'local,
@@ -24586,7 +24586,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1text_1callback_1bf41b6097b186476<
     'local,
@@ -24939,7 +24939,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1optional_1borrow_1pair_111a84638f9db14d4<
     'local,
@@ -25120,7 +25120,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1select_1b3dae360ea0eecfb<
     'local,
@@ -25312,7 +25312,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1kinds_19b033197b22af4fe<
     'local,
@@ -25516,7 +25516,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1units_11560a205c63d4c8a<
     'local,
@@ -25682,7 +25682,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1flags_1fe0ac76234b14846<
     'local,
@@ -25873,7 +25873,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1envelope_1c78cdfdfd18c33f1<
     'local,
@@ -26060,7 +26060,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1primitives_1be9bffc80840ca87<
     'local,
@@ -26430,7 +26430,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1optional_1wide_10dbde2915189c95e<
     'local,
@@ -26611,7 +26611,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1optional_1callback_13ffeb9ae490fb489<
     'local,
@@ -26954,7 +26954,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1native_1939b6cd52b96a019<
     'local,
@@ -27219,7 +27219,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1expanded_165b04628441e244b<
     'local,
@@ -27406,7 +27406,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1expanded_1rows_18611c0e3cec0b75a<
     'local,
@@ -27656,7 +27656,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1result_122b6c65613a56b35<
     'local,
@@ -27874,7 +27874,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1new_1e5a9aa77fa861745<
     'local,
@@ -27970,7 +27970,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1value_14d14e8e3b89bd1bd<
     'local,
@@ -28071,7 +28071,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1drops_10c93c5a0b1492a12<
     'local,
@@ -28147,7 +28147,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1late_1051f1ea6dcd2506f<
     'local,
@@ -28259,7 +28259,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1views_1c1f9da5de20e3fc3<
     'local,
@@ -28377,7 +28377,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handles_116b087b5f7f79484<
     'local,
@@ -28630,7 +28630,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1borrow_1034d937ec5b796d9<
     'local,
@@ -28763,7 +28763,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1checked_1b7e284c31e7e5a38<
     'local,
@@ -28998,7 +28998,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1wide_16b955d7b4ee7dc0d<
     'local,
@@ -29197,7 +29197,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1unsigned_1wide_1407b0f069bb7ed7a<
     'local,
@@ -29398,7 +29398,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1callback_1worker_14498defd15d5c1bf<
     'local,
@@ -29726,7 +29726,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1callback_163ae4882756ac2cf<
     'local,
@@ -30052,7 +30052,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1handle_1callback_139d3540632be44a7<
     'local,
@@ -30506,7 +30506,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1point_1e770ca9da9c12852<
     'local,
@@ -30682,7 +30682,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1points_16101af74290565c5<
     'local,
@@ -30916,7 +30916,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1point_1array_1aa3dcf2590ca3a28<
     'local,
@@ -31162,7 +31162,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1slice_1c30fbd330fdb06e6<
     'local,
@@ -31396,7 +31396,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1point_1plain_153e7bd65e4464218<
     'local,
@@ -31522,7 +31522,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1optional_1handles_144d1ca20cf3dbdbe<
     'local,
@@ -31841,7 +31841,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1array_1b64f34d955cfbc66<
     'local,
@@ -32041,7 +32041,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1array_1borrow_108a33cfde93f0897<
     'local,
@@ -32197,7 +32197,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1scalar_1859e15b07fe6305f<
     'local,
@@ -32334,7 +32334,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1numbers_1a3f5c3da005fa8ec<
     'local,
@@ -32522,7 +32522,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1nested_10e44e904f1fd8209<
     'local,
@@ -32787,7 +32787,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1text_1af334975f2297859<
     'local,
@@ -32932,7 +32932,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1strings_1106737903dcecf60<
     'local,
@@ -33139,7 +33139,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1optional_14abfbe9a71e24339<
     'local,
@@ -33435,7 +33435,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1bytes_1711128b36c976142<
     'local,
@@ -33637,7 +33637,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1limited_154299b9182f8d252<
     'local,
@@ -35527,7 +35527,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1wide_1error_16801c788d55410a5<
     'local,
@@ -35607,7 +35607,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1ownership_1e57618289bd585e0<
     'local,
@@ -35766,7 +35766,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1single_1ownership_19b8a79f3a1788fe8<
     'local,
@@ -35914,7 +35914,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1domain_1cb3675a75d892ba1<
     'local,
@@ -36069,7 +36069,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1pair_18bb51b9e0f2fc283<
     'local,
@@ -36171,7 +36171,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1return_1wide_1af7145445fe5e699<
     'local,
@@ -36925,7 +36925,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1handle_1new_152d93c3d58bc9ddd<
     'local,
@@ -37023,7 +37023,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1handle_1read_187c3a62f7392e4f0<
     'local,
@@ -37126,7 +37126,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1handle_1optional_10d97fddf5e04f9dc<
     'local,
@@ -37243,7 +37243,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1text_1371469abc18caa34<
     'local,
@@ -37336,7 +37336,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1text_1optional_17c4699f3d1e235f0<
     'local,
@@ -37445,7 +37445,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1bytes_1ed1ce1214d744c8d<
     'local,
@@ -37538,7 +37538,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1bytes_1optional_148809d71f31114f1<
     'local,
@@ -37647,7 +37647,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1wide_19d858f42bb045bf8<
     'local,
@@ -37745,7 +37745,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1wide_1optional_1675c57dd8593ffa4<
     'local,
@@ -37880,7 +37880,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1value_1sum_19ffd3f4f4ef95c92<
     'local,
@@ -38189,7 +38189,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1value_1bulk_1cde4e2ae3684af79<
     'local,
@@ -38608,7 +38608,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1value_1optional_19875ca4fcdb053b1<
     'local,
@@ -38812,7 +38812,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1values_1b3abc03a5e5fdbda<
     'local,
@@ -39050,7 +39050,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1values_1optional_1bd4a7ceb471c6c54<
     'local,
@@ -39302,7 +39302,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1handles_1optional_195fc2bf9cec835af<
     'local,
@@ -39493,7 +39493,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1text_1callback_142d80e83e23401a2<
     'local,
@@ -39652,7 +39652,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1optional_1text_1callback_1426adf31f0aa74b4<
     'local,
@@ -39837,7 +39837,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nullability_1callback_1choose_16b3e84beed47a860<
     'local,
@@ -40127,7 +40127,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1sum_183f208ac1978fef1<
     'local,
@@ -40242,7 +40242,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1optional_198841e5b8a3bad26<
     'local,
@@ -40376,7 +40376,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1bulk_1sum_1b42ccdd89f7b8352<
     'local,
@@ -40532,7 +40532,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1sum_1object_1f81116dd2577a97f<
     'local,
@@ -40649,7 +40649,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1variants_18d7d583d82d7fc46<
     'local,
@@ -40821,7 +40821,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1collisions_10fcb430c5f288a73<
     'local,
@@ -40988,7 +40988,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1escaped_1names_13a6c23522a1c4542<
     'local,
@@ -41140,7 +41140,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1record_1306b9dc9d6961224<
     'local,
@@ -41277,7 +41277,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1parameter_1records_13f3e92735953a16b<
     'local,
@@ -41505,7 +41505,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1new_17ae6fd267af3001d<
     'local,
@@ -41618,7 +41618,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1value_19ca9e696d72ab415<
     'local,
@@ -41719,7 +41719,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1consume_19318049a3f0cf4e9<
     'local,
@@ -41850,7 +41850,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1fail_16be93bc9cd0b8290<
     'local,
@@ -41993,7 +41993,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1pair_16efba23f0576e080<
     'local,
@@ -42157,7 +42157,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1drops_153900a369e1b88bb<
     'local,
@@ -42247,7 +42247,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1three_1a606daff102e146f<
     'local,
@@ -42400,7 +42400,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1consume_1rows_175eea78d55b4e81f<
     'local,
@@ -42577,7 +42577,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1read_1rows_157e058d6915b4e28<
     'local,
@@ -42724,7 +42724,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1emit_1c3aa9044644f4b9c<
     'local,
@@ -42872,7 +42872,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1hold_1d19978b99df91680<
     'local,
@@ -43009,7 +43009,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1return_15d3f561d66e965c2<
     'local,
@@ -43187,7 +43187,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1emit_1owned_15c69b3edc59eb5a1<
     'local,
@@ -43335,7 +43335,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1rows_1cdbbaa46996fd3a0<
     'local,
@@ -43502,7 +43502,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain_1resource_1new_1d97fe9314c02793e<
     'local,
@@ -43615,7 +43615,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain_1resource_1value_198ccec4a9f9d6c37<
     'local,
@@ -43718,7 +43718,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1text_12e5df9089cef5211<
     'local,
@@ -43837,7 +43837,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1bytes_1f3f56b8a8b1996c2<
     'local,
@@ -43956,7 +43956,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1text_1d3011d2eb33189c1<
     'local,
@@ -44050,7 +44050,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1bytes_1491539966ab74896<
     'local,
@@ -44144,7 +44144,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1resource_1f33d027f936f6663<
     'local,
@@ -44255,7 +44255,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1domain_1failure_1f36020e4f4562fe0<
     'local,
@@ -44335,7 +44335,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1resource_1rows_154fd0c38ecd1f227<
     'local,
@@ -44492,7 +44492,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1text_1d33d1c8fd91af20d<
     'local,
@@ -44575,7 +44575,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1string_1649b053bccecf6a7<
     'local,
@@ -44658,7 +44658,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1bytes_1801aa24b9714561c<
     'local,
@@ -44741,7 +44741,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1vec_118f26d75535912ae<
     'local,
@@ -44824,7 +44824,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1optional_1text_1d47e68fa29b4bf83<
     'local,
@@ -44959,7 +44959,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1optional_1bytes_12e41382fb70d4d62<
     'local,
@@ -45094,7 +45094,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_1optional_13ea9b140c39283fe<
     'local,
@@ -45256,7 +45256,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_11b20562b3c5bfef8<
     'local,
@@ -45358,7 +45358,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1rows_10e85d0bcc7902cb5<
     'local,
@@ -45508,7 +45508,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1wide_16983ec538bbdc661<
     'local,
@@ -46163,7 +46163,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1callback_1a41319fcdf187075<
     'local,
@@ -46366,7 +46366,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1failure_16fdac6591b1a6726<
     'local,
@@ -46516,7 +46516,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1worker_18d2b0e9314030afd<
     'local,
@@ -46649,7 +46649,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_1callback_19fa8a662ae731b98<
     'local,
@@ -46811,7 +46811,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1new_19b3691104cf4f094<
     'local,
@@ -47091,7 +47091,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1failure_1983fd2bf1ecc08ff<
     'local,
@@ -47202,7 +47202,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1id_1a8c03c5a37bc12c7<
     'local,
@@ -47303,7 +47303,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1leaf_1id_12fb1e3b5dd3d2d62<
     'local,
@@ -47404,7 +47404,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1static_1leaf_13de084de8ab56cf6<
     'local,
@@ -47486,7 +47486,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1read_16853655c2dc05353<
     'local,
@@ -47607,7 +47607,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1counts_1ac432be3e581775f<
     'local,
@@ -47725,7 +47725,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1two_1clones_1new_1c6e10ed44149bf78<
     'local,
@@ -47824,7 +47824,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1fields_1new_16223254642400003<
     'local,
@@ -47930,7 +47930,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1callback_1261a8655bbbdf16f<
     'local,
@@ -48284,7 +48284,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1optional_1b3a3cb08bb632879<
     'local,
@@ -48536,7 +48536,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1mixed_123877cf213bf0c0c<
     'local,
@@ -48752,7 +48752,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1output_1rows_176dcbc8fbe8acf89<
     'local,
@@ -48936,7 +48936,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1output_1nested_109e14469d381a037<
     'local,
@@ -49180,7 +49180,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1output_1pair_1654ab15b1845473b<
     'local,
@@ -49457,7 +49457,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1register_1f9d2a0713d344329<
     'local,
@@ -49610,7 +49610,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1fire_17050b5a0a6b6f271<
     'local,
@@ -49718,7 +49718,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1fold_1fdb4940d384f5a6d<
     'local,
@@ -49893,7 +49893,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1faults_1b864f6da96359033<
     'local,
@@ -50079,7 +50079,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1conversion_10ab973f530f23b0b<
     'local,
@@ -50222,7 +50222,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1borrowed_12779cd6570f360a9<
     'local,
@@ -50368,7 +50368,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1strings_179f049084aabc87a<
     'local,
@@ -50531,7 +50531,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1default_17ba54fc6e91d1046<
     'local,
@@ -50704,7 +50704,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1type_1default_12e21d1170d142a9b<
     'local,
@@ -50858,7 +50858,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1argument_1f2ca22fac606e26f<
     'local,
@@ -51031,7 +51031,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1return_11a2a025b2d23bf61<
     'local,
@@ -51203,7 +51203,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1pair_1075058877ec579cf<
     'local,
@@ -51472,7 +51472,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1nested_1c023613beb216159<
     'local,
@@ -51704,7 +51704,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1optional_1c1ccbb78d74cca03<
     'local,
@@ -51913,7 +51913,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1config_1ordinary_17a1de11aa6329a97<
     'local,
@@ -52016,7 +52016,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1wire_1rows_1catch_1001b9a48fe8c7967<
     'local,
@@ -52312,7 +52312,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1wire_1row_1catch_105921b2c51a5708c<
     'local,
@@ -52539,7 +52539,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1i64_1c08776c9ce71e81d<
     'local,
@@ -52688,7 +52688,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1i8_1753f4b94dff729a6<
     'local,
@@ -52837,7 +52837,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1i16_19b06d1210ff8b2b7<
     'local,
@@ -52986,7 +52986,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1f32_11d9d4691d73646c5<
     'local,
@@ -53135,7 +53135,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1u128_154bd6e65c7018d0b<
     'local,
@@ -53298,7 +53298,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1zero_1d965a5274955145f<
     'local,
@@ -53444,7 +53444,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1bool_1468d68aae8a03d87<
     'local,
@@ -53594,7 +53594,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1char_1ac2c7988ad8d876f<
     'local,
@@ -53748,7 +53748,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1float_1e8e49d9c6e5ee55e<
     'local,
@@ -53897,7 +53897,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1unsigned_1fce893a55ce5733f<
     'local,
@@ -54046,7 +54046,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1wide_13b195257768b36eb<
     'local,
@@ -54209,7 +54209,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1text_1b4839b1b734afa0b<
     'local,
@@ -54380,7 +54380,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1bytes_18891244c4fbb186c<
     'local,
@@ -54551,7 +54551,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1optional_1b061087be5b62673<
     'local,
@@ -54775,7 +54775,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1vector_1f78658284aa91f49<
     'local,
@@ -55071,7 +55071,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1record_1b21187a8bb28b01d<
     'local,
@@ -55277,7 +55277,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1enum_101ed3ed2bab330bf<
     'local,
@@ -55436,7 +55436,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1resource_1new_19e73b822affaedb3<
     'local,
@@ -55534,7 +55534,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1resource_1live_1b530072d9d196364<
     'local,
@@ -55610,7 +55610,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1owned_15cfe5c76741495b8<
     'local,
@@ -55788,7 +55788,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1take_13ffb2a58590a9f8f<
     'local,
@@ -55979,7 +55979,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1owned_1optional_13f9c79bb9e2a1c84<
     'local,
@@ -56196,7 +56196,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1owned_1vector_1c955ff3794caa0f7<
     'local,
@@ -56459,7 +56459,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1spawn_17212e8a490c09a14<
     'local,
@@ -56614,7 +56614,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1join_11a06270dc90abd5f<
     'local,
@@ -56745,7 +56745,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1handler_1new_1773c695edbbbf41e<
     'local,
@@ -56929,7 +56929,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1handler_1call_1ea4b685d6ef94d77<
     'local,
@@ -57047,7 +57047,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1catch_1fb340e4965e59b90<
     'local,
@@ -57196,7 +57196,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1handler_1many_18518ace5a4249c8b<
     'local,
@@ -57405,7 +57405,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1char_1catch_12304a076cc2d2d5d<
     'local,
@@ -57556,7 +57556,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1owned_1vector_1catch_1712110277489aed4<
     'local,
@@ -57819,7 +57819,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1unit_1dd4499fffb863427<
     'local,
@@ -57927,7 +57927,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1handler_1value_1a23aec1750dc3226<
     'local,
@@ -58087,7 +58087,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed_1rows_1worker_16b9e6aab9bf9dcf9<
     'local,
@@ -58320,7 +58320,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed_1rows_1limit_12e92146cd4dd53c0<
     'local,
@@ -59313,7 +59313,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed_1rows_1wide_13a9a88de1b1dce19<
     'local,
@@ -62291,7 +62291,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed_1rows_1mixed_1f837b40bf5799358<
     'local,
@@ -65370,7 +65370,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1typed
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1ref_1e8fc186edb0f16d5<
     'local,
@@ -65578,7 +65578,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1return_1cleanup_1failure_1056118ca27a67821<
     'local,
@@ -65854,7 +65854,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1unique_1resource_1id_1e80db4a3f497e062<
     'local,
@@ -65957,7 +65957,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1unique_1019d8d474de1bdc3<
     'local,
@@ -66170,7 +66170,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1unique_1error_140154160e9803c99<
     'local,
@@ -66383,7 +66383,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1resource_1id_1dc9253bb393e6277<
     'local,
@@ -66486,7 +66486,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1resource_1live_1510223cb2d40d9e1<
     'local,
@@ -66562,7 +66562,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1resource_1drops_101de29492e0e46ba<
     'local,
@@ -66638,7 +66638,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1resource_1hold_1a82671c2a7310f8d<
     'local,
@@ -66765,7 +66765,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1owned_1probe_118cebe9ab6081eb8<
     'local,
@@ -66984,7 +66984,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1optional_1probe_1bed3ad3142d5a05b<
     'local,
@@ -67277,7 +67277,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1nested_1probe_188c40199386d8891<
     'local,
@@ -67705,7 +67705,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1pair_1probe_1de30e0e31a7df3e7<
     'local,
@@ -68040,7 +68040,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1probe_1a4ac030f6ad6a92d<
     'local,
@@ -68255,7 +68255,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1pair_1probe_143ce9ece795705de<
     'local,
@@ -68586,7 +68586,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1owned_13e990348ad64d75b<
     'local,
@@ -68823,7 +68823,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1borrowed_157b23a1fb6669005<
     'local,
@@ -69062,7 +69062,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1optional_10d52c7d730c41d75<
     'local,
@@ -69374,7 +69374,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1nested_15da56d6464038743<
     'local,
@@ -69811,7 +69811,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1pair_1a961f029753aca2e<
     'local,
@@ -70182,7 +70182,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1handles_10883c9c06120fdc3<
     'local,
@@ -70368,7 +70368,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1bab23b0a8a8f4840<
     'local,
@@ -70583,7 +70583,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1transferred_1pair_1e141e947123b4d58<
     'local,
@@ -70932,7 +70932,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1conversion_1failure_19ae85f90d1f5c256<
     'local,
@@ -71169,7 +71169,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1rows_1spawn_14aac2c41997a9b73<
     'local,
@@ -71437,7 +71437,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1row_1job_1finished_1e593d9b0a16e2bc6<
     'local,
@@ -71540,7 +71540,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1new_17c866d733e6695ab<
     'local,
@@ -71638,7 +71638,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1read_1163ceba922956210<
     'local,
@@ -71741,7 +71741,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1write_1a7d55ad80b6fe129<
     'local,
@@ -71849,7 +71849,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1take_1833f1b6bd5ec9e72<
     'local,
@@ -71980,7 +71980,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1shared_124c2640bb542ea50<
     'local,
@@ -72117,7 +72117,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1exclusive_14a731f58f2740351<
     'local,
@@ -72254,7 +72254,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1consuming_13be54c5a354f741d<
     'local,
@@ -72419,7 +72419,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1pair_1cf445d8ea75641d4<
     'local,
@@ -72581,7 +72581,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1mixed_1e6aa9763b3d05c8d<
     'local,
@@ -72743,7 +72743,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1worker_10a51904596acdc7a<
     'local,
@@ -72880,7 +72880,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1probe_1d336877ed9e13d45<
     'local,
@@ -72983,7 +72983,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1optional_19676511d65a8c7e8<
     'local,
@@ -73134,7 +73134,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1reentry_1constructed_13e15b9644deb63ff<
     'local,
@@ -73282,7 +73282,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1new_14d91f17ba5ed43a7<
     'local,
@@ -73406,7 +73406,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1fire_1f870340c7995bc02<
     'local,
@@ -73539,7 +73539,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1owned_1fire_15025d0be7b00c9b9<
     'local,
@@ -73680,7 +73680,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1pair_19c4ca5ba547ab06e<
     'local,
@@ -73849,7 +73849,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1mixed_10d8af3de66dbc771<
     'local,
@@ -74008,7 +74008,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1set_1fire_166ee90d277a83d28<
     'local,
@@ -74183,7 +74183,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1nested_1cb4b380338cdfee2<
     'local,
@@ -74312,7 +74312,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1spawn_134c96d991b52d675<
     'local,
@@ -74461,7 +74461,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1run_11483f2b3c5476def<
     'local,
@@ -74582,7 +74582,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1selected_1f4b532a5cf25fe0c<
     'local,
@@ -74796,7 +74796,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1optional_17e8221b306fdc76a<
     'local,
@@ -74949,7 +74949,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1list_19de391e0ca3c5896<
     'local,
@@ -75114,7 +75114,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1constructor_1checked_168d8204b4d954b4b<
     'local,
@@ -75256,7 +75256,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1set_1new_184d26d4b7902b874<
     'local,
@@ -75439,7 +75439,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1set_1fire_1fd8448ed712f5ecd<
     'local,
@@ -75547,7 +75547,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1set_1spawn_1b31481854c69274a<
     'local,
@@ -75671,7 +75671,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1job_1join_13bface1ca474cf53<
     'local,
@@ -75790,7 +75790,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1owned_1new_11ad5877d98b31f02<
     'local,
@@ -75888,7 +75888,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1owned_1id_143797cc4da3830d1<
     'local,
@@ -75989,7 +75989,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1owned_1drops_1d617a886f0baab03<
     'local,
@@ -76065,7 +76065,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1owned_1fire_15ac0f47b60fb0ab1<
     'local,
@@ -76183,7 +76183,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1owned_1borrow_118156795b5ab342a<
     'local,
@@ -76327,7 +76327,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1transferred_1id_12de587e529e4f1e6<
     'local,
@@ -76430,7 +76430,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1transferred_1drops_14ff92471b79e1575<
     'local,
@@ -76506,7 +76506,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1transferred_1fire_1b5720cc21e6a881a<
     'local,
@@ -76674,7 +76674,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1projection_1fire_1fab0fb05d382a2b3<
     'local,
@@ -76799,7 +76799,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1projected_1id_1ab694d1e4f294104<
     'local,
@@ -76902,7 +76902,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1preflight_1f3d64440a541f0fe<
     'local,
@@ -77057,7 +77057,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1scalars_1107e667aaf4d1540<
     'local,
@@ -77172,7 +77172,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1texts_1c776f9ba3bb1e5fa<
     'local,
@@ -77363,7 +77363,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1optional_1owned_1c339b71b13e68762<
     'local,
@@ -77516,7 +77516,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1envelope_1bede25767fde1a47<
     'local,
@@ -77646,7 +77646,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1primitives_1ff126f0005bfa2b5<
     'local,
@@ -77827,7 +77827,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1enums_1b6723b6e70db554a<
     'local,
@@ -77964,7 +77964,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1native_1bulk_1rows_1f3ef23b4e405ea00<
     'local,
@@ -78154,7 +78154,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nativ
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1native_1bulk_1nested_1a866f03d6554ae4e<
     'local,
@@ -78388,7 +78388,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nativ
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1native_1bulk_1pair_1a4a8c00804a0cda0<
     'local,
@@ -78691,7 +78691,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nativ
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1native_1bulk_1callback_1b0aa3d8beb220a07<
     'local,
@@ -78993,7 +78993,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nativ
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1surround_158e43f8fdb96cdf0<
     'local,
@@ -79283,7 +79283,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1surround_1bulk_1f8fb155e97de0ce3<
     'local,
@@ -79591,7 +79591,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1rows_1d61c4972dafc1c15<
     'local,
@@ -79775,7 +79775,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1rows_1bulk_1b9d0f7fac05677c7<
     'local,
@@ -79986,7 +79986,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1nested_1de8d2b4b9cdb3154<
     'local,
@@ -80249,7 +80249,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1nested_1bulk_116ea88d5215cb029<
     'local,
@@ -80530,7 +80530,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1callback_13661b832911fa506<
     'local,
@@ -80869,7 +80869,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1callback_1bulk_14a1f8c925d7c71c7<
     'local,
@@ -81221,7 +81221,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1scalars_1d9a5730159aaf1ce<
     'local,
@@ -81710,7 +81710,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1u128_104e9df44fc750d1f<
     'local,
@@ -81894,7 +81894,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1construct_1all_1301fa7e444a58a6b<
     'local,
@@ -82074,7 +82074,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1make_1items_1c6725210ed9bf318<
     'local,
@@ -82212,7 +82212,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1bundle_1f76991cc8c87924d<
     'local,
@@ -82361,7 +82361,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_1handles_19bea1ae6ac9dc934<
     'local,
@@ -82628,7 +82628,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1nested_1handles_1340f5f0733d40480<
     'local,
@@ -82963,7 +82963,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1numbers_158708da43cac559a<
     'local,
@@ -83097,7 +83097,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1resource_1ids_1f5c907b9c01914ba<
     'local,
@@ -83286,7 +83286,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1i64_190bde5aeb8c647ea<
     'local,
@@ -83460,7 +83460,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1text_119d59571edb173e9<
     'local,
@@ -83647,7 +83647,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1bytes_1f8c8c3aaf2aa2be0<
     'local,
@@ -83832,7 +83832,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1nested_14394d3d5a3b0ca8f<
     'local,
@@ -84096,7 +84096,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1options_1a293ccc475eb588e<
     'local,
@@ -84341,7 +84341,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_11f78a6a6c734d45b<
     'local,
@@ -84547,7 +84547,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_1items_1a463b73617be6af0<
     'local,
@@ -84807,7 +84807,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1enum_1a72cd6089a34be29<
     'local,
@@ -85001,7 +85001,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1probe_1cf67d7568b2f663c<
     'local,
@@ -85203,7 +85203,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1borrow_10edafd22349f21ff<
     'local,
@@ -85380,7 +85380,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1slice_100044f8d9833eed8<
     'local,
@@ -85554,7 +85554,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1resource_1new_17274517961a66222<
     'local,
@@ -85652,7 +85652,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1handles_162cdb8fbfb349eda<
     'local,
@@ -85942,7 +85942,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1alias_12250b76699c9c260<
     'local,
@@ -86144,7 +86144,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1result_1be11b22c862519eb<
     'local,
@@ -86349,7 +86349,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1fail_1e960b89bf99875af<
     'local,
@@ -86429,7 +86429,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1result_1optional_14054433f3ab4e1e5<
     'local,
@@ -86711,7 +86711,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1put_1slice_12321b992f47ae6b3<
     'local,
@@ -86926,7 +86926,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1get_1vec_141fb29ce4d0d84db<
     'local,
@@ -87125,7 +87125,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1result_1error_1drop_18c05c7fda32d0f81<
     'local,
@@ -87205,7 +87205,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1result_1late_1niche_19d6cee99c69463b1<
     'local,
@@ -87323,7 +87323,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1result_1resource_1error_1f29a434ac3a17580<
     'local,
@@ -87419,7 +87419,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1result_1rich_1error_1e97eeeaedd2fcd23<
     'local,
@@ -87515,7 +87515,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1scalar_1717ad7e5f39fb113<
     'local,
@@ -87619,7 +87619,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1unit_1error_16007a70d185fe955<
     'local,
@@ -87723,7 +87723,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1unit_1fc0177d655b15009<
     'local,
@@ -87817,7 +87817,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1optional_101608adeaf654d25<
     'local,
@@ -87938,7 +87938,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1text_1d4e50fb117070bd3<
     'local,
@@ -88049,7 +88049,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1record_11be5deeed131a35d<
     'local,
@@ -88188,7 +88188,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1owned_1a3e41c438ccc8a54<
     'local,
@@ -88378,7 +88378,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1other_1bf6ac73e7d98d05c<
     'local,
@@ -88482,7 +88482,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1try_1with_1label_11db3fb1ae12e2bed<
     'local,
@@ -88597,7 +88597,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1result_1error_1drops_137b19328e81c2636<
     'local,
@@ -88673,7 +88673,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_1boundary_1probe_1602c56993c15d467<
     'local,
@@ -88873,7 +88873,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_1payload_1new_19a992a3f2e4e9d40<
     'local,
@@ -88969,7 +88969,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1payload_1priority_105fa05ed04713bec<
     'local,
@@ -89074,7 +89074,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1priority_1weight_1bcf2d93ac3538d33<
     'local,
@@ -89173,7 +89173,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1prior
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1priority_1or_18b7e9d67b98b36fd<
     'local,
@@ -89316,7 +89316,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1prior
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sparse_1echo_1ff112271a9f96bd5<
     'local,
@@ -89427,7 +89427,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sparse_1optional_1d96a4fb0a1baa04f<
     'local,
@@ -89561,7 +89561,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sparse_1nested_180137c780e0dbc13<
     'local,
@@ -89723,7 +89723,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sparse_1ref_1d09b189574416726<
     'local,
@@ -89823,7 +89823,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sparse_1borrowed_12c5728a75c56fd13<
     'local,
@@ -89931,7 +89931,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_1record_1echo_11fa3f892fbef60f0<
     'local,
@@ -90117,7 +90117,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_1names_1echo_145deb1696c7faead<
     'local,
@@ -90234,7 +90234,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche_1choice_1new_1a532294534010060<
     'local,
@@ -90353,7 +90353,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche_1choice_1id_161dfc8efcd02257b<
     'local,
@@ -90567,7 +90567,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1nested_1u32_12e0792d512f0f24f<
     'local,
@@ -90712,7 +90712,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1triple_1text_1cae6b50b503944e6<
     'local,
@@ -90925,7 +90925,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1triple_1bytes_14f662b4b06709c31<
     'local,
@@ -91138,7 +91138,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1triple_1i64_153dfd00875940117<
     'local,
@@ -91332,7 +91332,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1triple_1unit_1c0762ed5037f126a<
     'local,
@@ -91501,7 +91501,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1text_1input_1len_15334cfb37cec76c0<
     'local,
@@ -91636,7 +91636,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1bytes_1input_1len_17c4fd8ed8adbd4f7<
     'local,
@@ -91771,7 +91771,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nested_1niche_1choice_1id_1e0ad555f54dbd8e9<
     'local,
@@ -92011,7 +92011,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1nested_1projection_1views_1d622fb44db024930<
     'local,
@@ -92178,7 +92178,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1ctor_1new_13e8a52ff9fd43303<
     'local,
@@ -92291,7 +92291,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1ctor_1id_1649c578491a01066<
     'local,
@@ -92486,7 +92486,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1nested_1resource_18f975483d195b195<
     'local,
@@ -92697,7 +92697,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1choice_1id_11dd579df3bd36ecc<
     'local,
@@ -92889,7 +92889,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1str_1echo_194daf2f0c810e1a7<
     'local,
@@ -93012,7 +93012,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1slice_1echo_1d601bb0588850bdb<
     'local,
@@ -93135,7 +93135,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1str_1len_1e1179a8d3f3ccc82<
     'local,
@@ -93260,7 +93260,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1slice_1len_1c45226bd8197ca90<
     'local,
@@ -93385,7 +93385,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1string_1len_15af3d51e1e87974d<
     'local,
@@ -93512,7 +93512,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1i64_1ref_1fda4b6cd002e52b6<
     'local,
@@ -93636,7 +93636,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1resource_1pair_1fdf6ca6e5732a477<
     'local,
@@ -93836,7 +93836,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resource_1choice_1id_10bd95922697c4442<
     'local,
@@ -94010,7 +94010,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1pair_1new_1a373cf8922fb383f<
     'local,
@@ -94146,7 +94146,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1projection_1views_15f2b052a4aadad2a<
     'local,
@@ -94279,7 +94279,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1bytes_1echo_116b56811763936ed<
     'local,
@@ -94427,7 +94427,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1resource_1mut_16ada7b8856f978ef<
     'local,
@@ -94544,7 +94544,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1projection_1ref_100f05d41cfe82ce6<
     'local,
@@ -94684,7 +94684,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1i64_1351387af348bdd22<
     'local,
@@ -94809,7 +94809,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1char_18b0e6ac80fbfb499<
     'local,
@@ -94931,7 +94931,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1u8_128e6cb3d73ac58b7<
     'local,
@@ -95048,7 +95048,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1bool_1abd9a75cd1e6da39<
     'local,
@@ -95173,7 +95173,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1text_11006bf1c6da09727<
     'local,
@@ -95297,7 +95297,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1bytes_12c7d160b5c896230<
     'local,
@@ -95421,7 +95421,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1unit_1d5c35f5bcf4cdd85<
     'local,
@@ -95525,7 +95525,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1nested_13c7b2ba952e35029<
     'local,
@@ -95684,7 +95684,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1nested_1char_10fbb5a6359c6a2ee<
     'local,
@@ -95836,7 +95836,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1resource_1new_1cd6aa3cab1e8ab93<
     'local,
@@ -95950,7 +95950,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1resource_1echo_12bb01ab528b6954b<
     'local,
@@ -96145,7 +96145,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1option_1resource_1id_1c42dbb9913c07a92<
     'local,
@@ -96262,7 +96262,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1fields_1echo_1303b818252f2c60b<
     'local,
@@ -96572,7 +96572,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1field_1new_116797b4e790c764e<
     'local,
@@ -96736,7 +96736,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optional_1resource_1new_179dab16fa38a4430<
     'local,
@@ -97022,7 +97022,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stamp_1new_1e7d8c1d49f7ad8b1<
     'local,
@@ -97141,7 +97141,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stamp
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain_1note_1echo_104effec8337b6f4f<
     'local,
@@ -97265,7 +97265,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsigned_1round_1trip_1b59be7bd92f5b575<
     'local,
@@ -97485,7 +97485,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsigned_1optional_17f17c540c43bf08f<
     'local,
@@ -97610,7 +97610,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_1value_1new_134260fb08c70acda<
     'local,
@@ -97744,7 +97744,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_1value_1echo_1711e78e87dab6447<
     'local,
@@ -97911,7 +97911,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archive_1new_1e55a20288bf01013<
     'local,
@@ -97993,7 +97993,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archive_1store_1aee2ebbb250b7a73<
     'local,
@@ -98194,7 +98194,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archive_1latest_1c7923acc8a7d647a<
     'local,
@@ -98315,7 +98315,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1new_1a15b46920214a065<
     'local,
@@ -98397,7 +98397,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1get_1b38090762950a015<
     'local,
@@ -98536,7 +98536,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1put_1opt_1179bf292b0cec6bb<
     'local,
@@ -98722,7 +98722,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1string_1new_1e13dcae0deb5ba72<
     'local,
@@ -98822,7 +98822,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1string_1len_10599f1bfcc1a4ae6<
     'local,
@@ -98927,7 +98927,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1i64_1ref_1double_1fe479ebaa0f31f86<
     'local,
@@ -99016,7 +99016,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1i64_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1text_1echo_1219b404084eaf51f<
     'local,
@@ -99117,7 +99117,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1text_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bytes_1echo_1a8ab3cbd8140d73a<
     'local,
@@ -99218,7 +99218,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bytes
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1report_1new_18c29e03007e0b826<
     'local,
@@ -99390,7 +99390,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1report_1into_1struct_1c0775a0f2b6c3486<
     'local,
@@ -99601,7 +99601,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1payload_1new_14db541865be00283<
     'local,
@@ -99762,7 +99762,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1with_1payload_1b44f150bf309e573<
     'local,
@@ -99913,7 +99913,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summary_1new_1c8a7979c4a30e563<
     'local,
@@ -100032,7 +100032,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summary_1total_1raw_11a3f55f0a5f07787<
     'local,
@@ -100218,7 +100218,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1i8_18b845afaa2c2b930<
     'local,
@@ -100308,7 +100308,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1i16_1f014be4488893e1b<
     'local,
@@ -100398,7 +100398,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1i32_147001a8bec684907<
     'local,
@@ -100488,7 +100488,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1i64_180af91ea21ca8b59<
     'local,
@@ -100578,7 +100578,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1i128_17c7adcb71f399482<
     'local,
@@ -100676,7 +100676,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1isize_1f73f4c9446afe299<
     'local,
@@ -100770,7 +100770,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1u8_1524c6ffed8776520<
     'local,
@@ -100864,7 +100864,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1u16_1f914d3a206cd401b<
     'local,
@@ -100958,7 +100958,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1u32_1c7f6c43082a5b737<
     'local,
@@ -101052,7 +101052,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1u64_1180c1433590aabe9<
     'local,
@@ -101142,7 +101142,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1u128_1ada5db066814cfea<
     'local,
@@ -101242,7 +101242,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1usize_1c1dde3a165f98019<
     'local,
@@ -101339,7 +101339,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1f32_10c5b24fab8306069<
     'local,
@@ -101429,7 +101429,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1f64_13ac16aca0f3ac727<
     'local,
@@ -101519,7 +101519,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1bool_1044d0aea7d03630a<
     'local,
@@ -101609,7 +101609,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1char_160d88328057d650a<
     'local,
@@ -101708,7 +101708,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primitive_1unit_1d880ab199b1d4c5a<
     'local,
@@ -101774,7 +101774,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1report_1label_1364968097c832e7c<
     'local,
@@ -101995,7 +101995,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1report_1relabel_13cf665ccef08aaa6<
     'local,
@@ -102187,7 +102187,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1len_1b50243a8692d2f03<
     'local,
@@ -102286,7 +102286,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1contains_18bc866018d04e804<
     'local,
@@ -102402,7 +102402,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1total_1len_15586730a7f37c6df<
     'local,
@@ -102549,7 +102549,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1accumulate_1lengths_17831d8906339cda9<
     'local,
@@ -102848,7 +102848,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1put_1by_1take_1b2b6012205db749f<
     'local,
@@ -103007,7 +103007,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summary_1merge_172601e4c502719c5<
     'local,
@@ -103297,7 +103297,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1summary_1handle_1dd25a249548287f1<
     'local,
@@ -103404,7 +103404,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1borrowed_1bc9032fce77ca56f<
     'local,
@@ -103503,7 +103503,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1owned_1eda94d58bc123b34<
     'local,
@@ -103602,7 +103602,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1callback_17a64636be1de6f9f<
     'local,
@@ -103732,7 +103732,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1mixed_1833184fb3cea18c0<
     'local,
@@ -103831,7 +103831,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1views_105197d1569e216c6<
     'local,
@@ -103951,7 +103951,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1clones_14cb30df2ddad16fb<
     'local,
@@ -104027,7 +104027,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1drops_10b54af22f7d4ea40<
     'local,
@@ -104103,7 +104103,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resource_1bundle_1new_14c184c76ecdb9bcd<
     'local,
@@ -104246,7 +104246,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resource_1bundle_1default_169a6f8678d97e5a4<
     'local,
@@ -104387,7 +104387,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resource_1bundle_1fields_1552abfd813e477ad<
     'local,
@@ -104531,7 +104531,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1record_1new_11c66bd6fa63a1f6a<
     'local,
@@ -104609,7 +104609,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1record_1views_118103c07542f54c4<
     'local,
@@ -104704,7 +104704,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned_1resource_1id_1226d1cb8f69ef53f<
     'local,
@@ -104805,7 +104805,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned_1resource_1drops_127038bacb19950fb<
     'local,
@@ -104881,7 +104881,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resource_1bundle_1views_198686c0f53809c0c<
     'local,
@@ -105034,7 +105034,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1primitives_1echo_1c1f83db309ac8aab<
     'local,
@@ -105502,7 +105502,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1primitives_1zero_152866d71f82311ff<
     'local,
@@ -105653,7 +105653,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1envelope_1echo_13968cde0709118c6<
     'local,
@@ -106129,7 +106129,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1with_1storage_1ba1c94c812ca7dc1<
     'local,
@@ -106567,7 +106567,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1envelope_1constructed_1dab47fa5443a2b68<
     'local,
@@ -106820,7 +106820,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_1floats_1echo_1cfa4c7cc9e4653c8<
     'local,
@@ -106975,7 +106975,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_1value_1selected_1bb0c7d8f79d57c4b<
     'local,
@@ -107203,7 +107203,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_1value_1views_19983ceb667085a50<
     'local,
@@ -107448,7 +107448,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_init_1SequenceCapa
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1array_1fold_18b682a05955403df<
     'local,
@@ -107606,7 +107606,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1default_1bulk_1optional_1fold_1a9233ea21645798f<
     'local,
@@ -107789,7 +107789,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1defau
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1resource_1rows_1fold_15c247ce3042d4525<
     'local,
@@ -107980,7 +107980,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1mixed_1frames_1fold_1e9474c6b8b0056cf<
     'local,
@@ -108228,7 +108228,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1fold_1drop_1fold_18e0eaffd2786301c<
     'local,
@@ -108446,7 +108446,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1output_1fold_1fold_130e359f733b27f80<
     'local,
@@ -108660,7 +108660,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1boundary_1fold_1fold_1f4fcc537824dc196<
     'local,
@@ -108870,7 +108870,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1rows_1fold_1d4a060fc1b46cffe<
     'local,
@@ -109083,7 +109083,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1rows_1bulk_1fold_18a047108d9782a30<
     'local,
@@ -109319,7 +109319,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1nested_1fold_14f16ec74e528db69<
     'local,
@@ -109612,7 +109612,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1output_1cleanup_1nested_1bulk_1fold_12c8fd0b69d9609fe<
     'local,
@@ -109925,7 +109925,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1outpu
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1scalars_1fold_13627b263ec4e572b<
     'local,
@@ -110402,7 +110402,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1u128_1fold_15aa4076e5dce00fc<
     'local,
@@ -110627,7 +110627,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_1handles_1fold_1cff425efcb503bb5<
     'local,
@@ -110911,7 +110911,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1nested_1handles_1fold_18c0143fc3ebd6d9d<
     'local,
@@ -111284,7 +111284,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1i64_1fold_1808c7d955e03904b<
     'local,
@@ -111493,7 +111493,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1text_1fold_1a7b24a9c45b3e186<
     'local,
@@ -111721,7 +111721,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1bytes_1fold_19e9770856c6c4641<
     'local,
@@ -111949,7 +111949,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1nested_1fold_1b79bf8a96a5df66c<
     'local,
@@ -112261,7 +112261,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1options_1fold_1ded63bd11a5c595b<
     'local,
@@ -112528,7 +112528,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_1fold_11efcbb0a1a187e64<
     'local,
@@ -112762,7 +112762,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1optional_1items_1fold_1912719d84a3df595<
     'local,
@@ -113039,7 +113039,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1enum_1fold_17a76112af7324a8e<
     'local,
@@ -113268,7 +113268,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1borrow_1fold_122d09716b260bda8<
     'local,
@@ -113500,7 +113500,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1slice_1fold_16f331d2d69f04ead<
     'local,
@@ -113709,7 +113709,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1handles_1fold_146dc064168aacb23<
     'local,
@@ -114023,7 +114023,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1result_1fold_172fabc4d8e10f6c8<
     'local,
@@ -114263,7 +114263,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1collection_1result_1optional_1fold_1235165576a1334d2<
     'local,
@@ -114581,7 +114581,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sequence_1late_1drop_1fold_17e360d29a6fc0d5f<
     'local,
@@ -114756,7 +114756,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sequence_1scalars_1fold_15108aab400f755b1<
     'local,
@@ -114999,7 +114999,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1sequence_1parts_1fold_1aeb653ed535ad4ab<
     'local,
@@ -115208,7 +115208,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1get_1vec_1fold_13251bfb51da9217c<
     'local,
@@ -115406,7 +115406,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1record_1rows_1fold_1847767faa33a5dce<
     'local,
@@ -116250,7 +116250,7 @@ mod relocated_parameter_names { #[allow(
     clippy::useless_conversion
 )]
 /**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_prebindgen_paramnames_JNINative_call_1parameter_1external_112d641fa6bd87fee<
     'local,
@@ -116420,3581 +116420,5 @@ const _: () = {
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::ParameterPoint > () != 0,
     "flat object `ParameterPoint` must have nonzero size"
-);
- }
-
-mod checked_raw_inputs { /**# Safety
-Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_drop_1BulkHandle_1393b82dfa5eaa2d5(
-    mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
-    id: i64,
-) {
-    if let Err(e) = ::prebindgen_runtime::boundary(|| unsafe {
-        ::prebindgen_jni_runtime::drop_pointer::<perftest_flat::BulkHandle>(id)
-    }) {
-        ::prebindgen_jni_runtime::fail(&mut env, &e);
-    }
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_Range_1800d3dd3eceec6d {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_Range_5019fbfb9686d1a8 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i64_i64_8afc2761c446bf98 {
-    pub v0: i64,
-    pub v1: i64,
-    pub v2: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_Range_9c778fd2ce1e4e75 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i64_a60d3960993b9a77 {
-    pub v0: i64,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_Range_ae5d49bdac718245 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i64_cbe830243575e259 {
-    pub v0: i64,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i64_i32_e7fb16c195e57181 {
-    pub v0: i64,
-    pub v1: i32,
-    pub v2: ::prebindgen_jni_runtime::bulk::Range,
-    pub v3: i32,
-    pub v4: ::prebindgen_jni_runtime::bulk::Range,
-    pub v5: i32,
-    pub v6: i64,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_i32_Range_f27ab2e6065597a6 {
-    pub v0: i32,
-    pub v1: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[no_mangle]
-pub extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_bulkLayouts(
-    mut env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
-    let result = (|| -> Result<_, String> {
-        let mut data = vec![
-            1i64, - 5596972784569740004i64, if cfg!(target_endian = "big") { 1 } else { 0
-            }, ::core::mem::size_of:: < usize > () as i64
-        ];
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                ::core::mem::align_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                ::core::mem::offset_of!(__PbBulk_Range_1800d3dd3eceec6d, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_Range_5019fbfb9686d1a8>(),
-                ::core::mem::align_of::<__PbBulk_Range_5019fbfb9686d1a8>(),
-                ::core::mem::offset_of!(__PbBulk_Range_5019fbfb9686d1a8, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i64_i64_8afc2761c446bf98>(),
-                ::core::mem::align_of::<__PbBulk_i64_i64_8afc2761c446bf98>(),
-                ::core::mem::offset_of!(__PbBulk_i64_i64_8afc2761c446bf98, v0),
-                ::core::mem::offset_of!(__PbBulk_i64_i64_8afc2761c446bf98, v1),
-                ::core::mem::offset_of!(__PbBulk_i64_i64_8afc2761c446bf98, v2),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>(),
-                ::core::mem::align_of::<__PbBulk_Range_9c778fd2ce1e4e75>(),
-                ::core::mem::offset_of!(__PbBulk_Range_9c778fd2ce1e4e75, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_Range_ae5d49bdac718245>(),
-                ::core::mem::align_of::<__PbBulk_Range_ae5d49bdac718245>(),
-                ::core::mem::offset_of!(__PbBulk_Range_ae5d49bdac718245, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>(),
-                ::core::mem::align_of::<__PbBulk_i64_cbe830243575e259>(),
-                ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                ::core::mem::align_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v0),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v1),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v2),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v3),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v4),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v5),
-                ::core::mem::offset_of!(__PbBulk_i64_i32_e7fb16c195e57181, v6),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_i32_Range_f27ab2e6065597a6>(),
-                ::core::mem::align_of::<__PbBulk_i32_Range_f27ab2e6065597a6>(),
-                ::core::mem::offset_of!(__PbBulk_i32_Range_f27ab2e6065597a6, v0),
-                ::core::mem::offset_of!(__PbBulk_i32_Range_f27ab2e6065597a6, v1),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        let array = env.new_long_array(data.len() as i32).map_err(|e| e.to_string())?;
-        env.set_long_array_region(&array, 0, &data).map_err(|e| e.to_string())?;
-        Ok(array.into_raw())
-    })();
-    match result {
-        Ok(array) => array,
-        Err(message) => {
-            let _ = env.throw_new("java/lang/IllegalStateException", message);
-            std::ptr::null_mut()
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1replay_1rows_1647e979b1d69f1d8<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
-    p0_w1_length: i32,
-    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
-                64usize,
-            >::default();
-            let _: () = {
-                if jni_environment
-                    .get_array_length(&ownership_accepted)
-                    .map_err(|e| e.to_string())? != 1
-                {
-                    return Err("invalid ownership acknowledgement".into());
-                }
-                __pb_receipt_valid.set(true);
-            };
-            let p0_w1_bytes = if true {
-                ::prebindgen_jni_runtime::bulk::input(
-                    &mut jni_environment,
-                    &p0_w1,
-                    p0_w1_length,
-                )?
-            } else {
-                ::core::default::Default::default()
-            };
-            let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                &p0_w1_bytes,
-            );
-            if p0_w1_bytes.len()
-                < ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>()
-            {
-                return Err("truncated bulk root record".into());
-            }
-            let p0_w3 = if true {
-                p0_w1_reader
-                    .range(::core::mem::offset_of!(__PbBulk_Range_9c778fd2ce1e4e75, v0))?
-            } else {
-                None
-            };
-            let mut p0_w2: Vec<perftest_flat::BulkReplayRow> = Vec::new();
-            if true {
-                let (p0_w3_start, p0_w4) = p0_w1_reader
-                    .rows(
-                        p0_w3,
-                        ::core::mem::size_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                    )?;
-                let mut p0_w3_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w4.saturating_mul(2usize));
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w7_f0 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                ),
-                        )?;
-                    let p0_w7_f1_present = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                ),
-                        )?;
-                    let p0_w9 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                ),
-                        )?;
-                    let p0_w7_f2_present = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                ),
-                        )?;
-                    let p0_w11 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                ),
-                        )?;
-                    let p0_w13 = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                ),
-                        )?;
-                    let p0_w7_f4 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                ),
-                        )?;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w7_f0_pointer = if true {
-                            (p0_w7_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::BulkHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                        }
-                        if (p0_w7_f1_present) != 0 && (p0_w7_f1_present) != 1 {
-                            return Err("invalid option presence".into());
-                        }
-                        if (p0_w7_f2_present) != 0 && (p0_w7_f2_present) != 1 {
-                            return Err("invalid option presence".into());
-                        }
-                        let p0_w7_f3_present: i32 = i32::from((p0_w13) != -1);
-                        let p0_w7_f4_pointer = if true {
-                            (p0_w7_f4)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::BulkHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f4_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w7_f0_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w7_f4_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
-                p0_w2.reserve_exact(p0_w4);
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w7_f0 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                ),
-                        )?;
-                    let p0_w7_f1_present = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                ),
-                        )?;
-                    let p0_w9 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                ),
-                        )?;
-                    let p0_w7_f2_present = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                ),
-                        )?;
-                    let p0_w11 = p0_w1_reader
-                        .range(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                ),
-                        )?;
-                    let p0_w13 = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                ),
-                        )?;
-                    let p0_w7_f4 = p0_w1_reader
-                        .read::<
-                            i64,
-                        >(
-                            (p0_w3_start
-                                + p0_w5
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                ),
-                        )?;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w3_element_built = (|| -> ::core::result::Result<
-                        perftest_flat::BulkReplayRow,
-                        String,
-                    > {
-                        let p0_w7_f0_pointer = if true {
-                            (p0_w7_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::BulkHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                        }
-                        if (p0_w7_f1_present) != 0 && (p0_w7_f1_present) != 1 {
-                            return Err("invalid option presence".into());
-                        }
-                        if (p0_w7_f2_present) != 0 && (p0_w7_f2_present) != 1 {
-                            return Err("invalid option presence".into());
-                        }
-                        let p0_w7_f3_present: i32 = i32::from((p0_w13) != -1);
-                        let p0_w7_f4_pointer = if true {
-                            (p0_w7_f4)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::BulkHandle,
-                                >
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w7_f4_pointer)?;
-                        }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w7_f0_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w7_f4_pointer.addr()) as usize))
-                                            .count(),
-                                );
-                        }
-                        let p0_w6_f0 = if true {
-                            Some(unsafe { Box::from_raw(p0_w7_f0_pointer) })
-                        } else {
-                            None
-                        };
-                        #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w8: Option<String> = None;
-                        #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w10: Option<Vec<u8>> = None;
-                        #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w12: Option<perftest_flat::BulkKind> = None;
-                        let p0_w6_f4 = if true {
-                            Some(unsafe { Box::from_raw(p0_w7_f4_pointer) })
-                        } else {
-                            None
-                        };
-                        let p0_w6_f0: perftest_flat::BulkHandle = p0_w6_f0
-                            .expect("active allocation")
-                            .value;
-                        let p0_w6_f1 = if (p0_w7_f1_present) == 1i32 {
-                            p0_w8 = if (p0_w7_f1_present) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        String,
-                                    >::into(
-                                        ::core::str::from_utf8(
-                                                p0_w1_reader.buffer_range(p0_w9)?.ok_or("null bulk text")?,
-                                            )
-                                            .map_err(|_| "invalid UTF-8 in bulk text")?,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
-                            let p0_w6_f1_some: String = perftest_flat::bulk_replay_text(
-                                p0_w8.as_ref().expect("active value"),
-                            );
-                            Some(p0_w6_f1_some)
-                        } else {
-                            None
-                        };
-                        let p0_w6_f2 = if (p0_w7_f2_present) == 1i32 {
-                            p0_w10 = if (p0_w7_f2_present) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        Vec<u8>,
-                                    >::into(
-                                        p0_w1_reader.buffer_range(p0_w11)?.ok_or("null bulk bytes")?,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
-                            let p0_w6_f2_some: Vec<u8> = perftest_flat::bulk_replay_bytes(
-                                p0_w10.as_ref().expect("active value"),
-                            );
-                            Some(p0_w6_f2_some)
-                        } else {
-                            None
-                        };
-                        let p0_w6_f3 = if p0_w7_f3_present == 1i32 {
-                            p0_w12 = if p0_w7_f3_present == 1i32 {
-                                Some(
-                                    match p0_w13 {
-                                        -3i32 => perftest_flat::BulkKind::A,
-                                        9i32 => perftest_flat::BulkKind::B,
-                                        _ => return Err("invalid enum discriminant".into()),
-                                    },
-                                )
-                            } else {
-                                None
-                            };
-                            let p0_w6_f3_some: perftest_flat::BulkKind = perftest_flat::bulk_replay_kind(
-                                p0_w12.as_ref().expect("active enum"),
-                            );
-                            Some(p0_w6_f3_some)
-                        } else {
-                            None
-                        };
-                        let p0_w6_f4: perftest_flat::BulkHandle = p0_w6_f4
-                            .expect("active allocation")
-                            .value;
-                        let p0_w6: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
-                            first: p0_w6_f0,
-                            text: p0_w6_f1,
-                            bytes: p0_w6_f2,
-                            kind: p0_w6_f3,
-                            last: p0_w6_f4,
-                        };
-                        let p0_w2 = p0_w6;
-                        Ok(p0_w2)
-                    })();
-                    let element = p0_w3_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w2.len();
-                        p0_w2.as_mut_ptr().add(initialized).write(element);
-                        p0_w2.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w2_built = if true { Some(p0_w2) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w2_built.expect("active input"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_replay_rows(__prebindgen_argument_0);
-            let ret_w0 = (source_value) as i64;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    if __pb_receipt_valid.get() {
-        let count = __pb_input_consumed.get() as i64;
-        let value = if outcome.is_ok() { count } else { -1 - count };
-        ::prebindgen_jni_runtime::write_input_receipt(
-            &mut jni_environment,
-            &ownership_accepted,
-            value,
-            outcome.is_err(),
-        );
-    }
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1handle_1new_1e5a9aa77fa861745<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: i64,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: i64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_handle_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: source_value,
-            });
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ((&mut *ret_w0)
-                        as *mut ::prebindgen_jni_runtime::Allocation<
-                            perftest_flat::BulkHandle,
-                        >) as i64,
-                })
-                    .j
-            };
-            let _: () = {
-                let _ = Box::into_raw(ret_w0).expose_provenance();
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1handle_1value_1020d7d074b3973cd<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: i64,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
-            let p0_w1_pointer = if true {
-                p0_w1
-                    as *mut ::prebindgen_jni_runtime::Allocation<
-                        perftest_flat::BulkHandle,
-                    >
-            } else {
-                ::core::ptr::null_mut()
-            };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
-                Some({
-                    let p0_w0: &perftest_flat::BulkHandle = unsafe {
-                        &(*p0_w1_pointer).value
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_handle_value(__prebindgen_argument_0);
-            let ret_w0 = source_value;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1replay_1nested_1rows_1888a142b3d0bc092<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
-    p0_w1_length: i32,
-    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
-                64usize,
-            >::default();
-            let _: () = {
-                if jni_environment
-                    .get_array_length(&ownership_accepted)
-                    .map_err(|e| e.to_string())? != 1
-                {
-                    return Err("invalid ownership acknowledgement".into());
-                }
-                __pb_receipt_valid.set(true);
-            };
-            let p0_w1_bytes = if true {
-                ::prebindgen_jni_runtime::bulk::input(
-                    &mut jni_environment,
-                    &p0_w1,
-                    p0_w1_length,
-                )?
-            } else {
-                ::core::default::Default::default()
-            };
-            let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                &p0_w1_bytes,
-            );
-            if p0_w1_bytes.len()
-                < ::core::mem::size_of::<__PbBulk_Range_ae5d49bdac718245>()
-            {
-                return Err("truncated bulk root record".into());
-            }
-            let p0_w4 = if true {
-                p0_w1_reader
-                    .range(::core::mem::offset_of!(__PbBulk_Range_ae5d49bdac718245, v0))?
-            } else {
-                None
-            };
-            let mut p0_w3: Vec<Vec<perftest_flat::BulkReplayRow>> = Vec::new();
-            if true {
-                let (p0_w4_start, p0_w5) = p0_w1_reader
-                    .rows(
-                        p0_w4,
-                        ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>(),
-                    )?;
-                p0_w3.reserve_exact(p0_w5);
-                for p0_w6 in 0..p0_w5 {
-                    let p0_w10 = p0_w1_reader
-                        .range(
-                            (p0_w4_start
-                                + p0_w6
-                                    * ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_Range_9c778fd2ce1e4e75, v0
-                                ),
-                        )?;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w4_element_built = (|| -> ::core::result::Result<
-                        Vec<perftest_flat::BulkReplayRow>,
-                        String,
-                    > {
-                        let mut p0_w9: Vec<perftest_flat::BulkReplayRow> = Vec::new();
-                        if true {
-                            let (p0_w10_start, p0_w11) = p0_w1_reader
-                                .rows(
-                                    p0_w10,
-                                    ::core::mem::size_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                                )?;
-                            let mut p0_w10_accesses = __prebindgen_input_aliases
-                                .begin_group(p0_w11.saturating_mul(2usize));
-                            for p0_w12 in 0..p0_w11 {
-                                let p0_w14_f0 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                            ),
-                                    )?;
-                                let p0_w14_f1_present = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                            ),
-                                    )?;
-                                let p0_w16 = p0_w1_reader
-                                    .range(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                            ),
-                                    )?;
-                                let p0_w14_f2_present = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                            ),
-                                    )?;
-                                let p0_w18 = p0_w1_reader
-                                    .range(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                            ),
-                                    )?;
-                                let p0_w20 = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                            ),
-                                    )?;
-                                let p0_w14_f4 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                            ),
-                                    )?;
-                                #[allow(unused_variables, clippy::redundant_closure_call)]
-                                let checked = (|| {
-                                    let p0_w14_f0_pointer = if true {
-                                        (p0_w14_f0)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if true {
-                                        ::prebindgen_runtime::validate_pointer(p0_w14_f0_pointer)?;
-                                    }
-                                    if (p0_w14_f1_present) != 0 && (p0_w14_f1_present) != 1 {
-                                        return Err("invalid option presence".into());
-                                    }
-                                    if (p0_w14_f2_present) != 0 && (p0_w14_f2_present) != 1 {
-                                        return Err("invalid option presence".into());
-                                    }
-                                    let p0_w14_f3_present: i32 = i32::from((p0_w20) != -1);
-                                    let p0_w14_f4_pointer = if true {
-                                        (p0_w14_f4)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if true {
-                                        ::prebindgen_runtime::validate_pointer(p0_w14_f4_pointer)?;
-                                    }
-                                    if true {
-                                        for address in ::core::iter::once(
-                                            (p0_w14_f0_pointer.addr()) as usize,
-                                        ) {
-                                            p0_w10_accesses.push((address, true));
-                                        }
-                                    }
-                                    if true {
-                                        for address in ::core::iter::once(
-                                            (p0_w14_f4_pointer.addr()) as usize,
-                                        ) {
-                                            p0_w10_accesses.push((address, true));
-                                        }
-                                    }
-                                    Ok::<_, String>(())
-                                })();
-                                checked?;
-                            }
-                            __prebindgen_input_aliases.accept_group(p0_w10_accesses)?;
-                            p0_w9.reserve_exact(p0_w11);
-                            for p0_w12 in 0..p0_w11 {
-                                let p0_w14_f0 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                            ),
-                                    )?;
-                                let p0_w14_f1_present = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                            ),
-                                    )?;
-                                let p0_w16 = p0_w1_reader
-                                    .range(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                            ),
-                                    )?;
-                                let p0_w14_f2_present = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                            ),
-                                    )?;
-                                let p0_w18 = p0_w1_reader
-                                    .range(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                            ),
-                                    )?;
-                                let p0_w20 = p0_w1_reader
-                                    .read::<
-                                        i32,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                            ),
-                                    )?;
-                                let p0_w14_f4 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w10_start
-                                            + p0_w12
-                                                * ::core::mem::size_of::<
-                                                    __PbBulk_i64_i32_e7fb16c195e57181,
-                                                >())
-                                            + ::core::mem::offset_of!(
-                                                __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                            ),
-                                    )?;
-                                #[allow(clippy::redundant_closure_call)]
-                                let p0_w10_element_built = (|| -> ::core::result::Result<
-                                    perftest_flat::BulkReplayRow,
-                                    String,
-                                > {
-                                    let p0_w14_f0_pointer = if true {
-                                        (p0_w14_f0)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if true {
-                                        ::prebindgen_runtime::validate_pointer(p0_w14_f0_pointer)?;
-                                    }
-                                    if (p0_w14_f1_present) != 0 && (p0_w14_f1_present) != 1 {
-                                        return Err("invalid option presence".into());
-                                    }
-                                    if (p0_w14_f2_present) != 0 && (p0_w14_f2_present) != 1 {
-                                        return Err("invalid option presence".into());
-                                    }
-                                    let p0_w14_f3_present: i32 = i32::from((p0_w20) != -1);
-                                    let p0_w14_f4_pointer = if true {
-                                        (p0_w14_f4)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if true {
-                                        ::prebindgen_runtime::validate_pointer(p0_w14_f4_pointer)?;
-                                    }
-                                    if true {
-                                        __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w14_f0_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
-                                    }
-                                    if true {
-                                        __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w14_f4_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
-                                    }
-                                    let p0_w13_f0 = if true {
-                                        Some(unsafe { Box::from_raw(p0_w14_f0_pointer) })
-                                    } else {
-                                        None
-                                    };
-                                    #[allow(unused_mut, unused_assignments)]
-                                    let mut p0_w15: Option<String> = None;
-                                    #[allow(unused_mut, unused_assignments)]
-                                    let mut p0_w17: Option<Vec<u8>> = None;
-                                    #[allow(unused_mut, unused_assignments)]
-                                    let mut p0_w19: Option<perftest_flat::BulkKind> = None;
-                                    let p0_w13_f4 = if true {
-                                        Some(unsafe { Box::from_raw(p0_w14_f4_pointer) })
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w13_f0: perftest_flat::BulkHandle = p0_w13_f0
-                                        .expect("active allocation")
-                                        .value;
-                                    let p0_w13_f1 = if (p0_w14_f1_present) == 1i32 {
-                                        p0_w15 = if (p0_w14_f1_present) == 1i32 {
-                                            Some(
-                                                ::core::convert::Into::<
-                                                    String,
-                                                >::into(
-                                                    ::core::str::from_utf8(
-                                                            p0_w1_reader.buffer_range(p0_w16)?.ok_or("null bulk text")?,
-                                                        )
-                                                        .map_err(|_| "invalid UTF-8 in bulk text")?,
-                                                ),
-                                            )
-                                        } else {
-                                            None
-                                        };
-                                        let p0_w13_f1_some: String = perftest_flat::bulk_replay_text(
-                                            p0_w15.as_ref().expect("active value"),
-                                        );
-                                        Some(p0_w13_f1_some)
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w13_f2 = if (p0_w14_f2_present) == 1i32 {
-                                        p0_w17 = if (p0_w14_f2_present) == 1i32 {
-                                            Some(
-                                                ::core::convert::Into::<
-                                                    Vec<u8>,
-                                                >::into(
-                                                    p0_w1_reader.buffer_range(p0_w18)?.ok_or("null bulk bytes")?,
-                                                ),
-                                            )
-                                        } else {
-                                            None
-                                        };
-                                        let p0_w13_f2_some: Vec<u8> = perftest_flat::bulk_replay_bytes(
-                                            p0_w17.as_ref().expect("active value"),
-                                        );
-                                        Some(p0_w13_f2_some)
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w13_f3 = if p0_w14_f3_present == 1i32 {
-                                        p0_w19 = if p0_w14_f3_present == 1i32 {
-                                            Some(
-                                                match p0_w20 {
-                                                    -3i32 => perftest_flat::BulkKind::A,
-                                                    9i32 => perftest_flat::BulkKind::B,
-                                                    _ => return Err("invalid enum discriminant".into()),
-                                                },
-                                            )
-                                        } else {
-                                            None
-                                        };
-                                        let p0_w13_f3_some: perftest_flat::BulkKind = perftest_flat::bulk_replay_kind(
-                                            p0_w19.as_ref().expect("active enum"),
-                                        );
-                                        Some(p0_w13_f3_some)
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w13_f4: perftest_flat::BulkHandle = p0_w13_f4
-                                        .expect("active allocation")
-                                        .value;
-                                    let p0_w13: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
-                                        first: p0_w13_f0,
-                                        text: p0_w13_f1,
-                                        bytes: p0_w13_f2,
-                                        kind: p0_w13_f3,
-                                        last: p0_w13_f4,
-                                    };
-                                    let p0_w9 = p0_w13;
-                                    Ok(p0_w9)
-                                })();
-                                let element = p0_w10_element_built?;
-                                #[allow(clippy::zst_offset)]
-                                unsafe {
-                                    let initialized = p0_w9.len();
-                                    p0_w9.as_mut_ptr().add(initialized).write(element);
-                                    p0_w9.set_len(initialized + 1);
-                                }
-                            }
-                        }
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w9_built = if true { Some(p0_w9) } else { None };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w8_built = if true {
-                            Some(p0_w9_built.expect("active input"))
-                        } else {
-                            None
-                        };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w7_built = if true {
-                            Some(p0_w8_built.expect("active input"))
-                        } else {
-                            None
-                        };
-                        let p0_w3 = p0_w7_built.expect("active input");
-                        Ok(p0_w3)
-                    })();
-                    let element = p0_w4_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w3.len();
-                        p0_w3.as_mut_ptr().add(initialized).write(element);
-                        p0_w3.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w3_built = if true { Some(p0_w3) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w2_built = if true {
-                Some(p0_w3_built.expect("active input"))
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w2_built.expect("active input"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_replay_nested_rows(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = (source_value) as i64;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    if __pb_receipt_valid.get() {
-        let count = __pb_input_consumed.get() as i64;
-        let value = if outcome.is_ok() { count } else { -1 - count };
-        ::prebindgen_jni_runtime::write_input_receipt(
-            &mut jni_environment,
-            &ownership_accepted,
-            value,
-            outcome.is_err(),
-        );
-    }
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1replay_1nested_1callback_1e01ab5cc8380c27a<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
-                &mut jni_environment,
-                &p0_callback,
-                "()[Ljava/lang/Object;",
-                "io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback",
-            )?;
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                Some({
-                    #[allow(unused_mut, clippy::collapsible_if)]
-                    let p0_callback_value = move || {
-                        p0_callback_retained
-                            .with_env_result(
-                                19i32,
-                                |callback_environment| {
-                                    let mut callback_environment = callback_environment;
-                                    {
-                                        let arguments = [];
-                                        {
-                                            let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-                                            let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
-                                                64usize,
-                                            >::default();
-                                            let callback_result = unsafe {
-                                                p0_callback_retained
-                                                    .invoke_return(
-                                                        callback_environment,
-                                                        ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
-                                                        &arguments,
-                                                    )
-                                            }?;
-                                            let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                                callback_result.l().map_err(|e| e.to_string())?,
-                                            );
-                                            let callback_return_w1 = ::prebindgen_jni_runtime::row_bytes(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                0usize,
-                                            )?;
-                                            let callback_return_w1_length = ::prebindgen_jni_runtime::row_i32(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                1usize,
-                                            )?;
-                                            let callback_return_w1_cached_bytes = if true {
-                                                ::prebindgen_jni_runtime::bulk::input(
-                                                    &mut callback_environment,
-                                                    &callback_return_w1,
-                                                    callback_return_w1_length,
-                                                )?
-                                            } else {
-                                                Vec::new()
-                                            };
-                                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                                            {
-                                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                                    __prebindgen_input_consumed,
-                                                );
-                                                if true {
-                                                    let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_cached_bytes,
-                                                    );
-                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                        let (
-                                                            callback_return_w3_cleanup_start,
-                                                            callback_return_w3_cleanup_count,
-                                                        ) = callback_return_w1_cleanup_reader
-                                                            .rows(
-                                                                callback_return_w1_cleanup_reader
-                                                                    .range(
-                                                                        ::core::mem::offset_of!(__PbBulk_Range_ae5d49bdac718245, v0),
-                                                                    )?,
-                                                                ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>(),
-                                                            )?;
-                                                        for callback_return_w3_cleanup_index in 0..callback_return_w3_cleanup_count {
-                                                            if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                let (
-                                                                    callback_return_w8_cleanup_start,
-                                                                    callback_return_w8_cleanup_count,
-                                                                ) = callback_return_w1_cleanup_reader
-                                                                    .rows(
-                                                                        callback_return_w1_cleanup_reader
-                                                                            .range(
-                                                                                (callback_return_w3_cleanup_start
-                                                                                    + callback_return_w3_cleanup_index
-                                                                                        * ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_Range_9c778fd2ce1e4e75, v0
-                                                                                    ),
-                                                                            )?,
-                                                                        ::core::mem::size_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                                                                    )?;
-                                                                for callback_return_w8_cleanup_index in 0..callback_return_w8_cleanup_count {
-                                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                        unsafe {
-                                                                            callback_return_owners
-                                                                                .receive(
-                                                                                    (callback_return_w1_cleanup_reader
-                                                                                        .read::<
-                                                                                            i64,
-                                                                                        >(
-                                                                                            (callback_return_w8_cleanup_start
-                                                                                                + callback_return_w8_cleanup_index
-                                                                                                    * ::core::mem::size_of::<
-                                                                                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                                    >())
-                                                                                                + ::core::mem::offset_of!(
-                                                                                                    __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                                                                                ),
-                                                                                        )?)
-                                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                            perftest_flat::BulkHandle,
-                                                                                        >,
-                                                                                );
-                                                                        }
-                                                                        Ok(())
-                                                                    })() {
-                                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                                    }
-                                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                        unsafe {
-                                                                            callback_return_owners
-                                                                                .receive(
-                                                                                    (callback_return_w1_cleanup_reader
-                                                                                        .read::<
-                                                                                            i64,
-                                                                                        >(
-                                                                                            (callback_return_w8_cleanup_start
-                                                                                                + callback_return_w8_cleanup_index
-                                                                                                    * ::core::mem::size_of::<
-                                                                                                        __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                                    >())
-                                                                                                + ::core::mem::offset_of!(
-                                                                                                    __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                                                                                ),
-                                                                                        )?)
-                                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                            perftest_flat::BulkHandle,
-                                                                                        >,
-                                                                                );
-                                                                        }
-                                                                        Ok(())
-                                                                    })() {
-                                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                                    }
-                                                                }
-                                                                Ok(())
-                                                            })() {
-                                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                            }
-                                                        }
-                                                        Ok(())
-                                                    })() {
-                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                    }
-                                                }
-                                                Ok(())
-                                            });
-                                            {
-                                                let callback_return_decoded = ({
-                                                    let callback_return_w1_bytes = if true {
-                                                        Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                                    } else {
-                                                        ::core::default::Default::default()
-                                                    };
-                                                    let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_bytes,
-                                                    );
-                                                    if callback_return_w1_bytes.len()
-                                                        < ::core::mem::size_of::<__PbBulk_Range_ae5d49bdac718245>()
-                                                    {
-                                                        return Err("truncated bulk root record".into());
-                                                    }
-                                                    let callback_return_w3 = if true {
-                                                        callback_return_w1_reader
-                                                            .range(
-                                                                ::core::mem::offset_of!(__PbBulk_Range_ae5d49bdac718245, v0),
-                                                            )?
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let mut callback_return_w2: Vec<
-                                                        Vec<perftest_flat::BulkReplayRow>,
-                                                    > = Vec::new();
-                                                    if true {
-                                                        let (callback_return_w3_start, callback_return_w4) = callback_return_w1_reader
-                                                            .rows(
-                                                                callback_return_w3,
-                                                                ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>(),
-                                                            )?;
-                                                        callback_return_w2.reserve_exact(callback_return_w4);
-                                                        for callback_return_w5 in 0..callback_return_w4 {
-                                                            let callback_return_w8 = callback_return_w1_reader
-                                                                .range(
-                                                                    (callback_return_w3_start
-                                                                        + callback_return_w5
-                                                                            * ::core::mem::size_of::<__PbBulk_Range_9c778fd2ce1e4e75>())
-                                                                        + ::core::mem::offset_of!(
-                                                                            __PbBulk_Range_9c778fd2ce1e4e75, v0
-                                                                        ),
-                                                                )?;
-                                                            #[allow(clippy::redundant_closure_call)]
-                                                            let callback_return_w3_element_built = (|| -> ::core::result::Result<
-                                                                Vec<perftest_flat::BulkReplayRow>,
-                                                                String,
-                                                            > {
-                                                                let mut callback_return_w7: Vec<
-                                                                    perftest_flat::BulkReplayRow,
-                                                                > = Vec::new();
-                                                                if true {
-                                                                    let (callback_return_w8_start, callback_return_w9) = callback_return_w1_reader
-                                                                        .rows(
-                                                                            callback_return_w8,
-                                                                            ::core::mem::size_of::<__PbBulk_i64_i32_e7fb16c195e57181>(),
-                                                                        )?;
-                                                                    let mut callback_return_w8_accesses = __prebindgen_input_aliases
-                                                                        .begin_group(callback_return_w9.saturating_mul(2usize));
-                                                                    for callback_return_w10 in 0..callback_return_w9 {
-                                                                        let callback_return_w12_f0 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f1_present = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w14 = callback_return_w1_reader
-                                                                            .range(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f2_present = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w16 = callback_return_w1_reader
-                                                                            .range(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w18 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f4 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                                                                    ),
-                                                                            )?;
-                                                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                                                        let checked = (|| {
-                                                                            let callback_return_w12_f0_pointer = if true {
-                                                                                (callback_return_w12_f0)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if true {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w12_f0_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if (callback_return_w12_f1_present) != 0
-                                                                                && (callback_return_w12_f1_present) != 1
-                                                                            {
-                                                                                return Err("invalid option presence".into());
-                                                                            }
-                                                                            if (callback_return_w12_f2_present) != 0
-                                                                                && (callback_return_w12_f2_present) != 1
-                                                                            {
-                                                                                return Err("invalid option presence".into());
-                                                                            }
-                                                                            let callback_return_w12_f3_present: i32 = i32::from(
-                                                                                (callback_return_w18) != -1,
-                                                                            );
-                                                                            let callback_return_w12_f4_pointer = if true {
-                                                                                (callback_return_w12_f4)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if true {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w12_f4_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if true {
-                                                                                for address in ::core::iter::once(
-                                                                                    (callback_return_w12_f0_pointer.addr()) as usize,
-                                                                                ) {
-                                                                                    callback_return_w8_accesses.push((address, true));
-                                                                                }
-                                                                            }
-                                                                            if true {
-                                                                                for address in ::core::iter::once(
-                                                                                    (callback_return_w12_f4_pointer.addr()) as usize,
-                                                                                ) {
-                                                                                    callback_return_w8_accesses.push((address, true));
-                                                                                }
-                                                                            }
-                                                                            Ok::<_, String>(())
-                                                                        })();
-                                                                        checked?;
-                                                                    }
-                                                                    __prebindgen_input_aliases
-                                                                        .accept_group(callback_return_w8_accesses)?;
-                                                                    callback_return_w7.reserve_exact(callback_return_w9);
-                                                                    for callback_return_w10 in 0..callback_return_w9 {
-                                                                        let callback_return_w12_f0 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v0
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f1_present = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v1
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w14 = callback_return_w1_reader
-                                                                            .range(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v2
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f2_present = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v3
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w16 = callback_return_w1_reader
-                                                                            .range(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v4
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w18 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i32,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v5
-                                                                                    ),
-                                                                            )?;
-                                                                        let callback_return_w12_f4 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w8_start
-                                                                                    + callback_return_w10
-                                                                                        * ::core::mem::size_of::<
-                                                                                            __PbBulk_i64_i32_e7fb16c195e57181,
-                                                                                        >())
-                                                                                    + ::core::mem::offset_of!(
-                                                                                        __PbBulk_i64_i32_e7fb16c195e57181, v6
-                                                                                    ),
-                                                                            )?;
-                                                                        #[allow(clippy::redundant_closure_call)]
-                                                                        let callback_return_w8_element_built = (|| -> ::core::result::Result<
-                                                                            perftest_flat::BulkReplayRow,
-                                                                            String,
-                                                                        > {
-                                                                            let callback_return_w12_f0_pointer = if true {
-                                                                                (callback_return_w12_f0)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if true {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w12_f0_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if (callback_return_w12_f1_present) != 0
-                                                                                && (callback_return_w12_f1_present) != 1
-                                                                            {
-                                                                                return Err("invalid option presence".into());
-                                                                            }
-                                                                            if (callback_return_w12_f2_present) != 0
-                                                                                && (callback_return_w12_f2_present) != 1
-                                                                            {
-                                                                                return Err("invalid option presence".into());
-                                                                            }
-                                                                            let callback_return_w12_f3_present: i32 = i32::from(
-                                                                                (callback_return_w18) != -1,
-                                                                            );
-                                                                            let callback_return_w12_f4_pointer = if true {
-                                                                                (callback_return_w12_f4)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if true {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w12_f4_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if true {
-                                                                                __prebindgen_input_consumed
-                                                                                    .set(
-                                                                                        __prebindgen_input_consumed.get()
-                                                                                            + (::core::iter::once(
-                                                                                                (callback_return_w12_f0_pointer.addr()) as usize,
-                                                                                            ))
-                                                                                                .count(),
-                                                                                    );
-                                                                            }
-                                                                            if true {
-                                                                                __prebindgen_input_consumed
-                                                                                    .set(
-                                                                                        __prebindgen_input_consumed.get()
-                                                                                            + (::core::iter::once(
-                                                                                                (callback_return_w12_f4_pointer.addr()) as usize,
-                                                                                            ))
-                                                                                                .count(),
-                                                                                    );
-                                                                            }
-                                                                            let callback_return_w11_f0 = if true {
-                                                                                Some(unsafe {
-                                                                                    Box::from_raw(callback_return_w12_f0_pointer)
-                                                                                })
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            #[allow(unused_mut, unused_assignments)]
-                                                                            let mut callback_return_w13: Option<String> = None;
-                                                                            #[allow(unused_mut, unused_assignments)]
-                                                                            let mut callback_return_w15: Option<Vec<u8>> = None;
-                                                                            #[allow(unused_mut, unused_assignments)]
-                                                                            let mut callback_return_w17: Option<
-                                                                                perftest_flat::BulkKind,
-                                                                            > = None;
-                                                                            let callback_return_w11_f4 = if true {
-                                                                                Some(unsafe {
-                                                                                    Box::from_raw(callback_return_w12_f4_pointer)
-                                                                                })
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w11_f0: perftest_flat::BulkHandle = callback_return_w11_f0
-                                                                                .expect("active allocation")
-                                                                                .value;
-                                                                            let callback_return_w11_f1 = if (callback_return_w12_f1_present)
-                                                                                == 1i32
-                                                                            {
-                                                                                callback_return_w13 = if (callback_return_w12_f1_present)
-                                                                                    == 1i32
-                                                                                {
-                                                                                    Some(
-                                                                                        ::core::convert::Into::<
-                                                                                            String,
-                                                                                        >::into(
-                                                                                            ::core::str::from_utf8(
-                                                                                                    callback_return_w1_reader
-                                                                                                        .buffer_range(callback_return_w14)?
-                                                                                                        .ok_or("null bulk text")?,
-                                                                                                )
-                                                                                                .map_err(|_| "invalid UTF-8 in bulk text")?,
-                                                                                        ),
-                                                                                    )
-                                                                                } else {
-                                                                                    None
-                                                                                };
-                                                                                let callback_return_w11_f1_some: String = perftest_flat::bulk_replay_text(
-                                                                                    callback_return_w13.as_ref().expect("active value"),
-                                                                                );
-                                                                                Some(callback_return_w11_f1_some)
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w11_f2 = if (callback_return_w12_f2_present)
-                                                                                == 1i32
-                                                                            {
-                                                                                callback_return_w15 = if (callback_return_w12_f2_present)
-                                                                                    == 1i32
-                                                                                {
-                                                                                    Some(
-                                                                                        ::core::convert::Into::<
-                                                                                            Vec<u8>,
-                                                                                        >::into(
-                                                                                            callback_return_w1_reader
-                                                                                                .buffer_range(callback_return_w16)?
-                                                                                                .ok_or("null bulk bytes")?,
-                                                                                        ),
-                                                                                    )
-                                                                                } else {
-                                                                                    None
-                                                                                };
-                                                                                let callback_return_w11_f2_some: Vec<u8> = perftest_flat::bulk_replay_bytes(
-                                                                                    callback_return_w15.as_ref().expect("active value"),
-                                                                                );
-                                                                                Some(callback_return_w11_f2_some)
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w11_f3 = if callback_return_w12_f3_present
-                                                                                == 1i32
-                                                                            {
-                                                                                callback_return_w17 = if callback_return_w12_f3_present
-                                                                                    == 1i32
-                                                                                {
-                                                                                    Some(
-                                                                                        match callback_return_w18 {
-                                                                                            -3i32 => perftest_flat::BulkKind::A,
-                                                                                            9i32 => perftest_flat::BulkKind::B,
-                                                                                            _ => return Err("invalid enum discriminant".into()),
-                                                                                        },
-                                                                                    )
-                                                                                } else {
-                                                                                    None
-                                                                                };
-                                                                                let callback_return_w11_f3_some: perftest_flat::BulkKind = perftest_flat::bulk_replay_kind(
-                                                                                    callback_return_w17.as_ref().expect("active enum"),
-                                                                                );
-                                                                                Some(callback_return_w11_f3_some)
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w11_f4: perftest_flat::BulkHandle = callback_return_w11_f4
-                                                                                .expect("active allocation")
-                                                                                .value;
-                                                                            let callback_return_w11: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
-                                                                                first: callback_return_w11_f0,
-                                                                                text: callback_return_w11_f1,
-                                                                                bytes: callback_return_w11_f2,
-                                                                                kind: callback_return_w11_f3,
-                                                                                last: callback_return_w11_f4,
-                                                                            };
-                                                                            let callback_return_w7 = callback_return_w11;
-                                                                            Ok(callback_return_w7)
-                                                                        })();
-                                                                        let element = callback_return_w8_element_built?;
-                                                                        #[allow(clippy::zst_offset)]
-                                                                        unsafe {
-                                                                            let initialized = callback_return_w7.len();
-                                                                            callback_return_w7
-                                                                                .as_mut_ptr()
-                                                                                .add(initialized)
-                                                                                .write(element);
-                                                                            callback_return_w7.set_len(initialized + 1);
-                                                                        }
-                                                                    }
-                                                                }
-                                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                                let callback_return_w7_built = if true {
-                                                                    Some(callback_return_w7)
-                                                                } else {
-                                                                    None
-                                                                };
-                                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                                let callback_return_w6_built = if true {
-                                                                    Some(callback_return_w7_built.expect("active input"))
-                                                                } else {
-                                                                    None
-                                                                };
-                                                                let callback_return_w2 = callback_return_w6_built
-                                                                    .expect("active input");
-                                                                Ok(callback_return_w2)
-                                                            })();
-                                                            let element = callback_return_w3_element_built?;
-                                                            #[allow(clippy::zst_offset)]
-                                                            unsafe {
-                                                                let initialized = callback_return_w2.len();
-                                                                callback_return_w2
-                                                                    .as_mut_ptr()
-                                                                    .add(initialized)
-                                                                    .write(element);
-                                                                callback_return_w2.set_len(initialized + 1);
-                                                            }
-                                                        }
-                                                    }
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_built = if true {
-                                                        Some(callback_return_w2)
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w0_built = if true {
-                                                        Some(callback_return_w2_built.expect("active input"))
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_value = callback_return_w0_built
-                                                        .expect("active input");
-                                                    Ok::<_, String>(callback_return_value)
-                                                })?;
-                                                callback_return_cleanup.commit();
-                                                Ok::<_, String>(callback_return_decoded)
-                                            }
-                                        }
-                                    }
-                                },
-                            )
-                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
-                    };
-                    p0_callback_value
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
-            let source_value = perftest_flat::bulk_replay_nested_callback(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = (source_value) as i64;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1nested_1handles_1input_120a8692eaca21fba<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
-    p0_w1_length: i32,
-    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
-                64usize,
-            >::default();
-            let _: () = {
-                if jni_environment
-                    .get_array_length(&ownership_accepted)
-                    .map_err(|e| e.to_string())? != 1
-                {
-                    return Err("invalid ownership acknowledgement".into());
-                }
-                __pb_receipt_valid.set(true);
-            };
-            let p0_w1_bytes = if true {
-                ::prebindgen_jni_runtime::bulk::input(
-                    &mut jni_environment,
-                    &p0_w1,
-                    p0_w1_length,
-                )?
-            } else {
-                ::core::default::Default::default()
-            };
-            let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                &p0_w1_bytes,
-            );
-            if p0_w1_bytes.len()
-                < ::core::mem::size_of::<__PbBulk_Range_5019fbfb9686d1a8>()
-            {
-                return Err("truncated bulk root record".into());
-            }
-            let p0_w4 = if true {
-                p0_w1_reader
-                    .range(::core::mem::offset_of!(__PbBulk_Range_5019fbfb9686d1a8, v0))?
-            } else {
-                None
-            };
-            let mut p0_w3: Vec<Option<Vec<Option<perftest_flat::BulkHandle>>>> = Vec::new();
-            if true {
-                let (p0_w4_start, p0_w5) = p0_w1_reader
-                    .rows(
-                        p0_w4,
-                        ::core::mem::size_of::<__PbBulk_i32_Range_f27ab2e6065597a6>(),
-                    )?;
-                p0_w3.reserve_exact(p0_w5);
-                for p0_w6 in 0..p0_w5 {
-                    let p0_w9 = p0_w1_reader
-                        .read::<
-                            i32,
-                        >(
-                            (p0_w4_start
-                                + p0_w6
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i32_Range_f27ab2e6065597a6,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i32_Range_f27ab2e6065597a6, v0
-                                ),
-                        )?;
-                    let p0_w11 = p0_w1_reader
-                        .range(
-                            (p0_w4_start
-                                + p0_w6
-                                    * ::core::mem::size_of::<
-                                        __PbBulk_i32_Range_f27ab2e6065597a6,
-                                    >())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i32_Range_f27ab2e6065597a6, v1
-                                ),
-                        )?;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w4_element_built = (|| -> ::core::result::Result<
-                        Option<Vec<Option<perftest_flat::BulkHandle>>>,
-                        String,
-                    > {
-                        if (p0_w9) != 0 && (p0_w9) != 1 {
-                            return Err("invalid option presence".into());
-                        }
-                        let mut p0_w10: Vec<Option<perftest_flat::BulkHandle>> = Vec::new();
-                        if (p0_w9) == 1i32 {
-                            let (p0_w11_start, p0_w12) = p0_w1_reader
-                                .rows(
-                                    p0_w11,
-                                    ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>(),
-                                )?;
-                            let mut p0_w11_accesses = __prebindgen_input_aliases
-                                .begin_group(p0_w12.saturating_mul(1usize));
-                            for p0_w13 in 0..p0_w12 {
-                                let p0_w18 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w11_start
-                                            + p0_w13
-                                                * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                            + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                    )?;
-                                #[allow(unused_variables, clippy::redundant_closure_call)]
-                                let checked = (|| {
-                                    let p0_w16: i32 = i32::from(((p0_w18) as usize) != 0);
-                                    let p0_w18_pointer = if p0_w16 == 1i32 {
-                                        (p0_w18)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if p0_w16 == 1i32 {
-                                        ::prebindgen_runtime::validate_pointer(p0_w18_pointer)?;
-                                    }
-                                    if p0_w16 == 1i32 {
-                                        for address in ::core::iter::once(
-                                            (p0_w18_pointer.addr()) as usize,
-                                        ) {
-                                            p0_w11_accesses.push((address, true));
-                                        }
-                                    }
-                                    Ok::<_, String>(())
-                                })();
-                                checked?;
-                            }
-                            __prebindgen_input_aliases.accept_group(p0_w11_accesses)?;
-                            p0_w10.reserve_exact(p0_w12);
-                            for p0_w13 in 0..p0_w12 {
-                                let p0_w18 = p0_w1_reader
-                                    .read::<
-                                        i64,
-                                    >(
-                                        (p0_w11_start
-                                            + p0_w13
-                                                * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                            + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                    )?;
-                                #[allow(clippy::redundant_closure_call)]
-                                let p0_w11_element_built = (|| -> ::core::result::Result<
-                                    Option<perftest_flat::BulkHandle>,
-                                    String,
-                                > {
-                                    let p0_w16: i32 = i32::from(((p0_w18) as usize) != 0);
-                                    let p0_w18_pointer = if p0_w16 == 1i32 {
-                                        (p0_w18)
-                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                perftest_flat::BulkHandle,
-                                            >
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    if p0_w16 == 1i32 {
-                                        ::prebindgen_runtime::validate_pointer(p0_w18_pointer)?;
-                                    }
-                                    if p0_w16 == 1i32 {
-                                        __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w18_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
-                                    }
-                                    let p0_w17 = if p0_w16 == 1i32 {
-                                        Some(unsafe { Box::from_raw(p0_w18_pointer) })
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w15 = if p0_w16 == 1i32 {
-                                        let p0_w17: perftest_flat::BulkHandle = p0_w17
-                                            .expect("active allocation")
-                                            .value;
-                                        Some(p0_w17)
-                                    } else {
-                                        None
-                                    };
-                                    let p0_w10 = p0_w15;
-                                    Ok(p0_w10)
-                                })();
-                                let element = p0_w11_element_built?;
-                                #[allow(clippy::zst_offset)]
-                                unsafe {
-                                    let initialized = p0_w10.len();
-                                    p0_w10.as_mut_ptr().add(initialized).write(element);
-                                    p0_w10.set_len(initialized + 1);
-                                }
-                            }
-                        }
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w10_built = if (p0_w9) == 1i32 {
-                            Some(p0_w10)
-                        } else {
-                            None
-                        };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w8_built = if true {
-                            Some({
-                                let p0_w8 = if (p0_w9) == 1i32 {
-                                    Some(p0_w10_built.expect("active input"))
-                                } else {
-                                    None
-                                };
-                                p0_w8
-                            })
-                        } else {
-                            None
-                        };
-                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                        let p0_w7_built = if true {
-                            Some(p0_w8_built.expect("active input"))
-                        } else {
-                            None
-                        };
-                        let p0_w3 = p0_w7_built.expect("active input");
-                        Ok(p0_w3)
-                    })();
-                    let element = p0_w4_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w3.len();
-                        p0_w3.as_mut_ptr().add(initialized).write(element);
-                        p0_w3.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w3_built = if true { Some(p0_w3) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w2_built = if true {
-                Some(p0_w3_built.expect("active input"))
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w2_built.expect("active input"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_nested_handles_input(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = (source_value) as i64;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    if __pb_receipt_valid.get() {
-        let count = __pb_input_consumed.get() as i64;
-        let value = if outcome.is_ok() { count } else { -1 - count };
-        ::prebindgen_jni_runtime::write_input_receipt(
-            &mut jni_environment,
-            &ownership_accepted,
-            value,
-            outcome.is_err(),
-        );
-    }
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1cleanup_1nested_1callback_11167603045ff0977<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-    p1_w1: u8,
-    p2_w1: u8,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobject {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
-                &mut jni_environment,
-                &p0_callback,
-                "()[Ljava/lang/Object;",
-                "io.prebindgen.covertest.rawinputs.BulkCleanupNestedCallback",
-            )?;
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                Some({
-                    #[allow(unused_mut, clippy::collapsible_if)]
-                    let p0_callback_value = move || {
-                        p0_callback_retained
-                            .with_env_result(
-                                19i32,
-                                |callback_environment| {
-                                    let mut callback_environment = callback_environment;
-                                    {
-                                        let arguments = [];
-                                        {
-                                            let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-                                            let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
-                                                64usize,
-                                            >::default();
-                                            let callback_result = unsafe {
-                                                p0_callback_retained
-                                                    .invoke_return(
-                                                        callback_environment,
-                                                        ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
-                                                        &arguments,
-                                                    )
-                                            }?;
-                                            let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                                callback_result.l().map_err(|e| e.to_string())?,
-                                            );
-                                            let callback_return_w1 = ::prebindgen_jni_runtime::row_bytes(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                0usize,
-                                            )?;
-                                            let callback_return_w1_length = ::prebindgen_jni_runtime::row_i32(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                1usize,
-                                            )?;
-                                            let callback_return_w1_cached_bytes = if true {
-                                                ::prebindgen_jni_runtime::bulk::input(
-                                                    &mut callback_environment,
-                                                    &callback_return_w1,
-                                                    callback_return_w1_length,
-                                                )?
-                                            } else {
-                                                Vec::new()
-                                            };
-                                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                                            {
-                                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                                    __prebindgen_input_consumed,
-                                                );
-                                                if true {
-                                                    let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_cached_bytes,
-                                                    );
-                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                        let (
-                                                            callback_return_w3_cleanup_start,
-                                                            callback_return_w3_cleanup_count,
-                                                        ) = callback_return_w1_cleanup_reader
-                                                            .rows(
-                                                                callback_return_w1_cleanup_reader
-                                                                    .range(
-                                                                        ::core::mem::offset_of!(__PbBulk_Range_5019fbfb9686d1a8, v0),
-                                                                    )?,
-                                                                ::core::mem::size_of::<
-                                                                    __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                >(),
-                                                            )?;
-                                                        for callback_return_w3_cleanup_index in 0..callback_return_w3_cleanup_count {
-                                                            if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                let callback_return_w7 = callback_return_w1_cleanup_reader
-                                                                    .read::<
-                                                                        i32,
-                                                                    >(
-                                                                        (callback_return_w3_cleanup_start
-                                                                            + callback_return_w3_cleanup_index
-                                                                                * ::core::mem::size_of::<
-                                                                                    __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                                >())
-                                                                            + ::core::mem::offset_of!(
-                                                                                __PbBulk_i32_Range_f27ab2e6065597a6, v0
-                                                                            ),
-                                                                    )?;
-                                                                if callback_return_w7 == 1 {
-                                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                        let (
-                                                                            callback_return_w9_cleanup_start,
-                                                                            callback_return_w9_cleanup_count,
-                                                                        ) = callback_return_w1_cleanup_reader
-                                                                            .rows(
-                                                                                callback_return_w1_cleanup_reader
-                                                                                    .range(
-                                                                                        (callback_return_w3_cleanup_start
-                                                                                            + callback_return_w3_cleanup_index
-                                                                                                * ::core::mem::size_of::<
-                                                                                                    __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                                                >())
-                                                                                            + ::core::mem::offset_of!(
-                                                                                                __PbBulk_i32_Range_f27ab2e6065597a6, v1
-                                                                                            ),
-                                                                                    )?,
-                                                                                ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>(),
-                                                                            )?;
-                                                                        for callback_return_w9_cleanup_index in 0..callback_return_w9_cleanup_count {
-                                                                            if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                                let callback_return_w15 = callback_return_w1_cleanup_reader
-                                                                                    .read::<
-                                                                                        i64,
-                                                                                    >(
-                                                                                        (callback_return_w9_cleanup_start
-                                                                                            + callback_return_w9_cleanup_index
-                                                                                                * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                                                                            + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                                                                    )?;
-                                                                                if (callback_return_w15 as usize) != 0 {
-                                                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                                                        unsafe {
-                                                                                            callback_return_owners
-                                                                                                .receive(
-                                                                                                    (callback_return_w1_cleanup_reader
-                                                                                                        .read::<
-                                                                                                            i64,
-                                                                                                        >(
-                                                                                                            (callback_return_w9_cleanup_start
-                                                                                                                + callback_return_w9_cleanup_index
-                                                                                                                    * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                                                                                                + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                                                                                        )?)
-                                                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                                            perftest_flat::BulkHandle,
-                                                                                                        >,
-                                                                                                );
-                                                                                        }
-                                                                                        Ok(())
-                                                                                    })() {
-                                                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                                                    }
-                                                                                }
-                                                                                Ok(())
-                                                                            })() {
-                                                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                                            }
-                                                                        }
-                                                                        Ok(())
-                                                                    })() {
-                                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                                    }
-                                                                }
-                                                                Ok(())
-                                                            })() {
-                                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                            }
-                                                        }
-                                                        Ok(())
-                                                    })() {
-                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                    }
-                                                }
-                                                Ok(())
-                                            });
-                                            {
-                                                let callback_return_decoded = ({
-                                                    let callback_return_w1_bytes = if true {
-                                                        Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                                    } else {
-                                                        ::core::default::Default::default()
-                                                    };
-                                                    let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_bytes,
-                                                    );
-                                                    if callback_return_w1_bytes.len()
-                                                        < ::core::mem::size_of::<__PbBulk_Range_5019fbfb9686d1a8>()
-                                                    {
-                                                        return Err("truncated bulk root record".into());
-                                                    }
-                                                    let callback_return_w3 = if true {
-                                                        callback_return_w1_reader
-                                                            .range(
-                                                                ::core::mem::offset_of!(__PbBulk_Range_5019fbfb9686d1a8, v0),
-                                                            )?
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let mut callback_return_w2: Vec<
-                                                        Option<Vec<Option<perftest_flat::BulkHandle>>>,
-                                                    > = Vec::new();
-                                                    if true {
-                                                        let (callback_return_w3_start, callback_return_w4) = callback_return_w1_reader
-                                                            .rows(
-                                                                callback_return_w3,
-                                                                ::core::mem::size_of::<
-                                                                    __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                >(),
-                                                            )?;
-                                                        callback_return_w2.reserve_exact(callback_return_w4);
-                                                        for callback_return_w5 in 0..callback_return_w4 {
-                                                            let callback_return_w7 = callback_return_w1_reader
-                                                                .read::<
-                                                                    i32,
-                                                                >(
-                                                                    (callback_return_w3_start
-                                                                        + callback_return_w5
-                                                                            * ::core::mem::size_of::<
-                                                                                __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                            >())
-                                                                        + ::core::mem::offset_of!(
-                                                                            __PbBulk_i32_Range_f27ab2e6065597a6, v0
-                                                                        ),
-                                                                )?;
-                                                            let callback_return_w9 = callback_return_w1_reader
-                                                                .range(
-                                                                    (callback_return_w3_start
-                                                                        + callback_return_w5
-                                                                            * ::core::mem::size_of::<
-                                                                                __PbBulk_i32_Range_f27ab2e6065597a6,
-                                                                            >())
-                                                                        + ::core::mem::offset_of!(
-                                                                            __PbBulk_i32_Range_f27ab2e6065597a6, v1
-                                                                        ),
-                                                                )?;
-                                                            #[allow(clippy::redundant_closure_call)]
-                                                            let callback_return_w3_element_built = (|| -> ::core::result::Result<
-                                                                Option<Vec<Option<perftest_flat::BulkHandle>>>,
-                                                                String,
-                                                            > {
-                                                                if (callback_return_w7) != 0 && (callback_return_w7) != 1 {
-                                                                    return Err("invalid option presence".into());
-                                                                }
-                                                                let mut callback_return_w8: Vec<
-                                                                    Option<perftest_flat::BulkHandle>,
-                                                                > = Vec::new();
-                                                                if (callback_return_w7) == 1i32 {
-                                                                    let (callback_return_w9_start, callback_return_w10) = callback_return_w1_reader
-                                                                        .rows(
-                                                                            callback_return_w9,
-                                                                            ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>(),
-                                                                        )?;
-                                                                    let mut callback_return_w9_accesses = __prebindgen_input_aliases
-                                                                        .begin_group(callback_return_w10.saturating_mul(1usize));
-                                                                    for callback_return_w11 in 0..callback_return_w10 {
-                                                                        let callback_return_w15 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w9_start
-                                                                                    + callback_return_w11
-                                                                                        * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                                                                    + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                                                            )?;
-                                                                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                                                                        let checked = (|| {
-                                                                            let callback_return_w13: i32 = i32::from(
-                                                                                ((callback_return_w15) as usize) != 0,
-                                                                            );
-                                                                            let callback_return_w15_pointer = if callback_return_w13
-                                                                                == 1i32
-                                                                            {
-                                                                                (callback_return_w15)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if callback_return_w13 == 1i32 {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w15_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if callback_return_w13 == 1i32 {
-                                                                                for address in ::core::iter::once(
-                                                                                    (callback_return_w15_pointer.addr()) as usize,
-                                                                                ) {
-                                                                                    callback_return_w9_accesses.push((address, true));
-                                                                                }
-                                                                            }
-                                                                            Ok::<_, String>(())
-                                                                        })();
-                                                                        checked?;
-                                                                    }
-                                                                    __prebindgen_input_aliases
-                                                                        .accept_group(callback_return_w9_accesses)?;
-                                                                    callback_return_w8.reserve_exact(callback_return_w10);
-                                                                    for callback_return_w11 in 0..callback_return_w10 {
-                                                                        let callback_return_w15 = callback_return_w1_reader
-                                                                            .read::<
-                                                                                i64,
-                                                                            >(
-                                                                                (callback_return_w9_start
-                                                                                    + callback_return_w11
-                                                                                        * ::core::mem::size_of::<__PbBulk_i64_cbe830243575e259>())
-                                                                                    + ::core::mem::offset_of!(__PbBulk_i64_cbe830243575e259, v0),
-                                                                            )?;
-                                                                        #[allow(clippy::redundant_closure_call)]
-                                                                        let callback_return_w9_element_built = (|| -> ::core::result::Result<
-                                                                            Option<perftest_flat::BulkHandle>,
-                                                                            String,
-                                                                        > {
-                                                                            let callback_return_w13: i32 = i32::from(
-                                                                                ((callback_return_w15) as usize) != 0,
-                                                                            );
-                                                                            let callback_return_w15_pointer = if callback_return_w13
-                                                                                == 1i32
-                                                                            {
-                                                                                (callback_return_w15)
-                                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                                        perftest_flat::BulkHandle,
-                                                                                    >
-                                                                            } else {
-                                                                                ::core::ptr::null_mut()
-                                                                            };
-                                                                            if callback_return_w13 == 1i32 {
-                                                                                ::prebindgen_runtime::validate_pointer(
-                                                                                    callback_return_w15_pointer,
-                                                                                )?;
-                                                                            }
-                                                                            if callback_return_w13 == 1i32 {
-                                                                                __prebindgen_input_consumed
-                                                                                    .set(
-                                                                                        __prebindgen_input_consumed.get()
-                                                                                            + (::core::iter::once(
-                                                                                                (callback_return_w15_pointer.addr()) as usize,
-                                                                                            ))
-                                                                                                .count(),
-                                                                                    );
-                                                                            }
-                                                                            let callback_return_w14 = if callback_return_w13 == 1i32 {
-                                                                                Some(unsafe { Box::from_raw(callback_return_w15_pointer) })
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w12 = if callback_return_w13 == 1i32 {
-                                                                                let callback_return_w14: perftest_flat::BulkHandle = callback_return_w14
-                                                                                    .expect("active allocation")
-                                                                                    .value;
-                                                                                Some(callback_return_w14)
-                                                                            } else {
-                                                                                None
-                                                                            };
-                                                                            let callback_return_w8 = callback_return_w12;
-                                                                            Ok(callback_return_w8)
-                                                                        })();
-                                                                        let element = callback_return_w9_element_built?;
-                                                                        #[allow(clippy::zst_offset)]
-                                                                        unsafe {
-                                                                            let initialized = callback_return_w8.len();
-                                                                            callback_return_w8
-                                                                                .as_mut_ptr()
-                                                                                .add(initialized)
-                                                                                .write(element);
-                                                                            callback_return_w8.set_len(initialized + 1);
-                                                                        }
-                                                                    }
-                                                                }
-                                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                                let callback_return_w8_built = if (callback_return_w7)
-                                                                    == 1i32
-                                                                {
-                                                                    Some(callback_return_w8)
-                                                                } else {
-                                                                    None
-                                                                };
-                                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                                let callback_return_w6_built = if true {
-                                                                    Some({
-                                                                        let callback_return_w6 = if (callback_return_w7) == 1i32 {
-                                                                            Some(callback_return_w8_built.expect("active input"))
-                                                                        } else {
-                                                                            None
-                                                                        };
-                                                                        callback_return_w6
-                                                                    })
-                                                                } else {
-                                                                    None
-                                                                };
-                                                                let callback_return_w2 = callback_return_w6_built
-                                                                    .expect("active input");
-                                                                Ok(callback_return_w2)
-                                                            })();
-                                                            let element = callback_return_w3_element_built?;
-                                                            #[allow(clippy::zst_offset)]
-                                                            unsafe {
-                                                                let initialized = callback_return_w2.len();
-                                                                callback_return_w2
-                                                                    .as_mut_ptr()
-                                                                    .add(initialized)
-                                                                    .write(element);
-                                                                callback_return_w2.set_len(initialized + 1);
-                                                            }
-                                                        }
-                                                    }
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_built = if true {
-                                                        Some(callback_return_w2)
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w0_built = if true {
-                                                        Some(callback_return_w2_built.expect("active input"))
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_value = callback_return_w0_built
-                                                        .expect("active input");
-                                                    Ok::<_, String>(callback_return_value)
-                                                })?;
-                                                callback_return_cleanup.commit();
-                                                Ok::<_, String>(callback_return_decoded)
-                                            }
-                                        }
-                                    }
-                                },
-                            )
-                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
-                    };
-                    p0_callback_value
-                })
-            } else {
-                None
-            };
-            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true {
-                Some({
-                    let p1_w0: bool = ::core::convert::Into::into(
-                        p1_w0.expect("active value"),
-                    );
-                    p1_w0
-                })
-            } else {
-                None
-            };
-            let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p2_w0_built = if true {
-                Some({
-                    let p2_w0: bool = ::core::convert::Into::into(
-                        p2_w0.expect("active value"),
-                    );
-                    p2_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
-            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
-            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
-            let source_value = perftest_flat::bulk_cleanup_nested_callback(
-                __prebindgen_argument_0,
-                __prebindgen_argument_1,
-                __prebindgen_argument_2,
-            );
-            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-            );
-            let ret_w1_source: ::std::vec::Vec<i64> = source_value;
-            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
-            let ret_w1 = ret_w0_writer
-                .rows(
-                    ret_w3,
-                    ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                    ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                )?;
-            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w1_source),
-            ) {
-                let ret_w5 = ret_w2;
-                ret_w0_writer
-                    .write(
-                        (ret_w1.offset as usize
-                            + ret_w4
-                                * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
-                            + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
-                        ret_w5,
-                    )?;
-                #[allow(
-                    clippy::redundant_closure_call,
-                    clippy::let_unit_value,
-                    clippy::unused_unit
-                )]
-                let _: () = (|| -> () {})();
-            }
-            let ret_w1 = Some(ret_w1);
-            ret_w0_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_1800d3dd3eceec6d, v0),
-                    ret_w1,
-                )?;
-            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                jni_environment
-                    .byte_array_from_slice(ret_w0_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let __pb_direct_object = ret_w0;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    l: __pb_direct_object.as_raw(),
-                })
-                    .l
-            };
-            let _: () = {
-                ret_w0_writer.commit();
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-#[allow(
-    clippy::needless_borrow,
-    clippy::borrow_deref_ref,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-/**# Safety
-The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. When native alias validation is omitted, complete Kotlin handle preflight before this entry point.*/
-#[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_call_1bulk_1cleanup_1pair_1callback_175c0d45b83cad591<
-    'local,
->(
-    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
-) -> i64 {
-    #[allow(unused_mut)]
-    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let mut success_transferred = false;
-    let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-    let __pb_receipt_valid = ::core::cell::Cell::new(false);
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        {
-            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
-                &mut jni_environment,
-                &p0_callback,
-                "()[Ljava/lang/Object;",
-                "io.prebindgen.covertest.rawinputs.BulkCleanupPairCallback",
-            )?;
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                Some({
-                    #[allow(unused_mut, clippy::collapsible_if)]
-                    let p0_callback_value = move || {
-                        p0_callback_retained
-                            .with_env_result(
-                                19i32,
-                                |callback_environment| {
-                                    let mut callback_environment = callback_environment;
-                                    {
-                                        let arguments = [];
-                                        {
-                                            let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-                                            let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::FixedInputs::<
-                                                2usize,
-                                            >::default();
-                                            let callback_result = unsafe {
-                                                p0_callback_retained
-                                                    .invoke_return(
-                                                        callback_environment,
-                                                        ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
-                                                        &arguments,
-                                                    )
-                                            }?;
-                                            let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
-                                                callback_result.l().map_err(|e| e.to_string())?,
-                                            );
-                                            let callback_return_w1 = ::prebindgen_jni_runtime::row_bytes(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                0usize,
-                                            )?;
-                                            let callback_return_w1_length = ::prebindgen_jni_runtime::row_i32(
-                                                &mut callback_environment,
-                                                &(callback_result_rows),
-                                                1usize,
-                                            )?;
-                                            let callback_return_w1_cached_bytes = if true {
-                                                ::prebindgen_jni_runtime::bulk::input(
-                                                    &mut callback_environment,
-                                                    &callback_return_w1,
-                                                    callback_return_w1_length,
-                                                )?
-                                            } else {
-                                                Vec::new()
-                                            };
-                                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                                            {
-                                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                                    __prebindgen_input_consumed,
-                                                );
-                                                if true {
-                                                    let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_cached_bytes,
-                                                    );
-                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
-                                                        unsafe {
-                                                            callback_return_owners
-                                                                .receive(
-                                                                    (callback_return_w1_cleanup_reader
-                                                                        .read::<
-                                                                            i64,
-                                                                        >(
-                                                                            ::core::mem::offset_of!(
-                                                                                __PbBulk_i64_i64_8afc2761c446bf98, v1
-                                                                            ),
-                                                                        )?)
-                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                            perftest_flat::BulkHandle,
-                                                                        >,
-                                                                );
-                                                        }
-                                                        Ok(())
-                                                    })() {
-                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                                    }
-                                                }
-                                                Ok(())
-                                            });
-                                            {
-                                                let callback_return_decoded = ({
-                                                    let callback_return_w1_bytes = if true {
-                                                        Ok::<_, String>(callback_return_w1_cached_bytes.as_slice())?
-                                                    } else {
-                                                        ::core::default::Default::default()
-                                                    };
-                                                    let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
-                                                        &callback_return_w1_bytes,
-                                                    );
-                                                    if callback_return_w1_bytes.len()
-                                                        < ::core::mem::size_of::<
-                                                            __PbBulk_i64_i64_8afc2761c446bf98,
-                                                        >()
-                                                    {
-                                                        return Err("truncated bulk root record".into());
-                                                    }
-                                                    let callback_return_w5 = if true {
-                                                        callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                ::core::mem::offset_of!(
-                                                                    __PbBulk_i64_i64_8afc2761c446bf98, v0
-                                                                ),
-                                                            )?
-                                                    } else {
-                                                        0
-                                                    };
-                                                    let callback_return_w3_f1 = if true {
-                                                        callback_return_w1_reader
-                                                            .read::<
-                                                                i64,
-                                                            >(
-                                                                ::core::mem::offset_of!(
-                                                                    __PbBulk_i64_i64_8afc2761c446bf98, v1
-                                                                ),
-                                                            )?
-                                                    } else {
-                                                        0
-                                                    };
-                                                    let callback_return_w3_f2 = if true {
-                                                        callback_return_w1_reader
-                                                            .range(
-                                                                ::core::mem::offset_of!(
-                                                                    __PbBulk_i64_i64_8afc2761c446bf98, v2
-                                                                ),
-                                                            )?
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_w5_pointer = if true {
-                                                        callback_return_w5
-                                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                perftest_flat::BulkHandle,
-                                                            >
-                                                    } else {
-                                                        ::core::ptr::null_mut()
-                                                    };
-                                                    if true {
-                                                        ::prebindgen_runtime::validate_pointer(
-                                                            callback_return_w5_pointer,
-                                                        )?;
-                                                    }
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w4_built = if true {
-                                                        if true {
-                                                            for address in ::core::iter::once(
-                                                                (callback_return_w5_pointer.addr()) as usize,
-                                                            ) {
-                                                                __prebindgen_input_aliases.access(address, false)?;
-                                                            }
-                                                        }
-                                                        Some({
-                                                            let callback_return_w4: &perftest_flat::BulkHandle = unsafe {
-                                                                &(*callback_return_w5_pointer).value
-                                                            };
-                                                            callback_return_w4
-                                                        })
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_f0_built = if true {
-                                                        Some({
-                                                            let callback_return_w2_f0: perftest_flat::BulkHandle = perftest_flat::bulk_handle_copy(
-                                                                callback_return_w4_built.expect("active input"),
-                                                            );
-                                                            callback_return_w2_f0
-                                                        })
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_w3_f1_pointer = if true {
-                                                        callback_return_w3_f1
-                                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                perftest_flat::BulkHandle,
-                                                            >
-                                                    } else {
-                                                        ::core::ptr::null_mut()
-                                                    };
-                                                    if true {
-                                                        ::prebindgen_runtime::validate_pointer(
-                                                            callback_return_w3_f1_pointer,
-                                                        )?;
-                                                    }
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_f1_built = if true {
-                                                        let mut callback_return_w2_f1_built_transferred_0 = 0usize;
-                                                        if true {
-                                                            for address in ::core::iter::once(
-                                                                (callback_return_w3_f1_pointer.addr()) as usize,
-                                                            ) {
-                                                                __prebindgen_input_aliases.access(address, true)?;
-                                                                callback_return_w2_f1_built_transferred_0 += 1;
-                                                            }
-                                                        }
-                                                        let callback_return_w2_f1 = if true {
-                                                            Some(unsafe {
-                                                                Box::from_raw(callback_return_w3_f1_pointer)
-                                                            })
-                                                        } else {
-                                                            None
-                                                        };
-                                                        __prebindgen_input_consumed
-                                                            .set(
-                                                                __prebindgen_input_consumed.get()
-                                                                    + callback_return_w2_f1_built_transferred_0,
-                                                            );
-                                                        Some({
-                                                            let callback_return_w2_f1: perftest_flat::BulkHandle = callback_return_w2_f1
-                                                                .expect("active allocation")
-                                                                .value;
-                                                            callback_return_w2_f1
-                                                        })
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_w2_f2 = if true {
-                                                        Some(
-                                                            ::core::str::from_utf8(
-                                                                    callback_return_w1_reader
-                                                                        .buffer_range(callback_return_w3_f2)?
-                                                                        .ok_or("null bulk text")?,
-                                                                )
-                                                                .map_err(|_| "invalid UTF-8 in bulk text")?,
-                                                        )
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_f2_built = if true {
-                                                        Some({
-                                                            let callback_return_w2_f2: String = ::core::convert::Into::into(
-                                                                callback_return_w2_f2.expect("active value"),
-                                                            );
-                                                            callback_return_w2_f2
-                                                        })
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w2_built = if true {
-                                                        Some({
-                                                            let callback_return_w2: perftest_flat::BulkPairText = perftest_flat::BulkPairText {
-                                                                borrowed_handle: callback_return_w2_f0_built
-                                                                    .expect("active input"),
-                                                                owned_handle: callback_return_w2_f1_built
-                                                                    .expect("active input"),
-                                                                text: callback_return_w2_f2_built.expect("active input"),
-                                                            };
-                                                            callback_return_w2
-                                                        })
-                                                    } else {
-                                                        None
-                                                    };
-                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                    let callback_return_w0_built = if true {
-                                                        Some(callback_return_w2_built.expect("active input"))
-                                                    } else {
-                                                        None
-                                                    };
-                                                    let callback_return_value = callback_return_w0_built
-                                                        .expect("active input");
-                                                    Ok::<_, String>(callback_return_value)
-                                                })?;
-                                                callback_return_cleanup.commit();
-                                                Ok::<_, String>(callback_return_decoded)
-                                            }
-                                        }
-                                    }
-                                },
-                            )
-                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
-                    };
-                    p0_callback_value
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
-            let source_value = perftest_flat::bulk_cleanup_pair_callback(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = (source_value) as i64;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
-        }
-    });
-    match outcome {
-        Ok(result) => result,
-        Err(e) => {
-            if domain_output.is_none()
-                && matches!(jni_environment.exception_check(), Ok(false))
-            {
-                let reported = ::prebindgen_runtime::boundary(|| {
-                    let message = ::prebindgen_jni_runtime::text_object(
-                        &mut jni_environment,
-                        &e,
-                    )?;
-                    unsafe {
-                        ::prebindgen_jni_runtime::invoke_error_callback(
-                            &mut jni_environment,
-                            &__pb_return,
-                            "bindingError",
-                            "(Ljava/lang/String;Z)V",
-                            &[
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: message.as_raw(),
-                                },
-                                ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    z: u8::from(success_transferred),
-                                },
-                            ],
-                        )
-                    }
-                });
-                if let Err(message) = reported {
-                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                }
-            }
-            direct_output
-        }
-    }
-}
-const _: () = {
-    konst::assertc_eq!(
-        perftest_flat::FEATURES, "",
-        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
-                        This usually happens if source crate is compiled with different feature set\n\
-                        for build dependencies and for library usage. You may need to explicitly set\n\
-                        the necessary features."
-    );
-};
-const _: () = assert!(
-    ::core::mem::size_of:: < perftest_flat::BulkHandle > () != 0,
-    "flat object `BulkHandle` must have nonzero size"
-);
-const _: () = assert!(
-    ::core::mem::size_of:: < perftest_flat::BulkKind > () != 0,
-    "flat object `BulkKind` must have nonzero size"
-);
-const _: () = assert!(
-    ::core::mem::size_of:: < perftest_flat::BulkPairText > () != 0,
-    "flat object `BulkPairText` must have nonzero size"
-);
-const _: () = assert!(
-    ::core::mem::size_of:: < perftest_flat::BulkReplayRow > () != 0,
-    "flat object `BulkReplayRow` must have nonzero size"
-);
-const _: () = assert!(
-    perftest_flat::BulkKind::A as i128 == - 3i32 as i128,
-    "enum discriminant differs from captured source"
-);
-const _: () = assert!(
-    perftest_flat::BulkKind::B as i128 == 9i32 as i128,
-    "enum discriminant differs from captured source"
 );
  }

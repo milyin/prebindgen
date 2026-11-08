@@ -118,13 +118,12 @@ Ordinary arguments and callback return values use the same policy, including
 nested collections. Conflict rejection before JNI leaves ordinary input owners
 with their caller; a later conversion failure may consume a prefix.
 
-`JniGen::builder().set_kotlin_input_preflight(false)` keeps alias validation in
-Rust for consumers constructing internal JNI frames directly. Custom conversion
-plans whose allocation identity or Kotlin preparation cannot be proved complete
-also retain native validation. Internal JNI names distinguish entry points that
-require Kotlin preflight, so regenerate and deploy the Kotlin and native bindings
-together. This does not remove monitor locking or add protection for same-thread
-callback reentry that violates an active Rust borrow.
+Native JNI decoding does not repeat handle alias validation. Custom conversion
+plans must expose matching native allocation types, access modes and prepared
+Kotlin handle inputs; incomplete plans fail generation. Internal JNI entry points
+require the generated wrappers' preflight, locking and ownership protocol.
+Regenerate and deploy the Kotlin and native bindings together. This does not add
+protection for same-thread callback reentry that violates an active Rust borrow.
 
 `ptr_class!(Query).gc_managed()` opts that handle class into automatic cleanup
 of abandoned wrappers through `java.lang.ref.Cleaner` (Java 9 or newer, or a
@@ -713,18 +712,18 @@ Low-level adapters constructing `prebindgen_conversions::Resource` use
 `true` when acquisition updates `__prebindgen_input_consumed` after each successful
 move, so failures between transfers preserve the exact consumed prefix. This is
 independent of `registered`, which tracks alias checking. `allocation_type`
-identifies an independently owned allocation class; use `None` for unknown
-identities or interior pointers that may overlap another class. JNI delegates
-validation to Kotlin only when these identities and access modes match its
-prepared handles. External adapter struct literals must supply this metadata;
-ordinary binding declarations do not change.
+identifies an independently owned allocation class. Unknown identities or
+interior pointers may use `None` in adapters retaining native checks; JniGen
+requires a known allocation type matching its prepared Kotlin handles.
+External adapter struct literals must supply this metadata; ordinary binding
+declarations do not change.
 
 Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
-gc_managed}`, `KotlinInput::handle_inputs`, `JniModule::kotlin_input_preflight`
-and `JniContext::input_alias_checks`. `KotlinInput::default()` leaves handle
-preflight metadata absent, preserving native checks. Keep
-`JniContext::input_alias_checks` true for native frames without matching Kotlin
-preflight. Normal binding declarations obtain all these settings from the builder.
+gc_managed}` and `KotlinInput::handle_inputs`. Resource-bearing inputs must expose
+all retained handles with their allocation types, access modes and individual or
+collection grouping. Missing or inconsistent metadata fails generation. Inputs
+without resources or handle locks may leave `handle_inputs` absent. Normal
+binding declarations provide this metadata automatically.
 
 Consuming C Result calls return an ownership count through `size_t *ownership`.
 The count identifies the consumed prefix of active owned wire values in argument,

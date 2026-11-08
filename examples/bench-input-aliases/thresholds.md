@@ -35,23 +35,14 @@ retains sorted vectors using the target platform’s maximum; zero allows immedi
 movement. Neither setting changes alias validity or ownership. Explicit numeric settings
 must fit the target platform’s `usize`; otherwise compilation rejects them.
 
-JNI supports a native-history setting:
+JniGen always validates aliases in Kotlin and emits no native alias history.
+Its former native-history controls have been removed. The JNI tables below
+record the earlier implementation and require that revision to reproduce.
 
-```rust
-JniGen::builder()
-    .set_kotlin_input_preflight(false)
-    .set_native_input_alias_index_threshold(256)
-```
-
-This covers native-checked arguments and callback results. Default JNI performs
-preflight in Kotlin and normally omits native history, so this setting does not
-change its locking, generated Kotlin or ABI. Conservative native-check fallbacks
-still use the setting.
-
-Low-level `CModule`, `CFunction`, `CContext`, `JniModule`, and `JniContext` now have
-an optional `input_alias_index_threshold` field. `None` inherits the surrounding
-policy or runtime default. Custom rendering contexts may continue using the
-compatibility constructor macro, whose fallback uses the runtime default.
+Low-level `CModule`, `CFunction` and `CContext` have an optional
+`input_alias_index_threshold` field. `None` inherits the surrounding policy or
+runtime default. Custom rendering contexts may continue using the compatibility
+constructor macro, whose fallback uses the runtime default.
 
 ## Default decision: retain 128
 

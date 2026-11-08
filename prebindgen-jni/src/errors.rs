@@ -172,13 +172,11 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         let ty = &error.ty;
         let source = format_ident!("source");
         let context = JniContext {
-            input_alias_index_threshold: None,
             environment: format_ident!("env"),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),
             return_sink: None,
             is_domain_error: true,
-            input_alias_checks: true,
             output_committed: quote!(*reported = Some(result.as_raw());),
         };
         let body_for = |context: &JniContext| -> Result<TokenStream> {

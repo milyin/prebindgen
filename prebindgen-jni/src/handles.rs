@@ -115,9 +115,9 @@ pub(crate) fn column_groups(node: &JniNode) -> Result<String> {
         .join(", ");
     Ok(format!("arrayOf({columns})"))
 }
-/// Custom deferred Rust resources retain native checking. Standard eager input
-/// plans expose the resources they validate through the prepared Kotlin wires.
-pub(crate) fn kotlin_preflight(input: &JniInput) -> bool {
+/// Every native resource must be represented by prepared Kotlin handle wires.
+/// Custom conversions without this information cannot use the generated JNI API.
+pub(crate) fn require_preflight(input: &JniInput) -> Result<()> {
     fn prepared(node: &JniNode) -> bool {
         match node {
             WireNode::Chain {
@@ -134,16 +134,21 @@ pub(crate) fn kotlin_preflight(input: &JniInput) -> bool {
         }
     }
     if !prepared(input.input_node()) {
-        return false;
+        return Err("Kotlin handle preflight requires an enclosing prepared bulk frame".into());
     }
     let mut native = BTreeMap::new();
     let mut kotlin = BTreeMap::new();
     for resource in &input.rust.resources {
         let Some(ty) = &resource.allocation_type else {
-            return false;
+            return Err(
+                "Kotlin handle preflight requires the allocation type of every native resource"
+                    .into(),
+            );
         };
         if !resource.registered {
-            return false;
+            return Err(
+                "Kotlin handle preflight requires eagerly prepared native resources".into(),
+            );
         }
         *native
             .entry((type_key(ty), access_key(resource.access)))
@@ -154,7 +159,68 @@ pub(crate) fn kotlin_preflight(input: &JniInput) -> bool {
             *kotlin.entry(key(handle)).or_insert(0usize) += 1;
         }
     }
-    native == kotlin
+    if native != kotlin {
+        return Err("Kotlin handle preflight requires matching allocation types and access modes for native resources and Kotlin handle wires".into());
+    }
+    Ok(())
+}
+
+/// Check the Kotlin emitter's retained sources against the wire shape. Carriers
+/// combine repeated fields into one list per allocation type and access mode.
+fn complete_handle_inputs(node: &JniNode, input: &mut KotlinInput) -> Result<()> {
+    fn sources(node: &JniNode, expected: &mut BTreeMap<(String, u8, bool), usize>) {
+        match node {
+            WireNode::Chain {
+                meta: JniChain::Bulk(_) | JniChain::Sequence(_),
+                child,
+                ..
+            } => {
+                for kind in kinds(child) {
+                    let (ty, access) = key(&kind);
+                    *expected.entry((ty, access, true)).or_default() += 1;
+                }
+            }
+            WireNode::Chain { child, .. } => sources(child, expected),
+            WireNode::Branch { children, .. } => {
+                for child in children {
+                    sources(child, expected);
+                }
+            }
+            WireNode::Leaf(wires) => {
+                for wire in wires {
+                    if let JniWire::Handle { handle, .. } = &wire.kind {
+                        let (ty, access) = key(handle);
+                        *expected.entry((ty, access, false)).or_default() += 1;
+                    }
+                }
+            }
+        }
+    }
+    let mut expected = BTreeMap::new();
+    sources(node, &mut expected);
+    if input.handle_inputs.is_none()
+        && expected.is_empty()
+        && input.locks.is_empty()
+        && input.lock_groups.is_empty()
+    {
+        input.handle_inputs = Some(vec![]);
+    }
+    let handles = input.handle_inputs.as_ref().ok_or(
+        "Kotlin handle preflight requires complete prepared handle inputs from custom conversions",
+    )?;
+    let mut actual = BTreeMap::new();
+    for handle in handles {
+        *actual
+            .entry((type_key(&handle.ty), access_key(handle.access), handle.many))
+            .or_default() += 1usize;
+    }
+    if actual != expected {
+        return Err("Kotlin handle preflight requires retained inputs matching every handle wire's allocation type, access mode and carrier grouping".into());
+    }
+    if handles.is_empty() && (!input.locks.is_empty() || !input.lock_groups.is_empty()) {
+        return Err("prepared handle inputs omit existing Kotlin locks".into());
+    }
+    Ok(())
 }
 
 struct Source {
@@ -173,26 +239,18 @@ pub(crate) struct HandleLocks {
     prefix: String,
 }
 impl HandleLocks {
-    pub(crate) fn new(
-        inputs: &mut [KotlinInput],
+    pub(crate) fn new<'a>(
+        inputs: impl IntoIterator<Item = (&'a JniInput, &'a mut KotlinInput)>,
         context: &KotlinContext<'_>,
-    ) -> Result<Option<Self>> {
-        if inputs.iter().any(|input| input.handle_inputs.is_none()) {
-            return Ok(None);
-        }
-        if inputs.iter().any(|input| {
-            input.handle_inputs.as_ref().is_some_and(|h| h.is_empty())
-                && (!input.locks.is_empty() || !input.lock_groups.is_empty())
-        }) {
-            return Err("prepared handle inputs omit existing Kotlin locks".into());
-        }
+    ) -> Result<Self> {
         let mut out = Self {
             sources: vec![],
             setup: String::new(),
             gc: false,
             prefix: context.package.into(),
         };
-        for input in inputs {
+        for (native, input) in inputs {
+            complete_handle_inputs(native.input_node(), input)?;
             for handle in input.handle_inputs.clone().unwrap() {
                 let class = context
                     .classes
@@ -236,7 +294,7 @@ impl HandleLocks {
                 out.gc |= class.gc_managed;
             }
         }
-        Ok(Some(out))
+        Ok(out)
     }
     pub(crate) fn wrap(&self, body: &str) -> String {
         let p = &self.prefix;
@@ -403,5 +461,61 @@ mod tests {
                 .unwrap_err()
                 .contains("missing prepared child"));
         }
+    }
+}
+
+#[cfg(test)]
+mod preflight_tests {
+    use super::*;
+    use prebindgen_flat::Wire;
+
+    #[test]
+    fn retained_handle_metadata_must_cover_the_wires() {
+        let handle = BoxedWire {
+            ty: syn::parse_quote!(Handle),
+            access: Access::Move,
+        };
+        let node = WireNode::Leaf(vec![Wire {
+            name: format_ident!("wire"),
+            kind: JniWire::handle(handle, "true"),
+        }]);
+        for wrong in ["missing", "access", "type", "group"] {
+            let mut input = KotlinInput {
+                handle_inputs: Some(vec![]),
+                ..Default::default()
+            };
+            if wrong != "missing" {
+                input
+                    .handle_inputs
+                    .as_mut()
+                    .unwrap()
+                    .push(KotlinHandleInput {
+                        ty: if wrong == "type" {
+                            syn::parse_quote!(Other)
+                        } else {
+                            syn::parse_quote!(Handle)
+                        },
+                        access: if wrong == "access" {
+                            Access::Shared
+                        } else {
+                            Access::Move
+                        },
+                        many: wrong == "group",
+                        value: "handle".into(),
+                        argument: Some(0),
+                        consumed: None,
+                    });
+            }
+            assert!(complete_handle_inputs(&node, &mut input)
+                .unwrap_err()
+                .contains("matching every handle wire"));
+        }
+    }
+
+    #[test]
+    fn resource_free_custom_inputs_need_no_handle_metadata() {
+        let mut input = KotlinInput::default();
+        complete_handle_inputs(&WireNode::Leaf(vec![]), &mut input).unwrap();
+        assert!(input.handle_inputs.unwrap().is_empty());
     }
 }

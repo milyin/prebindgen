@@ -1,10 +1,10 @@
 package io.prebindgen.covertest
 
-import io.prebindgen.covertest.bulk.*
+import *
 
 fun checkBulkReplay() {
     checkBulkReplayRaw()
-    checkLargeAliasHistory()
+    checkLargeHandlePreflight()
     fun rows(): List<BulkReplayRow> = listOf(
         BulkReplayRow(bulkHandleNew(1), "世界", byteArrayOf(0,-1), BulkKind.A, bulkHandleNew(2)),
         BulkReplayRow(bulkHandleNew(3), null, null, null, bulkHandleNew(4)),
@@ -38,27 +38,25 @@ fun checkBulkReplay() {
     println("bulk replay PASS: optional borrowed text/bytes/enums, constructors once, panic prefixes and callback unread-owner cleanup")
 }
 
-private fun checkLargeAliasHistory() {
-    // This binding explicitly retains native checks after Kotlin preflight became
-    // the default. Two owned handles per inner list cross the runtime's vector/index boundary.
-    // Constructor failure occurs after promotion, covering callback unread-owner
-    // cleanup and ordinary-input ownership receipts through the actual JNI call.
+private fun checkLargeHandlePreflight() {
+    // Large nested lists exercise Kotlin preflight, native constructor failures,
+    // callback unread-owner cleanup and ordinary-input ownership receipts.
     val count = 256
     for (callback in listOf(false, true)) for (fail in listOf(0uL, 100uL)) {
-        val rows = List(count) { i -> io.prebindgen.covertest.rawinputs.BulkReplayRow(
-            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), io.prebindgen.covertest.rawinputs.BulkKind.A,
-            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L * i + 2)
+        val rows = List(count) { i -> BulkReplayRow(
+            bulkHandleNew(2L * i + 1), "ok", byteArrayOf(7), BulkKind.A,
+            bulkHandleNew(2L * i + 2)
         ) }
         val handles = rows.flatMap { listOf(it.first, it.last) }
         val nested = rows.map { listOf(it) }
         val before = bulkDrops()
         bulkReplayReset(fail)
         var failed = false
-        val error = io.prebindgen.covertest.rawinputs.JniErrorHandler { failed = true; 0uL }
+        val error = JniErrorHandler { failed = true; 0uL }
         val result = if (callback) {
-            io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback { nested }, error)
+            bulkReplayNestedCallback(BulkReplayNestedCallback { nested }, error)
         } else {
-            io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(nested, error)
+            bulkReplayNestedRows(nested, error)
         }
         check(failed == (fail != 0uL))
         if (!failed) {
@@ -72,33 +70,33 @@ private fun checkLargeAliasHistory() {
         else check(consumed in 1 until handles.size)
         check(bulkDrops() == before + consumed.toULong())
         handles.forEachIndexed { i, handle ->
-            if (!handle.isClosed) check(io.prebindgen.covertest.rawinputs.bulkHandleValue(handle) == i.toLong() + 1)
+            if (!handle.isClosed) check(bulkHandleValue(handle) == i.toLong() + 1)
             handle.close()
         }
         check(bulkDrops() == before + handles.size.toULong())
     }
-    // A late duplicate must be rejected by Rust after constructors ran. Kotlin
-    // preflight would reject this before the native constructor counter advances.
+    // A late duplicate is rejected by Kotlin before native constructors run.
     for (callback in listOf(false,true)) {
-        val values=List(count) {i->io.prebindgen.covertest.rawinputs.BulkReplayRow(
-            io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+1), "ok", byteArrayOf(7),
-            io.prebindgen.covertest.rawinputs.BulkKind.A,io.prebindgen.covertest.rawinputs.bulkHandleNew(2L*i+2))}
+        val values=List(count) {i->BulkReplayRow(
+            bulkHandleNew(2L*i+1), "ok", byteArrayOf(7),
+            BulkKind.A,bulkHandleNew(2L*i+2))}
         val handles=values.flatMap {listOf(it.first,it.last)}
         val last=values.last()
-        val rows=(values.dropLast(1)+io.prebindgen.covertest.rawinputs.BulkReplayRow(values.first().first,last.text,last.bytes,last.kind,last.last)).map{listOf(it)}
+        val rows=(values.dropLast(1)+BulkReplayRow(values.first().first,last.text,last.bytes,last.kind,last.last)).map{listOf(it)}
         bulkReplayReset(0uL)
         val before=bulkDrops()
         var message: String?=null
-        val error=io.prebindgen.covertest.rawinputs.JniErrorHandler {message=it;0uL}
-        if(callback)io.prebindgen.covertest.rawinputs.bulkReplayNestedCallback(io.prebindgen.covertest.rawinputs.BulkReplayNestedCallback {rows},error)
-        else io.prebindgen.covertest.rawinputs.bulkReplayNestedRows(rows,error)
+        val error=JniErrorHandler {message=it;0uL}
+        if(callback)bulkReplayNestedCallback(BulkReplayNestedCallback {rows},error)
+        else bulkReplayNestedRows(rows,error)
         // A source Fn cannot return a binding error. Its adapter aborts the
         // Rust operation through the existing panic route; ordinary input
         // validation preserves the specific alias diagnostic.
-        check((if(callback)message=="Rust operation panicked" else message?.contains("conflicting input aliases")==true) && bulkReplayCount(0uL)>128uL)
-
-        check(values.first().first.isClosed) // The duplicate refers to a consumed prefix owner.
-        check(!last.first.isClosed && io.prebindgen.covertest.rawinputs.bulkHandleValue(last.first)==2L*count-1)
+        check(if(callback) message=="Rust operation panicked" else message?.contains("conflicting input aliases")==true)
+        check(bulkReplayCount(0uL)==0uL)
+        if (callback) check(rows.flatten().flatMap { listOf(it.first,it.last) }.all { it.isClosed })
+        else check(handles.none { it.isClosed })
+        check(!last.first.isClosed && bulkHandleValue(last.first)==2L*count-1)
         handles.forEach{it.close()}
         check(bulkDrops()==before+handles.size.toULong())
     }
@@ -108,10 +106,12 @@ private fun checkLargeAliasHistory() {
 private fun checkBulkReplayRaw() {
     val root=BulkLayouts.r55fb9dde8a946716
     val row=BulkLayouts.r01496d6ef6ccdfde
-    val method=io.prebindgen.covertest.rawinputs.JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_replay_rows_")}
+    val method=JNINative::class.java.declaredMethods.single {it.name.startsWith("call_bulk_replay_rows_")}
     val captureType=method.parameterTypes.last()
     val companion=captureType.getField("Companion").get(null)
-    for(mode in 0..3) {
+    // These deliberately malformed frames preserve unique live handles and
+    // acquire all locks. They exercise wire-value validation, not alias checks.
+    for(mode in listOf(0,1,3)) {
         val handles=List(6) {bulkHandleNew(it.toLong()+10)}
         val before=bulkDrops();bulkReplayReset(if(mode==3)2uL else 0uL)
         val payload=root.size+3*row.size
@@ -120,7 +120,7 @@ private fun checkBulkReplayRaw() {
         frame.put(payload,'x'.code.toByte()).put(payload+1,0xff.toByte())
         for(i in 0..2) {
             val at=root.size+i*row.size
-            frame.putLong(at+row.offsets[0],handles[if(mode==2 && i==1)0 else 2*i].raw)
+            frame.putLong(at+row.offsets[0],handles[2*i].raw)
             frame.putInt(at+row.offsets[1],if(i<2)1 else 0)
             frame.putLong(at+row.offsets[2],if(i==2)Long.MIN_VALUE else (payload+if(mode==0 && i==1)1 else 0).toLong())
             frame.putLong(at+row.offsets[2]+8,if(i==2)Long.MAX_VALUE else 1)
@@ -132,17 +132,17 @@ private fun checkBulkReplayRaw() {
         val capture=companion.javaClass.getMethod("acquire").invoke(companion)
         val ownership=LongArray(1) {Long.MIN_VALUE}
         try {
-            withHandleLocks(handles) {method.invoke(io.prebindgen.covertest.rawinputs.JNINative,frame.array(),frame.capacity(),ownership,capture)}
+            withHandleLocks(handles) {method.invoke(JNINative,frame.array(),frame.capacity(),ownership,capture)}
             check(captureType.getMethod("getStatus").invoke(capture)==2)
             val message=captureType.getMethod("getMessage").invoke(capture) as String
             check(message.isNotEmpty())
             if(mode==0)check(message.contains("UTF-8"))
-            val consumed=if(mode==2)0 else 4
+            val consumed=4
             check(ownership[0]==-1L-consumed)
             handles.take(consumed).forEach {it.markConsumed()}
             check(bulkDrops()==before+consumed.toULong())
             handles.drop(consumed).forEachIndexed {i,h->check(bulkHandleValue(h)==10L+consumed+i)}
-            check(bulkReplayCount(0uL)==when(mode){0->1uL;2->0uL;else->2uL})
+            check(bulkReplayCount(0uL)==if(mode==0)1uL else 2uL)
             check(bulkReplayCount(1uL)==0uL && bulkReplayCount(3uL)==0uL)
             handles.forEach {it.close()};check(bulkDrops()==before+6uL)
         } finally {captureType.getMethod("release").invoke(capture)}

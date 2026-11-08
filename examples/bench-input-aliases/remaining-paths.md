@@ -1,5 +1,10 @@
 # Earlier native alias-history study after #887
 
+The native-checked JNI results in this report describe the implementation before
+JniGen removed that mode. Current JniGen always uses Kotlin handle preflight;
+C native validation remains supported. Reproducing the old JNI comparison
+requires the recorded revisions and their benchmark fixtures.
+
 This study measured the original fixed-128 hybrid before the ascending append
 fix. Its large ascending-group regression is addressed by the
 [configurable-threshold update](thresholds.md), which preserves vector append and

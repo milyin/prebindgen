@@ -55,7 +55,7 @@ def cargo_configs(project):
     return {str(path): digest(path) for path in paths if path.is_file()}
 
 
-def build(checkout, output, kotlinc, record, check, fetch, native_allocations=False, target_dir=None, native_input_checks=False, alias_index_threshold=None):
+def build(checkout, output, kotlinc, record, check, fetch, native_allocations=False, target_dir=None):
     project = output / "fixture"
     (project / "flat/src").mkdir(parents=True)
     (project / "src").mkdir()
@@ -97,9 +97,6 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     seed = FIXTURE / "Cargo.lock.snapshot"
     shutil.copyfile(seed, project / "Cargo.lock")
     env = dict(os.environ, CARGO_TARGET_DIR=str(target_dir.resolve() if target_dir else output / "target"))
-    env.pop("BENCH_ALIAS_INDEX_THRESHOLD", None)
-    if alias_index_threshold is not None:env["BENCH_ALIAS_INDEX_THRESHOLD"]=alias_index_threshold
-    env["BENCH_NATIVE_INPUT_CHECKS"] = "1" if native_input_checks else "0"
     if fetch:
         subprocess.run(["cargo", "fetch", "--locked"], cwd=project, env=env, check=True)
     rustc = command_version([os.environ.get("RUSTC", "rustc"), "-vV"], cwd=project)
@@ -154,8 +151,6 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "cargo_profile": cdylib["profile"],
         "rust_sources_sha256": {name: digest(output / name) for name in ("plain.rs", "bulk.rs")},
         "native_allocations": native_allocations,
-        "native_input_checks": native_input_checks,
-        "alias_index_threshold": alias_index_threshold,
         "instrumentation_probe": probe,
         "kotlin": command_version([kotlinc, "-version"]),
         "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "AllocationBench.kt", "native_allocations.rs", "run.py", "Cargo.lock.snapshot")},
@@ -193,8 +188,6 @@ def main():
     parser.add_argument("--record-generated", action="store_true")
     parser.add_argument("--check-generated", action="store_true")
     parser.add_argument("--build-only", action="store_true")
-    parser.add_argument("--alias-index-threshold", help="native sorted-history limit, or max")
-    parser.add_argument("--native-input-checks", action="store_true", help="retain Rust input alias checks instead of Kotlin preflight")
     parser.add_argument("--native-allocations", action="store_true", help="instrument native allocations; use AllocationBenchKt, not latency measurements")
     parser.add_argument("--fetch", action="store_true", help="fetch the pinned fixture dependencies before building")
     parser.add_argument("--check-jni", action="store_true", help="correctness smoke run; not suitable for timing")
@@ -223,7 +216,7 @@ def main():
         parser.error("use a new empty output directory to preserve earlier results")
     output.mkdir(parents=True, exist_ok=True)
     kotlinc = os.environ.get("KOTLINC", "kotlinc")
-    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch, args.native_allocations, args.target_dir, args.native_input_checks, args.alias_index_threshold)
+    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch, args.native_allocations, args.target_dir)
     jar, library = Path(info["jar"]), Path(info["library"])
     if digest(jar) != info["jar_sha256"] or digest(library) != info["native_sha256"]:
         raise RuntimeError("prepared benchmark artifact changed")
