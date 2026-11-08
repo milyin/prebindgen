@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build benchmark-only native alternatives from frozen generated C bindings."""
-import argparse,hashlib,importlib.util,json,os,re,shutil,subprocess
+import argparse,hashlib,importlib.util,json,os,re,shutil,subprocess,sys
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[2]
@@ -131,6 +131,8 @@ def main():
     a=p.parse_args();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True);assert not list(out.iterdir())
     # All variants use exactly the same compiler, fixtures, ABI and alignment.
     env=os.environ|{'CARGO_BUILD_JOBS':'1','PYTHONDONTWRITEBYTECODE':'1','RUSTFLAGS':'-C llvm-args=-align-all-functions=6'}
+    # Loading the existing fixture helper must not create untracked cache files.
+    sys.dont_write_bytecode=True
     spec=importlib.util.spec_from_file_location('base',FIXTURE/'build.py');base=importlib.util.module_from_spec(spec);spec.loader.exec_module(base)
     project=base.prepare(ROOT,out/'seed')
     original_build=(project/'build.rs').read_text()
