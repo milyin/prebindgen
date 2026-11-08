@@ -1,9 +1,11 @@
-# Native alias-history paths after #887
+# Earlier native alias-history study after #887
 
-#886 still improves native validation of incremental handle batches. It provides
-no algorithmic benefit to default JNI after #887. The new C measurements also
-expose a substantial ascending-batch regression: preserve that fast path before
-treating this change as generally preferable for checked C.
+This study measured the original fixed-128 hybrid before the ascending append
+fix. Its large ascending-group regression is addressed by the
+[configurable-threshold update](thresholds.md), which preserves vector append and
+compares six limits before retaining 128 as the default. The measurements below
+remain as historical evidence of the problem and of the native paths affected.
+Default JNI after #887 does not use this native history.
 
 The baseline is #824 **after #887**, commit
 `0d73b8e60eda49456d3c7d07407244435853793c`. Candidate runtime is #886's unchanged

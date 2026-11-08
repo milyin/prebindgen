@@ -26,6 +26,14 @@ if a.compare_thresholds:
   text=re.sub(r'\s+','',path.read_text())
   text=re.sub(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(?:[0-9]+usize|\{(?:[0-9]+usize|::core::primitive::usize::MAX)\}),?>::default\(\)','NATIVE_HISTORY()',text)
   return text.replace('::prebindgen_runtime::DynamicInputs::default()','NATIVE_HISTORY()')
+ for version,directory in [('before',a.before),('after',a.after)]:
+  threshold=info[version]['alias_index_threshold']
+  assert threshold is not None, 'threshold comparison requires explicit limits'
+  expected='::core::primitive::usize::MAX' if threshold=='max' else threshold+'usize'
+  for name in ['plain.rs','bulk.rs']:
+   constructors=re.findall(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(.*?)>::default\(\)',re.sub(r'\s+','',(directory/name).read_text()))
+   assert constructors and all(x.rstrip(',').strip('{}')==expected for x in constructors), 'frozen JNI glue has wrong threshold'
+ assert info['before']['native_sha256']!=info['after']['native_sha256']
  for name in ['plain.rs','bulk.rs']:
   assert normalized(a.before/name)==normalized(a.after/name), 'generated JNI Rust differs beyond threshold constructor'
 else:

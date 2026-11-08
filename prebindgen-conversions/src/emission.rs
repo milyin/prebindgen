@@ -121,6 +121,17 @@ pub fn render_input_alias_checks_with_threshold(
             output.extend(if let Some(limit) = threshold {
                 let limit = if limit == usize::MAX {
                     quote!({ ::core::primitive::usize::MAX })
+                } else if limit > u16::MAX as usize {
+                    // A usize literal can silently wrap on a narrower target
+                    // when a dependency build caps lints. Const evaluation must
+                    // reject it before the cast, even with all lints allowed.
+                    let limit = limit as u128;
+                    quote!({
+                        const LIMIT: u128 = #limit;
+                        assert!(LIMIT <= ::core::primitive::usize::MAX as u128,
+                            "input alias index threshold exceeds target usize");
+                        LIMIT as usize
+                    })
                 } else {
                     quote!(#limit)
                 };
@@ -230,6 +241,14 @@ mod history_policy_tests {
             .to_string();
         assert!(maximum.contains("usize :: MAX"));
         assert!(!maximum.contains(&usize::MAX.to_string()));
+        if usize::BITS > 16 {
+            let large = render_input_alias_checks_with_threshold(&code, true, Some(65536))
+                .unwrap()
+                .to_string();
+            assert!(large.contains("const LIMIT : u128 = 65536u128"));
+            assert!(large.contains("assert !"));
+            assert!(large.contains("LIMIT as usize"));
+        }
         let default = render_input_alias_checks(&code, true).unwrap().to_string();
         assert!(default.contains("DynamicInputs :: default"));
         assert!(!default.contains("WithThreshold"));

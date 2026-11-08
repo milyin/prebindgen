@@ -1,0 +1,296 @@
+{
+  "settings": {
+    "output": "/tmp/threshold-c-sweep",
+    "limits": "64,128,256,512,1024,max",
+    "sizes": "64,128,256,512,1024,8192",
+    "cases": "nested,groups8,shared,callback,flat,readonly",
+    "orders": "ascending,descending,shuffled",
+    "forks": 4,
+    "batches": 7,
+    "target_ms": 8,
+    "target_dir": "/tmp/alias-role-target",
+    "build_only": false,
+    "prepared": true,
+    "reference_build": "/tmp/alias-role-c-glue-checked"
+  },
+  "core": 0,
+  "runner_sha256": "9ff3b612d3748bb479b6091f950bb6d6c0eaaadfdd2e3c67daffc89a26376bbe",
+  "builds": {
+    "('64', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "64",
+      "library_sha256": "becd4f6cabe896e64914176bdffec89c65d54f7dfc873351ec967416c48184f2",
+      "history_driver_sha256": "cbe3368fcbc92ea5fc364b46d3fdcfc97fe58113172f60705dd42e47110afc43",
+      "bindings_sha256": "f6615ebd83ac381c29474509b6698d8fd439234022595ac842c58e3b8e97a1c4",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('64', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "64",
+      "library_sha256": "07b62a8a1caa7f4a1a6d3d5d73117a12253f0849c1f7539786246eb60607064a",
+      "history_driver_sha256": "19ad5db1044a38b16955a443a7070279e74820ee9a443eaf88064f45336f31e4",
+      "bindings_sha256": "f6615ebd83ac381c29474509b6698d8fd439234022595ac842c58e3b8e97a1c4",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('128', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "128",
+      "library_sha256": "1f280007db23e8d13e9704824bcb55e243eb5010ea7c96c8382ed0d4ab6d206d",
+      "history_driver_sha256": "72a503b1ccc52edfd82a50d22304513d554075e220791adedf6d9b5ed4118c36",
+      "bindings_sha256": "20489c13702b67e17766f0d591c5c2210dc1c5d6798a5d5acdc178bb4b6636da",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('128', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "128",
+      "library_sha256": "c00200bc47a7fc255288cc4a6a66cdbc3fb4557fc78a130bdb61ebf4df76181c",
+      "history_driver_sha256": "f76f192aeef833dd44fb3c94375a478f757103ed9c69f3c56ad6134bb4afc746",
+      "bindings_sha256": "20489c13702b67e17766f0d591c5c2210dc1c5d6798a5d5acdc178bb4b6636da",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('256', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "256",
+      "library_sha256": "96baadfe2ca6e294ca5233799ae5868a7dca25a07cbfc62c823b8cda74d28c5b",
+      "history_driver_sha256": "e14abeb2e0ad1ef7543887b022936dfc04c281b0950b28a5cc5444ee103cb53d",
+      "bindings_sha256": "cc657e75a80c7437ade3fb3f484dd06445a509513ef730f4e5141c47f9adb7d6",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('256', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "256",
+      "library_sha256": "67d3b8498294eb3bac2cdc16bf98690b88266aabfe3125f9a60cd46816300754",
+      "history_driver_sha256": "136d0491e32dbb6ff4077c49261e5c8fa0d62869108e1a1b400153675d8b3695",
+      "bindings_sha256": "cc657e75a80c7437ade3fb3f484dd06445a509513ef730f4e5141c47f9adb7d6",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('512', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "512",
+      "library_sha256": "98d9a8d76ce30382382f2e422dd4dc8b15d4546790a0bd6afa87d941044262f8",
+      "history_driver_sha256": "c0320f3ced50b9d47dec551f44b826130333379bf6ff0dd35b1b8aaaaff33331",
+      "bindings_sha256": "cfb14609b710d803084178cd670d57e20b146ff0ecaa9647f0ef459bd1bc8060",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('512', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "512",
+      "library_sha256": "0f7060189f8f4170c3c4f3f215466ff1758c35539ffb87ac07bf678e04ddbf3e",
+      "history_driver_sha256": "fb93f97ecdaa9362b9e54fcd4e4d311e84c12fb00163bee1ad7bf5df78f3a169",
+      "bindings_sha256": "cfb14609b710d803084178cd670d57e20b146ff0ecaa9647f0ef459bd1bc8060",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('1024', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "1024",
+      "library_sha256": "909edb2058ed43cd3286c0df60ef67daf8c6ff40d9df8954cd2608e59b2d4e71",
+      "history_driver_sha256": "254a28d4245938b143615b9409ceacf051b760f0e2b0706e64d70898ad3799c0",
+      "bindings_sha256": "55cc4dc809ee2dc697c53cf98d2a23e22a9e3acc2cdab4ad797e1ca46c40ffa9",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('1024', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "1024",
+      "library_sha256": "3d8e379348d301590e1e6e5cf1fd430841f88622ea8f1c7ef849b523f40e0e6d",
+      "history_driver_sha256": "49037171bbfd4c78d1fcafb5584a4f65dc8138ba6b69b39bc18a0084ea1da31c",
+      "bindings_sha256": "55cc4dc809ee2dc697c53cf98d2a23e22a9e3acc2cdab4ad797e1ca46c40ffa9",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('max', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "alias_index_threshold": "max",
+      "library_sha256": "ec0dfd32097ebeb6228d38898284b51b60b3298526de595fd87542248c87c5c8",
+      "history_driver_sha256": "8fe3f965d46462cb3c675fa155f9b1618f6f0cb767ee30d0980defed1b2a66ad",
+      "bindings_sha256": "a2f7514eaa6fd8ee80f57a5d9d943b7bca0651e25dd5f5cea6b2d7d4b084df52",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('max', 'count')": {
+      "alias_checks": true,
+      "count_allocations": true,
+      "alias_index_threshold": "max",
+      "library_sha256": "30a581de0a4307c2ac95531d398e320ad565a97f37e3dce3bd3e7512c6a66f2f",
+      "history_driver_sha256": "95a4990c8b82c81d8c001942a5208f029d3b0bde2360963d8a0cbf9a4c288532",
+      "bindings_sha256": "a2f7514eaa6fd8ee80f57a5d9d943b7bca0651e25dd5f5cea6b2d7d4b084df52",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "efa8026c38ee80725849f05e498417877829c9456660aee037bffca6dc12de17",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    },
+    "('old128', 'time')": {
+      "alias_checks": true,
+      "count_allocations": false,
+      "library_sha256": "fcfdb4b282c096069a406a7502c846310fedafd4d498fdf97165fa0a59a873eb",
+      "history_driver_sha256": "28aa9c04eb8487f7f2871373be5aa2f6870bfe37b60bca14c29a225f6446f8ae",
+      "bindings_sha256": "d0bf8f2233074036ab8956e9eaba6de8a524cef7ca126f6b8a237034b7c9bb59",
+      "header_abi_sha256": "ecc49e860eea67314bc4b194e94a0c0d7ab66f53b7b63ba6e2b741d69311de39",
+      "fixture_sha256": {
+        "flat.rs": "7af2b694efbd467eafec4427359c388846334c57de32975c05c5688ecf3b60b7",
+        "bindings.rs": "35244abd6e31e8f63510c6ce1996cf3097f59f28aa45fe2b90a867840c36c5ac",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "3fb7620f73d1b4a37919aceafce8ecd4aa8fd9d29099df1877532c456b8cae01",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "profile_environment": {}
+    }
+  },
+  "samples_sha256": "25c995152dc9706e47dca891fa1d468a0232c4ccb3f3fdaa35b06c6383e116a6",
+  "count_reverification": "All648rows repeated with explicit library search path and loaded-path assertion; all five counts per row match original exactly. All30 deliberate-alias child probes reject with the native alias diagnostic.",
+  "count_reverification_script_sha256": "459d0a9d77e506d6340c71e8b34abe1f0e34cfe6f10497e9a6366983ff06f484",
+  "cosmetic_followups": "After the frozen C builds, map_or(true,...) became is_none_or(...), and numeric const arguments lost unnecessary braces to satisfy Clippy. Neither changes the selected policy."
+}

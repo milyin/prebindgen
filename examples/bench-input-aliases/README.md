@@ -22,7 +22,19 @@ native-checked JNI and default-JNI/checks-disabled controls against #824 **after
 #887. It separates whole-call timing from native allocation measurements and
 retains slower controls and identical-library comparisons.
 
-The decision is a sorted-vector/integer-hash hybrid. One first batch retains the existing sorted vector and reuses its allocation, including large batches. Small incremental histories retain the same sorted-vector algorithm. A subsequent group whose potential total exceeds 128 entries, or a new individual address beyond 128 stored entries, promotes history into an exact `HashMap`. Existing shared addresses found by `access` do not trigger promotion. Fixed-size and shared-only calls keep their existing implementations.
+[The threshold investigation](thresholds.md) compares configurable limits using
+complete C calls. The current implementation preserves disjoint ascending append
+and retains 128 as the default; C supports project/local overrides and JNI has a
+native-history setting. This fixes the ascending regression documented in the
+earlier remaining-path study. The tables below record the earlier algorithm
+comparison before that append fix, rather than the new threshold sweep.
+
+The decision is a sorted-vector/integer-hash hybrid. The first batch retains its
+sorted vector and allocation, including large batches. Disjoint ascending
+additions also retain the vector. Other incremental additions beyond the
+configured limit may promote to an exact `HashMap`. Repeated shared addresses
+found by individual `access` do not trigger promotion. Fixed-size and shared-only
+calls retain their existing implementations.
 
 This favors predictable incremental scaling over the growing Bloom prototype's better unique-input speed and lower memory use. The growing filter is competitive on unique addresses, but confirmed shared repetitions still require exact searches through its history. The hybrid removes that linear fallback. This is a comparison of the supplied implementations, not proof that every possible Bloom-based design loses. In particular, separate shared/exclusive filters or specialized access to cached wire data could change the tradeoff, and are not implemented here.
 

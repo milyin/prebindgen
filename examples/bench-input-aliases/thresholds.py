@@ -29,6 +29,7 @@ p.add_argument('--reference-build',type=Path,help='optional older checked timing
 a=p.parse_args();assert a.forks>0 and a.forks%2==0
 out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
 limits=a.limits.split(',');builds={}
+assert all(x=='max' or 0<=int(x)<=65535 for x in limits), 'this sweep supports portable small thresholds or max'
 sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def normalized_text(text):
@@ -55,13 +56,21 @@ for limit in limits:
         assert sha(d['library'])==d['library_sha256'] and sha(d['history_driver'])==d['history_driver_sha256']
         d['frozen_bindings']=str(directory/'bindings.rs');assert sha(d['frozen_bindings'])==d['bindings_sha256']
         builds[limit,kind]=d
+        constructors=re.findall(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(.*?)>::default\(\)', re.sub(r'\s+','',Path(d['frozen_bindings']).read_text()))
+        expected='::core::primitive::usize::MAX' if limit=='max' else limit+'usize'
+        assert constructors and all(x.rstrip(',').strip('{}')==expected for x in constructors), 'frozen glue has the wrong threshold'
+        assert '::prebindgen_runtime::DynamicInputs::default()' not in re.sub(r'\s+','',Path(d['frozen_bindings']).read_text())
         print('build ready',limit,kind,flush=True)
 if a.reference_build:
     directory=a.reference_build.resolve();d=json.loads((directory/'build.json').read_text())
     assert d['alias_checks'] and not d['count_allocations']
     d['frozen_bindings']=str(directory/'bindings.rs');assert sha(d['frozen_bindings'])==d['bindings_sha256']
+    assert sha(d['library'])==d['library_sha256'] and sha(d['history_driver'])==d['history_driver_sha256']
     builds['old128','time']=d
     limits=['old128',*limits]
+for kind in ['time','count']:
+    hashes=[v['library_sha256'] for (limit,k),v in builds.items() if k==kind and limit!='old128']
+    assert len(set(hashes))==len(hashes), 'different limits unexpectedly loaded the same library'
 reference=builds[limits[0],'time']
 for d in builds.values():
     assert d['header_abi_sha256']==reference['header_abi_sha256']
