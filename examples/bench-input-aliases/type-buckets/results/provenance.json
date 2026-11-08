@@ -1,0 +1,239 @@
+{
+  "c": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so",
+          "sha256": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628"
+        },
+        "current-count": {
+          "library": "/tmp/type-bucket-study-build/current-count/libtype_group_bench.so",
+          "sha256": "c8772adeabdd6aadee4b8510b56f55ab265c949823502b5cdd1efa028ed779fe"
+        },
+        "flat-time": {
+          "library": "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so",
+          "sha256": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988"
+        },
+        "flat-count": {
+          "library": "/tmp/type-bucket-study-build/flat-count/libtype_group_bench.so",
+          "sha256": "3dc2c244d5dbc988a098065069670002b01808ec8d9e5b9727f8b1bc0810b054"
+        },
+        "typed-time": {
+          "library": "/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so",
+          "sha256": "e50eb345dd55da8ead6bc08c5acc8090ce3493dadf2ada3549d0bfdca2cb09cc"
+        },
+        "typed-count": {
+          "library": "/tmp/type-bucket-study-build/typed-count/libtype_group_bench.so",
+          "sha256": "12cb98cd7e6319b73623f51b602292469e3cfa19f4c31bb987f1724bb1b6c93c"
+        },
+        "cross-time": {
+          "library": "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so",
+          "sha256": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6"
+        },
+        "cross-count": {
+          "library": "/tmp/type-bucket-study-build/cross-count/libtype_group_bench.so",
+          "sha256": "eb9c73ab2965ba5363467e6de0ad458e0342d433330a3cbda9b606efbb65228e"
+        }
+      },
+      "production_base": "776afedcf964cf753692f75c975d47c84c2d1505",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "sources": {
+        "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+        "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+        "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+        "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+        "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+        "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+        "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+        "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+        "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+        "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+      },
+      "lock_sha256": "fc83c6b6ba3bab10ec8889906432a65ab09ba433d73b2ef6d37df78d30bb63d1"
+    },
+    "files": {
+      "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+      "/tmp/type-bucket-study-build/cross-count/libtype_group_bench.so": "eb9c73ab2965ba5363467e6de0ad458e0342d433330a3cbda9b606efbb65228e",
+      "/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so": "e50eb345dd55da8ead6bc08c5acc8090ce3493dadf2ada3549d0bfdca2cb09cc",
+      "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628",
+      "/tmp/type-bucket-study-build/current-count/libtype_group_bench.so": "c8772adeabdd6aadee4b8510b56f55ab265c949823502b5cdd1efa028ed779fe",
+      "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+      "/tmp/type-bucket-study-build/typed-count/libtype_group_bench.so": "12cb98cd7e6319b73623f51b602292469e3cfa19f4c31bb987f1724bb1b6c93c",
+      "/tmp/type-bucket-study-build/flat-count/libtype_group_bench.so": "3dc2c244d5dbc988a098065069670002b01808ec8d9e5b9727f8b1bc0810b054",
+      "/tmp/type-bucket-study-build/buckets.jar": "9f8754d5c68c3ff1f36e9e324dfe979507ba03285a81f190695d63a55f73bd4a",
+      "/tmp/type-bucket-study-build/paired.jar": "7c98573dd9f4a158ddbc20a2103ab93b0d3c867aa2acead6dd07793a6712ef63",
+      "/tmp/type-bucket-study-build/flat.jar": "c8f82d9d0d074935b9e9417f38a13694950ad96f582b8b2a69764a5f9dd89262"
+    },
+    "cpu": 1,
+    "forks": 3,
+    "batches": 9,
+    "warmups": 4,
+    "target_ms": 20,
+    "aa": false,
+    "checks": [
+      "LIBRARY,0,/tmp/type-bucket-study-build/current-time/libtype_group_bench.so,0x70b9ca16d200\nLIBRARY,1,/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so,0x70b9ca0c5cc0\nLIBRARY,2,/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so,0x70b9ca049040\nLIBRARY,3,/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so,0x70b9c9daf800\nPROBES,0,ok\nPROBES,1,ok\nPROBES,2,ok\nPROBES,3,ok"
+    ],
+    "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+    "sources": {
+      "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+      "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+    }
+  },
+  "c_aa": {
+    "build": {
+      "builds": {
+        "current-time": {
+          "library": "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so",
+          "sha256": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628"
+        },
+        "current-count": {
+          "library": "/tmp/type-bucket-study-build/current-count/libtype_group_bench.so",
+          "sha256": "c8772adeabdd6aadee4b8510b56f55ab265c949823502b5cdd1efa028ed779fe"
+        },
+        "flat-time": {
+          "library": "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so",
+          "sha256": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988"
+        },
+        "flat-count": {
+          "library": "/tmp/type-bucket-study-build/flat-count/libtype_group_bench.so",
+          "sha256": "3dc2c244d5dbc988a098065069670002b01808ec8d9e5b9727f8b1bc0810b054"
+        },
+        "typed-time": {
+          "library": "/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so",
+          "sha256": "e50eb345dd55da8ead6bc08c5acc8090ce3493dadf2ada3549d0bfdca2cb09cc"
+        },
+        "typed-count": {
+          "library": "/tmp/type-bucket-study-build/typed-count/libtype_group_bench.so",
+          "sha256": "12cb98cd7e6319b73623f51b602292469e3cfa19f4c31bb987f1724bb1b6c93c"
+        },
+        "cross-time": {
+          "library": "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so",
+          "sha256": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6"
+        },
+        "cross-count": {
+          "library": "/tmp/type-bucket-study-build/cross-count/libtype_group_bench.so",
+          "sha256": "eb9c73ab2965ba5363467e6de0ad458e0342d433330a3cbda9b606efbb65228e"
+        }
+      },
+      "production_base": "776afedcf964cf753692f75c975d47c84c2d1505",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "sources": {
+        "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+        "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+        "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+        "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+        "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+        "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+        "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+        "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+        "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+        "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+      },
+      "lock_sha256": "fc83c6b6ba3bab10ec8889906432a65ab09ba433d73b2ef6d37df78d30bb63d1"
+    },
+    "files": {
+      "/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so": "0238058b2679ab196b1def4a3a4b42616aedcc9de29575f7f50a99c0ed7c5988",
+      "/tmp/type-bucket-study-build/cross-count/libtype_group_bench.so": "eb9c73ab2965ba5363467e6de0ad458e0342d433330a3cbda9b606efbb65228e",
+      "/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so": "e50eb345dd55da8ead6bc08c5acc8090ce3493dadf2ada3549d0bfdca2cb09cc",
+      "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628",
+      "/tmp/type-bucket-study-build/current-count/libtype_group_bench.so": "c8772adeabdd6aadee4b8510b56f55ab265c949823502b5cdd1efa028ed779fe",
+      "/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so": "ca61c74f5f6758da6739b6ed04d6b2b8b22f1e62ecf3b5b9fc6742d8a295e8a6",
+      "/tmp/type-bucket-study-build/typed-count/libtype_group_bench.so": "12cb98cd7e6319b73623f51b602292469e3cfa19f4c31bb987f1724bb1b6c93c",
+      "/tmp/type-bucket-study-build/flat-count/libtype_group_bench.so": "3dc2c244d5dbc988a098065069670002b01808ec8d9e5b9727f8b1bc0810b054",
+      "/tmp/type-bucket-study-build/buckets.jar": "9f8754d5c68c3ff1f36e9e324dfe979507ba03285a81f190695d63a55f73bd4a",
+      "/tmp/type-bucket-study-build/paired.jar": "7c98573dd9f4a158ddbc20a2103ab93b0d3c867aa2acead6dd07793a6712ef63",
+      "/tmp/type-bucket-study-build/flat.jar": "c8f82d9d0d074935b9e9417f38a13694950ad96f582b8b2a69764a5f9dd89262"
+    },
+    "cpu": 1,
+    "forks": 3,
+    "batches": 9,
+    "warmups": 4,
+    "target_ms": 15,
+    "aa": true,
+    "checks": [
+      "LIBRARY,0,/tmp/type-bucket-study-build/current-time/libtype_group_bench.so,0x70857ad4c200\nLIBRARY,1,/tmp/type-bucket-study-build/flat-time/libtype_group_bench.so,0x70857aca4cc0\nLIBRARY,2,/tmp/type-bucket-study-build/typed-time/libtype_group_bench.so,0x70857a9b2040\nLIBRARY,3,/tmp/type-bucket-study-build/cross-time/libtype_group_bench.so,0x70857a932800\nPROBES,0,ok\nPROBES,1,ok\nPROBES,2,ok\nPROBES,3,ok"
+    ],
+    "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+    "sources": {
+      "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+      "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+    }
+  },
+  "kotlin": {
+    "files": {
+      "/tmp/type-bucket-study-build/paired.jar": "7c98573dd9f4a158ddbc20a2103ab93b0d3c867aa2acead6dd07793a6712ef63",
+      "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628"
+    },
+    "cpu": 1,
+    "forks": 5,
+    "batches": 11,
+    "warmups": 4,
+    "target_ms": 30,
+    "aa": false,
+    "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+    "sources": {
+      "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+      "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+    }
+  },
+  "kotlin_aa": {
+    "files": {
+      "/tmp/type-bucket-study-build/paired.jar": "7c98573dd9f4a158ddbc20a2103ab93b0d3c867aa2acead6dd07793a6712ef63",
+      "/tmp/type-bucket-study-build/current-time/libtype_group_bench.so": "374ef6442f331dd4a304e4a27ad5511a1a898406f281ff28df3d1ae136ad2628"
+    },
+    "cpu": 1,
+    "forks": 3,
+    "batches": 11,
+    "warmups": 4,
+    "target_ms": 20,
+    "aa": true,
+    "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+    "sources": {
+      "paired.py": "91f38629751bab94b5148f8c5ce76e33e6518ced34dc5bfb2284e17c7b8858eb",
+      "Paired.kt": "a86e9105a60d39b7985661f428c93f503eac9bfe96011273856e5bcdeb96f08c",
+      "kotlin.py": "a235f7930ce8cc58088400a2e846bbbeb71a8499f24087574176f25304685d8e",
+      "driver.c": "f26127778e47b8f1f895e88ddbf49d6530f1503355b799c5d11c8b537279e9a6",
+      "c-prototypes.rs": "556b684e04100157fc0d2ca883d77a7c9ef1d75bcd49baf83ed18a320aaad4fa",
+      "measure.py": "1f093d9341add4c961d7f3909ee64ea9987fe8e24c0f98a95147749c3af23707",
+      "build.py": "bbe1192e9132a40b328a7158a8a22bca32237019afebfb1a0f387fa55153bee2",
+      "c-build.rs": "9d61391099ed853a42f50bb73724101dbe6f5aec9ea7ed645bdd9536d9750b9b",
+      "flat.rs": "bbe2b0cf3147c9dd591e839a7d15d9e7ff9e79eea81c7e2f7a87c4787f2be1de",
+      "Checks.kt": "6ac1a65d82b2f46dfc995896c15f2f8b52e49e37d19b0790669474e9d72653b7"
+    }
+  },
+  "environment": {
+    "cpu": "AMD EPYC 7713 64-Core Processor; 2 vCPUs; CPU 1 pinned",
+    "kotlinc": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)\n",
+    "production_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "production_diff_files": [],
+    "external_source_sha256": {
+      "examples/bench-handle-inputs/build.rs": "9eeca294f4fc5ea4f9ba1770f79078814a271b0feb3eb71d5b25437403e1b33b",
+      "examples/bench-handle-inputs/Bench.kt": "6f2579b64712259442c3746d8f0e5712471aa528b098f546d33b6901aeadf3ef",
+      "examples/bench-c-collections/allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede"
+    }
+  }
+}

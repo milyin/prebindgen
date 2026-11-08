@@ -25,3 +25,7 @@ jobs:
       - run: python3 examples/bench-c-collections/input-compare.py --before /tmp/c-rows-smoke --after /tmp/c-rows-smoke --output /tmp/c-input-check --kind count --smoke --forks 1
       - run: python3 examples/bench-input-aliases/call-wide/build.py --output /tmp/c-alias-preflight --target-dir /tmp/c-alias-preflight-target
       - run: python3 examples/bench-input-aliases/call-wide/study.py --build /tmp/c-alias-preflight --output /tmp/c-alias-preflight-check --verify-only
+      - run: python3 examples/bench-input-aliases/type-buckets/build.py --output /tmp/type-buckets --target-dir /tmp/c-alias-preflight-target --no-count
+      - run: python3 examples/bench-input-aliases/type-buckets/kotlin.py --build /tmp/type-buckets --kotlinc /tmp/kotlin/kotlinc/bin/kotlinc
+      - run: python3 examples/bench-input-aliases/type-buckets/measure.py --build /tmp/type-buckets --output /tmp/type-buckets-check --only checks
+      - run: java -Xss64m -Djava.library.path=/tmp/type-buckets/current-time -cp /tmp/type-buckets/paired.jar PairedKt 8 ascending 0 1 1

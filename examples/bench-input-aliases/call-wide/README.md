@@ -3,6 +3,10 @@
 Production base: #824 after #890 (`ab57d2050`). These are benchmark-only prototypes;
 no production generator, runtime or binding defaults change.
 
+The follow-up [type-bucket comparison](../type-buckets/README.md) measures C
+per-type vectors versus one call-wide array, and JniGen buckets versus one combined
+Kotlin handle array. It retains cross-type C conflict checks for borrowed interiors.
+
 **Recommendation:** pursue one call-wide address collection and one sort for
 checked C collection inputs. Preserve the existing omission of checks for
 shared-only calls and the stack treatment of fixed inputs. Add an empty-input
