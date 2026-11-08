@@ -301,6 +301,10 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
+        if matches!(ty,syn::Type::Reference(reference) if reference.lifetime.as_ref().is_some_and(|l|l.ident=="static"))
+        {
+            return Err("C input leaves cannot promise a 'static reference lifetime".into());
+        }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }

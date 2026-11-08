@@ -418,7 +418,8 @@ pub(crate) fn input<C: Codec>(
                     }
                     __prebindgen_input_aliases.accept_group(#group)?;
                     #var.reserve_exact(#length);
-                    for build in #staged {
+                    #[allow(unused_mut)]
+                    for mut build in #staged {
                         let element = build()?;
                         // Pointer addition is also valid (and a no-op) for ZSTs.
                         #[allow(clippy::zst_offset)]

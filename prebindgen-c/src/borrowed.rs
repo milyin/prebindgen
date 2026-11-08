@@ -109,6 +109,13 @@ pub(crate) fn input_sequence(
     if reference.mutability.is_some() {
         return Err("mutable C collection inputs are unsupported".into());
     }
+    if reference
+        .lifetime
+        .as_ref()
+        .is_some_and(|l| l.ident == "static")
+    {
+        return Err("shared C collection inputs cannot promise a 'static lifetime".into());
+    }
     let target = &reference.elem;
     let (source_element, array_length) = match target.as_ref() {
         syn::Type::Slice(slice) => (slice.elem.as_ref(), None),
@@ -128,7 +135,7 @@ pub(crate) fn input_sequence(
         |length| quote!(if #wire.len != #length {return Err("wrong fixed array length".into());}),
     );
     let argument = if array_length.is_some() {
-        quote!(<#ty>::try_from(#slice).map_err(|_|"wrong fixed array length".to_string())?)
+        quote!(<&[#native;#array_length]>::try_from(#slice).map_err(|_|"wrong fixed array length".to_string())?)
     } else {
         quote!(#slice)
     };
@@ -763,6 +770,40 @@ mod tests {
             assert!(!g.rust.contains("reserve_exact"));
             assert!(!g.rust.contains("active temporary"));
         }
+    }
+    #[test]
+    fn low_level_static_input_views_and_c_bulk_inputs_are_rejected() {
+        let flat = model("");
+        let error = input_sequence(
+            &flat,
+            &syn::parse_quote!(&'static [i64]),
+            syn::parse_quote!(wire),
+            syn::parse_quote!(value),
+            &prebindgen_declarations::Input::Leaf,
+            &Default::default(),
+        )
+        .err()
+        .unwrap();
+        assert!(error.contains("'static lifetime"), "{error}");
+        assert!(CCodec
+            .input_leaf(
+                &flat,
+                &syn::parse_quote!(&'static str),
+                &(),
+                syn::parse_quote!(wire),
+                syn::parse_quote!(value),
+                &Default::default()
+            )
+            .err()
+            .unwrap()
+            .contains("'static reference lifetime"));
+        let error = Cbindgen::new(model("pub fn inspect(values:&[i64])->usize{}"))
+            .function(fun!(inspect).input("values", prebindgen_declarations::Input::auto().bulk()))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("bulk inputs are unsupported"), "{error}");
     }
     #[test]
     fn malformed_views_are_rejected() {

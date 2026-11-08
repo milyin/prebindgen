@@ -1885,7 +1885,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Input::Sequence(element_recipe) => {
                 if matches!(ty, Type::Reference(_)) {
                     let next = self.next.get();
-                    let wire = self.name();
+                    let wire = names
+                        .map(|(wire, _)| wire.clone())
+                        .unwrap_or_else(|| self.name());
                     if let Some(plan) = self.codec.input_borrowed_sequence(
                         self.flat,
                         ty,

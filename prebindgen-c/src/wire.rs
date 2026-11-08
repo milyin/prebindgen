@@ -27,7 +27,7 @@ pub enum CWire {
     },
     /// Non-owning byte/text view. No allocation is transferred.
     View,
-    /// Shared numeric slice in its original Rust storage. No owner is transferred.
+    /// Shared numeric slice in its original source storage. No owner is transferred.
     SliceView {
         /// Element with identical Rust and C scalar representation.
         element: Primitive,

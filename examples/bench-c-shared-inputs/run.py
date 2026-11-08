@@ -37,7 +37,7 @@ for version,checkout in [('before',a.before.resolve()),('after',ROOT)]:
   element='int64_t'
   if not direct:
    definition=re.search(r'typedef struct \{([^{}]*)\} '+re.escape(returned)+';',header,re.S).group(1)
-   element=re.search(r'const (\w+) \*data;',definition).group(1)
+   element=re.search(r'(?:const )?(\w+) \*data;',definition).group(1)
   driver=directory/'borrowed-driver'
   if not a.prepared:
    cc=shlex.split(os.environ.get('CC','cc'))
