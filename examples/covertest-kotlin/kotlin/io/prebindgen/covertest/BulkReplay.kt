@@ -1,6 +1,6 @@
 package io.prebindgen.covertest
 
-import *
+import io.prebindgen.covertest.bulk.*
 
 fun checkBulkReplay() {
     checkBulkReplayRaw()
