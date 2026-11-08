@@ -29,6 +29,7 @@ if a.compare_thresholds:
  for version,directory in [('before',a.before),('after',a.after)]:
   threshold=info[version]['alias_index_threshold']
   assert threshold is not None, 'threshold comparison requires explicit limits'
+  assert threshold=='max' or 0<=int(threshold)<=65535, 'threshold comparison supports portable small limits or max'
   expected='::core::primitive::usize::MAX' if threshold=='max' else threshold+'usize'
   for name in ['plain.rs','bulk.rs']:
    constructors=re.findall(r'::prebindgen_runtime::DynamicInputsWithThreshold::<(.*?)>::default\(\)',re.sub(r'\s+','',(directory/name).read_text()))

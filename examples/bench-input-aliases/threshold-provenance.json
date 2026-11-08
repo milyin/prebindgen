@@ -292,5 +292,195 @@
   "samples_sha256": "25c995152dc9706e47dca891fa1d468a0232c4ccb3f3fdaa35b06c6383e116a6",
   "count_reverification": "All648rows repeated with explicit library search path and loaded-path assertion; all five counts per row match original exactly. All30 deliberate-alias child probes reject with the native alias diagnostic.",
   "count_reverification_script_sha256": "459d0a9d77e506d6340c71e8b34abe1f0e34cfe6f10497e9a6366983ff06f484",
-  "cosmetic_followups": "After the frozen C builds, map_or(true,...) became is_none_or(...), and numeric const arguments lost unnecessary braces to satisfy Clippy. Neither changes the selected policy."
+  "cosmetic_followups": "After the frozen C builds, map_or(true,...) became is_none_or(...), and numeric const arguments lost unnecessary braces to satisfy Clippy. Neither changes the selected policy.",
+  "jni": {
+    "settings": {
+      "forks": 4,
+      "aa": false,
+      "compare_thresholds": true,
+      "policy": "native",
+      "warmup": 8,
+      "batches": 9,
+      "target_ms": 15
+    },
+    "rust_glue_sha256": {
+      "before": {
+        "plain.rs": "ca3da057622380aa008d01fad98d8b31752c877321f3e8ac4f637c2b6ad14c8c",
+        "bulk.rs": "73c4371f61f7e662e02f5dd946c19e24fcfb4f7657ca584d80ce80e8dd78c4c1"
+      },
+      "after": {
+        "plain.rs": "e7d427f3a8f7ed093f7c9a54530bfe1120b14d52c818ba6c5cb8689a26b7cb90",
+        "bulk.rs": "898ab90e851c28cf47cf0e3b8f5d1792bb34fe3127ffead2f6dc3a3a87049f2b"
+      }
+    },
+    "flags": [
+      "-Xss16m",
+      "-Xms256m",
+      "-Xmx256m",
+      "-XX:+UseG1GC",
+      "-XX:ActiveProcessorCount=2"
+    ],
+    "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "runner_sha256": "a34142254706a5ee018614756bea56998c84db9df04528a1672eef187d1e4fe1",
+    "samples_sha256": "fad699c72e4812eeacd4d8054a0ad1b73a1bfa18722d4ce315c7ac57fc444340",
+    "builds": {
+      "before": {
+        "commit": "ebeb97ff91c1d92534c139ee783427a4adb64944",
+        "native_input_checks": true,
+        "alias_index_threshold": "128",
+        "native_sha256": "d6005791bf84b764a72c7691d7524fdae91e1d6ba9d0a543739fc812ca7f57c4",
+        "jar_sha256": "f490c3d380c894a597f24fbe33b1229f037bd6321e8e2700f2c435a27039b688",
+        "kotlin_sources_sha256": {
+          "bench/bulk/BufferRecord.kt": "65962132d525b230ed12b1e84ca536d725a9fc87d8a0b0a9bbb3a35103568b6e",
+          "bench/bulk/BulkInputs.kt": "9d4437b8c16be263532cb9340023c47bca7628e5c09afce042ae7cf2e839eeb8",
+          "bench/bulk/BulkLayouts.kt": "dc9d87f1822056b742fe8763fd216b570eb6d55da5075822aa6b09f284bbcaba",
+          "bench/bulk/BulkRuntime.kt": "7d71df3ddf0f518452a6744ea4e144e0eecc03d70dcb794bfc25cb1e0b6e640f",
+          "bench/bulk/Functions.kt": "54d6ef4b7af9762f4abaf6ec879e48130f267fc8427bc3fea9adb05ac1af665a",
+          "bench/bulk/HandleRecord.kt": "af4b0574c3e63faf2d623b3f57043d692196a07829c93e103ead0b77e619d040",
+          "bench/bulk/Handler.kt": "868b45212c3e143b1fb5834f2e309a62a1b7ec12d5d75261b65087d2265f5c85",
+          "bench/bulk/InputHandle.kt": "7ccf019734f3a2574eb19392508d2cd6e8ef7f239decc1db01d08f34a1aa0db9",
+          "bench/bulk/JNINative.kt": "b5873331b255430e027e91a99df7785b1932c41ec1323fc2569f50e06f1e1010",
+          "bench/bulk/JniErrorHandler.kt": "914bd702585497d5eeadf41629d1ebf15110588c158d7b4a04caa875ded13261",
+          "bench/bulk/NativeHandle.kt": "41c8ee2111c148cb0a69e297cd21003bbdbd1a7415f709d9433dfd8220fa1bac",
+          "bench/bulk/OwnedNestedCallback.kt": "16cad592f79b8b4003d0c31df84c1a06c65f5289984c27675e9d285569a31048",
+          "bench/bulk/OwnedRecordCallback.kt": "e996ca485a7d8becaa051d5bc80894ddd5a500b37a26f87e304e43d997dc123e",
+          "bench/bulk/OwnedRecordsCallback.kt": "e5b4c6e3926f8f8fb7b31b9b8f2c50050fc7d38894728318f8aa24a420c29118",
+          "bench/bulk/Packet.kt": "8b5be54285e70b21837b0ba6e51e618255584865c4bb3b3d51b4fe7a8e6043b1",
+          "bench/bulk/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "dcfee6f698d8b85134b9ff651c50275d1f9ec7cb2436c0887e20c27ba700441d",
+          "bench/bulk/Row.kt": "2b527711ba0e2895e4a6eca5204c4782bce594c3c94492c5b1fff9bbd12462db",
+          "bench/bulk/RowReturnCallback.kt": "99734d9281026522ff4365f0129b8554f59f9dd96ff5bf6165dabb708f3da433",
+          "bench/bulk/RowReturnHandler.kt": "a8ed05183fcd874e38e614ce334ed6eefa9646c499c27bc4fad025c3394b8ea9",
+          "bench/bulk/RowsCallback.kt": "028b8a6389db4a5ffb89c52074da90fc6407c9acd773b5e31fd1bc11cbf87b70",
+          "bench/bulk/WideRow.kt": "dfe3f510158a39d9a9638032130c299c20118f8139f2e4d2e3c491f64f93e0c9",
+          "bench/bulk/WideRowReturnCallback.kt": "4db24345085afa459dfc999453b4aef5644d458a4e56b966163439237155c5d1",
+          "bench/bulk/WideRowReturnHandler.kt": "88fc8adc3c45d7d7587bc15dfa4bc674cefeac5bee3c683e28262ff5891b9723",
+          "bench/plain/BufferRecord.kt": "21878521971775bcb0e058d42eba250b8111bbfa8a4a74aa73d4e9ee54321e21",
+          "bench/plain/Functions.kt": "a8378620933ace94bb7bb3e72b5a04b397aaa31ae9d622d3b9d2bae4f5a8bdc0",
+          "bench/plain/HandleRecord.kt": "9db1f8154e187714b4c0d300e3478eb0c97f3fbfa9a4edb0c4459acecbb2e7b9",
+          "bench/plain/Handler.kt": "a790d4397a0227068c7d2b475bfd78dbf3e94c71315cf613f59eb57c7a92981c",
+          "bench/plain/InputHandle.kt": "e391847ba5e7be0c02f3bd83d29ce81ba54479c92540d14449ff539fed864ccd",
+          "bench/plain/JNINative.kt": "4949837b5becec9e9445145680198c33a355d816785dd441577732fbccee17d6",
+          "bench/plain/JniErrorHandler.kt": "87cf684cdaa5337029502148811187f5db65c440875b8a45d746f40f0327a083",
+          "bench/plain/NativeHandle.kt": "de522dbf1d012cd3b3d1a8de23f2299a274e10b54412314307ff92734fae11c5",
+          "bench/plain/OwnedNestedCallback.kt": "2ef3f9e05e80d084814ed1cc2745c3cba885c764aebadba4f63dda0f8688ceab",
+          "bench/plain/OwnedRecordCallback.kt": "b4ea7e7e7802581ce0c23d0a3742f702adda925e030af01e95013c6d2edc5280",
+          "bench/plain/OwnedRecordsCallback.kt": "33f8e759da39622355d981dcf6d4c728bdd30311c2dcc8fd181dafe7b3c1023c",
+          "bench/plain/Packet.kt": "d74f2694c667e54b259c29ac8d7e7c09e2bcc0fa8ffc544daab511f5aa24fc05",
+          "bench/plain/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "3ce669199b3e84432564b88fb5e21b3c5500e03be4f9b8dd9828e12a505b673e",
+          "bench/plain/Return_Long_Long2_ErrorEmpty_951bc171243c8a73.kt": "aad401f40ef8dd7e92e2506b6ac076144b814760fdf92c126a6dbcbb362153fe",
+          "bench/plain/Return_Long_Long_Long32_ErrorEmpty_6fba61a9625e2221.kt": "89bcdf04ab77573d42f4f8c5e698f2222ddfe96cd4a409bf6a45424d09cd88a3",
+          "bench/plain/Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509.kt": "de90da808476ed71e3e5becef963973d8a22af9e04305d296b39e6dd09a377d8",
+          "bench/plain/Row.kt": "e57b379aa3fe32c91baea37a11f7f2ad2d5fa0807a4da615c004e65dbede5da7",
+          "bench/plain/RowReturnCallback.kt": "8d602a3cb7bd2135d1dd9fcd9c66c87ebd300dadd2268017ebf59f4a4e1c7983",
+          "bench/plain/RowReturnHandler.kt": "3c6be6a1a836a0462298ddc56b90a7a625cd14539529dfda35c6ea7a187c49bb",
+          "bench/plain/RowsCallback.kt": "de23625952e3b0bfb06c9b98e11c11d64456ad782053b166611fdb86458ff2de",
+          "bench/plain/WideRow.kt": "f9821961721958627156da165a92a389fb8fd6c336b869b0cff111f02fc839d5",
+          "bench/plain/WideRowReturnCallback.kt": "a01664aae72724691dcb65f968eb0600b06f8a05844ac558c0b3a33b6b038e6c",
+          "bench/plain/WideRowReturnHandler.kt": "993290c4431ec7a1124710b8c704dc128782e7fe06708c991eb610b9a720d924"
+        },
+        "rust_sources_sha256": {
+          "plain.rs": "ca3da057622380aa008d01fad98d8b31752c877321f3e8ac4f637c2b6ad14c8c",
+          "bulk.rs": "73c4371f61f7e662e02f5dd946c19e24fcfb4f7657ca584d80ce80e8dd78c4c1"
+        },
+        "instrumentation_probe": "NATIVE_ALLOCATIONS,false",
+        "path_dependency_repositories": [
+          {
+            "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history",
+            "commit": "ebeb97ff91c1d92534c139ee783427a4adb64944",
+            "packages": [
+              "prebindgen",
+              "prebindgen-conversions",
+              "prebindgen-declarations",
+              "prebindgen-flat",
+              "prebindgen-jni",
+              "prebindgen-jni-runtime",
+              "prebindgen-proc-macro",
+              "prebindgen-reprc",
+              "prebindgen-runtime"
+            ],
+            "contains_fixture": true
+          }
+        ]
+      },
+      "after": {
+        "commit": "ebeb97ff91c1d92534c139ee783427a4adb64944",
+        "native_input_checks": true,
+        "alias_index_threshold": "256",
+        "native_sha256": "3c18b418f5f959bf436546b3ddad6b2397e83ded83b7747df78b7dd33b923ab7",
+        "jar_sha256": "f490c3d380c894a597f24fbe33b1229f037bd6321e8e2700f2c435a27039b688",
+        "kotlin_sources_sha256": {
+          "bench/bulk/BufferRecord.kt": "65962132d525b230ed12b1e84ca536d725a9fc87d8a0b0a9bbb3a35103568b6e",
+          "bench/bulk/BulkInputs.kt": "9d4437b8c16be263532cb9340023c47bca7628e5c09afce042ae7cf2e839eeb8",
+          "bench/bulk/BulkLayouts.kt": "dc9d87f1822056b742fe8763fd216b570eb6d55da5075822aa6b09f284bbcaba",
+          "bench/bulk/BulkRuntime.kt": "7d71df3ddf0f518452a6744ea4e144e0eecc03d70dcb794bfc25cb1e0b6e640f",
+          "bench/bulk/Functions.kt": "54d6ef4b7af9762f4abaf6ec879e48130f267fc8427bc3fea9adb05ac1af665a",
+          "bench/bulk/HandleRecord.kt": "af4b0574c3e63faf2d623b3f57043d692196a07829c93e103ead0b77e619d040",
+          "bench/bulk/Handler.kt": "868b45212c3e143b1fb5834f2e309a62a1b7ec12d5d75261b65087d2265f5c85",
+          "bench/bulk/InputHandle.kt": "7ccf019734f3a2574eb19392508d2cd6e8ef7f239decc1db01d08f34a1aa0db9",
+          "bench/bulk/JNINative.kt": "b5873331b255430e027e91a99df7785b1932c41ec1323fc2569f50e06f1e1010",
+          "bench/bulk/JniErrorHandler.kt": "914bd702585497d5eeadf41629d1ebf15110588c158d7b4a04caa875ded13261",
+          "bench/bulk/NativeHandle.kt": "41c8ee2111c148cb0a69e297cd21003bbdbd1a7415f709d9433dfd8220fa1bac",
+          "bench/bulk/OwnedNestedCallback.kt": "16cad592f79b8b4003d0c31df84c1a06c65f5289984c27675e9d285569a31048",
+          "bench/bulk/OwnedRecordCallback.kt": "e996ca485a7d8becaa051d5bc80894ddd5a500b37a26f87e304e43d997dc123e",
+          "bench/bulk/OwnedRecordsCallback.kt": "e5b4c6e3926f8f8fb7b31b9b8f2c50050fc7d38894728318f8aa24a420c29118",
+          "bench/bulk/Packet.kt": "8b5be54285e70b21837b0ba6e51e618255584865c4bb3b3d51b4fe7a8e6043b1",
+          "bench/bulk/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "dcfee6f698d8b85134b9ff651c50275d1f9ec7cb2436c0887e20c27ba700441d",
+          "bench/bulk/Row.kt": "2b527711ba0e2895e4a6eca5204c4782bce594c3c94492c5b1fff9bbd12462db",
+          "bench/bulk/RowReturnCallback.kt": "99734d9281026522ff4365f0129b8554f59f9dd96ff5bf6165dabb708f3da433",
+          "bench/bulk/RowReturnHandler.kt": "a8ed05183fcd874e38e614ce334ed6eefa9646c499c27bc4fad025c3394b8ea9",
+          "bench/bulk/RowsCallback.kt": "028b8a6389db4a5ffb89c52074da90fc6407c9acd773b5e31fd1bc11cbf87b70",
+          "bench/bulk/WideRow.kt": "dfe3f510158a39d9a9638032130c299c20118f8139f2e4d2e3c491f64f93e0c9",
+          "bench/bulk/WideRowReturnCallback.kt": "4db24345085afa459dfc999453b4aef5644d458a4e56b966163439237155c5d1",
+          "bench/bulk/WideRowReturnHandler.kt": "88fc8adc3c45d7d7587bc15dfa4bc674cefeac5bee3c683e28262ff5891b9723",
+          "bench/plain/BufferRecord.kt": "21878521971775bcb0e058d42eba250b8111bbfa8a4a74aa73d4e9ee54321e21",
+          "bench/plain/Functions.kt": "a8378620933ace94bb7bb3e72b5a04b397aaa31ae9d622d3b9d2bae4f5a8bdc0",
+          "bench/plain/HandleRecord.kt": "9db1f8154e187714b4c0d300e3478eb0c97f3fbfa9a4edb0c4459acecbb2e7b9",
+          "bench/plain/Handler.kt": "a790d4397a0227068c7d2b475bfd78dbf3e94c71315cf613f59eb57c7a92981c",
+          "bench/plain/InputHandle.kt": "e391847ba5e7be0c02f3bd83d29ce81ba54479c92540d14449ff539fed864ccd",
+          "bench/plain/JNINative.kt": "4949837b5becec9e9445145680198c33a355d816785dd441577732fbccee17d6",
+          "bench/plain/JniErrorHandler.kt": "87cf684cdaa5337029502148811187f5db65c440875b8a45d746f40f0327a083",
+          "bench/plain/NativeHandle.kt": "de522dbf1d012cd3b3d1a8de23f2299a274e10b54412314307ff92734fae11c5",
+          "bench/plain/OwnedNestedCallback.kt": "2ef3f9e05e80d084814ed1cc2745c3cba885c764aebadba4f63dda0f8688ceab",
+          "bench/plain/OwnedRecordCallback.kt": "b4ea7e7e7802581ce0c23d0a3742f702adda925e030af01e95013c6d2edc5280",
+          "bench/plain/OwnedRecordsCallback.kt": "33f8e759da39622355d981dcf6d4c728bdd30311c2dcc8fd181dafe7b3c1023c",
+          "bench/plain/Packet.kt": "d74f2694c667e54b259c29ac8d7e7c09e2bcc0fa8ffc544daab511f5aa24fc05",
+          "bench/plain/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "3ce669199b3e84432564b88fb5e21b3c5500e03be4f9b8dd9828e12a505b673e",
+          "bench/plain/Return_Long_Long2_ErrorEmpty_951bc171243c8a73.kt": "aad401f40ef8dd7e92e2506b6ac076144b814760fdf92c126a6dbcbb362153fe",
+          "bench/plain/Return_Long_Long_Long32_ErrorEmpty_6fba61a9625e2221.kt": "89bcdf04ab77573d42f4f8c5e698f2222ddfe96cd4a409bf6a45424d09cd88a3",
+          "bench/plain/Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509.kt": "de90da808476ed71e3e5becef963973d8a22af9e04305d296b39e6dd09a377d8",
+          "bench/plain/Row.kt": "e57b379aa3fe32c91baea37a11f7f2ad2d5fa0807a4da615c004e65dbede5da7",
+          "bench/plain/RowReturnCallback.kt": "8d602a3cb7bd2135d1dd9fcd9c66c87ebd300dadd2268017ebf59f4a4e1c7983",
+          "bench/plain/RowReturnHandler.kt": "3c6be6a1a836a0462298ddc56b90a7a625cd14539529dfda35c6ea7a187c49bb",
+          "bench/plain/RowsCallback.kt": "de23625952e3b0bfb06c9b98e11c11d64456ad782053b166611fdb86458ff2de",
+          "bench/plain/WideRow.kt": "f9821961721958627156da165a92a389fb8fd6c336b869b0cff111f02fc839d5",
+          "bench/plain/WideRowReturnCallback.kt": "a01664aae72724691dcb65f968eb0600b06f8a05844ac558c0b3a33b6b038e6c",
+          "bench/plain/WideRowReturnHandler.kt": "993290c4431ec7a1124710b8c704dc128782e7fe06708c991eb610b9a720d924"
+        },
+        "rust_sources_sha256": {
+          "plain.rs": "e7d427f3a8f7ed093f7c9a54530bfe1120b14d52c818ba6c5cb8689a26b7cb90",
+          "bulk.rs": "898ab90e851c28cf47cf0e3b8f5d1792bb34fe3127ffead2f6dc3a3a87049f2b"
+        },
+        "instrumentation_probe": "NATIVE_ALLOCATIONS,false",
+        "path_dependency_repositories": [
+          {
+            "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-input-alias-history",
+            "commit": "ebeb97ff91c1d92534c139ee783427a4adb64944",
+            "packages": [
+              "prebindgen",
+              "prebindgen-conversions",
+              "prebindgen-declarations",
+              "prebindgen-flat",
+              "prebindgen-jni",
+              "prebindgen-jni-runtime",
+              "prebindgen-proc-macro",
+              "prebindgen-reprc",
+              "prebindgen-runtime"
+            ],
+            "contains_fixture": true
+          }
+        ]
+      }
+    }
+  }
 }

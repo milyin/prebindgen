@@ -128,7 +128,7 @@ pub fn render_input_alias_checks_with_threshold(
                     let limit = limit as u128;
                     quote!({
                         const LIMIT: u128 = #limit;
-                        assert!(LIMIT <= ::core::primitive::usize::MAX as u128,
+                        ::core::assert!(LIMIT <= ::core::primitive::usize::MAX as u128,
                             "input alias index threshold exceeds target usize");
                         LIMIT as usize
                     })

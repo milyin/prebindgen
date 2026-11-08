@@ -2,7 +2,8 @@
 
 Native input validation retains addresses already used by a call. The threshold
 controls when an incremental sorted vector may become an exact hash index. It
-counts accumulated addresses, not the outer array length. Every setting enforces
+counts accumulated addresses plus the incoming group’s potential size before
+deduplication, not the outer array length. Every setting enforces
 the same alias rules; changing the threshold does not disable checks.
 
 The first batch reuses its sorted vector even above the threshold. Disjoint
@@ -120,6 +121,39 @@ validator sweep also covers prefix-plus-array transitions; a 128-row array with
 16 prior accesses can still pay late promotion. Such functions can select 256 or
 `MAX`; this API does not promise to eliminate every transition cost.
 
+## Native-checked JNI confirmation
+
+The 128/256 comparison uses the same Kotlin JAR for both frozen native libraries.
+All Kotlin sources match; generated Rust differs only in the configured history
+constructor. Both libraries explicitly retain native checks and have allocation
+instrumentation disabled. Four balanced fresh-JVM pairs use fixed 256 MiB heaps,
+G1, `-Xss16m`, eight warmup and nine measured batches targeting 15 ms. The larger
+stack is needed by the existing recursive Kotlin lock helper. No compilers or
+other benchmark runs execute concurrently.
+
+| Handles / bulk roundtrip | Limit 128 µs | Limit 256 µs | Paired 256/128 time |
+|---|---:|---:|---:|
+| 128 / singleton-list argument | 42.41 | 41.67 | 0.998 |
+| 128 / singleton-list callback result | 43.23 | 43.83 | 1.025 |
+| 512 / singleton-list argument | 156.86 | 164.53 | 1.030 |
+| 512 / singleton-list callback result | 166.20 | 169.22 | 1.018 |
+| 8192 / singleton-list argument | 2559.45 | 2542.81 | 0.998 |
+| 8192 / singleton-list callback result | 2630.25 | 2642.94 | 0.999 |
+
+Raising to 256 shows no consistent benefit here. Paired ratios are medians of
+per-fork time ratios, so they need not equal the ratio of displayed medians.
+[All JNI cells](threshold-jni-latency.csv), including single-element, first-batch,
+flat and primitive controls, retain fork spread and JVM allocation. Some unchanged
+controls vary more than the nested cases (the 128-handle flat control is 11.9%
+slower at 256); these measurements do not establish an index-related cause.
+Default JNI remains covered by Kotlin preflight and normally has no native history.
+
+Reproduce with `examples/bench-bulk/run.py --build-only --native-input-checks
+--alias-index-threshold 128` and a second build at 256, then use
+`examples/bench-input-aliases/jni.py --policy native --compare-thresholds` with those
+`--before`/`--after` directories, `--forks 4 --sizes 1,128,512,8192 --warmup 8
+--batches 9 --target-ms 15`.
+
 ## Reproduction
 
 The standalone validator runner accepts `limit0`, `limit64`, `limit128`,
@@ -133,9 +167,12 @@ arguments and owned callback results:
 ```sh
 python3 examples/bench-input-aliases/thresholds.py \
   --output /tmp/threshold-c-sweep --limits 64,128,256,512,1024,max \
-  --sizes 64,128,256,512,1024,8192 --forks 4 --batches 7 --target-ms 8
+  --sizes 64,128,256,512,1024,8192 --forks 4 --batches 7 --target-ms 8 \
+  --reference-build /tmp/original-128-build
 ```
 
+The optional reference is the original-128 build recorded in the provenance
+(`ec1a168d2`); omit it when comparing only the current configurable limits.
 Run from a committed, clean checkout. Generated C ABI must match for all variants;
 generated Rust may differ only in the history constructor. The same C executable
 loads each frozen library and verifies its loaded path and result. Actual pointer

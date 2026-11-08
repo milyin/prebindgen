@@ -116622,7 +116622,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_c
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                64usize,
+            >::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -117344,7 +117346,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_c
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                64usize,
+            >::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -117938,7 +117942,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_c
                                         {
                                             let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                             let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                                                64usize,
+                                            >::default();
                                             let callback_result = unsafe {
                                                 p0_callback_retained
                                                     .invoke_return(
@@ -118702,7 +118708,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_c
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &__pb_input_consumed;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                64usize,
+            >::default();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -119046,7 +119054,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_rawinputs_JNINative_c
                                         {
                                             let __pb_input_consumed = ::core::cell::Cell::new(0usize);
                                             let __prebindgen_input_consumed = &__pb_input_consumed;
-                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
+                                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputsWithThreshold::<
+                                                64usize,
+                                            >::default();
                                             let callback_result = unsafe {
                                                 p0_callback_retained
                                                     .invoke_return(
