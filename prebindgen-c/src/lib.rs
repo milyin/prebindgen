@@ -1136,8 +1136,8 @@ impl Cbindgen {
     pub fn owned_len(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "len"))
     }
-    /// Reference the generated shared view getter for a String, Vec<u8>, or
-    /// numeric Vec owner. Views preserve the original allocation without copying.
+    /// Reference the generated shared view getter for a `String`, `Vec<u8>`, or
+    /// numeric `Vec` owner. Views preserve the original allocation without copying.
     pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
     }
