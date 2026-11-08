@@ -29,7 +29,8 @@ Fresh interleaved allocation makes each list monotonically increasing in native
 address: A/B/C/D are allocated in turn. Concatenating the lists creates four
 sorted runs, with overlapping address ranges. This is unusually favorable to
 sorting buckets. Allocating all A values, then all B values, etc. instead produces
-one globally sorted sequence, where one array wins.
+one globally sorted sequence, where one array and direct intersections are close
+and both are much faster than the tournament merges.
 
 Fragmentation is reproduced by allocating 2N filler handles, freeing a shuffled
 half, creating the N actual handles, then freeing the remaining fillers. Its
@@ -50,7 +51,8 @@ A separate checker-only test uses numeric addresses, never dereferenced. With
 - After independently shuffling each bucket, comparison counts are roughly
   1.08 million versus 0.95 million. Most of the sorting advantage disappears.
 
-Separate phase timers, in µs, for the sorted-run case:
+Separate phase timers, in µs, for the sorted-run case (the original-bucket cross
+stage invokes an equivalent extracted merge helper):
 
 | Checker | Sorting | Local duplicate scan | Cross-group check |
 |---|---:|---:|---:|
@@ -96,7 +98,7 @@ regular cursor pattern; random placement removes that regularity. Branch
 prediction is a plausible contributor, but hardware counters were unavailable
 (`perf_event_paranoid=4`), so no branch-miss/cache attribution is claimed.
 
-This explains why shuffled freshly interleaved objects and fragmented objects
+This is consistent with shuffled freshly interleaved objects and fragmented objects
 can behave differently even though both have unordered input lists. Shuffling a
 list changes traversal order; it does not change the type distribution by address.
 
@@ -128,11 +130,25 @@ one array (one allocation) and four buckets (four allocations). Allocation/copy
 stages are much smaller than the old merge. Allocation count alone does not
 explain the result.
 
-A global stable sort was also measured. It is slower for the native 65,536 cases
-above, but becomes useful for larger already-ordered runs: at 1,048,576 numeric
-addresses, it takes 11.2 ms versus 31.6 ms for global unstable sorting. In that
-checker it requests another 16 MiB of scratch storage, doubling requested metadata
-bytes. This is a checker-only result, not a measured full C-call speedup.
+A global stable sort was also measured. It loses in the four 65,536-mutable-handle
+rows above, but helps other native cases:
+
+| Interleaved native input | Global unstable sort | Global stable sort |
+|---|---:|---:|
+| 65,536 shared handles + token / creation order | 1824.9 µs | 884.3 µs |
+| 262,144 mutable handles / address-sorted lists | 8702.2 µs | 7063.4 µs |
+
+The mutable/shared difference under comparable layouts is not explained by this
+investigation. It may involve generated-code specialization and compiler behavior;
+no root cause is established, and these measurements should not select a universal
+sort default.
+
+At 1,048,576 numeric addresses arranged as four increasing interleaved runs,
+**complete checker-only** times (copy, sort and scan) are 11.2 ms for stable versus
+31.6 ms for unstable sorting. Stable requests 24 MiB of metadata versus 16 MiB:
+8 MiB extra scratch, a 1.5× total. At 65,536 it requests 2 MiB versus 1 MiB.
+Scratch size is not a fixed multiplier. The million-address result is not a
+measured million-element full C-call speedup.
 
 ## Production direction
 
@@ -163,8 +179,10 @@ and resource checks remain in every generated call. The microbenchmark is built
 with `rustc -O`; native libraries use Cargo release, both rustc 1.98.0. The host is
 the same shared AMD EPYC VM as the earlier study; CPU frequency is not isolated.
 Selected identical-path controls stay within 2.2% of a paired median ratio of 1
-(both checker-only and native calls). Small differences should not select an
-implementation. Main and spatial datasets have separate source/executable hashes;
+(both checker-only and native calls). The in-run mutable `token` candidate uses the same validation code as `flat`:
+its paired median ratios range 0.986–1.041, with individual fork ratios
+0.888–1.110. That wider control spread also matters; small differences should not
+select an implementation. Main and spatial datasets have separate source/executable hashes;
 the spatial run adds fixture distributions without changing the checkers.
 
 After following the original fixture build instructions:
