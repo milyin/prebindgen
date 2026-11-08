@@ -39,6 +39,7 @@ fn input_body(input: Input<InputRequest>) -> Input<InputRequest> {
     match input {
         Input::Selector(mut arms) if arms.len() == 1 => arms.remove(0),
         Input::Bulk(child) => Input::Bulk(Box::new(input_body(*child))),
+        Input::Temporary(child) => Input::Temporary(Box::new(input_body(*child))),
         other => other,
     }
 }
@@ -359,6 +360,11 @@ impl Declarations {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
+            Input::Temporary(child) => Ok(Input::Temporary(Box::new(resolve(
+                &crate::temporary_input_type(ty)?,
+                &input_body((**child).clone()),
+                stack,
+            )?))),
             Input::Bulk(child) => Ok(Input::Bulk(Box::new(resolve(
                 ty,
                 &input_body((**child).clone()),
@@ -1096,7 +1102,8 @@ pub fn source_functions<'a>(
             Input::Request(InputRequest::ForType { input: child, .. })
             | Input::Optional(child)
             | Input::Sequence(child)
-            | Input::Bulk(child) => input(child, names),
+            | Input::Bulk(child)
+            | Input::Temporary(child) => input(child, names),
             Input::Fields(children) | Input::Record(children) | Input::Selector(children) => {
                 for child in children {
                     input(child, names)
@@ -1178,6 +1185,7 @@ pub fn parse_type(text: &str) -> syn::Type {
 fn lift_input_bulk(tree: Input) -> Input {
     match tree {
         Input::Bulk(c) => Input::Bulk(Box::new(lift_input_bulk(*c))),
+        Input::Temporary(c) => Input::Temporary(Box::new(lift_input_bulk(*c))),
         Input::Sequence(c) => {
             let child = lift_input_bulk(*c);
             if input_has_bulk(&child) {

@@ -1257,10 +1257,10 @@ pub unsafe extern "C" fn fast_buffer_rows_enum(
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables)]
-                    let p0_w12 = p0_w1_rows[p0_w3].v3;
-                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w13 = p0_w1_rows[p0_w3].v3;
+                    let p0_w16 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables)]
-                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w19 = p0_w1_rows[p0_w3].v5;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -1274,9 +1274,13 @@ pub unsafe extern "C" fn fast_buffer_rows_enum(
                         if (p0_w10) != 0 && (p0_w10) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if (p0_w14) != 0 && (p0_w14) != 1 {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w14: Option<String> = None;
+                        if (p0_w16) != 0 && (p0_w16) != 1 {
                             return Err("invalid option presence".into());
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w20: Option<Vec<u8>> = None;
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
@@ -1289,9 +1293,9 @@ pub unsafe extern "C" fn fast_buffer_rows_enum(
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<perftest_flat::SparseCode> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w11: Option<String> = None;
+                        let mut p0_w12: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w15: Option<Vec<u8>> = None;
+                        let mut p0_w18: Option<&[u8]> = None;
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
                         p0_w7 = if true {
@@ -1312,33 +1316,37 @@ pub unsafe extern "C" fn fast_buffer_rows_enum(
                         };
                         let p0_w7 = p0_w7.expect("active enum");
                         let p0_w9 = if (p0_w10) == 1i32 {
-                            p0_w11 = if (p0_w10) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        String,
-                                    >::into(
-                                        std::str::from_utf8(unsafe { __pb_read(p0_w12)? })
+                            if (p0_w10) == 1i32 {
+                                p0_w12 = if (p0_w10) == 1i32 {
+                                    Some(
+                                        std::str::from_utf8(unsafe { __pb_read(p0_w13)? })
                                             .map_err(|_| "invalid UTF-8")?,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w11.as_ref().expect("active value"))
+                                    )
+                                } else {
+                                    None
+                                };
+                                let p0_w12: String = ::core::convert::Into::into(
+                                    p0_w12.expect("active value"),
+                                );
+                                p0_w14 = Some(p0_w12);
+                            }
+                            Some(p0_w14.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
-                        let p0_w13 = if (p0_w14) == 1i32 {
-                            p0_w15 = if (p0_w14) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        Vec<u8>,
-                                    >::into(unsafe { __pb_read(p0_w16)? }),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w15.as_ref().expect("active value"))
+                        let p0_w15 = if (p0_w16) == 1i32 {
+                            if (p0_w16) == 1i32 {
+                                p0_w18 = if (p0_w16) == 1i32 {
+                                    Some(unsafe { __pb_read(p0_w19)? })
+                                } else {
+                                    None
+                                };
+                                let p0_w18: Vec<u8> = ::core::convert::Into::into(
+                                    p0_w18.expect("active value"),
+                                );
+                                p0_w20 = Some(p0_w18);
+                            }
+                            Some(p0_w20.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
@@ -1346,7 +1354,7 @@ pub unsafe extern "C" fn fast_buffer_rows_enum(
                             p0_w5,
                             p0_w7,
                             p0_w9,
-                            p0_w13,
+                            p0_w15,
                         );
                         let p0_w0 = p0_w4;
                         Ok(p0_w0)

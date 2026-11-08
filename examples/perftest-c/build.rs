@@ -6,6 +6,42 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        // These coverage fixtures intentionally construct temporary owned buffers
+        // for borrowed String/Vec parameters; ordinary shared inputs never do so.
+        .expand(expand_param!(&String).reconstruct())
+        .expand(expand_param!(&Vec<u8>).reconstruct())
+        .expand(expand_param!(&Vec<i64>).reconstruct())
+        .function(
+            fun!(shared_input_move)
+                .expand_param("value", expand_param!(&OwnedResource).reconstruct()),
+        )
+        .function(fun!(shared_input_checked))
+        .function(fun!(shared_input_echo))
+        .panic()
+        .function(fun!(shared_input_fixed))
+        .function(fun!(shared_input_optional))
+        .panic()
+        .function(
+            fun!(shared_input_copy).expand_param("values", expand_param!(&[i64]).reconstruct()),
+        )
+        .panic()
+        .function(fun!(shared_input_vector))
+        .panic()
+        .function(fun!(shared_input_optional_vector))
+        .panic()
+        .function(fun!(shared_input_string))
+        .panic()
+        .function(fun!(shared_input_bytes))
+        .panic()
+        .function(fun!(shared_input_text))
+        .panic()
+        .function(fun!(shared_input_qualified_bytes))
+        .panic()
+        .function(fun!(shared_input_rows).expand_param(
+            "rows",
+            expand_param!(SharedInputRow).variant(fun!(shared_input_row_new)),
+        ))
+        .panic()
         .opaque_ptr("numeric_loan_owner", pq!(NumericLoanOwner))
         .function(fun!(numeric_loan_new))
         .panic()
@@ -559,10 +595,15 @@ fn main() {
             )),
         )
         .panic()
-        .function(fun!(collection_resource_ids).expand_param(
-            "values",
-            expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
-        ))
+        .function(
+            fun!(collection_resource_ids).input(
+                "values",
+                prebindgen_declarations::Input::Sequence(Box::new(
+                    prebindgen_declarations::Input::call("collection_resource_clone"),
+                ))
+                .reconstruct(),
+            ),
+        )
         .panic()
         .function(fun!(collection_i64).callback_return())
         .panic()
@@ -628,7 +669,10 @@ fn main() {
             fun!(collection_late_drop)
                 .expand_return(expand_return!(CPanicOutput).field(fun!(collection_late_values))),
         )
-        .function(fun!(storage_put_slice))
+        .function(
+            fun!(storage_put_slice)
+                .expand_param("payloads", expand_param!(&[Payload]).reconstruct()),
+        )
         .panic()
         .function(fun!(storage_get_vec).callback_return())
         .panic()
@@ -989,6 +1033,21 @@ fn main() {
     ] {
         cbindgen = cbindgen.function(f).panic();
     }
+    for function in [
+        fun!(shared_input_i8),
+        fun!(shared_input_i16),
+        fun!(shared_input_i32),
+        fun!(shared_input_i64),
+        fun!(shared_input_isize),
+        fun!(shared_input_u16),
+        fun!(shared_input_u32),
+        fun!(shared_input_u64),
+        fun!(shared_input_usize),
+        fun!(shared_input_f32),
+        fun!(shared_input_f64),
+    ] {
+        cbindgen = cbindgen.function(function).panic();
+    }
     // These fixtures exercise explicit element conversion and visitor delivery.
     // Ordinary Vec outputs use inline native ownership instead.
     for ty in [
@@ -1047,6 +1106,12 @@ fn main() {
         .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
         .error_mapper(pq!(String), fun!(inline_packet_error));
     let mut owners = owners
+        .function(fun!(shared_input_vector))
+        .panic()
+        .function(fun!(shared_input_string))
+        .panic()
+        .function(fun!(shared_input_bytes))
+        .panic()
         .opaque_ptr("resource", pq!(OwnedResource))
         .function(fun!(collection_resource_new))
         .panic()
@@ -1219,6 +1284,8 @@ fn main() {
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .prefix("fast")
         .set_emit_alias_checks(false)
+        .expand(expand_param!(&String).reconstruct())
+        .expand(expand_param!(&Vec<u8>).reconstruct())
         .opaque_ptr("owned_resource", pq!(OwnedResource))
         .opaque_ptr("alias_handler", pq!(AliasHandler))
         .opaque_error(pq!(ResultFailure), fun!(result_error_message))

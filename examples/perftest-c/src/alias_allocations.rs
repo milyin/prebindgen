@@ -243,14 +243,12 @@ fn native_vec_and_string_transfers_preserve_capacity_without_allocating() {
 }
 
 #[test]
-fn generated_collection_inputs_allocate_once_without_growth() {
+fn generated_owned_collection_inputs_allocate_once_and_shared_slices_borrow() {
     for size in [0usize, 1, 8, 64, 512, 4096] {
         let plain: Vec<_> = (0..size)
             .map(|v| super::__PbRow_collection_input_plain_p0_w1 { v0: v as i64 })
             .collect();
-        let slice: Vec<_> = (0..size)
-            .map(|v| super::__PbRow_collection_input_slice_p0_w1 { v0: v as i64 })
-            .collect();
+        let slice: Vec<_> = (0..size).map(|v| v as i64).collect();
         let custom: Vec<_> = (0..size)
             .map(|v| super::__PbRow_collection_input_custom_p0_w1 { v0: v as i64 })
             .collect();
@@ -275,18 +273,15 @@ fn generated_collection_inputs_allocate_once_without_growth() {
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
         let slice_cost = allocations(|| unsafe {
             assert_eq!(
-                super::perftest_collection_input_slice(super::__PbRows {
-                    data: slice.as_ptr().cast(),
+                super::perftest_collection_input_slice(super::__PbSliceView_i64 {
+                    data: slice.as_ptr(),
                     len: size
                 }),
                 expected
             );
         });
-        assert_eq!(slice_cost, usize::from(size != 0));
-        assert_eq!(
-            ALLOCATED_BYTES.with(Cell::get),
-            size * std::mem::size_of::<i64>()
-        );
+        assert_eq!(slice_cost, 0);
+        assert_eq!(ALLOCATED_BYTES.with(Cell::get), 0);
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
         // Custom constructors use the same final vector allocation as primitives.
         let custom_cost = allocations(|| unsafe {
@@ -854,5 +849,147 @@ fn numeric_vec_view_survives_a_descriptor_move_and_static_views_retain_storage()
             );
         });
         assert_eq!(count, 0);
+    }
+}
+
+#[test]
+fn shared_input_views_preserve_foreign_addresses_without_allocations() {
+    use super::*;
+    let (sizes, calls): (&[usize], usize) = if cfg!(miri) {
+        (&[0, 1, 64], 3)
+    } else {
+        (&[0, 1, 65536], 1000)
+    };
+    for &n in sizes {
+        let values = (0..n).map(|i| i as i64 + 7).collect::<Vec<_>>();
+        let input = __PbSliceView_i64 {
+            data: values.as_ptr(),
+            len: n,
+        };
+        let fixed = [1.25, 2.5, 3.75];
+        let count = allocations(|| unsafe {
+            for _ in 0..calls {
+                assert_eq!(perftest_shared_input_i64(input), values.as_ptr().addr());
+                let echo = perftest_shared_input_echo(input);
+                assert_eq!(echo.data, values.as_ptr());
+                assert_eq!(echo.len, n);
+                assert_eq!(perftest_shared_input_optional(1, input), n);
+                assert_eq!(
+                    perftest_shared_input_optional(
+                        0,
+                        __PbSliceView_i64 {
+                            data: std::ptr::null(),
+                            len: usize::MAX
+                        }
+                    ),
+                    usize::MAX
+                );
+                let mut error = std::ptr::null_mut();
+                let mut sum = 0.0;
+                assert!(perftest_shared_input_fixed(
+                    __PbSliceView_f64 {
+                        data: fixed.as_ptr(),
+                        len: 3
+                    },
+                    &mut sum,
+                    &mut error
+                ));
+                assert_eq!(sum, 7.5);
+                assert!(error.is_null());
+            }
+        });
+        assert_eq!(count, 0, "{n} elements");
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+        // An explicit temporary owns its allocation until the source call returns.
+        let rows = (0..n)
+            .map(|i| __PbRow_shared_input_copy_p0_w2 { v0: i as i64 + 7 })
+            .collect::<Vec<_>>();
+        let count = allocations(|| unsafe {
+            for _ in 0..calls {
+                let address = perftest_shared_input_copy(__PbRows {
+                    data: rows.as_ptr().cast(),
+                    len: n,
+                });
+                if n != 0 {
+                    assert_ne!(address, rows.as_ptr().addr());
+                }
+            }
+        });
+        assert_eq!(count, if n == 0 { 0 } else { calls });
+        assert_eq!(
+            ALLOCATED_BYTES.with(Cell::get),
+            n * std::mem::size_of::<i64>() * calls
+        );
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+    }
+}
+
+#[test]
+fn shared_input_native_owners_and_nested_slice_constructors_avoid_copies() {
+    use super::inline_owners as owners;
+    use super::*;
+    let calls = if cfg!(miri) { 3 } else { 1000 };
+    unsafe {
+        let mut numbers = owners::owner_inline_numbers_new();
+        let numeric = owners::owner_numbers_view(&numbers);
+        let mut text = owners::owner_inline_text_new();
+        let string = owners::owner_text_view(&text);
+        let mut bytes_view = owners::__PbBuffer {
+            data: std::ptr::null(),
+            len: 0,
+        };
+        let mut len = 0;
+        let mut bytes = owners::owner_inline_bytes_new(&mut bytes_view, &mut len);
+        let count = allocations(|| {
+            for _ in 0..calls {
+                assert_eq!(
+                    owners::owner_shared_input_vector(&numbers),
+                    numeric.data.addr()
+                );
+                assert_eq!(owners::owner_shared_input_string(&text), string.data.addr());
+                assert_eq!(
+                    owners::owner_shared_input_bytes(&bytes),
+                    bytes_view.data.addr()
+                );
+                let echoed = perftest_shared_input_echo(__PbSliceView_i64 {
+                    data: numeric.data,
+                    len: numeric.len,
+                });
+                assert_eq!(echoed.data, numeric.data);
+            }
+        });
+        assert_eq!(count, 0);
+        owners::owner_drop_bytes(&mut bytes);
+        owners::owner_drop_text(&mut text);
+        owners::owner_drop_numbers(&mut numbers);
+        let values = [7i64, 8, 9];
+        let view = __PbSliceView_i64 {
+            data: values.as_ptr(),
+            len: 3,
+        };
+        let rows = [
+            __PbRow_shared_input_rows_p0_w1 { v0: view },
+            __PbRow_shared_input_rows_p0_w1 { v0: view },
+        ];
+        let count = allocations(|| {
+            for _ in 0..calls {
+                assert_eq!(
+                    perftest_shared_input_rows(__PbRows {
+                        data: rows.as_ptr().cast(),
+                        len: 2
+                    }),
+                    20
+                );
+            }
+        });
+        assert_eq!(
+            count, calls,
+            "only the final owned Vec<SharedInputRow> allocates"
+        );
+        assert_eq!(
+            ALLOCATED_BYTES.with(Cell::get),
+            2 * std::mem::size_of::<perftest_flat::SharedInputRow>() * calls
+        );
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
     }
 }

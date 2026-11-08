@@ -94,6 +94,78 @@ pub(crate) fn sequence(
         values: vec![(wire.clone(), quote!(#wire))],
     }))
 }
+/// A directly borrowed foreign slice, without reconstructing a Rust Vec owner.
+pub(crate) fn input_sequence(
+    flat: &Bindings,
+    ty: &syn::Type,
+    wire: syn::Ident,
+    var: syn::Ident,
+    recipe: &prebindgen_declarations::Input,
+    active: &prebindgen_declarations::Condition,
+) -> Result<InputPlan<CWire>> {
+    let syn::Type::Reference(reference) = ty else {
+        return Err("borrowed C input requires a reference".into());
+    };
+    if reference.mutability.is_some() {
+        return Err("mutable C collection inputs are unsupported".into());
+    }
+    if reference
+        .lifetime
+        .as_ref()
+        .is_some_and(|l| l.ident == "static")
+    {
+        return Err("shared C collection inputs cannot promise a 'static lifetime".into());
+    }
+    let target = &reference.elem;
+    let (source_element, array_length) = match target.as_ref() {
+        syn::Type::Slice(slice) => (slice.elem.as_ref(), None),
+        syn::Type::Array(array) => (array.elem.as_ref(), Some(&array.len)),
+        _ => return Err(format!("shared C input `{}` cannot reconstruct an owning collection implicitly; declare a native opaque owner input or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty))),
+    };
+    let Some(element) = primitive(source_element, &flat.types)
+        .filter(|_| matches!(recipe, prebindgen_declarations::Input::Leaf))
+    else {
+        return Err(format!("shared C input `{}` cannot allocate converted elements implicitly; use a compatible numeric slice, a native opaque owner, or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty)));
+    };
+    let native = native_element_type(element);
+    let condition = active.rust();
+    let pointer = format_ident!("{var}_pointer");
+    let slice = format_ident!("{var}_slice");
+    let length_check = array_length.map(
+        |length| quote!(if #wire.len != #length {return Err("wrong fixed array length".into());}),
+    );
+    let argument = if array_length.is_some() {
+        quote!(<&[#native;#array_length]>::try_from(#slice).map_err(|_|"wrong fixed array length".to_string())?)
+    } else {
+        quote!(#slice)
+    };
+    Ok(InputPlan {
+        fallible: true,
+        context: Default::default(),
+        acknowledgement: None,
+        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
+            name: wire.clone(),
+            kind: CWire::SliceView { element },
+        }]),
+        validation: quote!(let #var = if #condition {
+            #length_check
+            // Avoid an outlined validation call on the empty path; the runtime
+            // helper accepts every empty descriptor and pointer normalization follows.
+            if #wire.len != 0 {::prebindgen_runtime::validate_slice::<#native>(#wire.data,#wire.len)?;}
+            // Empty foreign views need not provide a valid aligned pointer.
+            // Preserve legitimate empty source pointers, normalize the rest.
+            let #pointer = if #wire.len == 0 && (#wire.data.is_null() || !#wire.data.is_aligned()) {
+                ::core::ptr::NonNull::<#native>::dangling().as_ptr() as *const #native
+            } else {#wire.data};
+            let #slice = unsafe {::core::slice::from_raw_parts(#pointer,#wire.len)};
+            Some(#argument)
+        } else {None};),
+        acquire: TokenStream::new(),
+        resources: vec![],
+        statements: TokenStream::new(),
+        argument: quote!(#var.expect("active slice view")),
+    })
+}
 /// A loan anywhere in a packet, including fields inside converted rows.
 pub(crate) fn has_loans(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) -> bool {
     prebindgen_flat::wire_definitions(std::iter::once(node)).any(|wire| {
@@ -258,9 +330,12 @@ mod tests {
         assert!(error.contains("temporary owner"), "{error}");
     }
     #[test]
-    fn reconstructed_reference_inputs_cannot_lend_views() {
+    fn explicitly_reconstructed_reference_inputs_cannot_lend_views() {
         let error = Cbindgen::new(model("pub fn echo(v:&[i64])->&[i64]{}"))
-            .function(fun!(echo))
+            .function(fun!(echo).expand_param(
+                "v",
+                prebindgen_declarations::expand_param!(&[i64]).reconstruct(),
+            ))
             .panic()
             .build()
             .err()
@@ -485,31 +560,259 @@ mod tests {
         }
     }
     #[test]
-    fn malformed_or_input_views_are_rejected() {
+    fn numeric_slice_and_array_inputs_borrow_without_a_collection_decoder() {
+        for element in [
+            "i8", "i16", "i32", "i64", "isize", "u16", "u32", "u64", "usize", "f32", "f64",
+        ] {
+            let source=format!("pub fn inspect(values:&[{element}])->usize{{}}pub fn fixed(values:&[{element};3])->usize{{}}pub fn maybe(values:Option<&[{element}]>)->usize{{}}pub fn echo(values:&[{element}])->&[{element}]{{}}");
+            let g = Cbindgen::new(model(&source))
+                .function(fun!(inspect))
+                .panic()
+                .function(fun!(fixed))
+                .panic()
+                .function(fun!(maybe))
+                .panic()
+                .function(fun!(echo))
+                .panic()
+                .build()
+                .unwrap();
+            assert!(
+                g.header.contains(&format!("pb_{element}_slice_view")),
+                "{element}"
+            );
+            assert!(g.rust.contains("validate_slice"));
+            assert!(!g.rust.contains("reserve_exact"));
+            assert!(!g.header.contains("_rows"));
+        }
+    }
+    #[test]
+    fn incompatible_borrowed_inputs_reject_implicit_reconstruction() {
+        for ty in [
+            "&[bool]",
+            "&[char]",
+            "&[i128]",
+            "&[u128]",
+            "&[Row]",
+            "&[Tag]",
+            "&[String]",
+            "&[Vec<i64>]",
+            "&Vec<i64>",
+            "&String",
+            "&Vec<u8>",
+        ] {
+            let source=format!("pub struct Row{{pub n:i64}}pub enum Tag{{A,B}}pub fn inspect(values:{ty})->usize{{}}");
+            let error = Cbindgen::new(model(&source))
+                .enum_type("tag", syn::parse_quote!(Tag))
+                .function(fun!(inspect))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains("reconstruct()"), "{ty}: {error}");
+        }
+    }
+    #[test]
+    fn shared_input_primitive_overrides_cannot_be_reinterpreted() {
+        let error = Cbindgen::new(model("pub fn inspect(values:&[i64])->usize{}"))
+            .opaque_ptr("number", syn::parse_quote!(::core::primitive::i64))
+            .function(fun!(inspect))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reconstruct()"), "{error}");
+        let error = Cbindgen::new(model(
+            "pub fn make(v:i64)->i64{}pub fn inspect(values:&[i64])->usize{}",
+        ))
+        .function(fun!(inspect).expand_param(
+            "values",
+            prebindgen_declarations::expand_param!(i64).variant(fun!(make)),
+        ))
+        .panic()
+        .build()
+        .err()
+        .unwrap();
+        assert!(error.contains("reconstruct()"), "{error}");
+    }
+    #[test]
+    fn reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
+        use prebindgen_declarations::{expand_param, Input};
+        for ty in [
+            "&[i64]",
+            "&Vec<i64>",
+            "&String",
+            "&Vec<u8>",
+            "&str",
+            "&[u8]",
+            "&[i64;3]",
+        ] {
+            let source = format!("pub fn inspect(values:{ty})->usize{{}}");
+            let declaration =
+                prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                    .reconstruct();
+            let g = Cbindgen::new(model(&source))
+                .function(fun!(inspect).expand_param("values", declaration))
+                .panic()
+                .build()
+                .unwrap();
+            assert!(g.rust.contains("active temporary"), "{ty}");
+        }
+        let g=Cbindgen::new(model("pub struct Row{pub n:usize}pub fn new(values:Option<&String>)->Row{}pub fn inspect(values:Vec<Row>)->usize{}"))
+            .expand(expand_param!(&String).reconstruct())
+            .function(fun!(inspect).expand_param("values",expand_param!(Row).variant(fun!(new))))
+            .panic().build().unwrap();
+        assert!(g.rust.contains("active temporary"));
+        assert!(!g.rust.contains("_prepared"));
+        assert!(
+            Cbindgen::new(model("pub fn inspect(values:&String)->usize{}"))
+                .function(fun!(inspect).input("values", Input::auto().reconstruct()))
+                .panic()
+                .build()
+                .is_ok()
+        );
+    }
+    #[test]
+    fn reconstruction_builder_order_and_local_identity_overrides_are_checked() {
+        use prebindgen_declarations::expand_param;
+        for declaration in [
+            expand_param!(&String).reconstruct().variant(fun!(make)),
+            expand_param!(&String).variant(fun!(make)).reconstruct(),
+        ] {
+            let g = Cbindgen::new(model(
+                "pub fn make(value:&str)->String{}pub fn inspect(value:&String)->usize{}",
+            ))
+            .function(fun!(inspect).expand_param("value", declaration))
+            .panic()
+            .build()
+            .unwrap();
+            assert!(g.rust.contains("active temporary"));
+            assert!(g.rust.contains("make("));
+        }
+        let error = Cbindgen::new(model("pub fn inspect(value:&String)->usize{}"))
+            .expand(expand_param!(&String).reconstruct())
+            .function(fun!(inspect).expand_param("value", expand_param!(&String).variant_self()))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reconstruct()"), "{error}");
+        let g = Cbindgen::new(model("pub fn inspect(value:&String)->usize{}"))
+            .opaque_ptr("text", syn::parse_quote!(String))
+            .expand(expand_param!(&String).reconstruct())
+            .function(fun!(inspect).expand_param("value", expand_param!(&String).variant_self()))
+            .panic()
+            .build()
+            .unwrap();
+        assert!(g.header.contains("const pb_text *"));
+        assert!(!g.rust.contains("active temporary"));
+    }
+    #[test]
+    fn reconstructed_inputs_cannot_back_escaping_loans() {
+        for ty in ["&[i64]", "&str", "&[u8]"] {
+            let source = format!("pub fn echo(values:{ty})->{ty}{{}}");
+            let error = Cbindgen::new(model(&source))
+                .function(
+                    fun!(echo).expand_param(
+                        "values",
+                        prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                            .reconstruct(),
+                    ),
+                )
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("reconstructed reference input"),
+                "{ty}: {error}"
+            );
+        }
+        for ty in ["&mut Vec<i64>", "Option<&[i64]>", "Vec<i64>"] {
+            let source = format!("pub fn inspect(values:{ty})->usize{{}}");
+            let error = Cbindgen::new(model(&source))
+                .function(
+                    fun!(inspect).expand_param(
+                        "values",
+                        prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                            .reconstruct(),
+                    ),
+                )
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains("reconstruct()"), "{ty}: {error}");
+        }
+    }
+    #[test]
+    fn direct_native_vector_and_string_references_keep_their_original_owner() {
+        for (ty, name, layout) in [
+            (
+                syn::parse_quote!(Vec<i64>),
+                "numbers",
+                OpaqueLayout::auto::<Vec<i64>>(),
+            ),
+            (
+                syn::parse_quote!(String),
+                "text",
+                OpaqueLayout::auto::<String>(),
+            ),
+        ] {
+            let source = format!(
+                "pub fn inspect(values:&{})->usize{{}}",
+                prebindgen_flat::type_key(&ty)
+            );
+            let g = Cbindgen::new(model(&source))
+                .opaque_owned_struct(name, ty, layout)
+                .function(fun!(inspect))
+                .panic()
+                .build()
+                .unwrap();
+            assert!(g.header.contains(&format!("const pb_{name} *")));
+            assert!(!g.rust.contains("reserve_exact"));
+            assert!(!g.rust.contains("active temporary"));
+        }
+    }
+    #[test]
+    fn low_level_static_input_views_and_c_bulk_inputs_are_rejected() {
+        let flat = model("");
+        let error = input_sequence(
+            &flat,
+            &syn::parse_quote!(&'static [i64]),
+            syn::parse_quote!(wire),
+            syn::parse_quote!(value),
+            &prebindgen_declarations::Input::Leaf,
+            &Default::default(),
+        )
+        .err()
+        .unwrap();
+        assert!(error.contains("'static lifetime"), "{error}");
+        assert!(CCodec
+            .input_leaf(
+                &flat,
+                &syn::parse_quote!(&'static str),
+                &(),
+                syn::parse_quote!(wire),
+                syn::parse_quote!(value),
+                &Default::default()
+            )
+            .err()
+            .unwrap()
+            .contains("'static reference lifetime"));
+        let error = Cbindgen::new(model("pub fn inspect(values:&[i64])->usize{}"))
+            .function(fun!(inspect).input("values", prebindgen_declarations::Input::auto().bulk()))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("bulk inputs are unsupported"), "{error}");
+    }
+    #[test]
+    fn malformed_views_are_rejected() {
         assert!(CWire::SliceView {
             element: Primitive::Bool
         }
         .validate()
         .is_err());
-        let mut p = CCodec
-            .input_leaf(
-                &model(""),
-                &syn::parse_quote!(i64),
-                &(),
-                syn::parse_quote!(wire),
-                syn::parse_quote!(value),
-                &Default::default(),
-            )
-            .unwrap();
-        p.node = prebindgen_flat::WireNode::Leaf(vec![Wire {
-            name: syn::parse_quote!(wire),
-            kind: CWire::SliceView {
-                element: Primitive::I64,
-            },
-        }]);
-        assert!(CCodec
-            .finish_input(&mut p, &())
-            .unwrap_err()
-            .contains("output-only"));
     }
 }

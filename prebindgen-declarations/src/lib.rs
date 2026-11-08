@@ -50,6 +50,29 @@ fn output_referent(ty: &Type) -> Option<&Type> {
         _ => None,
     }
 }
+// The owned value deliberately constructed by Input::Temporary. A Vec/String
+// descriptor must never be fabricated over memory merely borrowed from C.
+fn temporary_input_type(ty: &Type) -> Result<Type> {
+    let Type::Reference(reference) = ty else {
+        return Err("reconstruct() requires a shared-reference input; apply it to the optional payload if necessary".into());
+    };
+    if reference.mutability.is_some()
+        || reference
+            .lifetime
+            .as_ref()
+            .is_some_and(|l| l.ident == "static")
+    {
+        return Err("reconstruct() cannot supply a mutable or 'static reference".into());
+    }
+    Ok(match reference.elem.as_ref() {
+        Type::Slice(slice) => {
+            let element = &slice.elem;
+            syn::parse_quote!(Vec<#element>)
+        }
+        Type::Path(path) if path.path.is_ident("str") => syn::parse_quote!(String),
+        other => other.clone(),
+    })
+}
 mod projection;
 pub use projection::{Projection, ProjectionMode};
 mod record;
@@ -113,6 +136,10 @@ pub enum Input<P = std::convert::Infallible> {
     Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
     Sequence(Box<Input<P>>),
+    /// Explicitly construct an owned temporary, then lend it as a shared input.
+    /// The child describes the owned value, including any transferred resources.
+    /// The temporary is dropped after the source call; it cannot back an escaping result.
+    Temporary(Box<Input<P>>),
     /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
     Bulk(Box<Input<P>>),
     /// Convert an optional payload, gating every conversion phase.
@@ -165,6 +192,18 @@ impl Input<InputRequest> {
     /// Infer a source constructor's argument conversions from registered defaults.
     pub fn call(name: impl Into<String>) -> Self {
         Self::Request(InputRequest::Call(name.into()))
+    }
+    /// Explicitly reconstruct an owned temporary for a shared-reference input.
+    /// Slices construct a Vec, str constructs a String, and sized references
+    /// construct their referent. Child recipes keep their ordinary ownership
+    /// semantics; this operation authorizes the temporary's allocation/copying.
+    pub fn reconstruct(self) -> Self {
+        match self {
+            Self::Request(InputRequest::ForType { ty, input }) => {
+                Self::for_type(*ty, Self::Temporary(input))
+            }
+            other => Self::Temporary(Box::new(other)),
+        }
     }
     /// Add a constructor alternative to this conversion tree.
     pub fn variant(self, name: impl Into<String>) -> Self {
@@ -925,6 +964,23 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<CodecInput<Self>>;
+    /// Borrow an input collection directly before preparing its element conversions.
+    /// Called only for reference sequence occurrences. The resolved `element`
+    /// recipe must be compatible with the borrowed storage. Return None to retain
+    /// ordinary sequence marshalling, or reject unsupported borrowing explicitly.
+    #[allow(clippy::too_many_arguments)]
+    fn input_borrowed_sequence(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _var: syn::Ident,
+        _element: &Input,
+        _active: &Condition,
+    ) -> Result<Option<CodecInput<Self>>> {
+        Ok(None)
+    }
     /// Convert a leaf inside a flat collection row whose construction is deferred.
     ///
     /// Its statements and argument share the row constructor's scope, so an
@@ -1754,6 +1810,51 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Temporary(inner) => {
+                let owned = temporary_input_type(ty)?;
+                let grouped = self.grouped_input.get();
+                let mut child = self.input_named(&owned, inner, extra, active, names)?;
+                let storage = self.name();
+                let build = std::mem::take(&mut child.statements);
+                let argument = &child.argument;
+                let condition = active.rust();
+                if grouped {
+                    // Declare the owner outside Optional/Selector blocks. Row
+                    // construction fills it only after the full group validates.
+                    // Prepared row closures capture the owner, never a reference
+                    // into a row-validation temporary.
+                    child.validation.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #storage:Option<#owned>=None;));
+                    child.statements = quote!(if #condition {#build #storage=Some(#argument);});
+                } else {
+                    let built = if build.is_empty() {
+                        quote!(Some(#argument))
+                    } else {
+                        quote!(Some({#build #argument}))
+                    };
+                    child
+                        .validation
+                        .extend(quote!(let #storage = if #condition {#built} else {None};));
+                }
+                let Type::Reference(reference) = ty else {
+                    unreachable!()
+                };
+                let target = &reference.elem;
+                child.argument = if matches!(target.as_ref(), Type::Slice(_))
+                    || matches!(target.as_ref(),Type::Path(path) if path.path.is_ident("str"))
+                {
+                    quote!(::core::convert::AsRef::<#target>::as_ref(#storage.as_ref().expect("active temporary")))
+                } else {
+                    quote!(#storage.as_ref().expect("active temporary"))
+                };
+                // Keep the temporary boundary visible. In particular a borrowed
+                // String buffer must not look like a persistent foreign &str.
+                child.node = WireNode::Branch {
+                    controls: vec![],
+                    children: vec![child.node],
+                    meta: self.codec.group_metadata(),
+                };
+                return Ok(child);
+            }
             Input::Bulk(inner) => {
                 if self.bulk.get() {
                     return self.input_named(ty, inner, extra, active, names);
@@ -1782,6 +1883,24 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 );
             }
             Input::Sequence(element_recipe) => {
+                if matches!(ty, Type::Reference(_)) {
+                    let next = self.next.get();
+                    let wire = names
+                        .map(|(wire, _)| wire.clone())
+                        .unwrap_or_else(|| self.name());
+                    if let Some(plan) = self.codec.input_borrowed_sequence(
+                        self.flat,
+                        ty,
+                        extra,
+                        wire,
+                        var.clone(),
+                        element_recipe,
+                        active,
+                    )? {
+                        return Ok(plan);
+                    }
+                    self.next.set(next);
+                }
                 if !self.bulk.get() {
                     if let Input::Bulk(inner) = element_recipe.as_ref() {
                         return self.input_named(
@@ -1802,7 +1921,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 fn contains_sequence(input: &Input) -> bool {
                     match input {
                         Input::Sequence(_) | Input::Callback(_) => true,
-                        Input::Bulk(inner) | Input::Optional(inner) => contains_sequence(inner),
+                        Input::Bulk(inner) | Input::Optional(inner) | Input::Temporary(inner) => {
+                            contains_sequence(inner)
+                        }
                         Input::Record(children)
                         | Input::Fields(children)
                         | Input::Selector(children) => children.iter().any(contains_sequence),
@@ -1822,7 +1943,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 fn deferred_construction(recipe: &Input, bulk: bool) -> bool {
                     match recipe {
                         Input::Leaf => true,
-                        Input::Optional(inner) => deferred_construction(inner, bulk),
+                        Input::Optional(inner) | Input::Temporary(inner) => {
+                            deferred_construction(inner, bulk)
+                        }
                         // With grouped element construction, input_named leaves
                         // acquisition deferred. Inside an existing bulk frame the
                         // modifier then adds no preparation. Outside bulk it can

@@ -1725,7 +1725,7 @@ fn main() {
         .package(
             package!()
                 .fun(fun!(string_new))
-                .fun(fun!(string_len))
+                .fun(fun!(string_len).expand_param("s",expand_param!(&String).reconstruct()))
                 .fun(fun!(i64_ref_double))
                 // Explicit identity declarations give text and bytes, like the defaults.
                 .fun(

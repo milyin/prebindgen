@@ -969,6 +969,81 @@ Explicit native-owner declarations also select by-value callback results.
 Owned callback arguments use their output representation; automatically selected
 owners keep the ordinary callback input buffer/row conversion for returns. They must not return a pointer to a local owner.
 
+## Shared C input storage
+
+Shared C inputs borrow compatible storage instead of creating an owned Rust
+wrapper. A declared function such as `inspect(values: &[i64])` accepts a typed
+pointer/length view:
+
+```c
+const int64_t values[] = {7, 8, 9};
+pb_i64_slice_view input = {values, 3};
+int64_t result = pb_inspect(input);
+```
+
+Compatible numeric slices and shared fixed-array references point into the
+caller's original memory. Binding validates pointer alignment/range and fixed
+array length without allocating or visiting individual elements. This includes
+optional slices and slices used by configured source constructors. A view returned
+by a Rust owner accessor can also be passed back to Rust while that owner remains
+alive and shared. Native `String`/`Vec` owner references retain their ordinary
+pointer-based borrowing path. Existing `&str`/`&[u8]` buffer inputs also borrow;
+empty views may normalize a null or misaligned pointer to an aligned dangling
+pointer. An aligned nonnull numeric empty view preserves its pointer. Optional
+slice presence uses a separate tag, distinguishing None from Some(empty).
+
+C must provide initialized elements with valid provenance for the entire slice.
+Keep storage alive and unchanged until the native call returns, including source
+constructor and callback invocations. Do not move, consume or obtain overlapping
+exclusive access to an owner whose allocation backs that slice during the call.
+The generator does not prove these buffer/owner relationships or add locks.
+Returned loans depend on the original input storage and remain subject to the
+same lifetime and exclusivity obligations after the call.
+
+A C buffer does not contain a native Rust `Vec` or `String` descriptor. Therefore
+`&Vec<T>` and `&String` require a declared native owner or explicit reconstruction;
+the generator never fabricates an owning descriptor over borrowed foreign memory.
+Borrowed collections whose elements need conversion (records, enums, handles,
+bool, char, 128-bit integers, nested collections or overridden primitive
+representations) likewise reject implicit reconstruction. An element constructor
+alone does not permit allocation of its enclosing borrowed collection.
+
+Use `.reconstruct()` to deliberately build an owned temporary and lend it to the
+source call. This is the `Input::Temporary` operation: slices build a Vec, str
+builds a String, and sized references build their referent. The child describes
+that **owned** value, retaining ordinary constructor/default/ownership rules.
+It may copy buffers or acquire owned handles; acquired values are dropped on
+failure or after use, and consumed-input receipts still apply. It does not imply
+cloning opaque objects whose ordinary input conversion consumes them.
+
+```rust,ignore
+// Generator-wide, also applies to &String inside Option or constructor arguments.
+.expand(expand_param!(&String).reconstruct())
+// Local override: permit allocation/copying for this parameter only.
+.function(fun!(inspect).expand_param(
+    "values", expand_param!(&[i64]).reconstruct()))
+// Explicit element constructors inside an explicitly reconstructed collection.
+.function(fun!(inspect_rows).input("values",
+    Input::Sequence(Box::new(Input::call("clone_row"))).reconstruct()))
+```
+
+With no alternatives, `expand_param!(...).reconstruct()` selects the owned
+value's default input conversion. Alternatives selected on that declaration must
+return the owned referent; builder modifier order does not matter. For explicit
+Input trees use `Input::auto().reconstruct()` or `Input::Temporary(child)`.
+Apply reconstruction to the reference payload, not its surrounding Option.
+Mutable and static-reference reconstruction are unsupported. Views into these
+temporaries cannot escape through returned references. Direct numeric input
+views can back returned loans because their storage belongs to the C caller.
+
+Migration: ordinary numeric borrowed collection inputs now take a typed
+`*_slice_view` rather than converted row arrays. Regenerate the header and native
+library together. Existing intentional reconstruction must opt in; generated row
+names may change. Owned collection construction still allocates its required
+final Rust collection. JNI retains its necessary JVM marshalling; the default
+JNI path is unchanged, and explicit reconstruction can also describe JNI inputs.
+Custom Input-tree traversals must handle the new Temporary variant.
+
 ## Borrowed C collection outputs
 
 A shared slice or fixed-array reference with an unchanged numeric element
@@ -1027,8 +1102,8 @@ The audit also covered scalar/enum snapshots (no allocation), byte/text views
 (original storage), explicit copies (owning results), nested output loans and
 callback-only view definitions. Borrowed `String`/`Vec<u8>` field observations without a native-owner
 representation require an explicit copy or a getter returning `&str`/`&[u8]`.
-C expanded **inputs** still reconstruct Rust collections where required by their
-input recipe; that separate input conversion is unchanged. JNI object/array marshalling is also unchanged.
+Shared C inputs follow the borrowing and explicit reconstruction rules above.
+JNI object/array marshalling is unchanged.
 
 ## Collections
 

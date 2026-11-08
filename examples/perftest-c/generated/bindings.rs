@@ -133,6 +133,12 @@ fn __pb_owned_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_sharedinputrow_65c66f299eac3a69_len(
+    value: &Vec<perftest_flat::SharedInputRow>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_sparsecode_634596980e0ca051_len(
     value: &Vec<perftest_flat::SparseCode>,
 ) -> usize {
@@ -229,6 +235,13 @@ pub unsafe extern "C" fn perftest_free_buffer(b: __PbBuffer) {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct __PbSliceView_f32 {
+    pub data: *const ::core::primitive::f32,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbSliceView_f64 {
     pub data: *const ::core::primitive::f64,
     pub len: usize,
@@ -236,8 +249,71 @@ pub struct __PbSliceView_f64 {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct __PbSliceView_i16 {
+    pub data: *const ::core::primitive::i16,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_i32 {
+    pub data: *const ::core::primitive::i32,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbSliceView_i64 {
     pub data: *const ::core::primitive::i64,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_i8 {
+    pub data: *const ::core::primitive::i8,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_isize {
+    pub data: *const ::core::primitive::isize,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_u16 {
+    pub data: *const ::core::primitive::u16,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_u32 {
+    pub data: *const ::core::primitive::u32,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_u64 {
+    pub data: *const ::core::primitive::u64,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_u8 {
+    pub data: *const ::core::primitive::u8,
+    pub len: usize,
+}
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbSliceView_usize {
+    pub data: *const ::core::primitive::usize,
     pub len: usize,
 }
 const _: () = {
@@ -4711,10 +4787,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables)]
-                    let p0_w12 = p0_w1_rows[p0_w3].v3;
-                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w13 = p0_w1_rows[p0_w3].v3;
+                    let p0_w16 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables)]
-                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w19 = p0_w1_rows[p0_w3].v5;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -4728,9 +4804,13 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         if (p0_w10) != 0 && (p0_w10) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if (p0_w14) != 0 && (p0_w14) != 1 {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w14: Option<String> = None;
+                        if (p0_w16) != 0 && (p0_w16) != 1 {
                             return Err("invalid option presence".into());
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w20: Option<Vec<u8>> = None;
                         if true {
                             for address in ::core::iter::once(
                                 (p0_w6_pointer.addr()) as usize,
@@ -4750,10 +4830,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     let p0_w10 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables)]
-                    let p0_w12 = p0_w1_rows[p0_w3].v3;
-                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w13 = p0_w1_rows[p0_w3].v3;
+                    let p0_w16 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables)]
-                    let p0_w16 = p0_w1_rows[p0_w3].v5;
+                    let p0_w19 = p0_w1_rows[p0_w3].v5;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -4767,9 +4847,13 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         if (p0_w10) != 0 && (p0_w10) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if (p0_w14) != 0 && (p0_w14) != 1 {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w14: Option<String> = None;
+                        if (p0_w16) != 0 && (p0_w16) != 1 {
                             return Err("invalid option presence".into());
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w20: Option<Vec<u8>> = None;
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
@@ -4782,9 +4866,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         #[allow(unused_mut, unused_assignments)]
                         let mut p0_w7: Option<perftest_flat::SparseCode> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w11: Option<String> = None;
+                        let mut p0_w12: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w15: Option<Vec<u8>> = None;
+                        let mut p0_w18: Option<&[u8]> = None;
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
                         p0_w7 = if true {
@@ -4805,33 +4889,37 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         };
                         let p0_w7 = p0_w7.expect("active enum");
                         let p0_w9 = if (p0_w10) == 1i32 {
-                            p0_w11 = if (p0_w10) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        String,
-                                    >::into(
-                                        std::str::from_utf8(unsafe { __pb_read(p0_w12)? })
+                            if (p0_w10) == 1i32 {
+                                p0_w12 = if (p0_w10) == 1i32 {
+                                    Some(
+                                        std::str::from_utf8(unsafe { __pb_read(p0_w13)? })
                                             .map_err(|_| "invalid UTF-8")?,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w11.as_ref().expect("active value"))
+                                    )
+                                } else {
+                                    None
+                                };
+                                let p0_w12: String = ::core::convert::Into::into(
+                                    p0_w12.expect("active value"),
+                                );
+                                p0_w14 = Some(p0_w12);
+                            }
+                            Some(p0_w14.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
-                        let p0_w13 = if (p0_w14) == 1i32 {
-                            p0_w15 = if (p0_w14) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        Vec<u8>,
-                                    >::into(unsafe { __pb_read(p0_w16)? }),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w15.as_ref().expect("active value"))
+                        let p0_w15 = if (p0_w16) == 1i32 {
+                            if (p0_w16) == 1i32 {
+                                p0_w18 = if (p0_w16) == 1i32 {
+                                    Some(unsafe { __pb_read(p0_w19)? })
+                                } else {
+                                    None
+                                };
+                                let p0_w18: Vec<u8> = ::core::convert::Into::into(
+                                    p0_w18.expect("active value"),
+                                );
+                                p0_w20 = Some(p0_w18);
+                            }
+                            Some(p0_w20.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
@@ -4839,7 +4927,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                             p0_w5,
                             p0_w7,
                             p0_w9,
-                            p0_w13,
+                            p0_w15,
                         );
                         let p0_w0 = p0_w4;
                         Ok(p0_w0)
@@ -5223,10 +5311,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
-                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w11 = p0_w1_rows[p0_w3].v2;
+                    let p0_w14 = p0_w1_rows[p0_w3].v3;
                     #[allow(unused_variables)]
-                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w17 = p0_w1_rows[p0_w3].v4;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -5240,9 +5328,13 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                         if (p0_w8) != 0 && (p0_w8) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w12: Option<String> = None;
+                        if (p0_w14) != 0 && (p0_w14) != 1 {
                             return Err("invalid option presence".into());
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w18: Option<Vec<u8>> = None;
                         if true {
                             for address in ::core::iter::once(
                                 (p0_w6_pointer.addr()) as usize,
@@ -5260,10 +5352,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     let p0_w8 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
-                    let p0_w12 = p0_w1_rows[p0_w3].v3;
+                    let p0_w11 = p0_w1_rows[p0_w3].v2;
+                    let p0_w14 = p0_w1_rows[p0_w3].v3;
                     #[allow(unused_variables)]
-                    let p0_w14 = p0_w1_rows[p0_w3].v4;
+                    let p0_w17 = p0_w1_rows[p0_w3].v4;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5277,9 +5369,13 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                         if (p0_w8) != 0 && (p0_w8) != 1 {
                             return Err("invalid option presence".into());
                         }
-                        if (p0_w12) != 0 && (p0_w12) != 1 {
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w12: Option<String> = None;
+                        if (p0_w14) != 0 && (p0_w14) != 1 {
                             return Err("invalid option presence".into());
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w18: Option<Vec<u8>> = None;
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
@@ -5290,46 +5386,50 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                                 .set(__prebindgen_input_consumed.get() + 1);
                         }
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w9: Option<String> = None;
+                        let mut p0_w10: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w13: Option<Vec<u8>> = None;
+                        let mut p0_w16: Option<&[u8]> = None;
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
                         let p0_w7 = if (p0_w8) == 1i32 {
-                            p0_w9 = if (p0_w8) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        String,
-                                    >::into(
-                                        std::str::from_utf8(unsafe { __pb_read(p0_w10)? })
+                            if (p0_w8) == 1i32 {
+                                p0_w10 = if (p0_w8) == 1i32 {
+                                    Some(
+                                        std::str::from_utf8(unsafe { __pb_read(p0_w11)? })
                                             .map_err(|_| "invalid UTF-8")?,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w9.as_ref().expect("active value"))
+                                    )
+                                } else {
+                                    None
+                                };
+                                let p0_w10: String = ::core::convert::Into::into(
+                                    p0_w10.expect("active value"),
+                                );
+                                p0_w12 = Some(p0_w10);
+                            }
+                            Some(p0_w12.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
-                        let p0_w11 = if (p0_w12) == 1i32 {
-                            p0_w13 = if (p0_w12) == 1i32 {
-                                Some(
-                                    ::core::convert::Into::<
-                                        Vec<u8>,
-                                    >::into(unsafe { __pb_read(p0_w14)? }),
-                                )
-                            } else {
-                                None
-                            };
-                            Some(p0_w13.as_ref().expect("active value"))
+                        let p0_w13 = if (p0_w14) == 1i32 {
+                            if (p0_w14) == 1i32 {
+                                p0_w16 = if (p0_w14) == 1i32 {
+                                    Some(unsafe { __pb_read(p0_w17)? })
+                                } else {
+                                    None
+                                };
+                                let p0_w16: Vec<u8> = ::core::convert::Into::into(
+                                    p0_w16.expect("active value"),
+                                );
+                                p0_w18 = Some(p0_w16);
+                            }
+                            Some(p0_w18.as_ref().expect("active temporary"))
                         } else {
                             None
                         };
                         let p0_w4: i64 = perftest_flat::buffer_row_optional_temporaries(
                             p0_w5,
                             p0_w7,
-                            p0_w11,
+                            p0_w13,
                         );
                         let p0_w0 = p0_w4;
                         Ok(p0_w0)
@@ -5682,9 +5782,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables)]
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w9 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w13 = p0_w1_rows[p0_w3].v2;
                     #[allow(unused_variables, clippy::redundant_closure_call)]
                     let checked = (|| {
                         let p0_w6_pointer = if true {
@@ -5695,6 +5795,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w10: Option<String> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w14: Option<Vec<u8>> = None;
                         if true {
                             for address in ::core::iter::once(
                                 (p0_w6_pointer.addr()) as usize,
@@ -5711,9 +5815,9 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                 for p0_w3 in 0..p0_w2 {
                     let p0_w6 = p0_w1_rows[p0_w3].v0;
                     #[allow(unused_variables)]
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w9 = p0_w1_rows[p0_w3].v1;
                     #[allow(unused_variables)]
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w13 = p0_w1_rows[p0_w3].v2;
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5724,6 +5828,10 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                         if true {
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
                         }
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w10: Option<String> = None;
+                        #[allow(unused_mut, unused_assignments)]
+                        let mut p0_w14: Option<Vec<u8>> = None;
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
@@ -5734,36 +5842,40 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                                 .set(__prebindgen_input_consumed.get() + 1);
                         }
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w7: Option<String> = None;
+                        let mut p0_w8: Option<&str> = None;
                         #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w9: Option<Vec<u8>> = None;
+                        let mut p0_w12: Option<&[u8]> = None;
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
-                        p0_w7 = if true {
-                            Some(
-                                ::core::convert::Into::<
-                                    String,
-                                >::into(
-                                    std::str::from_utf8(unsafe { __pb_read(p0_w8)? })
+                        if true {
+                            p0_w8 = if true {
+                                Some(
+                                    std::str::from_utf8(unsafe { __pb_read(p0_w9)? })
                                         .map_err(|_| "invalid UTF-8")?,
-                                ),
-                            )
-                        } else {
-                            None
-                        };
-                        p0_w9 = if true {
-                            Some(
-                                ::core::convert::Into::<
-                                    Vec<u8>,
-                                >::into(unsafe { __pb_read(p0_w10)? }),
-                            )
-                        } else {
-                            None
-                        };
+                                )
+                            } else {
+                                None
+                            };
+                            let p0_w8: String = ::core::convert::Into::into(
+                                p0_w8.expect("active value"),
+                            );
+                            p0_w10 = Some(p0_w8);
+                        }
+                        if true {
+                            p0_w12 = if true {
+                                Some(unsafe { __pb_read(p0_w13)? })
+                            } else {
+                                None
+                            };
+                            let p0_w12: Vec<u8> = ::core::convert::Into::into(
+                                p0_w12.expect("active value"),
+                            );
+                            p0_w14 = Some(p0_w12);
+                        }
                         let p0_w4: i64 = perftest_flat::buffer_row_temporary(
                             p0_w5,
-                            p0_w7.as_ref().expect("active value"),
-                            p0_w9.as_ref().expect("active value"),
+                            p0_w10.as_ref().expect("active temporary"),
+                            p0_w14.as_ref().expect("active temporary"),
                         );
                         let p0_w0 = p0_w4;
                         Ok(p0_w0)
@@ -14794,7 +14906,7 @@ pub unsafe extern "C" fn perftest_collection_alias(
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_collection_borrow_p0_w1 {
+pub struct __PbRow_collection_borrow_p0_w2 {
     pub v0: i64,
 }
 #[repr(C)]
@@ -14831,7 +14943,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows {
+pub unsafe extern "C" fn perftest_collection_borrow(p0_w2: __PbRows) -> __PbRows {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
@@ -14840,46 +14952,57 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w0: Vec<i64> = Vec::new();
+            let mut p0_w1: Vec<i64> = Vec::new();
             if true {
-                let p0_w2 = p0_w1.len;
+                let p0_w3 = p0_w2.len;
                 ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_collection_borrow_p0_w1,
-                    p0_w2,
+                    p0_w2.data as *const __PbRow_collection_borrow_p0_w2,
+                    p0_w3,
                 )?;
-                let p0_w1_rows: &[__PbRow_collection_borrow_p0_w1] = if p0_w2 == 0 {
+                let p0_w2_rows: &[__PbRow_collection_borrow_p0_w2] = if p0_w3 == 0 {
                     &[]
                 } else {
                     unsafe {
                         ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_collection_borrow_p0_w1,
-                            p0_w2,
+                            p0_w2.data as *const __PbRow_collection_borrow_p0_w2,
+                            p0_w3,
                         )
                     }
                 };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                p0_w1.reserve_exact(p0_w3);
+                for p0_w4 in 0..p0_w3 {
+                    let p0_w6 = p0_w2_rows[p0_w4].v0;
                     #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
+                    let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w5 = if true { Some(p0_w6) } else { None };
+                        let p0_w5: i64 = ::core::convert::Into::into(
+                            p0_w5.expect("active value"),
                         );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
+                        let p0_w1 = p0_w5;
+                        Ok(p0_w1)
                     })();
-                    let element = p0_w1_element_built?;
+                    let element = p0_w2_element_built?;
                     #[allow(clippy::zst_offset)]
                     unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
+                        let initialized = p0_w1.len();
+                        p0_w1.as_mut_ptr().add(initialized).write(element);
+                        p0_w1.set_len(initialized + 1);
                     }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(&p0_w0) } else { None };
+            let p0_w1_built = if true { Some(p0_w1) } else { None };
+            let p0_w7 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w7.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -14937,7 +15060,7 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_collection_borrow_each_p0_w1 {
+pub struct __PbRow_collection_borrow_each_p0_w2 {
     pub v0: i64,
 }
 #[repr(C)]
@@ -14955,7 +15078,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_collection_borrow_each(
-    p0_w1: __PbRows,
+    p0_w2: __PbRows,
     __pb_callback: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64)>,
     __pb_callback_context: *mut ::core::ffi::c_void,
 ) -> usize {
@@ -14970,46 +15093,57 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w0: Vec<i64> = Vec::new();
+            let mut p0_w1: Vec<i64> = Vec::new();
             if true {
-                let p0_w2 = p0_w1.len;
+                let p0_w3 = p0_w2.len;
                 ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1,
-                    p0_w2,
+                    p0_w2.data as *const __PbRow_collection_borrow_each_p0_w2,
+                    p0_w3,
                 )?;
-                let p0_w1_rows: &[__PbRow_collection_borrow_each_p0_w1] = if p0_w2 == 0 {
+                let p0_w2_rows: &[__PbRow_collection_borrow_each_p0_w2] = if p0_w3 == 0 {
                     &[]
                 } else {
                     unsafe {
                         ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_collection_borrow_each_p0_w1,
-                            p0_w2,
+                            p0_w2.data as *const __PbRow_collection_borrow_each_p0_w2,
+                            p0_w3,
                         )
                     }
                 };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                p0_w1.reserve_exact(p0_w3);
+                for p0_w4 in 0..p0_w3 {
+                    let p0_w6 = p0_w2_rows[p0_w4].v0;
                     #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
+                    let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w5 = if true { Some(p0_w6) } else { None };
+                        let p0_w5: i64 = ::core::convert::Into::into(
+                            p0_w5.expect("active value"),
                         );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
+                        let p0_w1 = p0_w5;
+                        Ok(p0_w1)
                     })();
-                    let element = p0_w1_element_built?;
+                    let element = p0_w2_element_built?;
                     #[allow(clippy::zst_offset)]
                     unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
+                        let initialized = p0_w1.len();
+                        p0_w1.as_mut_ptr().add(initialized).write(element);
+                        p0_w1.set_len(initialized + 1);
                     }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(&p0_w0) } else { None };
+            let p0_w1_built = if true { Some(p0_w1) } else { None };
+            let p0_w7 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w7.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_borrow(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -17314,11 +17448,6 @@ pub unsafe extern "C" fn perftest_collection_input_plain(
     value.v0
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_collection_input_slice_p0_w1 {
-    pub v0: i64,
-}
-#[repr(C)]
 pub struct perftest_collection_input_slice_result {
     pub v0: i64,
 }
@@ -17332,7 +17461,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_collection_input_slice(p0_w1: __PbRows) -> i64 {
+pub unsafe extern "C" fn perftest_collection_input_slice(
+    p0_w1: __PbSliceView_i64,
+) -> i64 {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
@@ -17341,46 +17472,33 @@ pub unsafe extern "C" fn perftest_collection_input_slice(p0_w1: __PbRows) -> i64
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w0: Vec<i64> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_collection_input_slice_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_collection_input_slice_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_collection_input_slice_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
                 }
-            }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_input_slice(
                 __prebindgen_argument_0,
@@ -20673,7 +20791,7 @@ pub unsafe extern "C" fn perftest_collection_probe(
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_collection_resource_ids_p0_w1 {
+pub struct __PbRow_collection_resource_ids_p0_w2 {
     pub v0: *const perftest_flat::OwnedResource,
 }
 #[repr(C)]
@@ -20712,7 +20830,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __PbRows {
+pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w2: __PbRows) -> __PbRows {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
@@ -20723,145 +20841,160 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
             let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
-            let p0_w0 = if __prebindgen_input_aliases.needs_group() {
-                let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
+            let p0_w1 = if __prebindgen_input_aliases.needs_group() {
+                let mut p0_w1: Vec<perftest_flat::OwnedResource> = Vec::new();
                 if true {
-                    let p0_w2 = p0_w1.len;
+                    let p0_w3 = p0_w2.len;
                     ::prebindgen_runtime::validate_slice(
-                        p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
-                        p0_w2,
+                        p0_w2.data as *const __PbRow_collection_resource_ids_p0_w2,
+                        p0_w3,
                     )?;
-                    let p0_w1_rows: &[__PbRow_collection_resource_ids_p0_w1] = if p0_w2
+                    let p0_w2_rows: &[__PbRow_collection_resource_ids_p0_w2] = if p0_w3
                         == 0
                     {
                         &[]
                     } else {
                         unsafe {
                             ::core::slice::from_raw_parts(
-                                p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
-                                p0_w2,
+                                p0_w2.data as *const __PbRow_collection_resource_ids_p0_w2,
+                                p0_w3,
                             )
                         }
                     };
-                    let mut p0_w1_accesses = __prebindgen_input_aliases
-                        .begin_group(p0_w2.saturating_mul(1usize));
-                    for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    let mut p0_w2_accesses = __prebindgen_input_aliases
+                        .begin_group(p0_w3.saturating_mul(1usize));
+                    for p0_w4 in 0..p0_w3 {
+                        let p0_w7 = p0_w2_rows[p0_w4].v0;
                         #[allow(unused_variables, clippy::redundant_closure_call)]
                         let checked = (|| {
-                            let p0_w6_pointer = if true {
-                                (p0_w6) as *mut perftest_flat::OwnedResource
+                            let p0_w7_pointer = if true {
+                                (p0_w7) as *mut perftest_flat::OwnedResource
                             } else {
                                 ::core::ptr::null_mut()
                             };
                             if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                                ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
                             }
                             if true {
                                 for address in ::core::iter::once(
-                                    (p0_w6_pointer.addr()) as usize,
+                                    (p0_w7_pointer.addr()) as usize,
                                 ) {
-                                    p0_w1_accesses.push((address, false));
+                                    p0_w2_accesses.push((address, false));
                                 }
                             }
                             Ok::<_, String>(())
                         })();
                         checked?;
                     }
-                    __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
-                    p0_w0.reserve_exact(p0_w2);
-                    for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    __prebindgen_input_aliases.accept_group(p0_w2_accesses)?;
+                    p0_w1.reserve_exact(p0_w3);
+                    for p0_w4 in 0..p0_w3 {
+                        let p0_w7 = p0_w2_rows[p0_w4].v0;
                         #[allow(clippy::redundant_closure_call)]
-                        let p0_w1_element_built = (|| -> ::core::result::Result<
+                        let p0_w2_element_built = (|| -> ::core::result::Result<
                             perftest_flat::OwnedResource,
                             String,
                         > {
-                            let p0_w6_pointer = if true {
-                                (p0_w6) as *mut perftest_flat::OwnedResource
+                            let p0_w7_pointer = if true {
+                                (p0_w7) as *mut perftest_flat::OwnedResource
                             } else {
                                 ::core::ptr::null_mut()
                             };
                             if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                                ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
                             }
-                            let p0_w5: &perftest_flat::OwnedResource = unsafe {
-                                &(*p0_w6_pointer)
+                            let p0_w6: &perftest_flat::OwnedResource = unsafe {
+                                &(*p0_w7_pointer)
                             };
-                            let p0_w4: perftest_flat::OwnedResource = perftest_flat::collection_resource_clone(
-                                p0_w5,
+                            let p0_w5: perftest_flat::OwnedResource = perftest_flat::collection_resource_clone(
+                                p0_w6,
                             );
-                            let p0_w0 = p0_w4;
-                            Ok(p0_w0)
+                            let p0_w1 = p0_w5;
+                            Ok(p0_w1)
                         })();
-                        let element = p0_w1_element_built?;
+                        let element = p0_w2_element_built?;
                         #[allow(clippy::zst_offset)]
                         unsafe {
-                            let initialized = p0_w0.len();
-                            p0_w0.as_mut_ptr().add(initialized).write(element);
-                            p0_w0.set_len(initialized + 1);
+                            let initialized = p0_w1.len();
+                            p0_w1.as_mut_ptr().add(initialized).write(element);
+                            p0_w1.set_len(initialized + 1);
                         }
                     }
                 }
-                p0_w0
+                p0_w1
             } else {
-                let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
+                let mut p0_w1: Vec<perftest_flat::OwnedResource> = Vec::new();
                 if true {
-                    let p0_w2 = p0_w1.len;
+                    let p0_w3 = p0_w2.len;
                     ::prebindgen_runtime::validate_slice(
-                        p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
-                        p0_w2,
+                        p0_w2.data as *const __PbRow_collection_resource_ids_p0_w2,
+                        p0_w3,
                     )?;
-                    let p0_w1_rows: &[__PbRow_collection_resource_ids_p0_w1] = if p0_w2
+                    let p0_w2_rows: &[__PbRow_collection_resource_ids_p0_w2] = if p0_w3
                         == 0
                     {
                         &[]
                     } else {
                         unsafe {
                             ::core::slice::from_raw_parts(
-                                p0_w1.data as *const __PbRow_collection_resource_ids_p0_w1,
-                                p0_w2,
+                                p0_w2.data as *const __PbRow_collection_resource_ids_p0_w2,
+                                p0_w3,
                             )
                         }
                     };
-                    p0_w0.reserve_exact(p0_w2);
-                    for p0_w3 in 0..p0_w2 {
-                        let p0_w6 = p0_w1_rows[p0_w3].v0;
+                    p0_w1.reserve_exact(p0_w3);
+                    for p0_w4 in 0..p0_w3 {
+                        let p0_w7 = p0_w2_rows[p0_w4].v0;
                         #[allow(clippy::redundant_closure_call)]
-                        let p0_w1_element_built = (|| -> ::core::result::Result<
+                        let p0_w2_element_built = (|| -> ::core::result::Result<
                             perftest_flat::OwnedResource,
                             String,
                         > {
-                            let p0_w6_pointer = if true {
-                                (p0_w6) as *mut perftest_flat::OwnedResource
+                            let p0_w7_pointer = if true {
+                                (p0_w7) as *mut perftest_flat::OwnedResource
                             } else {
                                 ::core::ptr::null_mut()
                             };
                             if true {
-                                ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
+                                ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
                             }
-                            let p0_w5: &perftest_flat::OwnedResource = unsafe {
-                                &(*p0_w6_pointer)
+                            let p0_w6: &perftest_flat::OwnedResource = unsafe {
+                                &(*p0_w7_pointer)
                             };
-                            let p0_w4: perftest_flat::OwnedResource = perftest_flat::collection_resource_clone(
-                                p0_w5,
+                            let p0_w5: perftest_flat::OwnedResource = perftest_flat::collection_resource_clone(
+                                p0_w6,
                             );
-                            let p0_w0 = p0_w4;
-                            Ok(p0_w0)
+                            let p0_w1 = p0_w5;
+                            Ok(p0_w1)
                         })();
-                        let element = p0_w1_element_built?;
+                        let element = p0_w2_element_built?;
                         #[allow(clippy::zst_offset)]
                         unsafe {
-                            let initialized = p0_w0.len();
-                            p0_w0.as_mut_ptr().add(initialized).write(element);
-                            p0_w0.set_len(initialized + 1);
+                            let initialized = p0_w1.len();
+                            p0_w1.as_mut_ptr().add(initialized).write(element);
+                            p0_w1.set_len(initialized + 1);
                         }
                     }
                 }
-                p0_w0
+                p0_w1
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
+            let p0_w1_built = if true { Some(p0_w1) } else { None };
+            let p0_w8 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(
+                    ::core::convert::AsRef::<
+                        [perftest_flat::OwnedResource],
+                    >::as_ref(p0_w8.as_ref().expect("active temporary")),
+                )
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_resource_ids(
                 __prebindgen_argument_0,
@@ -21919,11 +22052,6 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_collection_slice_p0_w1 {
-    pub v0: i64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct __PbRow_collection_slice_ret_w0 {
     pub v0: i64,
 }
@@ -21956,7 +22084,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows {
+pub unsafe extern "C" fn perftest_collection_slice(
+    p0_w1: __PbSliceView_i64,
+) -> __PbRows {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
@@ -21965,46 +22095,33 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w0: Vec<i64> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_collection_slice_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_collection_slice_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_collection_slice_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
                 }
-            }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
@@ -22058,11 +22175,6 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
     value.v0
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_collection_slice_each_p0_w1 {
-    pub v0: i64,
-}
-#[repr(C)]
 pub struct perftest_collection_slice_each_result {
     pub v0: usize,
 }
@@ -22077,7 +22189,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_collection_slice_each(
-    p0_w1: __PbRows,
+    p0_w1: __PbSliceView_i64,
     __pb_callback: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64)>,
     __pb_callback_context: *mut ::core::ffi::c_void,
 ) -> usize {
@@ -22092,46 +22204,33 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut p0_w0: Vec<i64> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_collection_slice_each_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_collection_slice_each_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_collection_slice_each_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: i64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
                 }
-            }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_slice(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<i64> = source_value;
@@ -26253,7 +26352,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_getter_static_child(
-    p0_w1: __PbBuffer,
+    p0_w2: __PbBuffer,
 ) -> *const perftest_flat::GetterChild {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -26263,21 +26362,33 @@ pub unsafe extern "C" fn perftest_getter_static_child(
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true {
+            let p0_w1 = if true {
                 Some(
-                    ::core::convert::Into::<
-                        String,
-                    >::into(
-                        std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
-                            .map_err(|_| "invalid UTF-8")?,
-                    ),
+                    std::str::from_utf8(unsafe { __pb_read(p0_w2)? })
+                        .map_err(|_| "invalid UTF-8")?,
                 )
             } else {
                 None
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: String = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                Some(p0_w0.as_ref().expect("active value"))
+                Some(p0_w3.as_ref().expect("active temporary"))
             } else {
                 None
             };
@@ -30808,7 +30919,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_option_string_len(
     p0_w1: i32,
-    p0_w3: __PbBuffer,
+    p0_w4: __PbBuffer,
     out1: *mut usize,
 ) -> i32 {
     #[allow(unused_mut)]
@@ -30825,21 +30936,33 @@ pub unsafe extern "C" fn perftest_option_string_len(
             if p0_w1 != 0 && p0_w1 != 1 {
                 return Err("invalid option presence".into());
             }
-            let p0_w2 = if p0_w1 == 1i32 {
+            let p0_w3 = if p0_w1 == 1i32 {
                 Some(
-                    ::core::convert::Into::<
-                        String,
-                    >::into(
-                        std::str::from_utf8(unsafe { __pb_read(p0_w3)? })
-                            .map_err(|_| "invalid UTF-8")?,
-                    ),
+                    std::str::from_utf8(unsafe { __pb_read(p0_w4)? })
+                        .map_err(|_| "invalid UTF-8")?,
                 )
             } else {
                 None
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w3_built = if p0_w1 == 1i32 {
+                Some({
+                    let p0_w3: String = ::core::convert::Into::into(
+                        p0_w3.expect("active value"),
+                    );
+                    p0_w3
+                })
+            } else {
+                None
+            };
+            let p0_w5 = if p0_w1 == 1i32 {
+                Some(p0_w3_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w2_built = if p0_w1 == 1i32 {
-                Some(p0_w2.as_ref().expect("active value"))
+                Some(p0_w5.as_ref().expect("active temporary"))
             } else {
                 None
             };
@@ -31578,7 +31701,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn perftest_owner_view_from_temporary(
-    p0_w1: __PbBuffer,
+    p0_w2: __PbBuffer,
     out1: *mut *const perftest_flat::GetterChild,
 ) -> *mut perftest_flat::GetterOwner {
     #[allow(unused_mut)]
@@ -31592,21 +31715,33 @@ pub unsafe extern "C" fn perftest_owner_view_from_temporary(
             return Err("null success output".into());
         }
         {
-            let p0_w0 = if true {
+            let p0_w1 = if true {
                 Some(
-                    ::core::convert::Into::<
-                        String,
-                    >::into(
-                        std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
-                            .map_err(|_| "invalid UTF-8")?,
-                    ),
+                    std::str::from_utf8(unsafe { __pb_read(p0_w2)? })
+                        .map_err(|_| "invalid UTF-8")?,
                 )
             } else {
                 None
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: String = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                Some(p0_w0.as_ref().expect("active value"))
+                Some(p0_w3.as_ref().expect("active temporary"))
             } else {
                 None
             };
@@ -35253,6 +35388,1985 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_shared_input_bytes_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_bytes(p0_w2: __PbBuffer) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1 = if true { Some(unsafe { __pb_read(p0_w2)? }) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: Vec<u8> = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w3.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_bytes_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_checked_result {
+    pub v0: usize,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_checked(
+    p0_w1: __PbSliceView_i64,
+    p1_w1: usize,
+    out0: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_checked_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: usize = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_checked(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_shared_input_checked_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_shared_input_copy_p0_w2 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_shared_input_copy_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_copy(p0_w2: __PbRows) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_copy_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w1: Vec<i64> = Vec::new();
+            if true {
+                let p0_w3 = p0_w2.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w2.data as *const __PbRow_shared_input_copy_p0_w2,
+                    p0_w3,
+                )?;
+                let p0_w2_rows: &[__PbRow_shared_input_copy_p0_w2] = if p0_w3 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w2.data as *const __PbRow_shared_input_copy_p0_w2,
+                            p0_w3,
+                        )
+                    }
+                };
+                p0_w1.reserve_exact(p0_w3);
+                for p0_w4 in 0..p0_w3 {
+                    let p0_w6 = p0_w2_rows[p0_w4].v0;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w5 = if true { Some(p0_w6) } else { None };
+                        let p0_w5: i64 = ::core::convert::Into::into(
+                            p0_w5.expect("active value"),
+                        );
+                        let p0_w1 = p0_w5;
+                        Ok(p0_w1)
+                    })();
+                    let element = p0_w2_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w1.len();
+                        p0_w1.as_mut_ptr().add(initialized).write(element);
+                        p0_w1.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true { Some(p0_w1) } else { None };
+            let p0_w7 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(
+                    ::core::convert::AsRef::<
+                        [i64],
+                    >::as_ref(p0_w7.as_ref().expect("active temporary")),
+                )
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_copy(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_copy_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_echo_result {
+    pub v0: __PbSliceView_i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_echo(
+    p0_w1: __PbSliceView_i64,
+) -> __PbSliceView_i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_echo_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_echo(__prebindgen_argument_0);
+            let ret_w0_source = &(source_value);
+            let ret_w0: &[::core::primitive::i64] = ::core::convert::AsRef::<
+                [::core::primitive::i64],
+            >::as_ref(ret_w0_source);
+            let ret_w0 = __PbSliceView_i64 {
+                data: <[::core::primitive::i64]>::as_ptr(ret_w0),
+                len: <[::core::primitive::i64]>::len(ret_w0),
+            };
+            let result = perftest_shared_input_echo_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_f32_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_f32(p0_w1: __PbSliceView_f32) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_f32_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::f32,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::f32>::dangling().as_ptr()
+                        as *const ::core::primitive::f32
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_f32(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_f32_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_f64_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_f64(p0_w1: __PbSliceView_f64) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_f64_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::f64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::f64>::dangling().as_ptr()
+                        as *const ::core::primitive::f64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_f64(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_f64_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_fixed_result {
+    pub v0: f64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_fixed(
+    p0_w1: __PbSliceView_f64,
+    out0: *mut f64,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_fixed_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 3 {
+                    return Err("wrong fixed array length".into());
+                }
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::f64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::f64>::dangling().as_ptr()
+                        as *const ::core::primitive::f64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(
+                    <&[::core::primitive::f64; 3]>::try_from(p0_w0_slice)
+                        .map_err(|_| "wrong fixed array length".to_string())?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_fixed(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_shared_input_fixed_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_shared_input_i16_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_i16(p0_w1: __PbSliceView_i16) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_i16_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i16,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i16>::dangling().as_ptr()
+                        as *const ::core::primitive::i16
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_i16(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_i16_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_i32_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_i32(p0_w1: __PbSliceView_i32) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_i32_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i32,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i32>::dangling().as_ptr()
+                        as *const ::core::primitive::i32
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_i32(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_i32_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_i64_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_i64(p0_w1: __PbSliceView_i64) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_i64_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_i64(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_i64_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_i8_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_i8(p0_w1: __PbSliceView_i8) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<perftest_shared_input_i8_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i8,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i8>::dangling().as_ptr()
+                        as *const ::core::primitive::i8
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_i8(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_i8_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_isize_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_isize(
+    p0_w1: __PbSliceView_isize,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_isize_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::isize,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::isize>::dangling().as_ptr()
+                        as *const ::core::primitive::isize
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_isize(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_isize_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_move_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_move(
+    p0_w2: *mut perftest_flat::OwnedResource,
+    p1_w1: u32,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_move_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if ownership.is_null() {
+            return Err("null ownership-output pointer".into());
+        }
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let __prebindgen_input_consumed = &ownership_accepted;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
+            let _: () = {};
+            let p0_w2_pointer = if true {
+                p0_w2 as *mut perftest_flat::OwnedResource
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w2_pointer)?;
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                let mut p0_w1_built_transferred_0 = 0usize;
+                if true {
+                    for address in ::core::iter::once((p0_w2_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                        p0_w1_built_transferred_0 += 1;
+                    }
+                }
+                let p0_w1 = if true {
+                    Some(unsafe { Box::from_raw(p0_w2_pointer) })
+                } else {
+                    None
+                };
+                __prebindgen_input_consumed
+                    .set(__prebindgen_input_consumed.get() + p0_w1_built_transferred_0);
+                Some({
+                    let p0_w1: perftest_flat::OwnedResource = *p0_w1
+                        .expect("active allocation");
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w3.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
+            let p1_w0 = if true {
+                Some(char::from_u32(p1_w1).ok_or("invalid Unicode scalar")?)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: char = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_move(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_shared_input_move_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    if !ownership.is_null() {
+        std::ptr::write(ownership, ownership_accepted.get());
+    }
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_shared_input_optional_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_optional(
+    p0_w1: i32,
+    p0_w3: __PbSliceView_i64,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            if p0_w1 != 0 && p0_w1 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let p0_w2 = if p0_w1 == 1i32 {
+                if p0_w3.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::i64,
+                    >(p0_w3.data, p0_w3.len)?;
+                }
+                let p0_w2_pointer = if p0_w3.len == 0
+                    && (p0_w3.data.is_null() || !p0_w3.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::i64>::dangling().as_ptr()
+                        as *const ::core::primitive::i64
+                } else {
+                    p0_w3.data
+                };
+                let p0_w2_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w2_pointer, p0_w3.len)
+                };
+                Some(p0_w2_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if p0_w1 == 1i32 {
+                Some(p0_w2.expect("active slice view"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0 = if p0_w1 == 1i32 {
+                        Some(p0_w2_built.expect("active input"))
+                    } else {
+                        None
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_optional(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_optional_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_shared_input_optional_vector_p0_w4 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_shared_input_optional_vector_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_optional_vector(
+    p0_w1: i32,
+    p0_w4: __PbRows,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_optional_vector_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            if p0_w1 != 0 && p0_w1 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let mut p0_w3: Vec<i64> = Vec::new();
+            if p0_w1 == 1i32 {
+                let p0_w5 = p0_w4.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w4.data as *const __PbRow_shared_input_optional_vector_p0_w4,
+                    p0_w5,
+                )?;
+                let p0_w4_rows: &[__PbRow_shared_input_optional_vector_p0_w4] = if p0_w5
+                    == 0
+                {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w4.data
+                                as *const __PbRow_shared_input_optional_vector_p0_w4,
+                            p0_w5,
+                        )
+                    }
+                };
+                p0_w3.reserve_exact(p0_w5);
+                for p0_w6 in 0..p0_w5 {
+                    let p0_w8 = p0_w4_rows[p0_w6].v0;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w4_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w7 = if true { Some(p0_w8) } else { None };
+                        let p0_w7: i64 = ::core::convert::Into::into(
+                            p0_w7.expect("active value"),
+                        );
+                        let p0_w3 = p0_w7;
+                        Ok(p0_w3)
+                    })();
+                    let element = p0_w4_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w3.len();
+                        p0_w3.as_mut_ptr().add(initialized).write(element);
+                        p0_w3.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w3_built = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
+            let p0_w9 = if p0_w1 == 1i32 {
+                Some(p0_w3_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w2_built = if p0_w1 == 1i32 {
+                Some(p0_w9.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0 = if p0_w1 == 1i32 {
+                        Some(p0_w2_built.expect("active input"))
+                    } else {
+                        None
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_optional_vector(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_optional_vector_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_qualified_bytes_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_qualified_bytes(
+    p0_w1: __PbSliceView_u8,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_qualified_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::u8,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::u8>::dangling().as_ptr()
+                        as *const ::core::primitive::u8
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_qualified_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_qualified_bytes_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_shared_input_rows_p0_w1 {
+    pub v0: __PbSliceView_i64,
+}
+#[repr(C)]
+pub struct perftest_shared_input_rows_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_rows(p0_w1: __PbRows) -> i64 {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_rows_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<perftest_flat::SharedInputRow> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w1.data as *const __PbRow_shared_input_rows_p0_w1,
+                    p0_w2,
+                )?;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_shared_input_rows_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        perftest_flat::SharedInputRow,
+                        String,
+                    > {
+                        let p0_w5 = if true {
+                            if (p0_w6).len != 0 {
+                                ::prebindgen_runtime::validate_slice::<
+                                    ::core::primitive::i64,
+                                >((p0_w6).data, (p0_w6).len)?;
+                            }
+                            let p0_w5_pointer = if (p0_w6).len == 0
+                                && ((p0_w6).data.is_null() || !(p0_w6).data.is_aligned())
+                            {
+                                ::core::ptr::NonNull::<::core::primitive::i64>::dangling()
+                                    .as_ptr() as *const ::core::primitive::i64
+                            } else {
+                                (p0_w6).data
+                            };
+                            let p0_w5_slice = unsafe {
+                                ::core::slice::from_raw_parts(p0_w5_pointer, (p0_w6).len)
+                            };
+                            Some(p0_w5_slice)
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w5_built = if true {
+                            Some(p0_w5.expect("active slice view"))
+                        } else {
+                            None
+                        };
+                        #[allow(clippy::let_and_return, clippy::unit_arg)]
+                        let p0_w4_built = if true {
+                            Some({
+                                let p0_w4: perftest_flat::SharedInputRow = perftest_flat::shared_input_row_new(
+                                    p0_w5_built.expect("active input"),
+                                );
+                                p0_w4
+                            })
+                        } else {
+                            None
+                        };
+                        let p0_w0 = p0_w4_built.expect("active input");
+                        Ok(p0_w0)
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true { Some(p0_w0) } else { None };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_rows(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_rows_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_string_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_string(p0_w2: __PbBuffer) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_string_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1 = if true {
+                Some(
+                    std::str::from_utf8(unsafe { __pb_read(p0_w2)? })
+                        .map_err(|_| "invalid UTF-8")?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: String = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w3.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_string(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_string_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_text_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_text(p0_w1: __PbBuffer) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_text_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                Some(
+                    std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
+                        .map_err(|_| "invalid UTF-8")?,
+                )
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(
+                    ::core::convert::AsRef::<
+                        str,
+                    >::as_ref(p0_w0.as_ref().expect("active value")),
+                )
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_text(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_text_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_u16_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_u16(p0_w1: __PbSliceView_u16) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_u16_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::u16,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::u16>::dangling().as_ptr()
+                        as *const ::core::primitive::u16
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_u16(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_u16_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_u32_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_u32(p0_w1: __PbSliceView_u32) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_u32_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::u32,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::u32>::dangling().as_ptr()
+                        as *const ::core::primitive::u32
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_u32(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_u32_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_u64_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_u64(p0_w1: __PbSliceView_u64) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_u64_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::u64,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::u64>::dangling().as_ptr()
+                        as *const ::core::primitive::u64
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_u64(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_u64_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_shared_input_usize_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_usize(
+    p0_w1: __PbSliceView_usize,
+) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_usize_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true {
+                if p0_w1.len != 0 {
+                    ::prebindgen_runtime::validate_slice::<
+                        ::core::primitive::usize,
+                    >(p0_w1.data, p0_w1.len)?;
+                }
+                let p0_w0_pointer = if p0_w1.len == 0
+                    && (p0_w1.data.is_null() || !p0_w1.data.is_aligned())
+                {
+                    ::core::ptr::NonNull::<::core::primitive::usize>::dangling().as_ptr()
+                        as *const ::core::primitive::usize
+                } else {
+                    p0_w1.data
+                };
+                let p0_w0_slice = unsafe {
+                    ::core::slice::from_raw_parts(p0_w0_pointer, p0_w1.len)
+                };
+                Some(p0_w0_slice)
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w0.expect("active slice view"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_usize(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_usize_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_shared_input_vector_p0_w2 {
+    pub v0: i64,
+}
+#[repr(C)]
+pub struct perftest_shared_input_vector_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_shared_input_vector(p0_w2: __PbRows) -> usize {
+    #[allow(unused_mut)]
+    let _ownership_accepted = ::core::cell::Cell::new(0usize);
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_shared_input_vector_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w1: Vec<i64> = Vec::new();
+            if true {
+                let p0_w3 = p0_w2.len;
+                ::prebindgen_runtime::validate_slice(
+                    p0_w2.data as *const __PbRow_shared_input_vector_p0_w2,
+                    p0_w3,
+                )?;
+                let p0_w2_rows: &[__PbRow_shared_input_vector_p0_w2] = if p0_w3 == 0 {
+                    &[]
+                } else {
+                    unsafe {
+                        ::core::slice::from_raw_parts(
+                            p0_w2.data as *const __PbRow_shared_input_vector_p0_w2,
+                            p0_w3,
+                        )
+                    }
+                };
+                p0_w1.reserve_exact(p0_w3);
+                for p0_w4 in 0..p0_w3 {
+                    let p0_w6 = p0_w2_rows[p0_w4].v0;
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w5 = if true { Some(p0_w6) } else { None };
+                        let p0_w5: i64 = ::core::convert::Into::into(
+                            p0_w5.expect("active value"),
+                        );
+                        let p0_w1 = p0_w5;
+                        Ok(p0_w1)
+                    })();
+                    let element = p0_w2_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w1.len();
+                        p0_w1.as_mut_ptr().add(initialized).write(element);
+                        p0_w1.set_len(initialized + 1);
+                    }
+                }
+            }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true { Some(p0_w1) } else { None };
+            let p0_w7 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some(p0_w7.as_ref().expect("active temporary"))
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let source_value = perftest_flat::shared_input_vector(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_shared_input_vector_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_sparse_borrowed_result {
     pub v0: i32,
 }
@@ -36907,7 +39021,7 @@ pub unsafe extern "C" fn perftest_storage_put_opt(
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct __PbRow_storage_put_slice_p1_w1 {
+pub struct __PbRow_storage_put_slice_p1_w2 {
     pub v0: i64,
     pub v1: i32,
     pub v2: f64,
@@ -36929,7 +39043,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_storage_put_slice(
     p0_w1: *mut perftest_flat::Storage,
-    p1_w1: __PbRows,
+    p1_w2: __PbRows,
 ) {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
@@ -36965,70 +39079,85 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
             } else {
                 None
             };
-            let mut p1_w0: Vec<perftest_flat::Payload> = Vec::new();
+            let mut p1_w1: Vec<perftest_flat::Payload> = Vec::new();
             if true {
-                let p1_w2 = p1_w1.len;
+                let p1_w3 = p1_w2.len;
                 ::prebindgen_runtime::validate_slice(
-                    p1_w1.data as *const __PbRow_storage_put_slice_p1_w1,
-                    p1_w2,
+                    p1_w2.data as *const __PbRow_storage_put_slice_p1_w2,
+                    p1_w3,
                 )?;
-                let p1_w1_rows: &[__PbRow_storage_put_slice_p1_w1] = if p1_w2 == 0 {
+                let p1_w2_rows: &[__PbRow_storage_put_slice_p1_w2] = if p1_w3 == 0 {
                     &[]
                 } else {
                     unsafe {
                         ::core::slice::from_raw_parts(
-                            p1_w1.data as *const __PbRow_storage_put_slice_p1_w1,
-                            p1_w2,
+                            p1_w2.data as *const __PbRow_storage_put_slice_p1_w2,
+                            p1_w3,
                         )
                     }
                 };
-                p1_w0.reserve_exact(p1_w2);
-                for p1_w3 in 0..p1_w2 {
-                    let p1_w6 = p1_w1_rows[p1_w3].v0;
-                    let p1_w8 = p1_w1_rows[p1_w3].v1;
-                    let p1_w10 = p1_w1_rows[p1_w3].v2;
-                    let p1_w12 = p1_w1_rows[p1_w3].v3;
+                p1_w1.reserve_exact(p1_w3);
+                for p1_w4 in 0..p1_w3 {
+                    let p1_w7 = p1_w2_rows[p1_w4].v0;
+                    let p1_w9 = p1_w2_rows[p1_w4].v1;
+                    let p1_w11 = p1_w2_rows[p1_w4].v2;
+                    let p1_w13 = p1_w2_rows[p1_w4].v3;
                     #[allow(clippy::redundant_closure_call)]
-                    let p1_w1_element_built = (|| -> ::core::result::Result<
+                    let p1_w2_element_built = (|| -> ::core::result::Result<
                         perftest_flat::Payload,
                         String,
                     > {
-                        let p1_w5 = if true { Some(p1_w6) } else { None };
-                        let p1_w7 = if true { Some(p1_w8) } else { None };
-                        let p1_w9 = if true { Some(p1_w10) } else { None };
-                        let p1_w11 = if true { Some((p1_w12) != 0) } else { None };
-                        let p1_w5: i64 = ::core::convert::Into::into(
-                            p1_w5.expect("active value"),
+                        let p1_w6 = if true { Some(p1_w7) } else { None };
+                        let p1_w8 = if true { Some(p1_w9) } else { None };
+                        let p1_w10 = if true { Some(p1_w11) } else { None };
+                        let p1_w12 = if true { Some((p1_w13) != 0) } else { None };
+                        let p1_w6: i64 = ::core::convert::Into::into(
+                            p1_w6.expect("active value"),
                         );
-                        let p1_w7: i32 = ::core::convert::Into::into(
-                            p1_w7.expect("active value"),
+                        let p1_w8: i32 = ::core::convert::Into::into(
+                            p1_w8.expect("active value"),
                         );
-                        let p1_w9: f64 = ::core::convert::Into::into(
-                            p1_w9.expect("active value"),
+                        let p1_w10: f64 = ::core::convert::Into::into(
+                            p1_w10.expect("active value"),
                         );
-                        let p1_w11: bool = ::core::convert::Into::into(
-                            p1_w11.expect("active value"),
+                        let p1_w12: bool = ::core::convert::Into::into(
+                            p1_w12.expect("active value"),
                         );
-                        let p1_w4: perftest_flat::Payload = perftest_flat::payload_new(
-                            p1_w5,
-                            p1_w7,
-                            p1_w9,
-                            p1_w11,
+                        let p1_w5: perftest_flat::Payload = perftest_flat::payload_new(
+                            p1_w6,
+                            p1_w8,
+                            p1_w10,
+                            p1_w12,
                         );
-                        let p1_w0 = p1_w4;
-                        Ok(p1_w0)
+                        let p1_w1 = p1_w5;
+                        Ok(p1_w1)
                     })();
-                    let element = p1_w1_element_built?;
+                    let element = p1_w2_element_built?;
                     #[allow(clippy::zst_offset)]
                     unsafe {
-                        let initialized = p1_w0.len();
-                        p1_w0.as_mut_ptr().add(initialized).write(element);
-                        p1_w0.set_len(initialized + 1);
+                        let initialized = p1_w1.len();
+                        p1_w1.as_mut_ptr().add(initialized).write(element);
+                        p1_w1.set_len(initialized + 1);
                     }
                 }
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true { Some(p1_w0.as_slice()) } else { None };
+            let p1_w1_built = if true { Some(p1_w1) } else { None };
+            let p1_w14 = if true {
+                Some(p1_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some(
+                    ::core::convert::AsRef::<
+                        [perftest_flat::Payload],
+                    >::as_ref(p1_w14.as_ref().expect("active temporary")),
+                )
+            } else {
+                None
+            };
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_slice(
@@ -37465,28 +39594,40 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_string_len(p0_w1: __PbBuffer) -> usize {
+pub unsafe extern "C" fn perftest_string_len(p0_w2: __PbBuffer) -> usize {
     #[allow(unused_mut)]
     let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<perftest_string_len_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true {
+            let p0_w1 = if true {
                 Some(
-                    ::core::convert::Into::<
-                        String,
-                    >::into(
-                        std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
-                            .map_err(|_| "invalid UTF-8")?,
-                    ),
+                    std::str::from_utf8(unsafe { __pb_read(p0_w2)? })
+                        .map_err(|_| "invalid UTF-8")?,
                 )
             } else {
                 None
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: String = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
+            let p0_w3 = if true {
+                Some(p0_w1_built.expect("active input"))
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                Some(p0_w0.as_ref().expect("active value"))
+                Some(p0_w3.as_ref().expect("active temporary"))
             } else {
                 None
             };
@@ -38594,6 +40735,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::SequenceScalars > () != 0,
     "flat object `SequenceScalars` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::SharedInputRow > () != 0,
+    "flat object `SharedInputRow` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::SparseCode > () != 0,

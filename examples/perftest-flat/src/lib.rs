@@ -554,3 +554,6 @@ pub use collection_cleanup::*;
 
 mod type_inputs;
 pub use type_inputs::*;
+
+mod shared_inputs;
+pub use shared_inputs::*;

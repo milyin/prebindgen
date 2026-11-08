@@ -400,6 +400,9 @@ uintptr_t owner_inline_text_take(owner_text * p0_w1);
 owner_bytes owner_mutable_bytes_vector_expanded(uintptr_t p0_w1, owner_buffer_view_mut *out1);
 uintptr_t owner_owned_resource_drops(void);
 int64_t owner_owned_resource_id(const owner_resource * p0_w1);
+uintptr_t owner_shared_input_bytes(const owner_bytes * p0_w1);
+uintptr_t owner_shared_input_string(const owner_text * p0_w1);
+uintptr_t owner_shared_input_vector(const owner_numbers * p0_w1);
 #ifdef __cplusplus
 }
 #endif

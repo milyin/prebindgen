@@ -22,6 +22,16 @@ fn main() {
         .panic()
         .function(fun!(borrowed_emit))
         .panic()
+        .function(fun!(shared_input_inspect))
+        .panic()
+        .function(fun!(shared_input_sum))
+        .panic()
+        .function(fun!(shared_input_array))
+        .panic()
+        .function(fun!(shared_input_text))
+        .panic()
+        .function(fun!(shared_input_owned))
+        .panic()
         .opaque_ptr("resource", syn::parse_quote!(Resource))
         .opaque_owned_struct(
             "native_packet",

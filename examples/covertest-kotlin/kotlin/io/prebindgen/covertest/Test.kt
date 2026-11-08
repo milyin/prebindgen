@@ -44,6 +44,7 @@ fun main() {
     checkEnums()
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
+        // Explicit reconstruction borrows the decoded Rust String temporary.
         check(stringLen(text) == text.encodeToByteArray().size.toULong())
         check(textEcho(text) == text)
     }
