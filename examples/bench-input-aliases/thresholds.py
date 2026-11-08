@@ -122,6 +122,6 @@ for d in builds.values():assert sha(d['library'])==d['library_sha256']
 for name,data in [('samples',rows),('summary',summary),('counts',counts)]:
     if name=='summary':data=[{**x,'fork_medians':json.dumps(x['fork_medians'])} for x in data]
     with (out/f'{name}.csv').open('w') as f:
-        w=csv.DictWriter(f,fieldnames=list(data[0]));w.writeheader();w.writerows(data)
+        w=csv.DictWriter(f,fieldnames=list(data[0]),lineterminator="\n");w.writeheader();w.writerows(data)
 (out/'results.json').write_text(json.dumps(dict(settings={k:str(v) if isinstance(v,Path) else v for k,v in vars(a).items()},builds={str(k):v for k,v in builds.items()},core=core,summary=summary,counts=counts,runner_sha256=sha(__file__)),indent=2)+'\n')
 print('finished',out,flush=True)
