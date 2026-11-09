@@ -92,6 +92,19 @@ fun checkMixedCallbackResults() {
     check(callbackReturnResourceLive() == retained.size.toULong())
     retained.forEach { it.close() }
     check(callbackReturnResourceLive() == 0UL)
+    // A nullable ordinary owner before a packed collection has its own
+    // consumption position, including when a later packed row fails.
+    for (present in listOf(false, true)) {
+        var calls = 0
+        val total = callbackMixedOptionalBatches(MixedOptionalBatchesCallback {
+            check(callbackReturnResourceLive() == 0UL)
+            val fail = calls++ == 0
+            List(3) { batch -> CallbackOptionalBatch(if (present) callbackReturnResourceNew(5) else null,
+                List(2) { row(present, if (fail && batch == 1 && it == 1) 'p'.code else 'c'.code) }, callbackReturnResourceNew(7)) }
+        }, true)
+        check(calls == 2 && total == 3 * (7L + (if (present) 5L else 0L) + 2 * (if (present) 60L else 40L)))
+        check(callbackReturnResourceLive() == 0UL)
+    }
     checkMalformedMixedCallbackResults()
     callbackReturnResourceAuditFinish()
     println("mixed callback results PASS: per-row bulk frames, optional nested lists, partial rows, borrowed owners, duplicate rejection, retries and workers")

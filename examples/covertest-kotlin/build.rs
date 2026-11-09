@@ -519,6 +519,11 @@ fn main() {
             .class(data_class!(CallbackWireRow))
             .class(data_class!(CallbackFixedResult))
             .class(data_class!(CallbackNestedBatch))
+            .class(data_class!(CallbackOptionalBatch))
+            .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+                        Input::Sequence(Box::new(callback_result_row_input())).bulk(), Input::Leaf]))))))
             .class(data_class!(CallbackScalarBatch))
             .fun(fun!(callback_mixed_scalars).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")

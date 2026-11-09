@@ -277,6 +277,7 @@ internal object JNINative {
     @JvmStatic external fun call_callback_config_nested_c023613beb216159(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_optional_c1ccbb78d74cca03(p0_w1: Int, p0_w4: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_ordinary_7a1de11aa6329a97(p0_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_mixed_optional_batches_76b06f5cc7757da1(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_mixed_scalars_b3ffdfdc953994c9(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_return_resource_audit_start_a5392cdfc5cff176(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_callback_return_resource_audit_finish_a13e6bda7dfc3d9b(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit

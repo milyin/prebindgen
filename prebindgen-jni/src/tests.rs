@@ -4216,3 +4216,21 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
         assert!(error.contains(reason), "{error}");
     }
 }
+
+#[test]
+fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
+    let returned = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Selector(vec![Input::Leaf, Input::Leaf]),
+        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
+    ])));
+    let error = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub struct Batch{pub first:Handle,pub packed:Vec<Row>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(data_class!(Row)).class(data_class!(Batch))
+            .fun(fun!(mixed).expand_param("cb", callback!(impl Fn()->Vec<Batch>).expand_return(returned))))
+        .build().err().unwrap();
+    assert!(
+        error.contains("data-class input") || error.contains("exactly one"),
+        "{error}"
+    );
+}

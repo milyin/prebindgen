@@ -1,6 +1,68 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.callbackreturns
 
+public fun callbackMixedOptionalBatches(callback: io.prebindgen.covertest.MixedOptionalBatchesCallback, retry: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackOptionalBatch>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val __pb_callback_return_w5_field0 = callback_return_w5.first
+val __pb_callback_return_w5_field1 = callback_return_w5.rows
+val __pb_callback_return_w5_field2 = callback_return_w5.last
+val callback_return_w7_elements = if (true) __pb_callback_return_w5_field1?.toList() else null
+val callback_return_w6_writer_state = if (true) run { val callback_return_w6_writer = io.prebindgen.covertest.BulkInputs.Input_Range_08a37f4477600073()
+val callback_return_w7_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w7_elements }
+if (callback_return_w7_bulkList == null) { callback_return_w6_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0]) } else {
+val callback_return_w7_bulkStart = callback_return_w6_writer.rows(callback_return_w7_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+callback_return_w6_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0], callback_return_w7_bulkStart, callback_return_w7_bulkList.size)
+callback_return_w7_bulkList.forEachIndexed { callback_return_w7_bulkIndex, callback_return_w11 ->
+val __pb_callback_return_w11_field0 = callback_return_w11.first
+val __pb_callback_return_w11_field1 = callback_return_w11.optional
+val __pb_callback_return_w11_field2 = callback_return_w11.character
+val __pb_callback_return_w11_field3 = callback_return_w11.last
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field0 }, true, 0)
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w11_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w11_field1) else null) { "invalid option payload" } else null }, true, 0)
+callback_return_w6_writer.int((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field2 })
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field3 }, true, 0)
+}
+}
+
+callback_return_w6_writer } else null
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w5_field0 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w5_field0) else null) { "invalid option payload" } else null }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state?.length ?: 0 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field2 }) }, intArrayOf(2, 0, 0, 2), 1, null) } else null
+ run { val __pb_handle0: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w1_elements?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withInputHandleLocks((__pb_handle0), true) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.callbackreturns.CallbackOptionalBatch)?.let { returnedValue1 -> (returnedValue1.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue4 -> returnedHandles.add(returnedValue4); returnedOwners.add(returnedValue4) }
+(returnedValue1.rows as? Iterable<*>)?.forEach { returnedValue7 -> (returnedValue7 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue8 -> (returnedValue8.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue10 -> returnedHandles.add(returnedValue10); returnedOwners.add(returnedValue10) }
+(returnedValue8.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue13 -> returnedHandles.add(returnedValue13); returnedOwners.add(returnedValue13) }
+(returnedValue8.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue15 -> returnedHandles.add(returnedValue15); returnedOwners.add(returnedValue15) }
+ }
+ }
+(returnedValue1.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue17 -> returnedHandles.add(returnedValue17); returnedOwners.add(returnedValue17) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { retry } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_optional_batches_76b06f5cc7757da1(nativeArgument0, nativeArgument1, nativeArgument2) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
 public fun callbackMixedScalars(callback: io.prebindgen.covertest.MixedScalarBatchesCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {

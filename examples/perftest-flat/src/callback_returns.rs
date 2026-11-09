@@ -89,8 +89,12 @@ static RESOURCE_LIVE: AtomicUsize = AtomicUsize::new(0);
 #[prebindgen]
 pub type CallbackReturnResource = CallbackReturnResourceImpl;
 pub struct CallbackReturnResourceImpl(i64, usize);
-static RESOURCE_AUDIT: std::sync::Mutex<Option<std::collections::BTreeSet<usize>>> =
-    std::sync::Mutex::new(None);
+#[derive(Default)]
+struct ResourceAudit {
+    live: std::collections::BTreeSet<usize>,
+    duplicate_drop: bool,
+}
+static RESOURCE_AUDIT: std::sync::Mutex<Option<ResourceAudit>> = std::sync::Mutex::new(None);
 static RESOURCE_SERIAL: AtomicUsize = AtomicUsize::new(1);
 #[prebindgen]
 pub fn callback_return_resource_audit_start() {
@@ -100,23 +104,22 @@ pub fn callback_return_resource_audit_start() {
 }
 #[prebindgen]
 pub fn callback_return_resource_audit_finish() {
+    let audit = RESOURCE_AUDIT.lock().unwrap().take().unwrap();
+    assert!(!audit.duplicate_drop, "callback allocation dropped twice");
     assert!(
-        RESOURCE_AUDIT.lock().unwrap().take().unwrap().is_empty(),
+        audit.live.is_empty(),
         "callback allocations were not all dropped"
     );
 }
+
 impl Drop for CallbackReturnResourceImpl {
     fn drop(&mut self) {
         if self.1 != 0 {
-            assert!(
-                RESOURCE_AUDIT
-                    .lock()
-                    .unwrap()
-                    .as_mut()
-                    .unwrap()
-                    .remove(&self.1),
-                "callback allocation dropped twice"
-            );
+            let mut audit = RESOURCE_AUDIT.lock().unwrap();
+            let audit = audit.as_mut().unwrap();
+            if !audit.live.remove(&self.1) {
+                audit.duplicate_drop = true;
+            }
         }
         RESOURCE_LIVE.fetch_sub(1, Ordering::SeqCst);
     }
@@ -126,7 +129,7 @@ pub fn callback_return_resource_new(value: i64) -> CallbackReturnResource {
     RESOURCE_LIVE.fetch_add(1, Ordering::SeqCst);
     let serial = RESOURCE_AUDIT.lock().unwrap().as_mut().map_or(0, |audit| {
         let serial = RESOURCE_SERIAL.fetch_add(1, Ordering::Relaxed);
-        assert!(audit.insert(serial));
+        assert!(audit.live.insert(serial));
         serial
     });
     CallbackReturnResourceImpl(value, serial)
@@ -564,4 +567,26 @@ pub fn callback_mixed_scalars(callback: impl Fn() -> Vec<CallbackScalarBatch>) -
                     .sum::<i64>()
         })
         .sum()
+}
+
+#[prebindgen]
+pub struct CallbackOptionalBatch {
+    pub first: Option<CallbackReturnResource>,
+    pub rows: Vec<CallbackFixedResult>,
+    pub last: CallbackReturnResource,
+}
+#[prebindgen]
+pub fn callback_mixed_optional_batches(
+    callback: impl Fn() -> Vec<CallbackOptionalBatch> + Send + Sync + 'static,
+    retry: bool,
+) -> i64 {
+    callback_retry(callback, retry, false, |rows| {
+        rows.into_iter()
+            .map(|row| {
+                row.first.as_ref().map_or(0, |r| r.0)
+                    + row.rows.into_iter().map(callback_row_total).sum::<i64>()
+                    + row.last.0
+            })
+            .sum()
+    })
 }

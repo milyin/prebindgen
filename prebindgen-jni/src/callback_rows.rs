@@ -3,7 +3,9 @@ use super::*;
 use crate::kotlin::JniNode;
 use prebindgen_flat::{Wire, WireNode};
 
-/// Generated Kotlin creates private row arrays, retained by the JNI local frame.
+/// Generated Kotlin creates private row arrays and fresh packed byte arrays per
+/// occurrence, retained by the JNI local frame. Packed capacity starts zeroed;
+/// these arrays are never pooled or reused across invocations.
 /// Internal native callers must keep those wire values stable through decoding
 /// and rollback, as required by the generated preparation/ownership protocol.
 /// Packed children reuse the native bulk cleanup traversal.
@@ -25,10 +27,7 @@ pub(crate) fn cleanup(
                 meta: JniChain::Sequence(JniSequence::Buffered),
                 child,
                 ..
-            } => {
-                let nested = rows(child)?;
-                Some(nested || kotlin::input_handles(child, true))
-            }
+            } => rows(child).map(|_| true),
             WireNode::Chain {
                 meta: JniChain::Bulk(_) | JniChain::Sequence(JniSequence::Bulk),
                 child,
