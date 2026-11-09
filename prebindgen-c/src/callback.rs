@@ -547,7 +547,8 @@ fn receive_return_owners(
                 let field = format_ident!("v{i}");
                 quote!(let #name=unsafe {(*((#carrier.data as *const #row).add(index))).#field};)
             });
-            quote!(for index in 0..#carrier.len {#(#reads)* #scan})
+            // The ordinal counts owned fields across rows and nested collections.
+            quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
         WireNode::Branch {
             meta: CBranch::Alternatives,

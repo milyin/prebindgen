@@ -1348,7 +1348,7 @@ impl Cbindgen {
                     .params
                     .iter()
                     .filter_map(|p| p.ty.slot.as_ref())
-                    .any(|p| p.fallible || !p.resources.is_empty())
+                    .any(|p| p.fallible)
                     || f.ret.slot.as_ref().is_some_and(|p| p.fallible))
             {
                 let declaration = f.path.segments.last().unwrap().ident.to_string();
@@ -1361,7 +1361,7 @@ impl Cbindgen {
                     .params
                     .iter()
                     .filter_map(|p| p.ty.slot.as_ref())
-                    .any(|p| p.fallible || !p.resources.is_empty())
+                    .any(|p| p.fallible)
                     || f.ret.slot.as_ref().is_some_and(|p| p.fallible);
                 f.metadata
                     .get_or_insert_with(Default::default)
