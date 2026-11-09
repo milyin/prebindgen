@@ -619,7 +619,7 @@ impl CallbackReturn {
             }
         }
         let node = self.input.input_node();
-        let cleanup_only = cached_return_owners(node, false);
+        let cleanup_only = native_return_owners(node, false);
         let scan = receive_return_owners(node, context, cleanup_only)?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
@@ -790,15 +790,12 @@ fn returned_handle_cleanup(
     })
 }
 
-// A native cleanup guard must never rescan mutable JVM rows or borrow JNIEnv
-// while ordinary decoding is using it. Only independently cached bulk roots
-// supply stable native bytes for every returned owner.
-fn cached_return_owners(node: &kotlin::JniNode, cached: bool) -> bool {
+// Cleanup may use fixed handle addresses already decoded into native locals
+// and independently cached bulk roots. It must never rescan mutable JVM rows
+// or borrow JNIEnv while ordinary decoding is using it.
+fn native_return_owners(node: &kotlin::JniNode, cached: bool) -> bool {
     match node {
-        WireNode::Leaf(fields) => fields.iter().all(|field| {
-            !matches!(&field.kind, JniWire::Handle {handle,..} if handle.access == Access::Move)
-                || cached
-        }),
+        WireNode::Leaf(_) => true,
         WireNode::Chain {
             meta: JniChain::Bulk(_),
             ..
@@ -807,20 +804,20 @@ fn cached_return_owners(node: &kotlin::JniNode, cached: bool) -> bool {
             meta: JniChain::Bulk(_),
             child,
             ..
-        } => cached_return_owners(child, true),
+        } => native_return_owners(child, true),
         WireNode::Chain {
             meta: JniChain::Sequence(JniSequence::Bulk),
             child,
             ..
-        } if cached => cached_return_owners(child, true),
+        } if cached => native_return_owners(child, true),
         WireNode::Chain {
             meta: JniChain::Sequence(_),
             ..
         } => !kotlin::input_handles(node, true),
-        WireNode::Chain { child, .. } => cached_return_owners(child, cached),
+        WireNode::Chain { child, .. } => native_return_owners(child, cached),
         WireNode::Branch { children, .. } => children
             .iter()
-            .all(|child| cached_return_owners(child, cached)),
+            .all(|child| native_return_owners(child, cached)),
     }
 }
 

@@ -517,6 +517,11 @@ fn main() {
         .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
         .package(package!("callbackreturns")
             .class(data_class!(CallbackWireRow))
+            .class(data_class!(CallbackFixedResult))
+            .fun(fun!(callback_fixed_result).expand_param("callback",
+                callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
+                    .expand_return(Input::Record(vec![Input::Leaf,Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))
             .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))))))
             .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::Input::Record(vec![prebindgen_jni::Input::Leaf; 2]))))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))

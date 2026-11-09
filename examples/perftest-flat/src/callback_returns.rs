@@ -316,3 +316,44 @@ pub fn callback_return_wire_rows_catch(
         })
         .sum()
 }
+
+/// Fixed callback results cover native cleanup without a collection transport.
+#[prebindgen]
+pub struct CallbackFixedResult {
+    pub first: CallbackReturnResource,
+    pub optional: Option<CallbackReturnResource>,
+    pub character: char,
+    pub last: CallbackReturnResource,
+}
+
+#[prebindgen]
+pub fn callback_fixed_marker(value: char) -> char {
+    assert_ne!(value, 'p', "fixed callback field constructor panic");
+    value
+}
+
+#[prebindgen]
+pub fn callback_fixed_result(
+    callback: impl Fn() -> CallbackFixedResult + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    let run = move || {
+        if retry {
+            assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback)).is_err());
+            assert_eq!(
+                callback_return_resource_live(),
+                0,
+                "callback owners leaked before retry"
+            );
+        }
+        let value = callback();
+        assert_eq!(value.character, 'c');
+        value.first.0 + value.optional.as_ref().map_or(0, |r| r.0) + value.last.0
+    };
+    if worker {
+        std::thread::spawn(run).join().unwrap()
+    } else {
+        run()
+    }
+}
