@@ -81,7 +81,7 @@ pub(crate) fn input(
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        bind.extend(quote!(let #name=unsafe {#data.get_unchecked(#index).#member};));
+        bind.extend(quote!(let #name=unsafe {(*#data.add(#index)).#member};));
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
@@ -90,7 +90,7 @@ pub(crate) fn input(
             kind: CWire::Rows,
         }],
         metadata: CChain::Sequence(CSequence::Buffered),
-        open: quote!(let #length=#wire.len;let #data=if #length==0 {&[]}else{unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};),
+        open: quote!(let #length=#wire.len;let #data=#wire.data as *const #row;),
         bind,
         validation_values: values,
         release: quote!(),
