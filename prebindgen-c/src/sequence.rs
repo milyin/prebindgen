@@ -61,7 +61,7 @@ pub(crate) fn prepare_input_leaf(
         {
             let condition = &resource.active;
             let count = &resource.count;
-            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count); }));
+            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count)); }));
             resource.records_consumption = true;
         }
     }
@@ -75,14 +75,13 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
+    let data = format_ident!("{wire}_data");
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        bind.extend(
-            quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};),
-        );
+        bind.extend(quote!(let #name=unsafe {(*#data.add(#index)).#member};));
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
@@ -91,7 +90,7 @@ pub(crate) fn input(
             kind: CWire::Rows,
         }],
         metadata: CChain::Sequence(CSequence::Buffered),
-        open: quote!(let #length=#wire.len;),
+        open: quote!(let #length=#wire.len;let #data=#wire.data as *const #row;),
         bind,
         validation_values: values,
         release: quote!(),

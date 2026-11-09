@@ -1737,7 +1737,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 && !resource.records_consumption
             {
                 let count = &resource.count;
-                transferred.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);}));
+                transferred.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count));}));
             }
             resource.registered = true;
         }

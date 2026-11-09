@@ -194,7 +194,7 @@ pub(crate) fn input<C: Codec>(
     }) {
         let condition = &resource.active;
         let size = &resource.count;
-        count.extend(replace(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#size);}),&transport.validation_values)?);
+        count.extend(replace(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#size));}),&transport.validation_values)?);
     }
     let fallible = codec.validates_inputs() || child.fallible;
     let resources = child
