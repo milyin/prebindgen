@@ -76,6 +76,22 @@ fun checkMixedCallbackResults() {
     check(outputs.size == inputs.size && callbackReturnResourceLive() == outputs.size.toULong())
     outputs.forEach { it.close() }
     check(callbackReturnResourceLive() == 0UL)
+    // An ordinary input failure consumes only the prefix Rust accepted. The
+    // caller retains the current row's suffix and every later batch.
+    val failing = List(3) { batch -> CallbackNestedBatch(callbackReturnResourceNew(5), callbackReturnResourceNew(70),
+        listOf(listOf(row(true))), if (batch == 1) 'p'.code else 'c'.code,
+        listOf(row(true)), callbackReturnResourceNew(7)) }
+    try { callbackMixedBatchesEcho(failing); error("expected input constructor failure") }
+    catch (_: IllegalArgumentException) { }
+    check(mixedHandles(failing[0]).all { it.isClosed })
+    check(failing[1].first.isClosed && failing[1].observed.isClosed)
+    check(failing[1].groups.filterNotNull().flatten().flatMap { listOfNotNull(it.first, it.optional, it.last) }.all { it.isClosed })
+    check(!failing[1].last.isClosed && failing[1].tail.flatMap { listOfNotNull(it.first, it.optional, it.last) }.all { !it.isClosed })
+    check(mixedHandles(failing[2]).all { !it.isClosed })
+    val retained = failing.flatMap(::mixedHandles).filter { !it.isClosed }
+    check(callbackReturnResourceLive() == retained.size.toULong())
+    retained.forEach { it.close() }
+    check(callbackReturnResourceLive() == 0UL)
     checkMalformedMixedCallbackResults()
     callbackReturnResourceAuditFinish()
     println("mixed callback results PASS: per-row bulk frames, optional nested lists, partial rows, borrowed owners, duplicate rejection, retries and workers")
