@@ -156,7 +156,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
             },
             registered: false,
             records_consumption: false,
-            identity: crate::ResourceIdentity::Single(quote!(#pointer.addr())),
+            count: quote!(1usize),
             active: active.clone(),
             access,
         }],

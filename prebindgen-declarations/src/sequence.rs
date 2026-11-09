@@ -1,7 +1,7 @@
 //! Decode and construct collection elements directly into their final storage.
 use super::*;
 
-use prebindgen_conversions::{Resource, ResourceIdentity};
+use prebindgen_conversions::Resource;
 use prebindgen_flat::SequenceView;
 use prebindgen_flat::WireNode;
 use quote::ToTokens;
@@ -193,10 +193,7 @@ pub(crate) fn input<C: Codec>(
         !r.registered && r.access == prebindgen_conversions::Access::Move && !r.records_consumption
     }) {
         let condition = &resource.active;
-        let size = match &resource.identity {
-            ResourceIdentity::Single(_) => quote!(1usize),
-            ResourceIdentity::Many(value) => quote!((#value).count()),
-        };
+        let size = &resource.count;
         count.extend(replace(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#size);}),&transport.validation_values)?);
     }
     let fallible = codec.validates_inputs() || child.fallible;
@@ -209,7 +206,7 @@ pub(crate) fn input<C: Codec>(
             records_consumption: true,
             // The row conversion already accounts for ownership transfers.
             // Keep type/access metadata for the foreign adapter without reading rows again.
-            identity: ResourceIdentity::Many(quote!(::core::iter::empty::<usize>())),
+            count: quote!(0usize),
             active: active.rust(),
             access: resource.access,
         })

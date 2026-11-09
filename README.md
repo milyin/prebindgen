@@ -665,8 +665,9 @@ only identifies the scalar leaf and leaves its representation to the adapter.
 | `i128`, `u128` | `<prefix>_int128 { uint64_t hi, lo; }` | `java.math.BigInteger` / `ByteArray` |
 
 Boolean inputs normalize zero to false and any nonzero carrier to true; outputs
-are 0 or 1. Character inputs reject surrogates and values outside Unicode's
-scalar range, preserving supplementary characters. Floats retain infinities,
+are 0 or 1. JNI character inputs reject surrogates and values outside Unicode's
+scalar range. C callers supply valid Unicode scalars, including supplementary
+characters. Floats retain infinities,
 NaNs and signed zero. JNI unsigned mappings match the established JniGen API.
 
 The C 128-bit pair carries the high and low halves of the value's bit pattern;
@@ -700,7 +701,9 @@ constructor side effects are not rolled back.
 Low-level adapters constructing `prebindgen_conversions::Resource` use
 `records_consumption: false` for compiler-managed ownership counts. Set it to
 `true` when acquisition updates `__prebindgen_input_consumed` after each successful
-move. `registered` means preparation already accounts for the resource.
+move. `registered` means preparation already accounts for the resource. `count` is
+the number of resources represented when active; address identities are no longer
+stored or rendered by the shared protocol.
 `allocation_type` identifies an independently owned allocation class used by
 Kotlin's handle preflight; C loans can use `None` for interior pointers.
 
@@ -844,7 +847,8 @@ relocate the bytes. The C caller ends the exclusive borrow before using or
 dropping the returned owner.
 
 Other vectors get `*_get(owner, index)`,
-which returns a borrowed element pointer or null for an out-of-range index.
+which returns a borrowed element pointer. The caller guarantees that the index
+is smaller than the vector length.
 Primitive elements use their C scalar type; opaque elements use a declared
 `opaque_ptr` type; other elements use `const void *`. No element conversion or
 copy is performed by these accessors. Source getters remain usable in expansions
@@ -1356,8 +1360,8 @@ compiled from declarations: a manually prebound output slot needs an explicit
 outside the sequence are rejected.
 
 ```rust
-// C: a null visitor is a binding error, so a non-Result function needs .panic().
-.function(fun!(numbers).callback_return()).panic()
+// C: the caller supplies a valid nonnull visitor.
+.function(fun!(numbers).callback_return())
 // JNI package declaration:
 .fun(fun!(numbers).callback_return())
 ```
@@ -1375,8 +1379,7 @@ later conversion fails. Result functions still use explicit error outputs and
 leave success-output storage unchanged on failure; consuming inputs retain their
 ownership acknowledgement. During a C visitor, that acknowledgement output has
 not yet been written: moved inputs already belong to Rust and must not be used.
-A null visitor is rejected before source invocation
-or input ownership transfer. Borrowed inputs must remain live throughout the
+The caller supplies a valid nonnull visitor. Borrowed inputs remain live throughout the
 call, and C visitors must not unwind or longjmp.
 
 Kotlin can fold into any accumulator:
@@ -1683,8 +1686,8 @@ return value or `Default` implementation is required.
 
 The C adapter also accepts `impl Fn(...) -> R` parameters, including callbacks
 selected through input constructors. Declare their source functions with
-`.function(fun!(evaluate)).panic()` for a non-`Result` function such as the example
-above. The ordinary C error policy handles invalid callback registration.
+`.function(fun!(evaluate))`. The C caller supplies a valid nonnull `run` function
+and keeps the callback context live for its declared lifetime.
 
 For the Rust parameter `evaluate(callback: ...)`, the header provides a
 `pb_evaluate_callback` type (`pb` is the configured prefix):
@@ -1864,7 +1867,8 @@ Enums work as parameters, results, fields of Kotlin data classes, and fields in
 explicit C constructor/projection expansions. `Option<Enum>` and nested options
 reserve unused integer representations, starting below zero and skipping actual
 variant values. For an enum with variants `-2`, `-1` and `0`, the first two
-absence representations are `-3` and `-4`. Unknown active inputs are rejected;
+absence representations are `-3` and `-4`. JNI rejects unknown active inputs;
+C callers supply valid tags. In both adapters,
 reserved values are accepted only by the corresponding optional layers.
 
 This increment supports exhaustive, nongeneric enums with unconditional
@@ -2108,12 +2112,12 @@ python3 examples/check.py
 ```
 
 The script builds every example and runs both C and both JNI smoke clients,
-including every primitive at boundary values, invalid unsigned/Unicode/128-bit
+including every primitive at boundary values, JNI invalid unsigned/Unicode/128-bit
 inputs, restored Payload fields, string round trips, byte-vector constructors, consumed handles,
 selector arms, field projections, builder rollback, output preservation and
 concurrent close. Ownership coverage also exercises mutable/shared Storage
 borrows, repeated shared arguments, opposite lock order, close/borrow/consume
-races, later-selector/text failures, duplicate consumption, native panic after
+races, JNI later-selector/text failures and duplicate consumption, native panic after
 transfer, C pointer type checking and a non-`Send` C object. `KOTLINC` and `CC` select the compilers.
 `SANITIZE=1` instruments the C callers with AddressSanitizer and
 UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.

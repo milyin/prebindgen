@@ -59,14 +59,9 @@ pub(crate) fn prepare_input_leaf(
     for resource in &mut plan.resources {
         if !resource.registered && !resource.records_consumption && resource.access == Access::Move
         {
-            if !matches!(
-                resource.identity,
-                prebindgen_conversions::ResourceIdentity::Single(_)
-            ) {
-                return Err("C row leaf acquisition requires one resource identity".into());
-            }
             let condition = &resource.active;
-            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); }));
+            let count = &resource.count;
+            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count); }));
             resource.records_consumption = true;
         }
     }

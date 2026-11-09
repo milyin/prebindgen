@@ -796,7 +796,7 @@ fn mixed_eager_and_deferred_resources_cannot_report_a_consumed_prefix() {
             allocation_type: None,
             registered: i == 0,
             records_consumption: false,
-            identity: ResourceIdentity::Single(quote!(1usize)),
+            count: quote!(1usize),
             access: Access::Move,
             active: quote!(true),
         }];

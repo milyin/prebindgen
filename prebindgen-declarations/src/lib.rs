@@ -1736,12 +1736,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             if resource.access == prebindgen_conversions::Access::Move
                 && !resource.records_consumption
             {
-                let count = match &resource.identity {
-                    prebindgen_conversions::ResourceIdentity::Single(_) => quote!(1usize),
-                    prebindgen_conversions::ResourceIdentity::Many(value) => {
-                        quote!((#value).count())
-                    }
-                };
+                let count = &resource.count;
                 transferred.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);}));
             }
             resource.registered = true;

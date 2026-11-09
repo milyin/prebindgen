@@ -223,7 +223,7 @@ pub(crate) fn input(
             allocation_type: None,
             registered: by_value,
             records_consumption: by_value,
-            identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#pointer.addr())),
+            count: quote!(1usize),
             active: condition,
             access,
         }],
@@ -467,7 +467,7 @@ pub(crate) fn emit_accessors(
         } else {
             "void".into()
         };
-        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while an element pointer is used."] #[no_mangle] pub unsafe extern "C" fn #get(value:*const #carrier,index:usize)->*const #element {(*value).as_rust().get_unchecked(index) as *const #element}));
+        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while an element pointer is used. The index must be smaller than the owner length."] #[no_mangle] pub unsafe extern "C" fn #get(value:*const #carrier,index:usize)->*const #element {(*value).as_rust().get_unchecked(index) as *const #element}));
         header.push_str(&format!("/* Borrowed element; index must be smaller than the owner length. */\nconst {c_element} *{get}(const {prefix}_{} *value,size_t index);\n",owner.name));
     }
     Ok(())

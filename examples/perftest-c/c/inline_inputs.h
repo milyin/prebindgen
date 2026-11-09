@@ -38,5 +38,5 @@ static void check_inline_inputs(void) {
     assert(owner_inline_inputs_texts((owner_inline_inputs_texts_p0_w1_rows){text_rows,3},&value,&consumed,&error));
     assert(value==expected_text && consumed==3 && error==NULL);
     for(size_t i=0;i<3;++i){assert(owner_bytes_len(&bytes[i])==0 && owner_text_len(&texts[i])==0);owner_drop_bytes(&bytes[i]);owner_drop_text(&texts[i]);}
-    puts("C inline input replay PASS: partial replacement panics, borrows, original buffer addresses and suffix cleanup");
+    puts("C inline inputs PASS: partial replacement panics, borrows, original buffer addresses and suffix cleanup");
 }

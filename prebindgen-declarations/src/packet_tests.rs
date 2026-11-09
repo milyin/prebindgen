@@ -235,7 +235,7 @@ impl Codec for CodecImpl {
                 allocation_type: None,
                 registered: false,
                 records_consumption: false,
-                identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#w as usize)),
+                count: quote!(1usize),
                 access: prebindgen_conversions::Access::Shared,
                 active: active.rust(),
             });

@@ -91,5 +91,5 @@ static void check_buffer_inputs(void) {
     assert(perftest_buffer_row_constructor_calls() == 2 && perftest_option_resource_id(shared) == 7);
     perftest_drop_owned_resource(shared);
 
-    puts("C buffer input replay PASS: decode once, optional/selector borrows and prefix cleanup");
+    puts("C buffer inputs PASS: decode once, optional/selector borrows and prefix cleanup");
 }

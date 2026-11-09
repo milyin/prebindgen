@@ -60,5 +60,5 @@ static void check_mixed_callback_rows(void) {
     assert(result==266 && consumed==1 && error==NULL);
     assert(owner_inline_inputs_constructor_calls()==2);
     assert(owner_inline_packet_drops()==packets+2 && owner_owned_resource_drops()==boxes+4);
-    puts("C mixed callback replay PASS: original payload addresses, constructor failure, inactive fields and cleanup before row release");
+    puts("C mixed callback rows PASS: original payload addresses, constructor failure, inactive fields and cleanup before row release");
 }

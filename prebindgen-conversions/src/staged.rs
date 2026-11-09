@@ -1,7 +1,7 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::{Access, InputPlan, OutputPlan, Resource, ResourceIdentity, TemplateContext};
+use crate::{Access, InputPlan, OutputPlan, Resource, TemplateContext};
 use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -15,10 +15,7 @@ fn include_resources<C: TemplateContext>(
         let mut resource = resource.clone();
         resource.active = context.render(&resource.active)?;
         if !resource.registered {
-            resource.identity = match &resource.identity {
-                ResourceIdentity::Single(value) => ResourceIdentity::Single(context.render(value)?),
-                ResourceIdentity::Many(values) => ResourceIdentity::Many(context.render(values)?),
-            };
+            resource.count = context.render(&resource.count)?;
         }
         output.push(resource);
     }
@@ -321,10 +318,7 @@ where
             .filter(|r| !r.registered && r.access == Access::Move && !r.records_consumption)
             .map(|r| {
                 let active = &r.active;
-                let count = match &r.identity {
-                    ResourceIdentity::Single(_) => quote!(1usize),
-                    ResourceIdentity::Many(ids) => quote!((#ids).count()),
-                };
+                let count = &r.count;
                 quote!(if #active {#count} else {0usize})
             });
         quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get() #(+ (#counts))*);)

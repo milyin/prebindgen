@@ -1184,7 +1184,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
             allocation_type: None,
             registered: false,
             records_consumption: false,
-            identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#index)),
+            count: quote!(1usize),
             access: Access::Move,
             active: quote!(selected),
         });
