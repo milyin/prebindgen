@@ -82,6 +82,9 @@ for name in ["covertest-kotlin", "perftest-kotlin"]:
     jar = build / (name + ".jar")
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
     run_java(["-Djava.library.path=" + str(lib), "-jar", str(jar)])
+    if name == "covertest-kotlin":
+        # A separate cold JVM makes the lock stack limit independent of earlier JIT warmup.
+        run_java(["-Xss1m", "-Djava.library.path=" + str(lib), "-jar", str(jar), "handle-lock-stack"])
 
 # Java callers can recover through the same typed domain-error callback.
 java_test = build / "ResultJava.java"
