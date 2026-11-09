@@ -307,37 +307,6 @@ pub fn callback_native_mixed(callback: impl Fn() -> Vec<NativeMixed>) -> u64 {
     take_native_mixed(callback())
 }
 
-// Borrowed source handles allow stable input fixtures across measured calls.
-#[prebindgen]
-pub fn history_read(value: &Resource) -> u64 {
-    std::hint::black_box(value.0)
-}
-#[prebindgen]
-pub fn history_write(value: &mut Resource) -> u64 {
-    std::hint::black_box(value.0)
-}
-#[prebindgen]
-pub fn history_flat(values: Vec<u64>) -> u64 {
-    std::hint::black_box(values).iter().sum()
-}
-#[prebindgen]
-pub fn history_nested(values: Vec<Vec<u64>>) -> u64 {
-    std::hint::black_box(values).iter().flatten().sum()
-}
-#[prebindgen]
-pub fn history_shared(values: Vec<Vec<u64>>, token: &mut Resource) -> u64 {
-    std::hint::black_box(values).iter().flatten().sum::<u64>() + token.0
-}
-#[prebindgen]
-pub fn history_callback(callback: impl Fn() -> Vec<Vec<Resource>>) -> u64 {
-    callback().iter().flatten().map(|v| v.0).sum()
-}
-
-#[prebindgen]
-pub fn history_readonly(values: Vec<Vec<u64>>) -> u64 {
-    history_nested(values)
-}
-
 #[prebindgen]
 pub struct BorrowedNumbers {
     pub values: Vec<i64>,

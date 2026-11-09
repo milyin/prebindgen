@@ -9,12 +9,9 @@ fn rows(element: Output<OutputRequest>) -> Output<OutputRequest> {
     }
 }
 fn main() {
-    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_CHECKS");
-    println!("cargo:rerun-if-env-changed=BENCH_ALIAS_INDEX_THRESHOLD");
-    let mut builder = prebindgen_c::Cbindgen::builder()
+    let builder = prebindgen_c::Cbindgen::builder()
         .source(c_collection_flat::PREBINDGEN_OUT_DIR)
         .prefix("bench")
-        .set_emit_alias_checks(std::env::var("BENCH_ALIAS_CHECKS").as_deref() != Ok("0"))
         .opaque_ptr("borrowed_numbers", syn::parse_quote!(BorrowedNumbers))
         .function(fun!(borrowed_numbers_new))
         .panic()
@@ -90,28 +87,6 @@ fn main() {
         .panic()
         .function(fun!(resource_value))
         .panic()
-        .function(
-            fun!(history_flat)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_write))),
-        )
-        .panic()
-        .function(
-            fun!(history_nested)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_write))),
-        )
-        .panic()
-        .function(
-            fun!(history_shared)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_read))),
-        )
-        .panic()
-        .function(
-            fun!(history_readonly)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_read))),
-        )
-        .panic()
-        .function(fun!(history_callback))
-        .panic()
         .function(fun!(make_handles).output(rows(Output::auto())))
         .panic()
         .function(fun!(make_records).output(rows(Output::auto())))
@@ -122,14 +97,6 @@ fn main() {
         .panic()
         .function(fun!(make_numbers).output(rows(Output::auto())))
         .panic();
-    if let Ok(value) = std::env::var("BENCH_ALIAS_INDEX_THRESHOLD") {
-        let value = if value == "max" {
-            usize::MAX
-        } else {
-            value.parse().expect("numeric native alias threshold")
-        };
-        builder = builder.set_input_alias_index_threshold(value);
-    }
     let generation = builder.build().expect("C collection benchmark bindings");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     generation.write_rust(out.join("bindings.rs")).unwrap();

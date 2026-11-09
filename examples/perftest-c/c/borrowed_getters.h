@@ -71,9 +71,6 @@ static void check_borrowed_pointers(void) {
         assert(perftest_getter_owner_try_child(owner, 0, &error) == child && error == NULL);
         assert(perftest_getter_owner_try_child(owner, 1, &error) == NULL && error != NULL);
         perftest_free_error(error);
-        error = NULL;
-        assert(perftest_getter_owner_try_child(NULL, 0, &error) == NULL && error != NULL);
-        perftest_free_error(error);
         for (int32_t mode = 0; mode <= 2; ++mode) {
             error = NULL;
             const perftest_getter_child *optional = child;
@@ -83,9 +80,6 @@ static void check_borrowed_pointers(void) {
             assert((error != NULL) == (mode == 2));
             perftest_free_error(error);
         }
-        error = NULL;
-        assert(!perftest_getter_owner_try_optional_child(owner, 1, NULL, &error) && error != NULL);
-        perftest_free_error(error);
         assert(perftest_getter_owner_child_matches(owner, child));
         assert(perftest_getter_child_number(child) == 71);
         perftest_drop_getter_owner(owner); // Invalidates child; only owner is freed.
@@ -135,9 +129,6 @@ static void check_mutable_borrowed_pointers(void) {
             perftest_free_error(error);
             assert(perftest_getter_owner_id(owner) == number);
         }
-        error = NULL;
-        assert(!perftest_getter_owner_try_optional_mut(owner, 1, NULL, &error) && error != NULL);
-        perftest_free_error(error);
         // Failures preserve the owning object; mutation uses a fresh child loan.
         child = perftest_getter_owner_child_mut(owner);
         assert((uintptr_t)child == address);

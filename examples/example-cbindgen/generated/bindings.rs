@@ -55,14 +55,8 @@ pub unsafe extern "C" fn example_free_error(error: *mut std::ffi::c_char) {
         drop(std::ffi::CString::from_raw(error));
     }
 }
-unsafe fn __pb_read<'a>(b: __PbBuffer) -> Result<&'a [u8], String> {
-    if b.len == 0 {
-        return Ok(&[]);
-    }
-    if b.data.is_null() || b.len > isize::MAX as usize {
-        return Err("invalid buffer".into());
-    }
-    Ok(std::slice::from_raw_parts(b.data, b.len))
+unsafe fn __pb_read<'a>(b: __PbBuffer) -> &'a [u8] {
+    if b.len == 0 { &[] } else { std::slice::from_raw_parts(b.data, b.len) }
 }
 /**# Safety
     The buffer must have been returned by this library and not already freed.*/
@@ -214,10 +208,7 @@ pub unsafe extern "C" fn example_caption_new(
                 None
             };
             let p1_w0 = if true {
-                Some(
-                    std::str::from_utf8(unsafe { __pb_read(p1_w1)? })
-                        .map_err(|_| "invalid UTF-8")?,
-                )
+                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) })
             } else {
                 None
             };
@@ -292,32 +283,23 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = if true {
                 p0_w1 as *mut example_flat::Foo
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe { Box::from_raw(p0_w1_pointer) })
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + (1usize));
+                }
                 Some({
                     let p0_w0: example_flat::Foo = *p0_w0.expect("active allocation");
                     p0_w0
@@ -420,32 +402,23 @@ pub unsafe extern "C" fn example_local_counter_label(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = if true {
                 p0_w1 as *mut example_flat::LocalCounter
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe { Box::from_raw(p0_w1_pointer) })
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + (1usize));
+                }
                 Some({
                     let p0_w0: example_flat::LocalCounter = *p0_w0
                         .expect("active allocation");
@@ -455,10 +428,7 @@ pub unsafe extern "C" fn example_local_counter_label(
                 None
             };
             let p1_w0 = if true {
-                Some(
-                    std::str::from_utf8(unsafe { __pb_read(p1_w1)? })
-                        .map_err(|_| "invalid UTF-8")?,
-                )
+                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) })
             } else {
                 None
             };
@@ -581,22 +551,13 @@ pub unsafe extern "C" fn example_local_counter_value(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut example_flat::LocalCounter
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &example_flat::LocalCounter = unsafe {
                         &(*p0_w1_pointer)

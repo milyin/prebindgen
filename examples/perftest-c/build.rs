@@ -446,7 +446,6 @@ fn main() {
         .function(fun!(callback_return_owned_optional))
         .panic()
         .function(fun!(callback_return_owned_vector))
-        .input_alias_index_threshold(0)
         .panic()
         .function(fun!(callback_return_spawn))
         .panic()
@@ -465,7 +464,6 @@ fn main() {
         .function(fun!(callback_return_char_catch))
         .panic()
         .function(fun!(callback_return_owned_vector_catch))
-        .input_alias_index_threshold(usize::MAX)
         .panic()
         .function(fun!(callback_return_unit))
         .panic()
@@ -638,6 +636,12 @@ fn main() {
         .function(fun!(collection_resource_new))
         .panic()
         .function(fun!(collection_handles).callback_return())
+        .opaque_ptr("alias_handler", pq!(AliasHandler))
+        .expand(expand_param!(AliasPair).variant(fun!(alias_pair_new)))
+        .function(fun!(alias_handler_new))
+        .panic()
+        .function(fun!(alias_handler_call))
+        .function(fun!(alias_callback_rows))
         .function(fun!(collection_alias))
         .panic()
         .function(fun!(collection_result).callback_return())
@@ -1132,19 +1136,9 @@ fn main() {
                 .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
         )
         .function(
-            fun!(inline_inputs_mixed_fast)
-                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
-        )
-        .alias_checks(false)
-        .function(
             fun!(inline_inputs_pair)
                 .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_pair))),
         )
-        .function(
-            fun!(inline_inputs_pair_fast)
-                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_pair))),
-        )
-        .alias_checks(false)
         .function(
             fun!(inline_inputs_optional)
                 .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
@@ -1154,14 +1148,10 @@ fn main() {
             expand_param!(usize).variant(fun!(inline_input_borrowed)),
         ))
         .function(fun!(inline_inputs_packets))
-        .function(fun!(inline_inputs_packets_fast))
-        .alias_checks(false)
         .function(fun!(inline_inputs_bytes))
         .function(fun!(inline_inputs_texts))
         .expand(expand_param!(InlineCallbackRow).variant(fun!(inline_callback_row_new)))
         .function(fun!(inline_callback_rows))
-        .function(fun!(inline_callback_rows_fast))
-        .alias_checks(false)
         .function(fun!(inline_callback_optional))
         .function(fun!(inline_packet_bytes_address))
         .panic()
@@ -1280,53 +1270,6 @@ fn main() {
         .expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
-    let mut unchecked = prebindgen_c::Cbindgen::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .prefix("fast")
-        .set_emit_alias_checks(false)
-        .expand(expand_param!(&String).reconstruct())
-        .expand(expand_param!(&Vec<u8>).reconstruct())
-        .opaque_ptr("owned_resource", pq!(OwnedResource))
-        .opaque_ptr("alias_handler", pq!(AliasHandler))
-        .opaque_error(pq!(ResultFailure), fun!(result_error_message))
-        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
-        .expand(expand_param!(AliasPair).variant(fun!(alias_pair_new)))
-        .expand(expand_param!(FixedCleanupRecord).variant(fun!(fixed_cleanup_new)))
-        .expand(expand_param!(CleanupGroup).variant(fun!(cleanup_group_new)))
-        .function(fun!(cleanup_group_call))
-        .function(fun!(cleanup_optional_call))
-        .function(fun!(collection_resource_new))
-        .panic()
-        .function(fun!(owned_resource_drops))
-        .panic()
-        .function(fun!(option_resource_id))
-        .panic()
-        .function(fun!(alias_fixed))
-        .panic()
-        .function(fun!(buffer_rows_sum))
-        .function(fun!(buffer_rows_optional))
-        .enum_type("code", pq!(SparseCode))
-        .function(
-            fun!(buffer_rows_enum)
-                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
-        )
-        .function(fun!(alias_nested_sum))
-        .panic()
-        .function(fun!(collection_alias))
-        .alias_checks(true)
-        .panic()
-        .function(fun!(alias_handler_new))
-        .panic()
-        .function(fun!(alias_callback_rows))
-        .input_alias_index_threshold(0)
-        .function(fun!(alias_handler_call))
-        .alias_checks(true);
-    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
-        unchecked = unchecked.opaque_layouts_file(path);
-    }
-    let unchecked = enum_inputs(unchecked).build().unwrap();
-    unchecked.write_rust(out.join("unchecked.rs")).unwrap();
-    unchecked.write_header(out.join("unchecked.h")).unwrap();
 }
 
 fn enum_inputs(generator: prebindgen_c::Cbindgen) -> prebindgen_c::Cbindgen {

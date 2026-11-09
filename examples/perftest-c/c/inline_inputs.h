@@ -1,23 +1,12 @@
 #define II_MIXED owner_inline_inputs_mixed
 #define II_PAIR owner_inline_inputs_pair
 #define II_CHECK check_inline_inputs_checked
-#define II_CHECKED 1
 #include "inline_inputs_case.h"
 #undef II_MIXED
 #undef II_PAIR
 #undef II_CHECK
-#undef II_CHECKED
-#define II_MIXED owner_inline_inputs_mixed_fast
-#define II_PAIR owner_inline_inputs_pair_fast
-#define II_CHECK check_inline_inputs_unchecked
-#define II_CHECKED 0
-#include "inline_inputs_case.h"
-#undef II_MIXED
-#undef II_PAIR
-#undef II_CHECK
-#undef II_CHECKED
 static void check_inline_inputs(void) {
-    check_inline_inputs_checked();check_inline_inputs_unchecked();
+    check_inline_inputs_checked();
     owner_inline_inputs_reset(0,0);
     int64_t result=12345;size_t consumed=99;char *error=NULL;
     assert(owner_inline_inputs_optional(0,(owner_inline_inputs_optional_p0_w3_rows){(void *)1,SIZE_MAX},&result,&consumed,&error));
@@ -34,10 +23,7 @@ static void check_inline_inputs(void) {
     uintptr_t value=12345;owner_inline_inputs_reset(0,0);
     assert(owner_inline_inputs_borrow(&receiver,(owner_inline_inputs_borrow_p1_w1_rows){borrowed,2},&value,&error));
     assert(value==9 && owner_inline_inputs_constructor_calls()==2 && owner_inline_inputs_empty_calls()==0);
-    owner_inline_inputs_reset(0,0);value=12345;
-    assert(!owner_inline_inputs_borrow(&shared,(owner_inline_inputs_borrow_p1_w1_rows){borrowed,2},&value,&error));
-    assert(value==12345 && error!=NULL && owner_inline_inputs_constructor_calls()==0 && owner_inline_inputs_empty_calls()==0);
-    owner_free_error(error);error=NULL;owner_drop_packet(&shared);owner_drop_packet(&receiver);
+    owner_drop_packet(&shared);owner_drop_packet(&receiver);
     owner_bytes bytes[3];owner_text texts[3];
     owner_inline_inputs_bytes_p0_w1_row byte_rows[3];owner_inline_inputs_texts_p0_w1_row text_rows[3];
     uintptr_t expected_bytes=0,expected_text=0;
@@ -52,5 +38,5 @@ static void check_inline_inputs(void) {
     assert(owner_inline_inputs_texts((owner_inline_inputs_texts_p0_w1_rows){text_rows,3},&value,&consumed,&error));
     assert(value==expected_text && consumed==3 && error==NULL);
     for(size_t i=0;i<3;++i){assert(owner_bytes_len(&bytes[i])==0 && owner_text_len(&texts[i])==0);owner_drop_bytes(&bytes[i]);owner_drop_text(&texts[i]);}
-    puts("C inline input replay PASS: partial replacement panics, aliases, borrows, original buffer addresses and suffix cleanup");
+    puts("C inline inputs PASS: partial replacement panics, borrows, original buffer addresses and suffix cleanup");
 }

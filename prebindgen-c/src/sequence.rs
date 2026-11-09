@@ -17,63 +17,10 @@ pub(crate) fn decode_buffer(value: Value, wire: &syn::Ident) -> TokenStream {
     let read = prebindgen_conversions::template_parameter("read_buffer");
     match value {
         Value::Text => {
-            quote!(std::str::from_utf8(unsafe {#read(#wire)?}).map_err(|_|"invalid UTF-8")?)
+            quote!(unsafe {std::str::from_utf8_unchecked(#read(#wire))})
         }
-        Value::Bytes => quote!(unsafe {#read(#wire)?}),
+        Value::Bytes => quote!(unsafe {#read(#wire)}),
         Value::Scalar(_) => unreachable!("a buffer has text or byte contents"),
-    }
-}
-
-pub(crate) fn defer_buffer_decode(
-    plan: &mut InputPlan<CWire>,
-    ty: &syn::Type,
-    wire: &syn::Ident,
-    var: &syn::Ident,
-    active: &prebindgen_declarations::Condition,
-) {
-    if matches!(&plan.node, WireNode::Leaf(wires) if matches!(wires.as_slice(), [wire] if matches!(wire.kind, CWire::Buffer)))
-    {
-        let value = Value::of(ty).expect("C buffer source type");
-        let decode = decode_buffer(value, wire);
-        let (decoded_type, decode) = match ty {
-            syn::Type::Reference(r)
-                if !matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]") =>
-            {
-                let owned = &r.elem;
-                (
-                    quote!(#owned),
-                    quote!(::core::convert::Into::<#owned>::into(#decode)),
-                )
-            }
-            _ => (
-                if value == Value::Text {
-                    quote!(&str)
-                } else {
-                    quote!(&[u8])
-                },
-                decode,
-            ),
-        };
-        let condition = active.rust();
-        debug_assert_eq!(
-            plan.validation.to_string(),
-            quote!(let #var = if #condition {Some(#decode)} else {None};).to_string(),
-            "audit deferred buffer conversion when ordinary validation changes"
-        );
-        // C descriptors and their source buffers remain valid through the call,
-        // including staged C rows (whose transport has no release operation).
-        // Declare storage in the row's acquisition scope, outside Optional or
-        // Selector blocks; initialize it only in the selected construction arm.
-        // Thus borrowed temporaries live until the row constructor finishes and
-        // staged closures capture descriptors, not uninitialized/owned values.
-        plan.validation = TokenStream::new();
-        plan.acquire.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#decoded_type> = None;));
-        let statements = std::mem::take(&mut plan.statements);
-        plan.statements = quote!(#var=if #condition {Some(#decode)} else {None}; #statements);
-        let WireNode::Leaf(wires) = &mut plan.node else {
-            unreachable!()
-        };
-        wires[0].kind = CWire::DeferredBuffer;
     }
 }
 
@@ -107,21 +54,14 @@ pub(crate) fn prepare_input_leaf(
             );
         }
     }
-    defer_buffer_decode(plan, ty, wire, var, active);
     // A row can contain several moves and a panicking empty-owner factory.
-    // Acknowledge each successful leaf acquisition in wire order, keeping
-    // its alias descriptor available to the enclosing grouped check.
+    // Acknowledge each successful leaf acquisition in wire order.
     for resource in &mut plan.resources {
         if !resource.registered && !resource.records_consumption && resource.access == Access::Move
         {
-            if !matches!(
-                resource.identity,
-                prebindgen_conversions::ResourceIdentity::Single(_)
-            ) {
-                return Err("C row leaf acquisition requires one resource identity".into());
-            }
             let condition = &resource.active;
-            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); }));
+            let count = &resource.count;
+            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count)); }));
             resource.records_consumption = true;
         }
     }
@@ -135,58 +75,24 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
-    let reread_rows = prebindgen_flat::wire_definitions(std::iter::once(element)).all(|wire| {
-        matches!(
-            wire.kind,
-            CWire::Scalar { .. }
-                | CWire::Pointer { .. }
-                | CWire::DeferredBuffer
-                | CWire::Enum { .. }
-                | CWire::Owned {
-                    by_value: false,
-                    ..
-                }
-                | CWire::Owned {
-                    access: Access::Move,
-                    by_value: true,
-                    ..
-                }
-        )
-    });
-    let slice = format_ident!("{wire}_rows");
+    let data = format_ident!("{wire}_data");
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        let unused = matches!(field.kind, CWire::DeferredBuffer | CWire::Enum { .. })
-            .then(|| quote!(#[allow(unused_variables)]));
-        bind.extend(if reread_rows {
-            quote!(#unused let #name=#slice[#index].#member;)
-        } else {
-            quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};)
-        });
+        bind.extend(quote!(let #name=unsafe {(*#data.add(#index)).#member};));
         values.push((field.name.clone(), quote!(#name)));
     }
-    // These leaves validate only Copy scalars and raw pointers. Buffer/enum decoding
-    // runs during construction, once the complete handle group has been checked.
-    // Inline owners replace their source only during acquisition, recording
-    // successful moves themselves. By-value carriers are Copy opaque storage:
-    // validation copies only their bytes/provenance, and acquisition derives the
-    // native pointer from the construction pass's final local storage. Callbacks
-    // and nested rows keep prepared state until their effects are audited.
-    let borrow = reread_rows.then(|| quote!(let #slice: &[#row] = if #length==0 {&[]} else {unsafe {::core::slice::from_raw_parts(#wire.data as *const #row,#length)}};));
     Ok(SequenceInput {
-        reread_rows,
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
             kind: CWire::Rows,
         }],
         metadata: CChain::Sequence(CSequence::Buffered),
-        open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?; #borrow),
+        open: quote!(let #length=#wire.len;let #data=#wire.data as *const #row;),
         bind,
-        validation_values: values.clone(),
-        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
+        validation_values: values,
         release: quote!(),
     })
 }
@@ -446,7 +352,7 @@ pub(crate) fn callback_output(
         metadata: CChain::Sequence(CSequence::Callback),
         begin: quote!(),
         enter: quote!(),
-        store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
+        store: quote!(#(#prepare)* #commit unsafe { __pb_callback.unwrap_unchecked()(__pb_callback_context, #(#names),*); }),
         finish: quote!(),
         values: vec![(wire.clone(), quote!(#length))],
         commit: quote!(),

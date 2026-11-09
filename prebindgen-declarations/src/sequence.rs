@@ -1,7 +1,7 @@
 //! Decode and construct collection elements directly into their final storage.
 use super::*;
 
-use prebindgen_conversions::{Resource, ResourceIdentity};
+use prebindgen_conversions::Resource;
 use prebindgen_flat::SequenceView;
 use prebindgen_flat::WireNode;
 use quote::ToTokens;
@@ -19,20 +19,6 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     pub bind: TokenStream,
     /// Raw element expressions keyed by binding name, used during validation.
     pub validation_values: Vec<(syn::Ident, TokenStream)>,
-    /// Wire expressions safe to capture after releasing the row. `None` marks
-    /// JNI local references, which must be decoded during validation. Any locals
-    /// retained by construction must also remain valid after `release`.
-    pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
-    /// Permit two traversals instead of retaining prepared row closures for a
-    /// grouped resource check. The transport must guarantee stable wire values
-    /// for the whole call, including source constructor invocations. Binding and
-    /// validation must be repeatable without ownership transfer, user code,
-    /// owned temporaries or other observable effects; `release` must also be
-    /// repeatable. These guarantees apply to every child, including resources
-    /// whose alias registration is already handled by their codec. Registration
-    /// alone does not imply acquisition. JNI object rows should retain the
-    /// single-decode path by leaving this false.
-    pub reread_rows: bool,
     /// Per-row cleanup after construction. Generated code runs this before
     /// propagating an ordinary conversion error from the row.
     pub release: TokenStream,
@@ -82,32 +68,8 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
     struct Replace<'a> {
         values: &'a std::collections::BTreeMap<String, syn::Expr>,
-        error: Option<String>,
     }
     impl syn::visit_mut::VisitMut for Replace<'_> {
-        fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
-            // Alias scopes remain unresolved while outer sequence fields are
-            // bound. Visit both statement branches so nested JNI row expressions
-            // receive the same substitutions as ordinary Rust statements.
-            if mac.path.segments.len() == 2
-                && mac.path.segments[0].ident == "prebindgen_runtime"
-                && mac.path.segments[1].ident == "__prebindgen_alias_checks"
-            {
-                let mut branches = TokenStream::new();
-                for token in mac.tokens.clone() {
-                    let mut block: syn::Block = match syn::parse2(token.into_token_stream()) {
-                        Ok(block) => block,
-                        Err(error) => {
-                            self.error = Some(format!("invalid input alias branch: {error}"));
-                            return;
-                        }
-                    };
-                    self.visit_block_mut(&mut block);
-                    branches.extend(block.into_token_stream());
-                }
-                mac.tokens = branches;
-            }
-        }
         fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
             if let syn::Expr::Path(p) = expr {
                 if p.qself.is_none() && p.path.segments.len() == 1 {
@@ -142,12 +104,8 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
     let mut expr: syn::Expr = syn::parse2(quote!({ #code })).map_err(|e| e.to_string())?;
     let mut visitor = Replace {
         values: &replacements,
-        error: None,
     };
     syn::visit_mut::VisitMut::visit_expr_mut(&mut visitor, &mut expr);
-    if let Some(error) = visitor.error {
-        return Err(error);
-    }
     let syn::Expr::Block(block) = expr else {
         unreachable!()
     };
@@ -157,30 +115,6 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         .iter()
         .map(ToTokens::to_token_stream)
         .collect())
-}
-
-fn prepared(
-    code: &TokenStream,
-    values: &[(syn::Ident, Option<TokenStream>)],
-) -> Result<TokenStream> {
-    fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
-        code.into_iter().any(|token| match token {
-            proc_macro2::TokenTree::Ident(id) => id == *name,
-            proc_macro2::TokenTree::Group(group) => mentions(group.stream(), name),
-            _ => false,
-        })
-    }
-    let mut reads = Vec::new();
-    for (name, value) in values {
-        if value.is_none() && mentions(code.clone(), name) {
-            return Err(format!(
-                "collection wire `{}` cannot be read after row validation",
-                name
-            ));
-        }
-        reads.push((name.clone(), value.clone().unwrap_or_else(|| quote!(#name))));
-    }
-    replace(code, &reads)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -195,7 +129,6 @@ pub(crate) fn input<C: Codec>(
     active: &Condition,
     child: CodecInput<C>,
     bulk: bool,
-    deferred_construction: bool,
 ) -> Result<CodecInput<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
@@ -247,58 +180,23 @@ pub(crate) fn input<C: Codec>(
             return Err(format!("unknown collection validation binding `{name}`"));
         }
     }
-    let expected_names = transport
-        .validation_values
-        .iter()
-        .map(|(name, _)| name.to_string())
-        .collect::<std::collections::BTreeSet<_>>();
-    let prepared_names = transport
-        .prepared_values
-        .iter()
-        .map(|(name, _)| name.to_string())
-        .collect::<std::collections::BTreeSet<_>>();
-    if expected_names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
-        return Err("collection prepared input names differ from validation bindings".into());
-    }
-    let grouped = child.resources.iter().any(|r| !r.registered);
-    let reread = transport.reread_rows && deferred_construction;
-    let shared_only = child
-        .resources
-        .iter()
-        .all(|r| r.access == prebindgen_conversions::Access::Shared);
     let validation = replace(&child.validation, &transport.validation_values)?;
-    let construction = |code: &TokenStream| {
-        if grouped {
-            prepared(code, &transport.prepared_values)
-        } else {
-            replace(code, &transport.validation_values)
-        }
-    };
-    let acquire = construction(&child.acquire)?;
-    let statements = construction(&child.statements)?;
+    let acquire = replace(&child.acquire, &transport.validation_values)?;
+    let statements = replace(&child.statements, &transport.validation_values)?;
     let child_argument = &child.argument;
-    let argument = construction(&quote!(let #var = #child_argument;))?;
-    let group = format_ident!("{wire}_accesses");
-    let staged = format_ident!("{wire}_prepared");
-    let mut collect = TokenStream::new();
+    let argument = replace(
+        &quote!(let #var=#child_argument;),
+        &transport.validation_values,
+    )?;
     let mut count = TokenStream::new();
-    let resource_count = child.resources.iter().filter(|r| !r.registered).count();
-    for resource in child.resources.iter().filter(|r| !r.registered) {
+    for resource in child.resources.iter().filter(|r| {
+        !r.registered && r.access == prebindgen_conversions::Access::Move && !r.records_consumption
+    }) {
         let condition = &resource.active;
-        let addresses = match &resource.identity {
-            ResourceIdentity::Single(value) => quote!(::core::iter::once((#value) as usize)),
-            ResourceIdentity::Many(value) => quote!(#value),
-        };
-        let exclusive = resource.access != prebindgen_conversions::Access::Shared;
-        collect.extend(prepared(
-            &quote!(if #condition {for address in #addresses {#group.push((address,#exclusive));}}),
-            &transport.prepared_values,
-        )?);
-        if resource.access == prebindgen_conversions::Access::Move && !resource.records_consumption
-        {
-            count.extend(prepared(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#addresses).count());}), &transport.prepared_values)?);
-        }
+        let size = &resource.count;
+        count.extend(replace(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#size));}),&transport.validation_values)?);
     }
+    let fallible = codec.validates_inputs() || child.fallible;
     let resources = child
         .resources
         .into_iter()
@@ -306,9 +204,9 @@ pub(crate) fn input<C: Codec>(
             allocation_type: resource.allocation_type,
             registered: true,
             records_consumption: true,
-            // Runtime addresses are checked while each row is alive. This descriptor
-            // retains dynamic cardinality for choosing the enclosing call's history.
-            identity: ResourceIdentity::Many(quote!(::core::iter::empty::<usize>())),
+            // The row conversion already accounts for ownership transfers.
+            // Keep type/access metadata for the foreign adapter without reading rows again.
+            count: quote!(0usize),
             active: active.rust(),
             access: resource.access,
         })
@@ -323,19 +221,31 @@ pub(crate) fn input<C: Codec>(
     };
     let length_check = if let syn::Type::Array(array) = array {
         let expected = &array.len;
-        quote!(if #length != #expected { return Err("wrong fixed array length".into()); })
+        if codec.validates_inputs() {
+            quote!(if #length != #expected { return Err("wrong fixed array length".into()); })
+        } else {
+            TokenStream::new()
+        }
     } else {
         TokenStream::new()
     };
     let to_array = if view == SequenceView::Array {
-        quote!(let #var: #ty = #var.try_into().map_err(|_|"wrong fixed array length".to_string())?;)
+        if codec.validates_inputs() {
+            quote!(let #var: #ty = #var.try_into().map_err(|_|"wrong fixed array length".to_string())?;)
+        } else {
+            quote!(let #var:#ty=unsafe {#var.try_into().unwrap_unchecked()};)
+        }
     } else {
         TokenStream::new()
     };
     let value = match view {
         SequenceView::Owned | SequenceView::Array => quote!(#var),
         SequenceView::ArrayReference => {
-            quote!(<#ty>::try_from(#var.as_slice()).map_err(|_|"wrong fixed array length".to_string())?)
+            if codec.validates_inputs() {
+                quote!(<#ty>::try_from(#var.as_slice()).map_err(|_|"wrong fixed array length".to_string())?)
+            } else {
+                quote!(unsafe {&*(#var.as_ptr() as *const _)})
+            }
         }
         SequenceView::Vector => quote!(&#var),
         SequenceView::Slice => quote!(#var.as_slice()),
@@ -366,88 +276,8 @@ pub(crate) fn input<C: Codec>(
                 }
             }
     };
-    let decode = if grouped {
-        let batch = if reread {
-            quote! {
-                let mut #var: Vec<#element> = Vec::new();
-                if #condition { #open #length_check
-                    let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
-                    for #index in 0..#length {
-                        #bind
-                        #[allow(unused_variables,clippy::redundant_closure_call)]
-                        let checked = (|| { #validation #collect Ok::<_,String>(()) })();
-                        #release
-                        checked?;
-                    }
-                    __prebindgen_input_aliases.accept_group(#group)?;
-                    #var.reserve_exact(#length);
-                    for #index in 0..#length {
-                        #bind
-                        #[allow(clippy::redundant_closure_call)]
-                        let #element_value=(|| -> ::core::result::Result<#element,String> {
-                            #validation #count #acquire #statements #argument Ok(#var)
-                        })();
-                        #release
-                        let element = #element_value?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = #var.len();
-                            #var.as_mut_ptr().add(initialized).write(element);
-                            #var.set_len(initialized + 1);
-                        }
-                    }
-                }
-            }
-        } else {
-            quote! {
-                let mut #var: Vec<#element> = Vec::new();
-                if #condition { #open #length_check
-                    let mut #group = __prebindgen_input_aliases.begin_group(#length.saturating_mul(#resource_count));
-                    let mut #staged = Vec::with_capacity(#length);
-                    for #index in 0..#length {
-                        #bind
-                        #[allow(clippy::redundant_closure_call)]
-                        let prepared = (|| {
-                            #validation #collect
-                            Ok::<_,String>(move || -> ::core::result::Result<#element,String> {
-                                #count #acquire #statements #argument Ok(#var)
-                            })
-                        })();
-                        #release
-                        #staged.push(prepared?);
-                    }
-                    __prebindgen_input_aliases.accept_group(#group)?;
-                    #var.reserve_exact(#length);
-                    #[allow(unused_mut)]
-                    for mut build in #staged {
-                        let element = build()?;
-                        // Pointer addition is also valid (and a no-op) for ZSTs.
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = #var.len();
-                            #var.as_mut_ptr().add(initialized).write(element);
-                            #var.set_len(initialized + 1);
-                        }
-                    }
-                }
-
-            }
-        };
-        let checked = if shared_only {
-            quote! {
-                let #var = if __prebindgen_input_aliases.needs_group() {
-                    #batch #var
-                } else { #direct #var };
-            }
-        } else {
-            batch
-        };
-        prebindgen_conversions::staged::input_alias_checks(checked, direct)
-    } else {
-        direct
-    };
     Ok(InputPlan {
-        fallible: true,
+        fallible,
         context: Default::default(),
         acknowledgement: None,
         node: WireNode::Chain {
@@ -455,7 +285,7 @@ pub(crate) fn input<C: Codec>(
             child: Box::new(child.node),
             meta: transport.metadata,
         },
-        validation: decode,
+        validation: direct,
         acquire: quote!(),
         statements: to_array,
         argument: value,
@@ -638,29 +468,5 @@ mod tests {
         .unwrap();
         assert!(code.to_string().contains(&quote!(&(*pointer)).to_string()));
         assert!(code.to_string().contains("consume (cached , value)"));
-    }
-}
-
-#[cfg(test)]
-mod alias_tests {
-    use super::*;
-    #[test]
-    fn wire_substitution_visits_both_policy_branches_and_reports_bad_syntax() {
-        let choice = prebindgen_conversions::staged::input_alias_checks(
-            quote!(let v=wire;),
-            quote!(let v=wire+1;),
-        );
-        let values = vec![(syn::parse_quote!(wire), quote!(42))];
-        let replaced = replace(&choice, &values).unwrap();
-        for checked in [true, false] {
-            let selected = prebindgen_conversions::render_input_alias_checks(&replaced, checked)
-                .unwrap()
-                .to_string();
-            assert!(selected.contains("42") && !selected.contains("wire"));
-        }
-        let malformed = quote!(::prebindgen_runtime::__prebindgen_alias_checks! {not_a_block});
-        assert!(replace(&malformed, &values)
-            .unwrap_err()
-            .contains("invalid input alias branch"));
     }
 }

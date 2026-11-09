@@ -114,7 +114,7 @@ fn borrowed_callbacks_allocate_only_when_copying_is_requested() {
 }
 
 #[test]
-fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
+fn generated_shared_and_consuming_calls_do_not_allocate() {
     let _getters = super::GETTER_TESTS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -141,10 +141,7 @@ fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
                 );
             }
         });
-        assert_eq!(
-            shared, 0,
-            "two/three shared handle calls must not allocate alias bookkeeping"
-        );
+        assert_eq!(shared, 0, "two/three shared handle calls must not allocate");
         let target = super::perftest_storage_with_payload(0, 0, 0.0, 0);
         let large = allocations(|| {
             for _ in 0..1000 {
@@ -161,10 +158,7 @@ fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
                 );
             }
         });
-        assert_eq!(
-            large, 0,
-            "nine fixed accesses must use stack-only alias bookkeeping"
-        );
+        assert_eq!(large, 0, "nine fixed accesses must not allocate");
         assert_eq!(super::perftest_storage_contains(target, 8000), 1);
         super::perftest_drop_storage(target);
         let mut consuming = 0;
@@ -190,7 +184,7 @@ fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
         }
         assert_eq!(
             consuming, 0,
-            "selected consuming handle inputs must not allocate alias bookkeeping"
+            "selected consuming handle inputs must not allocate"
         );
         super::perftest_drop_storage(storage);
     }
@@ -303,7 +297,7 @@ fn generated_owned_collection_inputs_allocate_once_and_shared_slices_borrow() {
 }
 
 #[test]
-fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
+fn consuming_collection_inputs_allocate_only_final_values() {
     let _getters = super::GETTER_TESTS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -329,8 +323,8 @@ fn consuming_collection_inputs_bound_preparation_and_alias_storage() {
         });
         assert_eq!(
             cost,
-            2 * usize::from(size != 0),
-            "size={size}: grouped addresses and final values; no prepared-row buffer"
+            usize::from(size != 0),
+            "size={size}: only the final values vector"
         );
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
         assert_eq!(consumed, size);
@@ -387,31 +381,23 @@ fn enum_handle_inputs_omit_prepared_row_storage() {
             }
         }};
     }
-    use super::unchecked;
     check!(
         super,
         __PbRow_enum_inputs_take_p0_w1,
         perftest_collection_resource_new,
         perftest_enum_inputs_take,
-        true
-    );
-    check!(
-        unchecked,
-        __PbRow_enum_inputs_take_p0_w1,
-        fast_collection_resource_new,
-        fast_enum_inputs_take,
         false
     );
 }
 
 #[test]
-fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
+fn inline_owner_inputs_allocate_only_final_values() {
     use super::inline_owners as ffi;
     let _owners = super::INLINE_OWNER_TESTS
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     for size in [0usize, 1, 8, 64, 512, 4096] {
-        for checked in [true, false] {
+        {
             let mut owners: Vec<_> = (0..size)
                 .map(|_| unsafe { ffi::owner_inline_packet_new() })
                 .collect();
@@ -428,21 +414,14 @@ fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
                     data: rows.as_ptr().cast(),
                     len: size,
                 };
-                let ok = if checked {
+                let ok = {
                     ffi::owner_inline_inputs_packets(rows, &mut result, &mut consumed, &mut error)
-                } else {
-                    ffi::owner_inline_inputs_packets_fast(
-                        rows,
-                        &mut result,
-                        &mut consumed,
-                        &mut error,
-                    )
                 };
                 assert!(ok);
             });
-            assert_eq!(count, (1 + usize::from(checked)) * usize::from(size != 0));
+            assert_eq!(count, usize::from(size != 0));
             assert_eq!(REALLOCATIONS.with(Cell::get), 0);
-            if !checked {
+            {
                 assert_eq!(
                     ALLOCATED_BYTES.with(Cell::get),
                     size * core::mem::size_of::<perftest_flat::InlinePacket>()
@@ -463,7 +442,7 @@ fn inline_owner_inputs_allocate_only_alias_history_and_final_values() {
 }
 
 #[test]
-fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
+fn mixed_inline_callback_rows_allocate_only_final_values() {
     use super::inline_owners as ffi;
     let _getters = super::GETTER_TESTS
         .lock()
@@ -480,7 +459,7 @@ fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
         }
     }
     for size in [0usize, 1, 8, 64, 512, 4096] {
-        for checked in [true, false] {
+        {
             let mut rows: Vec<_> = (0..size)
                 .map(|i| unsafe {
                     let packet = ffi::owner_inline_packet_new();
@@ -505,15 +484,8 @@ fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
                     drop: None,
                     release_result: None,
                 };
-                assert!(if checked {
+                assert!({
                     ffi::owner_inline_callback_rows(
-                        callback,
-                        &mut result,
-                        &mut consumed,
-                        &mut error,
-                    )
-                } else {
-                    ffi::owner_inline_callback_rows_fast(
                         callback,
                         &mut result,
                         &mut consumed,
@@ -521,18 +493,10 @@ fn mixed_inline_callback_rows_allocate_only_alias_history_and_final_values() {
                     )
                 });
             });
-            assert_eq!(count, (1 + usize::from(checked)) * usize::from(size != 0));
+            assert_eq!(count, usize::from(size != 0));
             assert_eq!(REALLOCATIONS.with(Cell::get), 0);
             let row_bytes = core::mem::size_of::<perftest_flat::InlineCallbackRow>();
-            let alias_bytes = if checked {
-                2 * core::mem::size_of::<(usize, bool)>()
-            } else {
-                0
-            };
-            assert_eq!(
-                ALLOCATED_BYTES.with(Cell::get),
-                size * (row_bytes + alias_bytes)
-            );
+            assert_eq!(ALLOCATED_BYTES.with(Cell::get), size * row_bytes);
             assert_eq!(result, (size * size.saturating_sub(1) + 100 * size) as i64);
             assert_eq!(consumed, 1);
             assert!(error.is_null());
@@ -630,7 +594,6 @@ fn mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy() {
 
 #[test]
 fn fixed_callback_results_need_no_cleanup_allocations() {
-    use super::unchecked;
     let _getters = super::GETTER_TESTS
         .lock()
         .unwrap_or_else(|error| error.into_inner());
@@ -643,11 +606,11 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
     }
     unsafe extern "C" fn run(
         context: *mut core::ffi::c_void,
-    ) -> unchecked::fast_callback_396f37c4ec343c74_result {
+    ) -> super::perftest_callback_396f37c4ec343c74_result {
         let inputs = unsafe { &mut *context.cast::<Inputs>() };
         let (first, second) = inputs.pairs[inputs.next];
         inputs.next += 1;
-        unchecked::fast_callback_396f37c4ec343c74_result {
+        super::perftest_callback_396f37c4ec343c74_result {
             v0: first,
             v1: second,
         }
@@ -656,8 +619,8 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
         pairs: (0..1000)
             .map(|_| unsafe {
                 (
-                    unchecked::fast_collection_resource_new(7),
-                    unchecked::fast_collection_resource_new(9),
+                    super::perftest_collection_resource_new(7),
+                    super::perftest_collection_resource_new(9),
                 )
             })
             .collect(),
@@ -665,7 +628,7 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
     };
     unsafe {
         let handler =
-            unchecked::fast_alias_handler_new(unchecked::fast_callback_396f37c4ec343c74 {
+            super::perftest_alias_handler_new(super::perftest_callback_396f37c4ec343c74 {
                 run: Some(run),
                 context: (&mut inputs as *mut Inputs).cast(),
                 drop: None,
@@ -674,7 +637,7 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
             for _ in 0..1000 {
                 let mut result = 0;
                 let mut error = core::ptr::null_mut();
-                assert!(unchecked::fast_alias_handler_call(
+                assert!(super::perftest_alias_handler_call(
                     handler,
                     &mut result,
                     &mut error
@@ -683,7 +646,7 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
                 assert!(error.is_null());
             }
         });
-        unchecked::fast_drop_alias_handler(handler);
+        super::perftest_drop_alias_handler(handler);
         assert_eq!(inputs.next, 1000);
         assert_eq!(
             count, 0,
@@ -694,20 +657,19 @@ fn fixed_callback_results_need_no_cleanup_allocations() {
 
 #[test]
 fn collection_callback_results_allocate_only_the_final_rust_vector() {
-    use super::unchecked;
     let _getters = super::GETTER_TESTS
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    type Row = unchecked::__PbRow_callback_8735da2fee137b57_callback_return_w1;
+    type Row = super::__PbRow_callback_8735da2fee137b57_callback_return_w1;
     struct Input {
         rows: Vec<Row>,
         next: usize,
     }
-    unsafe extern "C" fn run(context: *mut core::ffi::c_void) -> unchecked::__PbRows {
+    unsafe extern "C" fn run(context: *mut core::ffi::c_void) -> super::__PbRows {
         let input = unsafe { &mut *context.cast::<Input>() };
         let offset = input.next;
         input.next += 512;
-        unchecked::__PbRows {
+        super::__PbRows {
             data: unsafe { input.rows.as_ptr().add(offset) }.cast(),
             len: 512,
         }
@@ -715,7 +677,7 @@ fn collection_callback_results_allocate_only_the_final_rust_vector() {
     let mut input = Input {
         rows: (0..(32 * 512))
             .map(|i| Row {
-                v0: unsafe { unchecked::fast_collection_resource_new((i % 512) as i64) },
+                v0: unsafe { super::perftest_collection_resource_new((i % 512) as i64) },
             })
             .collect(),
         next: 0,
@@ -726,8 +688,8 @@ fn collection_callback_results_allocate_only_the_final_rust_vector() {
             let mut accepted = 0;
             let mut error = core::ptr::null_mut();
             unsafe {
-                assert!(unchecked::fast_alias_callback_rows(
-                    unchecked::fast_callback_8735da2fee137b57 {
+                assert!(super::perftest_alias_callback_rows(
+                    super::perftest_callback_8735da2fee137b57 {
                         run: Some(run),
                         context: (&mut input as *mut Input).cast(),
                         drop: None,

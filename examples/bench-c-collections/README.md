@@ -62,14 +62,13 @@ Input comparisons use `input-compare.py`. In addition to handles and scalar rows
 the input driver covers a handle plus text, bytes, or both. Short payloads contain
 three bytes; `_large` cases use a 4 KiB UTF-8 string (Euro signs plus one ASCII
 byte) or a 4 KiB byte payload. Payloads, handles and C rows are prepared before
-timing. Native decoding, required owned copies, alias checks, construction and
+timing. Native decoding, required owned copies, construction and
 destruction remain timed. `--same-build` uses the selected `--cases` and `--sizes`
 for an identical-library control. Per-run console logs stay in the selected
 output directory; only compact summaries need to be committed for PR review.
 
-Use `build.py --disable-alias-checks` to freeze the same generator without C
-input alias-conflict checks. The default remains checked; C callers must supply
-valid, nonconflicting owners in both builds. `input-compare.py` also measures
+The C adapter trusts caller-supplied inputs. There are no runtime alias-check
+settings. C callers supply valid, nonconflicting owners. `input-compare.py` also measures
 `fixed_move`, `fixed_borrow`, `callback_fixed` and `callback_many`. Fixed and
 callback-record cases use two handles; callback-array cases use the requested
 size. Preparation and C storage allocation are outside the timed interval;

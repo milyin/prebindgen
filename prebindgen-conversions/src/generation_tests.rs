@@ -593,106 +593,6 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 }
 
 #[test]
-fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
-    let code = validate_resources(&[
-        Resource {
-            allocation_type: None,
-            registered: false,
-            records_consumption: false,
-            identity: crate::ResourceIdentity::Single(quote!(left)),
-            access: Access::Move,
-            active: quote!(enabled && count > 0),
-        },
-        Resource {
-            allocation_type: None,
-            registered: false,
-            records_consumption: false,
-            identity: crate::ResourceIdentity::Single(quote!(
-                right.expect("inactive identity must not be evaluated")
-            )),
-            access: Access::Shared,
-            active: quote!(count % 2 == 0),
-        },
-    ]);
-    let mut pair_checks = TokenStream::new();
-    let mut assertions = TokenStream::new();
-    for (i, first) in [Access::Shared, Access::Exclusive, Access::Move]
-        .into_iter()
-        .enumerate()
-    {
-        for (j, second) in [Access::Shared, Access::Exclusive, Access::Move]
-            .into_iter()
-            .enumerate()
-        {
-            let name = quote::format_ident!("pair_{i}_{j}");
-            let pair = validate_resources(&[
-                Resource {
-                    allocation_type: None,
-                    registered: false,
-                    records_consumption: false,
-                    identity: crate::ResourceIdentity::Single(quote!(left)),
-                    access: first,
-                    active: quote!(true),
-                },
-                Resource {
-                    allocation_type: None,
-                    registered: false,
-                    records_consumption: false,
-                    identity: crate::ResourceIdentity::Single(quote!(right)),
-                    access: second,
-                    active: quote!(true),
-                },
-            ]);
-            pair_checks.extend(quote! {
-                fn #name(left: usize, right: usize) -> Result<(), String> {
-                    #pair
-                    Ok(())
-                }
-            });
-            let shared = first == Access::Shared && second == Access::Shared;
-            assertions.extend(quote! {
-                assert_eq!(#name(7, 7).is_ok(), #shared);
-                assert!(#name(7, 8).is_ok());
-            });
-        }
-    }
-    let source = quote! {
-        #pair_checks
-        fn check(enabled: bool, count: usize, left: usize, right: Option<usize>) -> Result<(), String> {
-            #code
-            Ok(())
-        }
-        fn main() {
-            #assertions
-            assert!(check(true, 2, 7, Some(7)).is_err());
-            assert!(check(true, 2, 7, Some(8)).is_ok());
-            assert!(check(false, 2, 7, Some(7)).is_ok());
-            assert!(check(true, 1, 7, None).is_ok());
-        }
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("predicates.rs");
-    let executable = dir.path().join("predicates");
-    std::fs::write(&file, source.to_string()).unwrap();
-    let compiled = std::process::Command::new("rustc")
-        .arg("--edition=2021")
-        .arg(&file)
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compiled.stderr)
-    );
-    assert!(std::process::Command::new(executable)
-        .status()
-        .unwrap()
-        .success());
-}
-
-#[test]
 fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     let item = syn::parse_quote!(
         pub fn length(value: &str) -> usize {
@@ -788,32 +688,6 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         .success());
 }
 
-fn validate_resources(resources: &[Resource]) -> TokenStream {
-    let plan = InputPlan::<syn::Type> {
-        fallible: false,
-        context: Default::default(),
-        node: Default::default(),
-        acknowledgement: None,
-        validation: quote!(),
-        acquire: quote!(),
-        statements: quote!(),
-        argument: quote!(()),
-        resources: resources.to_vec(),
-    };
-    let mut aliases = crate::staged::ParameterAliasCheck::default();
-    let contribution = plan
-        .code_fragment_slot(
-            InputFragment::CheckAliases {
-                context: &(),
-                check: &mut aliases,
-            },
-            &syn::parse_quote!(()),
-        )
-        .unwrap();
-    let check = aliases.emit().unwrap();
-    quote!(let _: () = #contribution; #check;)
-}
-
 #[derive(Debug)]
 struct TestPacketValue<'a, W: prebindgen_flat::WireKind> {
     wire: &'a Wire<W>,
@@ -906,318 +780,35 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
 }
 
 #[test]
-fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
-    let single = |access| Resource {
-        allocation_type: None,
-        registered: false,
-        records_consumption: false,
-        identity: ResourceIdentity::Single(quote!(left)),
-        access,
-        active: quote!(enabled),
-    };
-    let many = |access| Resource {
-        allocation_type: None,
-        registered: false,
-        records_consumption: false,
-        // Dynamic-set scratch storage must not shadow this validation local.
-        identity: ResourceIdentity::Many(quote!(__prebindgen_resources.iter().copied())),
-        access,
-        active: quote!(enabled),
-    };
-    let mut wrappers = TokenStream::new();
-    for (name, resources) in [
-        ("no_resources", vec![vec![], vec![]]),
-        ("shared", vec![vec![single(Access::Shared)], vec![]]),
-        ("exclusive", vec![vec![single(Access::Exclusive)], vec![]]),
-        ("moved", vec![vec![single(Access::Move)], vec![]]),
-        ("shared_set", vec![vec![many(Access::Shared)], vec![]]),
-        ("exclusive_set", vec![vec![many(Access::Exclusive)], vec![]]),
-        (
-            "internal_pair",
-            vec![vec![single(Access::Move), single(Access::Shared)], vec![]],
-        ),
-        (
-            "separate",
-            vec![vec![single(Access::Move)], vec![single(Access::Shared)]],
-        ),
-    ] {
-        let mut flat = Flat::<syn::Type>::parse(
-            syn::parse_file("pub fn source(a:i32,b:i32)->i32 { 42 }")
-                .unwrap()
-                .items
-                .into_iter()
-                .map(|i| (i, Default::default())),
-        )
-        .unwrap();
-        let function = flat.function_mut("source").unwrap();
-        for (index, resources) in resources.into_iter().enumerate() {
-            let mut input = Input(index).plan();
-            input.acknowledgement = None;
-            input.validation = quote!();
-            input.acquire = quote!();
-            input.statements = quote!();
-            input.argument = quote!(1i32);
-            input.resources = resources;
-            function.params[index].ty.slot = Some(input);
-        }
-        let mut output = Output.plan();
-        output.statements = quote!();
-        output.commit = quote!();
-        output.delivery.statements = quote!();
-        function.ret.slot = Some(output);
-        let body = emit_call(
-            function,
-            &(),
-            &source_binding(),
-            &syn::parse_quote!(i32),
-            &[],
-        )
-        .unwrap();
-        if matches!(
-            name,
-            "no_resources" | "shared" | "exclusive" | "moved" | "shared_set"
-        ) {
-            assert!(!body.to_string().contains("Vec"), "{name}: {body}");
-        }
-        let name = format_ident!("{name}");
-        wrappers.extend(quote! {
-            fn #name(enabled: bool, left: usize, __prebindgen_resources: &[usize]) -> Result<i32,String> { #body }
-        });
-    }
-    let code = quote! {
-        use std::alloc::{GlobalAlloc, Layout, System};
-        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-        struct Allocator;
-        static COUNTING: AtomicBool = AtomicBool::new(false);
-        static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-        #[global_allocator] static ALLOCATOR: Allocator = Allocator;
-        unsafe impl GlobalAlloc for Allocator {
-            unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-                if COUNTING.load(Ordering::Relaxed) { ALLOCATIONS.fetch_add(1, Ordering::Relaxed); }
-                System.alloc(layout)
-            }
-            unsafe fn dealloc(&self, p: *mut u8, layout: Layout) { System.dealloc(p,layout); }
-        }
-        fn source(_:i32,_:i32)->i32 {42}
-        #wrappers
-        fn main() {
-            COUNTING.store(true, Ordering::Relaxed);
-            for _ in 0..1000 {
-                let left=std::hint::black_box(7);
-                assert_eq!(no_resources(true,left,&[7,7]),Ok(42));
-                assert_eq!(shared(true,left,&[7,7]),Ok(42));
-                assert_eq!(exclusive(true,left,&[7,7]),Ok(42));
-                assert_eq!(moved(true,left,&[7,7]),Ok(42));
-                assert_eq!(shared_set(true,left,&[7,7]),Ok(42));
-            }
-            COUNTING.store(false, Ordering::Relaxed);
-            assert_eq!(ALLOCATIONS.load(Ordering::Relaxed),0);
-            assert!(exclusive_set(true,7,&[7,7]).is_err());
-            assert_eq!(exclusive_set(true,7,&[7,8]),Ok(42));
-            assert_eq!(exclusive_set(false,7,&[7,7]),Ok(42));
-            assert!(internal_pair(true,7,&[]).is_err());
-            assert_eq!(internal_pair(false,7,&[]),Ok(42));
-            assert!(separate(true,7,&[]).is_err());
-            assert_eq!(separate(false,7,&[]),Ok(42));
-        }
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("alias_cost.rs");
-    let executable = dir.path().join("alias_cost");
-    std::fs::write(&path, code.to_string()).unwrap();
-    let compile = std::process::Command::new("rustc")
-        .args(["--edition=2021", "-O"])
-        .arg(&path)
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        compile.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compile.stderr)
-    );
-    let run = std::process::Command::new(executable).output().unwrap();
-    assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
-    );
-}
-
-#[test]
-fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
-    use crate::staged::ParameterAliasCheck;
-    let mut wrappers = TokenStream::new();
-    let mut successes = TokenStream::new();
-    let mut conflicts = TokenStream::new();
-    for count in [1usize, 2, 3, 8, 9, 16] {
-        for shared in [true, false] {
-            let mut check = ParameterAliasCheck::default();
-            for index in 0..count {
-                check
-                    .include_parameter(
-                        &(),
-                        &[Resource {
-                            allocation_type: None,
-                            registered: false,
-                            records_consumption: false,
-                            identity: ResourceIdentity::Single(
-                                quote!(__prebindgen_alias_0[#index]),
-                            ),
-                            active: quote!(__prebindgen_resources & (1u32 << #index) != 0),
-                            access: if shared || (count > 1 && index == 0) {
-                                Access::Shared
-                            } else if index % 2 == 0 {
-                                Access::Move
-                            } else {
-                                Access::Exclusive
-                            },
-                        }],
-                    )
-                    .unwrap();
-            }
-            let check = check.emit().unwrap();
-            assert!(!check.to_string().contains("Vec"), "{check}");
-            if shared || count <= 8 {
-                assert!(!check.to_string().contains("sort_unstable"), "{check}");
-            } else {
-                assert!(check.to_string().contains("sort_unstable"), "{check}");
-            }
-            if shared {
-                assert_eq!(check.to_string(), "()");
-            }
-            let name = format_ident!("fixed_{count}_{shared}");
-            wrappers.extend(quote! {
-                fn #name(__prebindgen_resources:u32, __prebindgen_alias_0:&[usize]) -> Result<(),String> {
-                    let _: () = #check;
-                    Ok(())
-                }
-            });
-            let active = (1u32 << count) - 1;
-            successes.extend(quote! {
-                assert_eq!(#name(#active, std::hint::black_box(&[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])),Ok(()));
-                assert_eq!(#name(0, &[]),Ok(()));
-            });
-            if count > 1 {
-                conflicts.extend(quote! {
-                    assert_eq!(#name(#active, &[0;16]).is_ok(),#shared);
-                    assert_eq!(#name(1, &[0;16]),Ok(()));
-                });
-            }
-        }
-    }
-    // A shared/shared duplicate remains legal inside a set that also has a
-    // distinct writer. Exercise both direct comparisons and the stack sort.
-    for count in [3usize, 9] {
-        let mut check = ParameterAliasCheck::default();
-        for index in 0..count {
-            check
-                .include_parameter(
-                    &(),
-                    &[Resource {
-                        allocation_type: None,
-                        registered: false,
-                        records_consumption: false,
-                        identity: ResourceIdentity::Single(quote!(__prebindgen_resources[#index])),
-                        active: quote!(true),
-                        access: if index == 2 {
-                            Access::Exclusive
-                        } else {
-                            Access::Shared
-                        },
-                    }],
-                )
-                .unwrap();
-        }
-        let body = check.emit().unwrap();
-        let name = format_ident!("mixed_duplicates_{count}");
-        wrappers.extend(quote! {
-            fn #name(__prebindgen_resources:&[usize])->Result<(),String> {
-                let _: ()=#body;
-                Ok(())
-            }
-        });
-        successes.extend(quote! {
-            assert_eq!(#name(std::hint::black_box(&[7,7,9,10,11,12,13,14,15])),Ok(()));
-        });
-        conflicts.extend(quote! {
-            assert!(#name(&[7,7,7,10,11,12,13,14,15]).is_err());
-        });
-    }
-    let code = quote! {
-        use std::alloc::{GlobalAlloc, Layout, System};
-        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-        struct Allocator;
-        static COUNTING: AtomicBool=AtomicBool::new(false);
-        static ALLOCATIONS: AtomicUsize=AtomicUsize::new(0);
-        #[global_allocator] static ALLOCATOR:Allocator=Allocator;
-        unsafe impl GlobalAlloc for Allocator {
-            unsafe fn alloc(&self,layout:Layout)->*mut u8 {
-                if COUNTING.load(Ordering::Relaxed) {ALLOCATIONS.fetch_add(1,Ordering::Relaxed);}
-                System.alloc(layout)
-            }
-            unsafe fn dealloc(&self,p:*mut u8,layout:Layout) {System.dealloc(p,layout);}
-        }
-        #wrappers
-        fn main() {
-            COUNTING.store(true,Ordering::Relaxed);
-            for _ in 0..1000 { #successes }
-            COUNTING.store(false,Ordering::Relaxed);
-            assert_eq!(ALLOCATIONS.load(Ordering::Relaxed),0);
-            #conflicts
-        }
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let source = dir.path().join("fixed_aliases.rs");
-    let executable = dir.path().join("fixed_aliases");
-    std::fs::write(&source, code.to_string()).unwrap();
-    let compile = std::process::Command::new("rustc")
-        .args(["--edition=2021", "-O"])
-        .arg(&source)
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        compile.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compile.stderr)
-    );
-    let run = std::process::Command::new(executable).output().unwrap();
-    assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
-    );
-}
-
-#[test]
-fn eager_resource_conversions_reject_deferred_resource_neighbors() {
-    let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 {a+b}").unwrap();
-    let mut flat =
-        Flat::<syn::Type>::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    let function = flat.function_mut("add").unwrap();
-    for (index, parameter) in function.params.iter_mut().enumerate() {
-        let mut plan = Input(index).plan();
-        plan.resources.push(Resource {
+fn mixed_eager_and_deferred_resources_cannot_report_a_consumed_prefix() {
+    let mut flat = Flat::<syn::Type>::parse(
+        syn::parse_file("pub fn add(a:i32,b:i32)->i32{a+b}")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let f = flat.function_mut("add").unwrap();
+    for (i, param) in f.params.iter_mut().enumerate() {
+        let mut plan = Input(i).plan();
+        plan.resources = vec![Resource {
             allocation_type: None,
-            registered: index == 0,
+            registered: i == 0,
             records_consumption: false,
-            identity: ResourceIdentity::Single(quote!(8usize)),
+            count: quote!(1usize),
             access: Access::Move,
             active: quote!(true),
-        });
-        parameter.ty.slot = Some(plan);
+        }];
+        param.ty.slot = Some(plan);
     }
-    function.ret.slot = Some(Output.plan());
-    let function = flat.function("add").unwrap();
+    f.ret.slot = Some(Output.plan());
     let error = emit_call(
-        function,
+        f,
         &(),
         &source_binding(),
-        &syn::parse_quote!(_),
-        &test_parameter_names(function),
+        &syn::parse_quote!(i32),
+        &test_parameter_names(f),
     )
     .unwrap_err();
     assert!(

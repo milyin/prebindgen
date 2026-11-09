@@ -28,23 +28,20 @@ static void mixed_callback_optional_release(void *raw,const owner_inline_callbac
     if(value->v0==1)free(value->v1.data);
 }
 static void check_mixed_callback_rows(void) {
-    for(int checked=0;checked<=1;++checked)for(int mode=0;mode<9;++mode) {
-        if(!checked && (mode==3 || mode==4))continue;
+    const int modes[]={0,1,7,8};
+    for(size_t m=0;m<sizeof(modes)/sizeof(*modes);++m) {
+        int mode=modes[m];
         mixed_callback_context ctx={.rows=malloc(3*sizeof(mixed_callback_row)),.len=3,.boxes=6,.failure=mode!=0};assert(ctx.rows);
         for(size_t i=0;i<3;++i)ctx.rows[i]=mixed_callback_make(i);
-        if(mode==2)ctx.rows[1].v3=0xd800;
-        if(mode==3){owner_drop_resource(ctx.rows[1].v0);ctx.rows[1].v0=ctx.rows[0].v0;--ctx.boxes;}
-        if(mode==4){owner_drop_resource(ctx.rows[1].v2);ctx.rows[1].v2=ctx.rows[1].v0;--ctx.boxes;}
-        if(mode==5 || mode==6){owner_drop_resource(ctx.rows[1].v2);ctx.rows[1].v2=mode==5 ? NULL:(void *)1;--ctx.boxes;}
         ctx.packets_before=owner_inline_packet_drops();ctx.boxes_before=owner_owned_resource_drops();
         size_t ctor_panic=mode==1 ? 2 : mode==7 ? 1 : mode==8 ? 3 : 0;
         owner_inline_inputs_reset(0,ctor_panic);
         int64_t result=12345;size_t consumed=99;char *error=NULL;
         owner_inline_callback_rows_callback callback={.run=mixed_callback_run,.context=&ctx,.drop=mixed_callback_drop,.release_result=mixed_callback_release};
-        bool ok=checked ? owner_inline_callback_rows(callback,&result,&consumed,&error) : owner_inline_callback_rows_fast(callback,&result,&consumed,&error);
+        bool ok=owner_inline_callback_rows(callback,&result,&consumed,&error);
         assert(consumed==1 && ctx.released==1 && ctx.dropped==1);
         assert(owner_inline_packet_drops()==ctx.packets_before+ctx.len && owner_owned_resource_drops()==ctx.boxes_before+ctx.boxes);
-        assert(owner_inline_inputs_constructor_calls()==(mode==0 ? 3 : ctor_panic ? ctor_panic : checked ? 0 : 1));
+        assert(owner_inline_inputs_constructor_calls()==(mode==0 ? 3 : ctor_panic));
         assert(owner_inline_inputs_calls()==(mode==0 ? 1u:0u));
         if(mode==0)assert(ok && result==396 && error==NULL);
         else {assert(!ok && result==12345 && error!=NULL);owner_free_error(error);}
@@ -63,5 +60,5 @@ static void check_mixed_callback_rows(void) {
     assert(result==266 && consumed==1 && error==NULL);
     assert(owner_inline_inputs_constructor_calls()==2);
     assert(owner_inline_packet_drops()==packets+2 && owner_owned_resource_drops()==boxes+4);
-    puts("C mixed callback replay PASS: original payload addresses, aliases, constructor failure, inactive fields and cleanup before row release");
+    puts("C mixed callback rows PASS: original payload addresses, constructor failure, inactive fields and cleanup before row release");
 }

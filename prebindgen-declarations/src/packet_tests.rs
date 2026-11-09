@@ -235,7 +235,7 @@ impl Codec for CodecImpl {
                 allocation_type: None,
                 registered: false,
                 records_consumption: false,
-                identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#w as usize)),
+                count: quote!(1usize),
                 access: prebindgen_conversions::Access::Shared,
                 active: active.rust(),
             });
@@ -268,7 +268,6 @@ impl Codec for CodecImpl {
             .name
             .clone();
         Ok(SequenceInput {
-            reread_rows: false,
             controls: vec![
                 Wire {
                     name: wire.clone(),
@@ -290,7 +289,6 @@ impl Codec for CodecImpl {
                 },
                 quote!(#field),
             )],
-            prepared_values: vec![(field.clone(), Some(quote!(#field)))],
             release: quote!(),
         })
     }
@@ -500,7 +498,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
 }
 
 #[test]
-fn prepared_rows_lend_temporary_values_after_validation_and_construct_once() {
+fn rows_lend_temporary_values_and_construct_once() {
     let source=syn::parse_file("pub struct Row{pub value:i32}pub fn row(value:&i32)->Row{}pub fn consume(values:Vec<Row>)->i32{}").unwrap();
     let flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
         source.items.into_iter().map(|i| (i, Default::default())),
@@ -515,8 +513,7 @@ fn prepared_rows_lend_temporary_values_after_validation_and_construct_once() {
         [Input::Temporary(Box::new(Input::Leaf))],
     )));
     let plan = compile_input(&flat, &codec, "consume", "values", &recipe, &()).unwrap();
-    let checked =
-        prebindgen_conversions::render_input_alias_checks(&plan.validation, true).unwrap();
+    let checked = plan.validation.clone();
     let acquire = plan.acquire;
     let statements = plan.statements;
     let argument = plan.argument;
@@ -528,28 +525,14 @@ fn prepared_rows_lend_temporary_values_after_validation_and_construct_once() {
         })
         .collect::<Vec<_>>();
     let program = quote! {
-        use std::sync::atomic::{AtomicBool,AtomicUsize,Ordering};
-        static VALIDATED:AtomicBool=AtomicBool::new(false);
+        use std::sync::atomic::{AtomicUsize,Ordering};
         static CONSTRUCTED:AtomicUsize=AtomicUsize::new(0);
         struct Row{value:i32}
         fn row(value:&i32)->Row {
-            assert!(VALIDATED.load(Ordering::SeqCst));
             CONSTRUCTED.fetch_add(1,Ordering::SeqCst);Row{value:*value}
         }
         fn consume(values:Vec<Row>)->i32{values.iter().map(|r|r.value).sum()}
-        // The test adapter's i32 resource identifiers are logical identities,
-        // not dereferenced pointers. Force the non-replay grouped transport.
-        struct Aliases;
-        impl Aliases {
-            fn needs_group(&self)->bool {true}
-            fn begin_group(&mut self,n:usize)->Vec<(usize,bool)>{Vec::with_capacity(n)}
-            fn accept_group(&mut self,group:Vec<(usize,bool)>)->Result<(),String>{
-                assert!(group.iter().all(|(id,exclusive)|*id>0 && !*exclusive));
-                VALIDATED.store(true,Ordering::SeqCst);Ok(())
-            }
-        }
         fn bridge(#(#parameters),*)->Result<i32,String>{
-            let mut __prebindgen_input_aliases=Aliases;
             let __prebindgen_input_consumed=std::cell::Cell::new(0usize);
             #checked #acquire #statements
             let values=#argument;
@@ -557,7 +540,7 @@ fn prepared_rows_lend_temporary_values_after_validation_and_construct_once() {
             Ok(consume(values))
         }
         fn main(){for values in [vec![],vec![1,2,3]] {
-            VALIDATED.store(false,Ordering::SeqCst);CONSTRUCTED.store(0,Ordering::SeqCst);
+            CONSTRUCTED.store(0,Ordering::SeqCst);
             assert_eq!(bridge(values.as_ptr(),values.len()).unwrap(),values.iter().sum());
             assert_eq!(CONSTRUCTED.load(Ordering::SeqCst),values.len());
         }}

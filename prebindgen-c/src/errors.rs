@@ -31,7 +31,7 @@ impl ErrorBinding {
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &enums::EnumCodec<'_>,
+    codec: &enums::EnumCodec,
     declarations: &prebindgen_declarations::Declarations,
 ) -> Result<()> {
     let mut types = flat
@@ -124,8 +124,6 @@ pub(crate) fn emit(
         let helper = helper(name);
         let input = format_ident!("source_error");
         let context = CContext {
-            input_alias_index_threshold: None,
-            emit_alias_checks: Some(true),
             row_types: {
                 let mut schemas = Vec::new();
                 sequence::schemas(&plan.outcomes.success, &mut schemas);
@@ -354,7 +352,6 @@ pub(crate) fn result_function(
     } else {
         (quote!(bool), "bool".into(), quote!(false), quote!(true))
     };
-    let mut checks = TokenStream::new();
     let mut writes = TokenStream::new();
     let mut display = Vec::new();
     for (i, wire) in outputs.iter().enumerate() {
@@ -367,21 +364,13 @@ pub(crate) fn result_function(
         let ty = wire.rust_type();
         params.push(quote!(#id:*mut #ty));
         cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers, context)));
-        checks.extend(quote!(if #id.is_null(){return Err("null success-output pointer".into());}));
         writes.extend(quote!(std::ptr::write(#id,value.#field);));
         display.push(format!("*{id}"));
     }
     let acknowledgement = if consumes {
         params.push(quote!(ownership:*mut usize));
         cparams.push("size_t *ownership".into());
-        quote!(if !ownership.is_null(){std::ptr::write(ownership,#accepted.get());})
-    } else {
-        quote!()
-    };
-    let preflight = if consumes {
-        quote!(if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        })
+        quote!(std::ptr::write(ownership,#accepted.get());)
     } else {
         quote!()
     };
@@ -430,7 +419,7 @@ pub(crate) fn result_function(
             let mut success_committed=false;
             let mut storage=std::mem::MaybeUninit::<#internal>::uninit();
             let #out=storage.as_mut_ptr();
-            let outcome=::prebindgen_runtime::boundary(|| {#preflight #checks #body});
+            let outcome=::prebindgen_runtime::boundary(|| {  #body});
             #acknowledgement
             match outcome {
                 Ok(())=>{let value=storage.assume_init();#writes #success}

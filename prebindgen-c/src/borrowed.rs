@@ -131,16 +131,13 @@ pub(crate) fn input_sequence(
     let condition = active.rust();
     let pointer = format_ident!("{var}_pointer");
     let slice = format_ident!("{var}_slice");
-    let length_check = array_length.map(
-        |length| quote!(if #wire.len != #length {return Err("wrong fixed array length".into());}),
-    );
     let argument = if array_length.is_some() {
-        quote!(<&[#native;#array_length]>::try_from(#slice).map_err(|_|"wrong fixed array length".to_string())?)
+        quote!(unsafe {&*(#slice.as_ptr() as *const [#native;#array_length])})
     } else {
         quote!(#slice)
     };
     Ok(InputPlan {
-        fallible: true,
+        fallible: false,
         context: Default::default(),
         acknowledgement: None,
         node: prebindgen_flat::WireNode::Leaf(vec![Wire {
@@ -148,15 +145,7 @@ pub(crate) fn input_sequence(
             kind: CWire::SliceView { element },
         }]),
         validation: quote!(let #var = if #condition {
-            #length_check
-            // Avoid an outlined validation call on the empty path; the runtime
-            // helper accepts every empty descriptor and pointer normalization follows.
-            if #wire.len != 0 {::prebindgen_runtime::validate_slice::<#native>(#wire.data,#wire.len)?;}
-            // Empty foreign views need not provide a valid aligned pointer.
-            // Preserve legitimate empty source pointers, normalize the rest.
-            let #pointer = if #wire.len == 0 && (#wire.data.is_null() || !#wire.data.is_aligned()) {
-                ::core::ptr::NonNull::<#native>::dangling().as_ptr() as *const #native
-            } else {#wire.data};
+            let #pointer=if #wire.len==0 && #wire.data.is_null() {::core::ptr::NonNull::<#native>::dangling().as_ptr() as *const #native}else{#wire.data};
             let #slice = unsafe {::core::slice::from_raw_parts(#pointer,#wire.len)};
             Some(#argument)
         } else {None};),
@@ -580,7 +569,7 @@ mod tests {
                 g.header.contains(&format!("pb_{element}_slice_view")),
                 "{element}"
             );
-            assert!(g.rust.contains("validate_slice"));
+            assert!(!g.rust.contains("validate_slice"));
             assert!(!g.rust.contains("reserve_exact"));
             assert!(!g.header.contains("_rows"));
         }

@@ -35,7 +35,7 @@ pub enum CWire {
     /// Exclusive non-owning byte view. The caller preserves the source lifetime
     /// and exclusive access; no allocation is transferred.
     MutableView,
-    /// A fieldless Rust enum represented by checked `int32_t` values.
+    /// A fieldless Rust enum represented by caller-validated `int32_t` values.
     Enum {
         /// Unprefixed C typedef name.
         name: String,
@@ -55,9 +55,6 @@ pub enum CWire {
     /// A null pointer with zero length is a valid empty value, so no null niche
     /// is available for this representation.
     Buffer,
-    /// A caller-owned input buffer decoded during flat row construction. Same
-    /// carrier as `Buffer`; only this audited conversion permits row rereading.
-    DeferredBuffer,
     /// A typed opaque pointer with independent move/shared/exclusive access.
     /// Only move outputs transfer allocation ownership.
     Pointer {
@@ -156,7 +153,6 @@ impl CWire {
                 ..
             } => *null_niche_available = false,
             Self::Buffer
-            | Self::DeferredBuffer
             | Self::View
             | Self::MutableView
             | Self::Owned { .. }
@@ -242,7 +238,7 @@ impl WireKind for CWire {
                     syn::parse_quote!(*mut #ty)
                 }
             }
-            CWire::View | CWire::Buffer | CWire::DeferredBuffer => syn::parse_quote!(__PbBuffer),
+            CWire::View | CWire::Buffer => syn::parse_quote!(__PbBuffer),
             CWire::MutableView => syn::parse_quote!(__PbBufferMut),
             CWire::Owned {
                 owner,

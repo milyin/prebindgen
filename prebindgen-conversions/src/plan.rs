@@ -21,11 +21,11 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Validate this value before using it. Compiled recipes also acquire and
     /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Acquire this leaf after validation and alias checks. Acquisition must be
+    /// Acquire this leaf after its adapter-specific validation. Acquisition must be
     /// infallible unless each moved resource records its own successful transfer
     /// through `Resource::records_consumption`. Empty for eagerly built recipes.
     pub acquire: TokenStream,
-    /// Active foreign resources whose identities must be checked across all arguments.
+    /// Active foreign resources used for ownership receipts and foreign preflight.
     pub resources: Vec<Resource>,
     /// Construct this value from acquired inputs, including source constructor calls.
     pub statements: TokenStream,
@@ -68,37 +68,29 @@ pub enum Access {
     /// Ownership transfer; conflicts with every other active use of the resource.
     Move,
 }
-/// One allocation address, or a runtime-sized set of addresses with the same access mode.
-#[derive(Clone, Debug)]
-pub enum ResourceIdentity {
-    /// Expression evaluating to one allocation address.
-    Single(TokenStream),
-    /// Expression implementing IntoIterator<Item = usize>.
-    Many(TokenStream),
-}
-/// The adapter supplies identity; flat enforces call-wide access conflicts.
+/// Resource metadata for ownership receipts and adapter-specific preflight.
 #[derive(Clone, Debug)]
 pub struct Resource {
     /// Independent root allocation class represented by this declared type.
-    /// Use None for interior loans, unknown ownership domains or custom identities.
-    /// Foreign-side alias preflight may replace native checks only when every
-    /// resource matches a handle wire of this type and access mode. The adapter
-    /// must establish that distinct allocation classes cannot alias.
+    /// Kotlin preflight matches this type and access mode with generated handle
+    /// inputs. Distinct classes must own independent allocations. C interior
+    /// loans and resources without a known allocation class use None.
     pub allocation_type: Option<syn::Type>,
-    /// This access has already been registered during input preparation.
-    /// Its identity then describes cardinality for call setup, not a later read.
+    /// This resource is acquired during input preparation. Its ownership count
+    /// is already included in the generated preparation code.
     pub registered: bool,
     /// Acquisition updates `__prebindgen_input_consumed` after each successful
     /// ownership transfer. The compiler must not also count this resource.
     /// Use this for acquisition that can fail or unwind between transfers.
-    /// This does not register or suppress alias checks. Ignored for borrows.
+    /// Ignored for borrows.
     pub records_consumption: bool,
-    /// Side-effect-free Rust expression identifying a live resource, such as an address.
-    /// All identities compared within a call must share an equality-compatible domain.
-    pub identity: ResourceIdentity,
+    /// Number of resources represented by this descriptor when active.
+    /// A side-effect-free Rust expression evaluating to usize; ordinary leaves
+    /// use `1usize`. Already-accounted collection descriptors may use zero.
+    pub count: TokenStream,
     /// Borrow or ownership requirement imposed by this input conversion.
     pub access: Access,
-    /// Side-effect-free Rust boolean expression; false resources do not conflict.
+    /// Side-effect-free Rust boolean expression selecting active resources.
     pub active: TokenStream,
 }
 /// Result-slot glue executed after output preparation and before ownership commit.

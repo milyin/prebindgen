@@ -458,7 +458,7 @@ output delivery. Requests introducing locals accept a continuation expression so
 borrowed storage and acquired owners stay alive through the call.
 
 The C and JNI adapters opt into `staged::emit_call`, which orders those requests,
-checks allocation aliases and shared acknowledgement, and returns a fallible
+checks shared ownership acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
 C/JNI use the optional staged conversion protocol from `prebindgen-conversions`.
@@ -481,7 +481,7 @@ duplicate bindings. Expression-list order therefore cannot silently change an
 output packet or sequence row. The tree remains the source of field types and
 placement; the expressions contain no second layout.
 
-Sequence input hooks similarly provide named validation and deferred reads for
+Sequence input hooks similarly provide named row reads for
 one element. Shared composition substitutes those names directly, without
 flattening the element tree. Output hooks provide metadata and named outer
 expressions, allowing one buffer value or separate pointer and length values.
@@ -550,16 +550,9 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional plans describe resource access using emitted Rust conditions.
-Compiled C/JNI inputs validate every value before using it. Native alias
-validation uses no bookkeeping for shared-only calls. Small fixed sets compare
-stack entries; larger fixed sets use a stack hash table. Resource-bearing
-collection rows are decoded once, then their addresses are checked together
-against a sorted native history before acquisition and construction. JNI plans
-covered by Kotlin preflight omit this native history and its validation staging. Addresses remain recorded
-even when constructors move or drop the original object. `CheckAliases` collects
-this access profile when generating the wrapper. Manually staged conversions
-retain their deferred checks; mixing deferred resource plans with compiled eager
-resource plans is diagnosed rather than dropping their checks. JNI slots
+C inputs are trusted; Kotlin wrappers validate and lock their handle arguments
+before entering JNI. Native code does not repeat alias validation. The shared
+protocol uses resource metadata to account for ownership transfers. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.
@@ -672,8 +665,9 @@ only identifies the scalar leaf and leaves its representation to the adapter.
 | `i128`, `u128` | `<prefix>_int128 { uint64_t hi, lo; }` | `java.math.BigInteger` / `ByteArray` |
 
 Boolean inputs normalize zero to false and any nonzero carrier to true; outputs
-are 0 or 1. Character inputs reject surrogates and values outside Unicode's
-scalar range, preserving supplementary characters. Floats retain infinities,
+are 0 or 1. JNI character inputs reject surrogates and values outside Unicode's
+scalar range. C callers supply valid Unicode scalars, including supplementary
+characters. Floats retain infinities,
 NaNs and signed zero. JNI unsigned mappings match the established JniGen API.
 
 The C 128-bit pair carries the high and low halves of the value's bit pattern;
@@ -691,32 +685,27 @@ The call data flow has an explicit ownership boundary:
 
 ```text
 select active alternatives
-    → validate/decode active values and check current/prior accesses before use
-    → acquire and construct, individually or in checked groups
+    → decode active values using the adapter's input contract
+    → acquire and construct
     → invoke the source function
     → prepare outputs under Rust ownership
     → publish foreign outputs and transfer their ownership
 ```
 
-Each value is validated before it is used, including checks against earlier
-accesses to the same allocation. Resource-bearing rows can be validated as a group
-before any row is acquired or constructed. If a later value fails, earlier constructors may already
-have run and earlier owned inputs remain consumed. Rust drops initialized values
-and unpublished outputs; it does not undo constructor side effects. Multiple
-shared borrows are allowed; an exclusive borrow or move conflicts with every
-other active use of that allocation. Inactive selector arms neither validate nor
-acquire their inputs.
+Kotlin validates inputs before use. C requires callers to provide valid inputs
+and obey Rust ownership, borrowing and lifetime rules. Inactive selector arms
+are not read or acquired. If conversion or source construction fails, Rust drops
+initialized values and unpublished outputs. Earlier owned inputs remain consumed;
+constructor side effects are not rolled back.
 
 Low-level adapters constructing `prebindgen_conversions::Resource` use
 `records_consumption: false` for compiler-managed ownership counts. Set it to
 `true` when acquisition updates `__prebindgen_input_consumed` after each successful
-move, so failures between transfers preserve the exact consumed prefix. This is
-independent of `registered`, which tracks alias checking. `allocation_type`
-identifies an independently owned allocation class. Unknown identities or
-interior pointers may use `None` in adapters retaining native checks; JniGen
-requires a known allocation type matching its prepared Kotlin handles.
-External adapter struct literals must supply this metadata; ordinary binding
-declarations do not change.
+move. `registered` means preparation already accounts for the resource. `count` is
+the number of resources represented when active; address identities are no longer
+stored or rendered by the shared protocol.
+`allocation_type` identifies an independently owned allocation class used by
+Kotlin's handle preflight; C loans can use `None` for interior pointers.
 
 Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
 gc_managed}` and `KotlinInput::handle_inputs`. Resource-bearing inputs must expose
@@ -858,7 +847,8 @@ relocate the bytes. The C caller ends the exclusive borrow before using or
 dropping the returned owner.
 
 Other vectors get `*_get(owner, index)`,
-which returns a borrowed element pointer or null for an out-of-range index.
+which returns a borrowed element pointer. The caller guarantees that the index
+is smaller than the vector length.
 Primitive elements use their C scalar type; opaque elements use a declared
 `opaque_ptr` type; other elements use `const void *`. No element conversion or
 copy is performed by these accessors. Source getters remain usable in expansions
@@ -981,13 +971,13 @@ int64_t result = pb_inspect(input);
 ```
 
 Compatible numeric slices and shared fixed-array references point into the
-caller's original memory. Binding validates pointer alignment/range and fixed
-array length without allocating or visiting individual elements. This includes
+caller's original memory. The caller guarantees pointer alignment, range and
+fixed array length. Conversion neither allocates nor visits individual elements. This includes
 optional slices and slices used by configured source constructors. A view returned
 by a Rust owner accessor can also be passed back to Rust while that owner remains
 alive and shared. Native `String`/`Vec` owner references retain their ordinary
 pointer-based borrowing path. Existing `&str`/`&[u8]` buffer inputs also borrow;
-empty views may normalize a null or misaligned pointer to an aligned dangling
+empty views normalize a null pointer to an aligned dangling
 pointer. An aligned nonnull numeric empty view preserves its pointer. Optional
 slice presence uses a separate tag, distinguishing None from Some(empty).
 
@@ -1114,88 +1104,33 @@ around a collection distinguish absence from an empty collection, and
 C native vector returns retain their original allocation through inline owners.
 Byte inputs and JNI byte collections retain their byte-buffer transport.
 
-Collection inputs without handle conflicts reserve their row count and fill
-final native storage directly, including custom constructors. Resource-bearing
-rows retain decoded state when decoding cannot safely be repeated. With alias checks enabled, flat C input
-rows made only of scalar fields, fieldless enum tags, opaque handles, pointers to
-inline owners and text/byte buffer descriptors use two traversals:
-validate and check the complete address group, then reread the rows and construct
-the final Rust vector directly. This omits the prepared-row closure buffer.
-Constructors still run once, after the grouped check. Enum decoding, buffer decoding, UTF-8
-validation and any required owned copies run once during row construction;
-borrowed views and `&String`/`&Vec<u8>` temporaries remain alive until that
-constructor finishes. Invalid later enum tags or buffers may fail after earlier rows and
-the current row's handles have been consumed. Rust drops the constructed prefix
-and acquired values; ownership receipts identify the consumed prefix, and unread
-owners remain with the caller. Direct function parameter decoding is unchanged.
-For inline owners, Rust creates the empty replacement immediately before moving
-each native value out of its C storage. Successful moves update the ownership
-receipt individually. If an empty factory panics midway through a row, the
-receipt includes earlier moved fields but excludes that owner and later fields.
-Native String/Vec buffers keep their original addresses and capacities.
-Mixed callback-result rows containing by-value inline owners and pointer handles
-also use the two traversals. The address check copies only opaque carrier storage;
-acquisition reads each native value from its final row-local carrier, so no
-pointer into temporary preparation storage is retained. Success keeps transferred
-values alive for Rust's caller; failure drops acquired values and reclaims unread
-owners before the C callback's row-storage release hook runs. Rows containing
-callback fields and nested outer collections retain their current conversion
-paths; eligible inner sequences can use replay. C input rows and descriptors must stay alive and unchanged
-throughout the call, including source constructor invocations; neither reentrant
-code nor another thread may mutate the wire rows or descriptors. This applies to
-all collection inputs. It describes the wire memory, while pointee liveness and
-consumption still follow each handle's ownership contract. Earlier staging could
-retain a snapshot of wire fields; code relying on mutating those fields during a
-call must stop doing so. No runtime locks or mutation checks are added. One grouped address check precedes acquisition and
-construction; no intermediate acquired-row vector is created. This applies to ordinary and bulk input. JNI local references are
-released after decoding each row, and are never retained for construction.
-Shared-only calls need no alias history. Other calls keep checked addresses so
-later parameters and collections can reject conflicts with earlier inputs.
+Collection inputs reserve their row count and construct elements directly in the
+final Rust vector in one traversal. Row-local borrowed values and reconstruction
+temporaries stay alive until their constructor finishes. JNI releases each row's
+local references afterward. No address history, alias-validation pass, row replay
+or intermediate vector of construction closures is generated.
 
-C bindings can omit input-handle conflict checks globally or per function:
+C trusts all arguments and callback results. The caller guarantees valid pointers,
+readable ranges, UTF-8, character and enum values, option/selector tags, fixed-array
+lengths, ownership, lifetimes and Rust-compatible aliasing. Required output pointers
+must be writable and disjoint from inputs and each other. Explicitly optional
+values retain their documented null/absent representations. Invalid input is
+undefined behavior. There is no C runtime-validation setting; the former global
+and per-function alias-check and threshold settings have been removed.
 
-```rust
-let bindings = Cbindgen::builder()
-    .set_emit_alias_checks(false)
-    .function(fun!(fast_path)).panic()
-    .function(fun!(checked_path)).alias_checks(true).panic();
-```
+C rows and descriptors must remain live and unchanged throughout conversion,
+source construction and cleanup. Moved input values are counted individually in
+ownership receipts. If a constructor or inline owner's empty factory fails,
+Rust drops initialized values; unread ordinary function inputs remain with C.
+An empty-factory failure excludes the owner whose move did not complete.
+Native String/Vec owners preserve their allocation, address and capacity.
 
-Checks remain enabled by default. `.alias_checks(false)` also opts out a single
-function under the checked project default. Local overrides take precedence
-regardless of setter order. The setting also applies to return values from
-callbacks registered by that function, even if a callback is retained and invoked
-later by a different function. With checks disabled, C must uphold Rust's ownership
-and aliasing rules: moved or exclusively borrowed allocations must not overlap
-another active input. Violations can cause undefined behavior. Pointer/length,
-UTF-8, presence and selector validation, ownership receipts and failure cleanup
-remain active. Collection inputs construct rows in one traversal without alias
-history or the alias-validation staging buffer. Ownership cleanup remains active. Handle-bearing C callback collections defer
-ownership scans until decoding fails or unwinds. Successful decoding allocates no
-cleanup vector and performs no ownership pre-scan. On failure, a stack-held guard
-rescans the existing returned rows, skips owned values already acquired by Rust,
-and deduplicates aliases before destroying unread owners. This scan validates
-collection descriptors before reading rows; an invalid container does not prevent
-cleanup of valid sibling fields. Cleanup may allocate and traverse rows again on
-the error path. Returned descriptors must remain live and unchanged until both
-decoding and owner cleanup finish; `release_result` runs afterward, also on failure.
-The final decoded Rust collection and enabled alias checks retain their storage.
-For C callback results with a fixed maximum of up to 32 returned owners, cleanup
-bookkeeping uses stack storage sized during generation, including optional fields
-and alternative constructors. Scalar and single-handle results retain their
-existing lightweight guards. Results containing handle collections or more than 32 potential owners keep
-dynamic storage. Both forms skip consumed owners and reclaim unread owners on failure,
-including duplicate pointers rejected by checked decoding; cleanup continues if
-a destructor panics. This changes no C representation or generator configuration.
-
-Low-level generators constructing `CContext`, `CModule` or `CFunction` directly
-must supply the new `emit_alias_checks` field (or use their metadata defaults).
-Stored plans may contain reserved input-alias scope macros until wrapper emission.
-Custom code that rewrites stored Rust syntax should first call
-`prebindgen_conversions::render_input_alias_checks(code, enabled)`; the normal C
-and JNI emitters do this automatically. Custom template contexts that leave the
-scopes unresolved need the matching `prebindgen-runtime` revision for its checked
-fallback macro. All generator/runtime crates should come from the same revision.
+For callback results, Rust owns the returned resources. Successful decoding needs
+no cleanup table or ownership pre-scan. A stack guard walks unread owners only on
+failure, skips the consumed prefix, and continues cleanup if a destructor panics.
+The C callback's `release_result` hook runs after decoding and cleanup; it releases
+row storage, while Rust handles the transferred owners. Source-library Result
+errors, panic routing and output rollback retain their normal behavior.
 
 Kotlin collection inputs snapshot their lists once. Ordinary inputs prepare the
 actual JNI row arrays directly, retaining handle wrappers in collection-level
@@ -1425,8 +1360,8 @@ compiled from declarations: a manually prebound output slot needs an explicit
 outside the sequence are rejected.
 
 ```rust
-// C: a null visitor is a binding error, so a non-Result function needs .panic().
-.function(fun!(numbers).callback_return()).panic()
+// C: the caller supplies a valid nonnull visitor.
+.function(fun!(numbers).callback_return())
 // JNI package declaration:
 .fun(fun!(numbers).callback_return())
 ```
@@ -1444,8 +1379,7 @@ later conversion fails. Result functions still use explicit error outputs and
 leave success-output storage unchanged on failure; consuming inputs retain their
 ownership acknowledgement. During a C visitor, that acknowledgement output has
 not yet been written: moved inputs already belong to Rust and must not be used.
-A null visitor is rejected before source invocation
-or input ownership transfer. Borrowed inputs must remain live throughout the
+The caller supplies a valid nonnull visitor. Borrowed inputs remain live throughout the
 call, and C visitors must not unwind or longjmp.
 
 Kotlin can fold into any accumulator:
@@ -1752,8 +1686,8 @@ return value or `Default` implementation is required.
 
 The C adapter also accepts `impl Fn(...) -> R` parameters, including callbacks
 selected through input constructors. Declare their source functions with
-`.function(fun!(evaluate)).panic()` for a non-`Result` function such as the example
-above. The ordinary C error policy handles invalid callback registration.
+`.function(fun!(evaluate))`. The C caller supplies a valid nonnull `run` function
+and keeps the callback context live for its declared lifetime.
 
 For the Rust parameter `evaluate(callback: ...)`, the header provides a
 `pb_evaluate_callback` type (`pb` is the configured prefix):
@@ -1923,7 +1857,7 @@ C emits an `int32_t` typedef and named constants, for example
 
 `prebindgen-flat` retains variant names and source discriminant expressions.
 `prebindgen-declarations::EnumMapping` resolves the integer mapping and generates
-exhaustive output matches and checked input matches for both adapters. Generated
+exhaustive output matches. JNI checks input tags; C assumes valid tags. Generated
 Rust assertions compare the mapping with the actual source discriminants. No
 integer is transmuted into an enum. Rust `repr` attributes do not determine the
 foreign carrier. No `Copy` or `Clone` implementation is required, and shared
@@ -1933,7 +1867,8 @@ Enums work as parameters, results, fields of Kotlin data classes, and fields in
 explicit C constructor/projection expansions. `Option<Enum>` and nested options
 reserve unused integer representations, starting below zero and skipping actual
 variant values. For an enum with variants `-2`, `-1` and `0`, the first two
-absence representations are `-3` and `-4`. Unknown active inputs are rejected;
+absence representations are `-3` and `-4`. JNI rejects unknown active inputs;
+C callers supply valid tags. In both adapters,
 reserved values are accepted only by the corresponding optional layers.
 
 This increment supports exhaustive, nongeneric enums with unconditional
@@ -2177,12 +2112,12 @@ python3 examples/check.py
 ```
 
 The script builds every example and runs both C and both JNI smoke clients,
-including every primitive at boundary values, invalid unsigned/Unicode/128-bit
+including every primitive at boundary values, JNI invalid unsigned/Unicode/128-bit
 inputs, restored Payload fields, string round trips, byte-vector constructors, consumed handles,
 selector arms, field projections, builder rollback, output preservation and
 concurrent close. Ownership coverage also exercises mutable/shared Storage
 borrows, repeated shared arguments, opposite lock order, close/borrow/consume
-races, later-selector/text failures, duplicate consumption, native panic after
+races, JNI later-selector/text failures and duplicate consumption, native panic after
 transfer, C pointer type checking and a non-`Send` C object. `KOTLINC` and `CC` select the compilers.
 `SANITIZE=1` instruments the C callers with AddressSanitizer and
 UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.

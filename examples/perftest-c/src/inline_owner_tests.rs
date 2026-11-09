@@ -7,21 +7,6 @@ mod tests {
     ) -> __PbOwned_packet {
         packet
     }
-    unsafe extern "C" fn bad_pair(
-        _: *mut core::ffi::c_void,
-    ) -> owner_callback_c381621a1cf6edc5_result {
-        owner_callback_c381621a1cf6edc5_result {
-            v0: owner_inline_packet_new(),
-            v1: 0xd800,
-        }
-    }
-    unsafe extern "C" fn bad_rows(context: *mut core::ffi::c_void) -> __PbRows {
-        let rows = &*(context as *const Vec<__PbRow_callback_f5d26722508e30c3_callback_return_w1>);
-        __PbRows {
-            data: rows.as_ptr().cast(),
-            len: rows.len(),
-        }
-    }
     unsafe extern "C" fn mixed_rows(context: *mut core::ffi::c_void) -> __PbRows {
         let rows = &*(context as *const Vec<__PbRow_callback_805117dbed50edfb_callback_return_w1>);
         __PbRows { data: rows.as_ptr().cast(), len: rows.len() }
@@ -81,15 +66,6 @@ mod tests {
                 4096
             );
             assert_eq!(owner_inline_packet_drops(), before + 2);
-            assert_eq!(
-                owner_inline_return_catch(owner_callback_c381621a1cf6edc5 {
-                    run: Some(bad_pair),
-                    context: core::ptr::null_mut(),
-                    drop: None
-                }),
-                1
-            );
-            assert_eq!(owner_inline_packet_drops(), before + 3);
             let mut output = ::core::mem::MaybeUninit::uninit();
             let mut len = 0;
             let mut error = core::ptr::null_mut();
@@ -100,27 +76,7 @@ mod tests {
             ));
             assert!(!error.is_null());
             owner_free_error(error);
-            assert_eq!(owner_inline_packet_drops(), before + 4);
-            let mut rows = vec![
-                __PbRow_callback_f5d26722508e30c3_callback_return_w1 {
-                    v0: owner_inline_packet_new(),
-                    v1: 'a' as u32,
-                },
-                __PbRow_callback_f5d26722508e30c3_callback_return_w1 {
-                    v0: owner_inline_packet_new(),
-                    v1: 0xd800,
-                },
-            ];
-            assert_eq!(
-                owner_inline_rows_catch(owner_callback_f5d26722508e30c3 {
-                    run: Some(bad_rows),
-                    context: (&mut rows as *mut Vec<_>).cast(),
-                    drop: None,
-                    release_result: None
-                }),
-                1
-            );
-            assert_eq!(owner_inline_packet_drops(), before + 6);
+            assert_eq!(owner_inline_packet_drops(), before + 3);
             let mut rows = __PbRows {
                 data: core::ptr::null(),
                 len: 0,
@@ -133,7 +89,7 @@ mod tests {
             assert!(rows.data.is_null());
             assert_eq!(count, 123);
             owner_free_error(error);
-            assert_eq!(owner_inline_packet_drops(), before + 8);
+            assert_eq!(owner_inline_packet_drops(), before + 5);
             let mut first = owner_inline_packet_new();
             let mut second = owner_inline_packet_new();
             let rows = [
@@ -149,7 +105,7 @@ mod tests {
             );
             owner_drop_packet(&mut first);
             owner_drop_packet(&mut second);
-            assert_eq!(owner_inline_packet_drops(), before + 10);
+            assert_eq!(owner_inline_packet_drops(), before + 7);
         }
     }
 }

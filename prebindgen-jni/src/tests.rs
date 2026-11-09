@@ -2208,7 +2208,7 @@ fn callback_returns_reject_borrows_and_unrepresented_results_in_preparation() {
 }
 
 #[test]
-fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
+fn trusted_c_callback_inputs_need_no_validation_error_policy() {
     let source = syn::parse_file("pub fn f(cb:impl Fn(i64)->i64)->i64{}").unwrap();
     let model = prebindgen_c::Bindings::parse(
         source
@@ -2217,12 +2217,11 @@ fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
             .map(|item| (item, Default::default())),
     )
     .unwrap();
-    let error = prebindgen_c::Cbindgen::new(model)
+    let generated = prebindgen_c::Cbindgen::new(model)
         .function(fun!(f))
         .build()
-        .err()
-        .expect("non-Result callback binding needs explicit panic policy");
-    assert!(error.contains("declare .panic()"), "{error}");
+        .unwrap();
+    assert!(!generated.rust.contains("null callback function"));
 }
 
 #[test]

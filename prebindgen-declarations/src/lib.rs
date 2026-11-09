@@ -658,6 +658,12 @@ impl Output {
 /// ```
 #[allow(clippy::type_complexity)] // Explicit, independently typed metadata for each parent variant.
 pub trait Codec {
+    /// Whether foreign tags and array lengths need runtime validation.
+    /// Trusted raw-pointer adapters may require valid representations from callers.
+    fn validates_inputs(&self) -> bool {
+        true
+    }
+
     /// Fixed schema selecting final converters and declaration metadata before parsing.
     type Schema: Schema<
         Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
@@ -676,10 +682,8 @@ pub trait Codec {
     ) -> Result<CodecInput<Self>> {
         Err("bulk inputs are unsupported by this codec".into())
     }
-    /// Convert a bulk leaf in a flat sequence row whose construction is deferred.
-    /// Like `input_row_leaf`, this lets an adapter create row-local borrowed
-    /// temporaries during construction while retaining resource validation for
-    /// the grouped check. The default uses ordinary bulk leaf conversion.
+    /// Convert a bulk leaf inside a sequence row. Row-local temporaries stay
+    /// alive through construction. The default uses ordinary bulk leaf conversion.
     #[allow(clippy::too_many_arguments)]
     fn input_bulk_row_leaf(
         &self,
@@ -981,17 +985,9 @@ pub trait Codec {
     ) -> Result<Option<CodecInput<Self>>> {
         Ok(None)
     }
-    /// Convert a leaf inside a flat collection row whose construction is deferred.
-    ///
-    /// Its statements and argument share the row constructor's scope, so an
-    /// adapter may decode row-local buffers there instead of retaining decoded
-    /// values during grouped validation. Resource identity and pointer validation
-    /// needed by the grouped check must remain in `validation`; every value must
-    /// still be validated before use. Deferred wire reads must remain valid after
-    /// the transport releases its per-row state, including when construction is
-    /// retained in a prepared-row closure rather than rereading source rows.
-    /// Nested sequences/callbacks retain their
-    /// ordinary input preparation. The default uses the usual leaf conversion.
+    /// Convert a leaf inside a collection row. Validation, acquisition and
+    /// construction complete before the transport releases its per-row state.
+    /// The default uses ordinary leaf conversion.
     fn input_row_leaf(
         &self,
         flat: &Flat<Self::Schema>,
@@ -1731,38 +1727,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
         if self.grouped_input.get() {
             return Ok(plan);
         }
-        let mut register = TokenStream::new();
         let mut transferred = TokenStream::new();
-        for (index, resource) in plan.resources.iter_mut().enumerate() {
+        for resource in &mut plan.resources {
             if resource.registered {
                 continue;
             }
             let condition = &resource.active;
-            let exclusive = resource.access != prebindgen_conversions::Access::Shared;
-            let count = format_ident!("{ready}_transferred_{index}");
-            let addresses = match &resource.identity {
-                prebindgen_conversions::ResourceIdentity::Single(value) => {
-                    quote!(::core::iter::once((#value) as usize))
-                }
-                prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
-            };
             if resource.access == prebindgen_conversions::Access::Move
                 && !resource.records_consumption
             {
-                let unchecked_count = match &resource.identity {
-                    prebindgen_conversions::ResourceIdentity::Single(_) => quote!(1usize),
-                    prebindgen_conversions::ResourceIdentity::Many(_) => {
-                        quote!((#addresses).count())
-                    }
-                };
-                register.extend(prebindgen_conversions::staged::input_alias_checks(
-                    quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}),
-                    quote!(let #count=if #condition {#unchecked_count} else {0usize};),
-                ));
-                transferred.extend(quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);));
-            } else {
-                register.extend(prebindgen_conversions::staged::input_alias_checks(
-                    quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}),TokenStream::new()));
+                let count = &resource.count;
+                transferred.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count));}));
             }
             resource.registered = true;
         }
@@ -1776,7 +1751,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         } else {
             quote!(Some({#statements #argument}))
         };
-        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #register #acquire #transferred #built } else {None};);
+        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #acquire #transferred #built } else {None};);
         plan.acquire = quote!();
         plan.statements = quote!();
         plan.argument = quote!(#ready.expect("active input"));
@@ -1820,9 +1795,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let condition = active.rust();
                 if grouped {
                     // Declare the owner outside Optional/Selector blocks. Row
-                    // construction fills it only after the full group validates.
-                    // Prepared row closures capture the owner, never a reference
-                    // into a row-validation temporary.
+                    // construction fills it while its temporary storage is alive.
                     child.validation.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #storage:Option<#owned>=None;));
                     child.statements = quote!(if #condition {#build #storage=Some(#argument);});
                 } else {
@@ -1938,31 +1911,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 self.bulk_input_row.set(previous_bulk_row);
                 self.grouped_input.set(previous);
                 let child = child?;
-                // An exhaustive recipe check keeps future validation-time
-                // operations out of row replay until their effects are audited.
-                fn deferred_construction(recipe: &Input, bulk: bool) -> bool {
-                    match recipe {
-                        Input::Leaf => true,
-                        Input::Optional(inner) | Input::Temporary(inner) => {
-                            deferred_construction(inner, bulk)
-                        }
-                        // With grouped element construction, input_named leaves
-                        // acquisition deferred. Inside an existing bulk frame the
-                        // modifier then adds no preparation. Outside bulk it can
-                        // create a new frame during validation.
-                        Input::Bulk(inner) if bulk => deferred_construction(inner, bulk),
-                        Input::Fields(fields) | Input::Record(fields) | Input::Selector(fields) => {
-                            fields
-                                .iter()
-                                .all(|field| deferred_construction(field, bulk))
-                        }
-                        Input::Constructor { args, .. } => {
-                            args.iter().all(|arg| deferred_construction(arg, bulk))
-                        }
-                        Input::Bulk(_) | Input::Sequence(_) | Input::Callback(_) => false,
-                        Input::Request(never) => match *never {},
-                    }
-                }
                 return sequence::input(
                     self.codec,
                     ty,
@@ -1974,7 +1922,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
-                    deferred_construction(element_recipe, self.bulk.get() && grouped_elements),
                 );
             }
             Input::Optional(inner) => {
@@ -2112,7 +2059,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }];
             }
             Input::Selector(arms) => {
-                fallible = true;
+                fallible = self.codec.validates_inputs();
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
@@ -2135,7 +2082,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut alternatives = Vec::new();
                 let count = arms.len() as i32;
                 let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
-                validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
+                if self.codec.validates_inputs() {
+                    validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
+                }
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
@@ -2159,7 +2108,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     children: alternatives,
                 };
                 wires = vec![node];
-                statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
+                let invalid = if self.codec.validates_inputs() {
+                    quote!(unreachable!("validated selector"))
+                } else {
+                    quote!(unsafe { ::core::hint::unreachable_unchecked() })
+                };
+                statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>#invalid};);
             }
         }
         Ok(InputPlan {
