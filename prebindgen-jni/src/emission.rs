@@ -24,9 +24,7 @@ pub struct JniContext {
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         // Generated Kotlin validates aliases while acquiring handle locks.
-        // Shared conversion templates also serve C, which can retain native checks.
-        let code = prebindgen_conversions::render_input_alias_checks(code, false)?;
-        render_template(&code, &|name| match name {
+        render_template(code, &|name| match name {
             "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),
             "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),

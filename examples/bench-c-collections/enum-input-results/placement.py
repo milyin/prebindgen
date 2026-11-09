@@ -32,7 +32,7 @@ output = lambda *args: subprocess.check_output(args, text=True)
 def inspect(directory):
     build = json.loads((directory / 'build.json').read_text())
     library = Path(build['library']).resolve()
-    assert not build['count_allocations'] and build['alias_checks']
+    assert not build['count_allocations']
     assert sha(library) == build['library_sha256'], 'Frozen library changed'
     symbols = output('nm', '-SC', str(library)).splitlines()
     native = next(s.split(maxsplit=3) for s in symbols

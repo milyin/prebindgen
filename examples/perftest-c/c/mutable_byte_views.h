@@ -38,8 +38,6 @@ static void check_mutable_byte_views(void) {
         assert(!perftest_mutable_bytes_result(owner, 1, &view, &error) && error != NULL);
         assert(view.data == NULL && view.len == 0);
         perftest_free_error(error); error = NULL;
-        assert(!perftest_mutable_bytes_result(owner, 0, NULL, &error) && error != NULL);
-        perftest_free_error(error); error = NULL;
         for (int present = 0; present <= 1; ++present) {
             int32_t actual = -1;
             assert(perftest_mutable_bytes_result_optional(owner, (uint8_t)present, 0, &actual, &view, &error));

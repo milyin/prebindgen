@@ -33,7 +33,7 @@ before using or dropping the returned owner.
 
 ## Allocation measurements
 
-`alias_allocations::mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy`
+`conversion_allocations::mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy`
 counts allocator calls at the actual generated C ABI, on the calling test thread.
 Tests use buffer lengths 0, 1 and 65,536. Source construction is outside the
 acquisition counters; sources reserve an additional 37 bytes of capacity.

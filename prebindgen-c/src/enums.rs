@@ -4,11 +4,10 @@ use prebindgen_declarations::{Condition, EnumMapping};
 
 /// C conversions read representation and error declarations from Flat.
 #[derive(Default)]
-pub(crate) struct EnumCodec<'a> {
-    pub(crate) return_owners:
-        Option<&'a std::cell::RefCell<std::collections::BTreeMap<String, syn::Type>>>,
+pub(crate) struct EnumCodec {
+    pub(crate) callback_return: bool,
 }
-impl EnumCodec<'_> {
+impl EnumCodec {
     fn mapping<'a>(
         &self,
         flat: &'a Bindings,
@@ -30,12 +29,15 @@ impl EnumCodec<'_> {
         CWire::enumeration(name, mapping.clone())
     }
 }
-impl Codec for EnumCodec<'_> {
+impl Codec for EnumCodec {
     type Schema = CSchema;
     type Wire = CWire;
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
+    fn validates_inputs(&self) -> bool {
+        false
+    }
     fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
         CCodec.input_collection_is_leaf(flat, ty, e)
     }
@@ -211,25 +213,35 @@ impl Codec for EnumCodec<'_> {
             return Err("resolve Optional operations before leaf compilation".into());
         }
         if let Some((name, m)) = self.mapping(flat, ty) {
-            return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
+            let decode = {
+                let ty = &m.ty;
+                let arms = m
+                    .variants
+                    .iter()
+                    .map(|(name, tag)| quote!(#tag=>#ty::#name));
+                quote!(match #w {#(#arms,)* _=>unsafe {::core::hint::unreachable_unchecked()}})
+            };
+            let mut plan = prebindgen_declarations::enum_input(
+                m,
+                ty,
+                w.clone(),
+                v.clone(),
+                active,
+                Self::wire(name, m),
+            )?;
+            let condition = active.rust();
+            plan.validation = quote!(let #v=if #condition {Some(#decode)}else{None};);
+            plan.fallible = false;
+            return Ok(plan);
         }
-        if self.return_owners.is_some() {
+        if self.callback_return {
             if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
                 return Ok(owned::input(owner, ty, w, v, active, true, false));
             }
         }
-        let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
-        if plan
-            .resources
-            .iter()
-            .any(|resource| resource.access == prebindgen_conversions::Access::Move)
-        {
-            if let Some(owners) = self.return_owners {
-                owners.borrow_mut().insert(w.to_string(), ty.clone());
-            }
-        }
-        Ok(plan)
+        CCodec.input_leaf(flat, ty, e, w, v, active)
     }
+
     fn input_borrowed_sequence(
         &self,
         flat: &Bindings,
@@ -252,23 +264,6 @@ impl Codec for EnumCodec<'_> {
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
         let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
-        if let Some((_, mapping)) = self.mapping(flat, ty) {
-            let native = &mapping.ty;
-            let condition = active.rust();
-            let decode = mapping.decode(quote!(#wire));
-            debug_assert_eq!(
-                plan.validation.to_string(),
-                quote!(let #var = if #condition { Some(#decode) } else { None };).to_string(),
-                "audit deferred enum conversion when ordinary validation changes"
-            );
-            // Keep only the Copy integer tag during the address-group scan.
-            // Decode the Rust enum once, after aliases have been checked.
-            // Storage must outlive optional/selector branches borrowing it.
-            plan.validation = TokenStream::new();
-            plan.acquire.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#native> = None;));
-            let statements = std::mem::take(&mut plan.statements);
-            plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
-        }
         sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
         Ok(plan)
     }

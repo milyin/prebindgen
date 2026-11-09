@@ -127,14 +127,8 @@ pub unsafe extern "C" fn owner_free_error(error: *mut std::ffi::c_char) {
         drop(std::ffi::CString::from_raw(error));
     }
 }
-unsafe fn __pb_read<'a>(b: __PbBuffer) -> Result<&'a [u8], String> {
-    if b.len == 0 {
-        return Ok(&[]);
-    }
-    if b.data.is_null() || b.len > isize::MAX as usize {
-        return Err("invalid buffer".into());
-    }
-    Ok(std::slice::from_raw_parts(b.data, b.len))
+unsafe fn __pb_read<'a>(b: __PbBuffer) -> &'a [u8] {
+    if b.len == 0 { &[] } else { std::slice::from_raw_parts(b.data, b.len) }
 }
 /**# Safety
     The buffer must have been returned by this library and not already freed.*/
@@ -454,10 +448,7 @@ pub unsafe extern "C" fn owner_numbers_get(
     value: *const __PbOwned_numbers,
     index: usize,
 ) -> *const i64 {
-    (*value)
-        .as_rust()
-        .get(index)
-        .map_or(::core::ptr::null(), |element| element as *const i64)
+    (*value).as_rust().get_unchecked(index) as *const i64
 }
 #[allow(non_camel_case_types)]
 #[repr(C, align(8))]
@@ -851,68 +842,39 @@ pub unsafe extern "C" fn owner_enum_inputs_inline(
     let mut storage = std::mem::MaybeUninit::<owner_enum_inputs_inline_result>::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_enum_inputs_inline_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(1usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables)]
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w6_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables)]
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w8 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_enum_inputs_inline_p0_w1)
+                            .add(p0_w3)))
+                            .v1
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
+                        let p0_w7 = if true {
+                            Some(
+                                match p0_w8 {
+                                    -3i32 => perftest_flat::InputTag::Low,
+                                    0i32 => perftest_flat::InputTag::Normal,
+                                    17i32 => perftest_flat::InputTag::High,
+                                    _ => unsafe { ::core::hint::unreachable_unchecked() }
+                                },
+                            )
+                        } else {
+                            None
+                        };
                         let p0_w6_empty = if true {
                             Some(perftest_flat::inline_packet_empty())
                         } else {
@@ -932,22 +894,8 @@ pub unsafe extern "C" fn owner_enum_inputs_inline(
                             __prebindgen_input_consumed
                                 .set(__prebindgen_input_consumed.get() + 1);
                         }
-                        #[allow(unused_mut, unused_assignments)]
-                        let mut p0_w7: Option<perftest_flat::InputTag> = None;
                         let p0_w5: perftest_flat::InlinePacket = p0_w5
                             .expect("active inline owner");
-                        p0_w7 = if true {
-                            Some(
-                                match p0_w8 {
-                                    -3i32 => perftest_flat::InputTag::Low,
-                                    0i32 => perftest_flat::InputTag::Normal,
-                                    17i32 => perftest_flat::InputTag::High,
-                                    _ => return Err("invalid enum discriminant".into()),
-                                },
-                            )
-                        } else {
-                            None
-                        };
                         let p0_w7 = p0_w7.expect("active enum");
                         let p0_w4: i64 = perftest_flat::enum_input_inline(p0_w5, p0_w7);
                         let p0_w0 = p0_w4;
@@ -964,6 +912,7 @@ pub unsafe extern "C" fn owner_enum_inputs_inline(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::enum_inputs_inline(
                 __prebindgen_argument_0,
@@ -996,9 +945,7 @@ pub unsafe extern "C" fn owner_enum_inputs_inline(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -1075,22 +1022,13 @@ pub unsafe extern "C" fn owner_inline_boxed_numbers_len(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut Vec<i32>
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &Vec<i32> = unsafe { &(*p0_w1_pointer) };
                     p0_w0
@@ -1098,6 +1036,7 @@ pub unsafe extern "C" fn owner_inline_boxed_numbers_len(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_boxed_numbers_len(
                 __prebindgen_argument_0,
@@ -1181,32 +1120,23 @@ pub unsafe extern "C" fn owner_inline_boxed_numbers_take(p0_w1: *mut Vec<i32>) -
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = if true {
                 p0_w1 as *mut Vec<i32>
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe { Box::from_raw(p0_w1_pointer) })
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: Vec<i32> = *p0_w0.expect("active allocation");
                     p0_w0
@@ -1214,6 +1144,7 @@ pub unsafe extern "C" fn owner_inline_boxed_numbers_take(p0_w1: *mut Vec<i32>) -
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_boxed_numbers_take(
                 __prebindgen_argument_0,
@@ -1299,22 +1230,10 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
     let mut storage = std::mem::MaybeUninit::<owner_inline_bytes_alias_result>::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::FixedInputs::<
-                2usize,
-            >::default();
             let _: () = {};
             let p0_w1_pointer = p0_w1 as *mut Vec<u8>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             let p0_w1_empty = if true {
                 Some(<Vec<u8> as ::core::default::Default>::default())
             } else {
@@ -1322,13 +1241,6 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe {
                         ::core::ptr::replace(
@@ -1339,8 +1251,10 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: Vec<u8> = p0_w0.expect("active inline owner");
                     p0_w0
@@ -1349,16 +1263,8 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
                 None
             };
             let p1_w1_pointer = p1_w1 as *mut Vec<u8>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p1_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p1_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p1_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p1_w0: &Vec<u8> = unsafe { &*(p1_w1_pointer) };
                     p1_w0
@@ -1366,6 +1272,7 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::inline_bytes_alias(
@@ -1400,9 +1307,7 @@ pub unsafe extern "C" fn owner_inline_bytes_alias(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -1446,7 +1351,7 @@ pub unsafe extern "C" fn owner_inline_bytes_callback(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -1474,7 +1379,6 @@ pub unsafe extern "C" fn owner_inline_bytes_callback(
                             );
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
                             let callback_argument_0 = callback_arg_0_w0.0;
                             {
                                 ::core::mem::forget(callback_arg_0_w0);
@@ -1486,40 +1390,64 @@ pub unsafe extern "C" fn owner_inline_bytes_callback(
                                 )
                             };
                             let callback_return_w1 = raw_result;
-                            let _callback_return_owner = ::prebindgen_runtime::TransferredOwner::new(
-                                __PbOwnedGuard_bytes(callback_return_w1),
-                                __prebindgen_input_consumed,
-                                0,
-                            );
-                            #[allow(unused_parens)]
-                            let callback_return_w1_storage = callback_return_w1;
-                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                            let callback_return_w0_built = if true {
-                                let callback_return_w0 = if true {
-                                    let callback_return_w1_pointer = ::core::ptr::addr_of!(
-                                        callback_return_w1_storage
-                                    )
-                                        .cast::<Vec<u8>>();
-                                    let value = unsafe {
-                                        ::core::ptr::read(callback_return_w1_pointer)
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut __pb_return_ordinal = 0usize;
+                                {
+                                    let ordinal = __pb_return_ordinal;
+                                    __pb_return_ordinal += 1;
+                                    if ordinal >= __prebindgen_input_consumed.get() {
+                                        if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                            unsafe {
+                                                drop(
+                                                    ::core::ptr::read(
+                                                        (&callback_return_w1 as *const __PbOwned_bytes)
+                                                            .cast::<Vec<u8>>(),
+                                                    ),
+                                                );
+                                            }
+                                            Ok(())
+                                        }) {
+                                            ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                        }
+                                    }
+                                }
+                                Ok(())
+                            });
+                            let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                #[allow(unused_parens)]
+                                let callback_return_w1_storage = callback_return_w1;
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w0_built = if true {
+                                    let callback_return_w0 = if true {
+                                        let callback_return_w1_pointer = ::core::ptr::addr_of!(
+                                            callback_return_w1_storage
+                                        )
+                                            .cast::<Vec<u8>>();
+                                        let value = unsafe {
+                                            ::core::ptr::read(callback_return_w1_pointer)
+                                        };
+                                        __prebindgen_input_consumed
+                                            .set(__prebindgen_input_consumed.get() + 1);
+                                        Some(value)
+                                    } else {
+                                        None
                                     };
-                                    __prebindgen_input_consumed
-                                        .set(__prebindgen_input_consumed.get() + 1);
-                                    Some(value)
+                                    Some({
+                                        let callback_return_w0: Vec<u8> = callback_return_w0
+                                            .expect("active inline owner");
+                                        callback_return_w0
+                                    })
                                 } else {
                                     None
                                 };
-                                Some({
-                                    let callback_return_w0: Vec<u8> = callback_return_w0
-                                        .expect("active inline owner");
-                                    callback_return_w0
-                                })
-                            } else {
-                                None
+                                let callback_return_value = callback_return_w0_built
+                                    .expect("active input");
+                                Ok(callback_return_value)
                             };
-                            let callback_return_value = callback_return_w0_built
-                                .expect("active input");
-                            Ok(callback_return_value)
+                            let callback_decoded = callback_outcome?;
+                            callback_return_cleanup.commit();
+                            Ok(callback_decoded)
                         });
                         result
                             .unwrap_or_else(|error| {
@@ -1581,18 +1509,9 @@ pub unsafe extern "C" fn owner_inline_bytes_capacity(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut Vec<u8>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &Vec<u8> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -1600,6 +1519,7 @@ pub unsafe extern "C" fn owner_inline_bytes_capacity(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_bytes_capacity(
                 __prebindgen_argument_0,
@@ -1643,9 +1563,6 @@ pub unsafe extern "C" fn owner_inline_bytes_mutable(
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if out1.is_null() {
-            return Err("null success output".into());
-        }
         {
             let source_value = perftest_flat::inline_bytes_mutable();
             let mut ret_w0 = __PbOwned_bytes::guard(source_value);
@@ -1695,12 +1612,6 @@ pub unsafe extern "C" fn owner_inline_bytes_new(
     let mut storage = std::mem::MaybeUninit::<owner_inline_bytes_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if out1.is_null() {
-            return Err("null success output".into());
-        }
-        if out2.is_null() {
-            return Err("null success output".into());
-        }
         {
             let source_value = perftest_flat::inline_bytes_new();
             let mut ret_w0 = __PbOwned_bytes::guard(source_value);
@@ -1757,12 +1668,8 @@ pub unsafe extern "C" fn owner_inline_bytes_take(p0_w1: *mut __PbOwned_bytes) ->
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = p0_w1 as *mut Vec<u8>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             let p0_w1_empty = if true {
                 Some(<Vec<u8> as ::core::default::Default>::default())
             } else {
@@ -1770,13 +1677,6 @@ pub unsafe extern "C" fn owner_inline_bytes_take(p0_w1: *mut __PbOwned_bytes) ->
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe {
                         ::core::ptr::replace(
@@ -1787,8 +1687,10 @@ pub unsafe extern "C" fn owner_inline_bytes_take(p0_w1: *mut __PbOwned_bytes) ->
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: Vec<u8> = p0_w0.expect("active inline owner");
                     p0_w0
@@ -1796,6 +1698,7 @@ pub unsafe extern "C" fn owner_inline_bytes_take(p0_w1: *mut __PbOwned_bytes) ->
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_bytes_take(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -1842,15 +1745,9 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -1876,7 +1773,6 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
@@ -1890,82 +1786,105 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                             let callback_return_w3 = raw_result.v1;
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                    __prebindgen_input_consumed,
-                                );
+                                let mut __pb_return_ordinal = 0usize;
                                 if callback_return_w1 == 1 {
-                                    match ::prebindgen_runtime::validate_slice(
-                                        callback_return_w3.data
-                                            as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3,
-                                        callback_return_w3.len,
-                                    ) {
-                                        Ok(()) => {
-                                            for index in 0..callback_return_w3.len {
-                                                let callback_return_w10 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v0
-                                                };
-                                                let callback_return_w12 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v1
-                                                };
-                                                let callback_return_w14 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v2
-                                                };
-                                                let callback_return_w16 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v3
-                                                };
-                                                let callback_return_w18 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v4
-                                                };
-                                                let callback_return_w20 = unsafe {
-                                                    (*((callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                        .add(index)))
-                                                        .v5
-                                                };
-                                                if (callback_return_w10 as usize) != 0 {
-                                                    unsafe {
-                                                        callback_return_owners
-                                                            .receive(
-                                                                callback_return_w10 as *mut perftest_flat::OwnedResource,
+                                    for index in 0..callback_return_w3.len {
+                                        let callback_return_w10 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v0
+                                        };
+                                        let callback_return_w12 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v1
+                                        };
+                                        let callback_return_w14 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v2
+                                        };
+                                        let callback_return_w16 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v3
+                                        };
+                                        let callback_return_w18 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v4
+                                        };
+                                        let callback_return_w20 = unsafe {
+                                            (*((callback_return_w3.data
+                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                .add(index)))
+                                                .v5
+                                        };
+                                        if (callback_return_w10 as usize) != 0 {
+                                            {
+                                                let ordinal = __pb_return_ordinal;
+                                                __pb_return_ordinal += 1;
+                                                if ordinal >= __prebindgen_input_consumed.get() {
+                                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                        unsafe {
+                                                            drop(
+                                                                Box::from_raw(
+                                                                    callback_return_w10 as *mut perftest_flat::OwnedResource,
+                                                                ),
                                                             );
-                                                    }
-                                                    unsafe {
-                                                        callback_return_owners
-                                                            .receive_inline(
-                                                                (::core::ptr::addr_of!(
-                                                                    (* ((callback_return_w3.data as * const
-                                                                    __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
-                                                                    .add(index))).v1
-                                                                ) as *const __PbOwned_packet)
-                                                                    .cast::<perftest_flat::InlinePacket>(),
-                                                            );
-                                                    }
-                                                    unsafe {
-                                                        callback_return_owners
-                                                            .receive(
-                                                                callback_return_w14 as *mut perftest_flat::OwnedResource,
-                                                            );
+                                                        }
+                                                        Ok(())
+                                                    }) {
+                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
                                                     }
                                                 }
                                             }
-                                        }
-                                        Err(error) => {
-                                            ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                            {
+                                                let ordinal = __pb_return_ordinal;
+                                                __pb_return_ordinal += 1;
+                                                if ordinal >= __prebindgen_input_consumed.get() {
+                                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                        unsafe {
+                                                            drop(
+                                                                ::core::ptr::read(
+                                                                    (::core::ptr::addr_of!(
+                                                                        (* ((callback_return_w3.data as * const
+                                                                        __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                                        .add(index))).v1
+                                                                    ) as *const __PbOwned_packet)
+                                                                        .cast::<perftest_flat::InlinePacket>(),
+                                                                ),
+                                                            );
+                                                        }
+                                                        Ok(())
+                                                    }) {
+                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                                    }
+                                                }
+                                            }
+                                            {
+                                                let ordinal = __pb_return_ordinal;
+                                                __pb_return_ordinal += 1;
+                                                if ordinal >= __prebindgen_input_consumed.get() {
+                                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                        unsafe {
+                                                            drop(
+                                                                Box::from_raw(
+                                                                    callback_return_w14 as *mut perftest_flat::OwnedResource,
+                                                                ),
+                                                            );
+                                                        }
+                                                        Ok(())
+                                                    }) {
+                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1973,130 +1892,49 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                             });
                             {
                                 let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    if callback_return_w1 != 0 && callback_return_w1 != 1 {
-                                        return Err("invalid option presence".into());
-                                    }
                                     let mut callback_return_w2: Vec<
                                         Option<perftest_flat::InlineCallbackRow>,
                                     > = Vec::new();
                                     if callback_return_w1 == 1i32 {
                                         let callback_return_w4 = callback_return_w3.len;
-                                        ::prebindgen_runtime::validate_slice(
-                                            callback_return_w3.data
-                                                as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3,
-                                            callback_return_w4,
-                                        )?;
-                                        let callback_return_w3_rows: &[__PbRow_callback_70db60a6f9dbbb06_callback_return_w3] = if callback_return_w4
-                                            == 0
-                                        {
-                                            &[]
-                                        } else {
-                                            unsafe {
-                                                ::core::slice::from_raw_parts(
-                                                    callback_return_w3.data
-                                                        as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3,
-                                                    callback_return_w4,
-                                                )
-                                            }
-                                        };
-                                        let mut callback_return_w3_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w4.saturating_mul(2usize));
-                                        for callback_return_w5 in 0..callback_return_w4 {
-                                            let callback_return_w10 = callback_return_w3_rows[callback_return_w5]
-                                                .v0;
-                                            let callback_return_w12 = callback_return_w3_rows[callback_return_w5]
-                                                .v1;
-                                            let callback_return_w14 = callback_return_w3_rows[callback_return_w5]
-                                                .v2;
-                                            let callback_return_w16 = callback_return_w3_rows[callback_return_w5]
-                                                .v3;
-                                            let callback_return_w18 = callback_return_w3_rows[callback_return_w5]
-                                                .v4;
-                                            let callback_return_w20 = callback_return_w3_rows[callback_return_w5]
-                                                .v5;
-                                            #[allow(unused_variables, clippy::redundant_closure_call)]
-                                            let checked = (|| {
-                                                let callback_return_w7: i32 = i32::from(
-                                                    ((callback_return_w10) as usize) != 0,
-                                                );
-                                                let callback_return_w10_pointer = if callback_return_w7
-                                                    == 1i32
-                                                {
-                                                    (callback_return_w10) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if callback_return_w7 == 1i32 {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w10_pointer,
-                                                    )?;
-                                                }
-                                                #[allow(unused_parens)]
-                                                let callback_return_w12_storage = (callback_return_w12);
-                                                let callback_return_w14_pointer = if callback_return_w7
-                                                    == 1i32
-                                                {
-                                                    (callback_return_w14) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if callback_return_w7 == 1i32 {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w14_pointer,
-                                                    )?;
-                                                }
-                                                let callback_return_w15 = if callback_return_w7 == 1i32 {
-                                                    Some(
-                                                        char::from_u32(callback_return_w16)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w17 = if callback_return_w7 == 1i32 {
-                                                    Some(callback_return_w18)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w19 = if callback_return_w7 == 1i32 {
-                                                    Some(callback_return_w20)
-                                                } else {
-                                                    None
-                                                };
-                                                if callback_return_w7 == 1i32 {
-                                                    for address in ::core::iter::once(
-                                                        (callback_return_w10_pointer.addr()) as usize,
-                                                    ) {
-                                                        callback_return_w3_accesses.push((address, true));
-                                                    }
-                                                }
-                                                if callback_return_w7 == 1i32 {
-                                                    for address in ::core::iter::once(
-                                                        (callback_return_w14_pointer.addr()) as usize,
-                                                    ) {
-                                                        callback_return_w3_accesses.push((address, true));
-                                                    }
-                                                }
-                                                Ok::<_, String>(())
-                                            })();
-                                            checked?;
-                                        }
-                                        __prebindgen_input_aliases
-                                            .accept_group(callback_return_w3_accesses)?;
                                         callback_return_w2.reserve_exact(callback_return_w4);
                                         for callback_return_w5 in 0..callback_return_w4 {
-                                            let callback_return_w10 = callback_return_w3_rows[callback_return_w5]
-                                                .v0;
-                                            let callback_return_w12 = callback_return_w3_rows[callback_return_w5]
-                                                .v1;
-                                            let callback_return_w14 = callback_return_w3_rows[callback_return_w5]
-                                                .v2;
-                                            let callback_return_w16 = callback_return_w3_rows[callback_return_w5]
-                                                .v3;
-                                            let callback_return_w18 = callback_return_w3_rows[callback_return_w5]
-                                                .v4;
-                                            let callback_return_w20 = callback_return_w3_rows[callback_return_w5]
-                                                .v5;
+                                            let callback_return_w10 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v0
+                                            };
+                                            let callback_return_w12 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v1
+                                            };
+                                            let callback_return_w14 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v2
+                                            };
+                                            let callback_return_w16 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v3
+                                            };
+                                            let callback_return_w18 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v4
+                                            };
+                                            let callback_return_w20 = unsafe {
+                                                (*((callback_return_w3.data
+                                                    as *const __PbRow_callback_70db60a6f9dbbb06_callback_return_w3)
+                                                    .add(callback_return_w5)))
+                                                    .v5
+                                            };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w3_element_built = (|| -> ::core::result::Result<
                                                 Option<perftest_flat::InlineCallbackRow>,
@@ -2112,11 +1950,6 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                                                 } else {
                                                     ::core::ptr::null_mut()
                                                 };
-                                                if callback_return_w7 == 1i32 {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w10_pointer,
-                                                    )?;
-                                                }
                                                 #[allow(unused_parens)]
                                                 let callback_return_w12_storage = (callback_return_w12);
                                                 let callback_return_w14_pointer = if callback_return_w7
@@ -2126,16 +1959,10 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                                                 } else {
                                                     ::core::ptr::null_mut()
                                                 };
-                                                if callback_return_w7 == 1i32 {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w14_pointer,
-                                                    )?;
-                                                }
                                                 let callback_return_w15 = if callback_return_w7 == 1i32 {
-                                                    Some(
-                                                        char::from_u32(callback_return_w16)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
+                                                    Some(unsafe {
+                                                        char::from_u32_unchecked(callback_return_w16)
+                                                    })
                                                 } else {
                                                     None
                                                 };
@@ -2301,9 +2128,7 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -2351,15 +2176,9 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -2385,7 +2204,6 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
@@ -2398,79 +2216,102 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                             let callback_return_w1 = raw_result;
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                    __prebindgen_input_consumed,
-                                );
-                                match ::prebindgen_runtime::validate_slice(
-                                    callback_return_w1.data
-                                        as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                    callback_return_w1.len,
-                                ) {
-                                    Ok(()) => {
-                                        for index in 0..callback_return_w1.len {
-                                            let callback_return_w6 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v0
-                                            };
-                                            let callback_return_w8 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v1
-                                            };
-                                            let callback_return_w10 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v2
-                                            };
-                                            let callback_return_w12 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v3
-                                            };
-                                            let callback_return_w14 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v4
-                                            };
-                                            let callback_return_w16 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v5
-                                            };
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w6 as *mut perftest_flat::OwnedResource,
+                                let mut __pb_return_ordinal = 0usize;
+                                for index in 0..callback_return_w1.len {
+                                    let callback_return_w6 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v0
+                                    };
+                                    let callback_return_w8 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v1
+                                    };
+                                    let callback_return_w10 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v2
+                                    };
+                                    let callback_return_w12 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v3
+                                    };
+                                    let callback_return_w14 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v4
+                                    };
+                                    let callback_return_w16 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                            .add(index)))
+                                            .v5
+                                    };
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        Box::from_raw(
+                                                            callback_return_w6 as *mut perftest_flat::OwnedResource,
+                                                        ),
                                                     );
-                                            }
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive_inline(
-                                                        (::core::ptr::addr_of!(
-                                                            (* ((callback_return_w1.data as * const
-                                                            __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                            .add(index))).v1
-                                                        ) as *const __PbOwned_packet)
-                                                            .cast::<perftest_flat::InlinePacket>(),
-                                                    );
-                                            }
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w10 as *mut perftest_flat::OwnedResource,
-                                                    );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
                                             }
                                         }
                                     }
-                                    Err(error) => {
-                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        ::core::ptr::read(
+                                                            (::core::ptr::addr_of!(
+                                                                (* ((callback_return_w1.data as * const
+                                                                __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                                .add(index))).v1
+                                                            ) as *const __PbOwned_packet)
+                                                                .cast::<perftest_flat::InlinePacket>(),
+                                                        ),
+                                                    );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                            }
+                                        }
+                                    }
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        Box::from_raw(
+                                                            callback_return_w10 as *mut perftest_flat::OwnedResource,
+                                                        ),
+                                                    );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                            }
+                                        }
                                     }
                                 }
                                 Ok(())
@@ -2482,115 +2323,44 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
-                                        ::prebindgen_runtime::validate_slice(
-                                            callback_return_w1.data
-                                                as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                            callback_return_w2,
-                                        )?;
-                                        let callback_return_w1_rows: &[__PbRow_callback_37300b78c94d93fa_callback_return_w1] = if callback_return_w2
-                                            == 0
-                                        {
-                                            &[]
-                                        } else {
-                                            unsafe {
-                                                ::core::slice::from_raw_parts(
-                                                    callback_return_w1.data
-                                                        as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                                    callback_return_w2,
-                                                )
-                                            }
-                                        };
-                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w2.saturating_mul(2usize));
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
-                                            let callback_return_w10 = callback_return_w1_rows[callback_return_w3]
-                                                .v2;
-                                            let callback_return_w12 = callback_return_w1_rows[callback_return_w3]
-                                                .v3;
-                                            let callback_return_w14 = callback_return_w1_rows[callback_return_w3]
-                                                .v4;
-                                            let callback_return_w16 = callback_return_w1_rows[callback_return_w3]
-                                                .v5;
-                                            #[allow(unused_variables, clippy::redundant_closure_call)]
-                                            let checked = (|| {
-                                                let callback_return_w6_pointer = if true {
-                                                    (callback_return_w6) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w6_pointer,
-                                                    )?;
-                                                }
-                                                #[allow(unused_parens)]
-                                                let callback_return_w8_storage = (callback_return_w8);
-                                                let callback_return_w10_pointer = if true {
-                                                    (callback_return_w10) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w10_pointer,
-                                                    )?;
-                                                }
-                                                let callback_return_w11 = if true {
-                                                    Some(
-                                                        char::from_u32(callback_return_w12)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w13 = if true {
-                                                    Some(callback_return_w14)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w15 = if true {
-                                                    Some(callback_return_w16)
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    for address in ::core::iter::once(
-                                                        (callback_return_w6_pointer.addr()) as usize,
-                                                    ) {
-                                                        callback_return_w1_accesses.push((address, true));
-                                                    }
-                                                }
-                                                if true {
-                                                    for address in ::core::iter::once(
-                                                        (callback_return_w10_pointer.addr()) as usize,
-                                                    ) {
-                                                        callback_return_w1_accesses.push((address, true));
-                                                    }
-                                                }
-                                                Ok::<_, String>(())
-                                            })();
-                                            checked?;
-                                        }
-                                        __prebindgen_input_aliases
-                                            .accept_group(callback_return_w1_accesses)?;
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
-                                            let callback_return_w10 = callback_return_w1_rows[callback_return_w3]
-                                                .v2;
-                                            let callback_return_w12 = callback_return_w1_rows[callback_return_w3]
-                                                .v3;
-                                            let callback_return_w14 = callback_return_w1_rows[callback_return_w3]
-                                                .v4;
-                                            let callback_return_w16 = callback_return_w1_rows[callback_return_w3]
-                                                .v5;
+                                            let callback_return_w6 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v0
+                                            };
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v1
+                                            };
+                                            let callback_return_w10 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v2
+                                            };
+                                            let callback_return_w12 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v3
+                                            };
+                                            let callback_return_w14 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v4
+                                            };
+                                            let callback_return_w16 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v5
+                                            };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                                 perftest_flat::InlineCallbackRow,
@@ -2601,11 +2371,6 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                                 } else {
                                                     ::core::ptr::null_mut()
                                                 };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w6_pointer,
-                                                    )?;
-                                                }
                                                 #[allow(unused_parens)]
                                                 let callback_return_w8_storage = (callback_return_w8);
                                                 let callback_return_w10_pointer = if true {
@@ -2613,16 +2378,10 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                                 } else {
                                                     ::core::ptr::null_mut()
                                                 };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w10_pointer,
-                                                    )?;
-                                                }
                                                 let callback_return_w11 = if true {
-                                                    Some(
-                                                        char::from_u32(callback_return_w12)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
+                                                    Some(unsafe {
+                                                        char::from_u32_unchecked(callback_return_w12)
+                                                    })
                                                 } else {
                                                     None
                                                 };
@@ -2769,399 +2528,7 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
-    match outcome {
-        Ok(()) => {
-            let value = storage.assume_init();
-            std::ptr::write(out0, value.v0);
-            true
-        }
-        Err(message) => {
-            if success_committed {
-                let value = storage.assume_init();
-            }
-            if !error_reported && !error.is_null() {
-                unsafe { __pb_report_message(message, error) };
-            }
-            false
-        }
-    }
-}
-#[repr(C)]
-pub struct owner_inline_callback_rows_fast_result {
-    pub v0: i64,
-}
-/**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
-#[allow(
-    clippy::needless_range_loop,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-#[no_mangle]
-pub unsafe extern "C" fn owner_inline_callback_rows_fast(
-    p0_callback: owner_callback_37300b78c94d93fa,
-    out0: *mut i64,
-    ownership: *mut usize,
-    error: *mut *mut std::ffi::c_char,
-) -> bool {
-    #[allow(unused_mut)]
-    let ownership_accepted = ::core::cell::Cell::new(0usize);
-    #[allow(unused_mut)]
-    let mut error_reported = false;
-    let mut success_committed = false;
-    let mut storage = std::mem::MaybeUninit::<
-        owner_inline_callback_rows_fast_result,
-    >::uninit();
-    let output = storage.as_mut_ptr();
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        {
-            let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                let p0_callback_release_result = p0_callback.release_result;
-                let p0_callback_owner = if true {
-                    {
-                        (&ownership_accepted).set((&ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p0_callback_run = p0_callback_run
-                        .expect("validated active callback");
-                    let p0_callback_owner = p0_callback_owner
-                        .expect("validated active callback");
-                    let p0_callback_value = move || {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let raw_result = unsafe {
-                                p0_callback_run(p0_callback_owner.context())
-                            };
-                            let callback_result = __PbCallbackResult {
-                                value: raw_result,
-                                context: p0_callback_owner.context(),
-                                release: p0_callback_release_result,
-                            };
-                            let raw_result = callback_result.value;
-                            let callback_return_w1 = raw_result;
-                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                            {
-                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                    __prebindgen_input_consumed,
-                                );
-                                match ::prebindgen_runtime::validate_slice(
-                                    callback_return_w1.data
-                                        as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                    callback_return_w1.len,
-                                ) {
-                                    Ok(()) => {
-                                        for index in 0..callback_return_w1.len {
-                                            let callback_return_w6 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v0
-                                            };
-                                            let callback_return_w8 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v1
-                                            };
-                                            let callback_return_w10 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v2
-                                            };
-                                            let callback_return_w12 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v3
-                                            };
-                                            let callback_return_w14 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v4
-                                            };
-                                            let callback_return_w16 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                    .add(index)))
-                                                    .v5
-                                            };
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w6 as *mut perftest_flat::OwnedResource,
-                                                    );
-                                            }
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive_inline(
-                                                        (::core::ptr::addr_of!(
-                                                            (* ((callback_return_w1.data as * const
-                                                            __PbRow_callback_37300b78c94d93fa_callback_return_w1)
-                                                            .add(index))).v1
-                                                        ) as *const __PbOwned_packet)
-                                                            .cast::<perftest_flat::InlinePacket>(),
-                                                    );
-                                            }
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w10 as *mut perftest_flat::OwnedResource,
-                                                    );
-                                            }
-                                        }
-                                    }
-                                    Err(error) => {
-                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
-                                    }
-                                }
-                                Ok(())
-                            });
-                            {
-                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    let mut callback_return_w0: Vec<
-                                        perftest_flat::InlineCallbackRow,
-                                    > = Vec::new();
-                                    if true {
-                                        let callback_return_w2 = callback_return_w1.len;
-                                        ::prebindgen_runtime::validate_slice(
-                                            callback_return_w1.data
-                                                as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                            callback_return_w2,
-                                        )?;
-                                        let callback_return_w1_rows: &[__PbRow_callback_37300b78c94d93fa_callback_return_w1] = if callback_return_w2
-                                            == 0
-                                        {
-                                            &[]
-                                        } else {
-                                            unsafe {
-                                                ::core::slice::from_raw_parts(
-                                                    callback_return_w1.data
-                                                        as *const __PbRow_callback_37300b78c94d93fa_callback_return_w1,
-                                                    callback_return_w2,
-                                                )
-                                            }
-                                        };
-                                        callback_return_w0.reserve_exact(callback_return_w2);
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
-                                            let callback_return_w10 = callback_return_w1_rows[callback_return_w3]
-                                                .v2;
-                                            let callback_return_w12 = callback_return_w1_rows[callback_return_w3]
-                                                .v3;
-                                            let callback_return_w14 = callback_return_w1_rows[callback_return_w3]
-                                                .v4;
-                                            let callback_return_w16 = callback_return_w1_rows[callback_return_w3]
-                                                .v5;
-                                            #[allow(clippy::redundant_closure_call)]
-                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                                perftest_flat::InlineCallbackRow,
-                                                String,
-                                            > {
-                                                let callback_return_w6_pointer = if true {
-                                                    (callback_return_w6) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w6_pointer,
-                                                    )?;
-                                                }
-                                                #[allow(unused_parens)]
-                                                let callback_return_w8_storage = (callback_return_w8);
-                                                let callback_return_w10_pointer = if true {
-                                                    (callback_return_w10) as *mut perftest_flat::OwnedResource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w10_pointer,
-                                                    )?;
-                                                }
-                                                let callback_return_w11 = if true {
-                                                    Some(
-                                                        char::from_u32(callback_return_w12)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w13 = if true {
-                                                    Some(callback_return_w14)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w15 = if true {
-                                                    Some(callback_return_w16)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w5 = if true {
-                                                    Some(unsafe { Box::from_raw(callback_return_w6_pointer) })
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
-                                                }
-                                                let callback_return_w7 = if true {
-                                                    let callback_return_w8_pointer = ::core::ptr::addr_of!(
-                                                        callback_return_w8_storage
-                                                    )
-                                                        .cast::<perftest_flat::InlinePacket>();
-                                                    let value = unsafe {
-                                                        ::core::ptr::read(callback_return_w8_pointer)
-                                                    };
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
-                                                    Some(value)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w9 = if true {
-                                                    Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
-                                                }
-                                                let callback_return_w5: perftest_flat::OwnedResource = *callback_return_w5
-                                                    .expect("active allocation");
-                                                let callback_return_w7: perftest_flat::InlinePacket = callback_return_w7
-                                                    .expect("active inline owner");
-                                                let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
-                                                    .expect("active allocation");
-                                                let callback_return_w11: char = ::core::convert::Into::into(
-                                                    callback_return_w11.expect("active value"),
-                                                );
-                                                let callback_return_w13: usize = ::core::convert::Into::into(
-                                                    callback_return_w13.expect("active value"),
-                                                );
-                                                let callback_return_w15: usize = ::core::convert::Into::into(
-                                                    callback_return_w15.expect("active value"),
-                                                );
-                                                let callback_return_w4: perftest_flat::InlineCallbackRow = perftest_flat::inline_callback_row_new(
-                                                    callback_return_w5,
-                                                    callback_return_w7,
-                                                    callback_return_w9,
-                                                    callback_return_w11,
-                                                    callback_return_w13,
-                                                    callback_return_w15,
-                                                );
-                                                let callback_return_w0 = callback_return_w4;
-                                                Ok(callback_return_w0)
-                                            })();
-                                            let element = callback_return_w1_element_built?;
-                                            #[allow(clippy::zst_offset)]
-                                            unsafe {
-                                                let initialized = callback_return_w0.len();
-                                                callback_return_w0
-                                                    .as_mut_ptr()
-                                                    .add(initialized)
-                                                    .write(element);
-                                                callback_return_w0.set_len(initialized + 1);
-                                            }
-                                        }
-                                    }
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w0_built = if true {
-                                        Some(callback_return_w0)
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_value = callback_return_w0_built
-                                        .expect("active input");
-                                    Ok(callback_return_value)
-                                };
-                                let callback_decoded = callback_outcome?;
-                                callback_return_cleanup.commit();
-                                Ok(callback_decoded)
-                            }
-                        });
-                        result
-                            .unwrap_or_else(|error| {
-                                ::prebindgen_runtime::report_callback_error(
-                                    "owner_callback_37300b78c94d93fa",
-                                    "()->Vec < perftest_flat :: InlineCallbackRow >",
-                                    &error,
-                                );
-                                panic!("callback failed: {}", error)
-                            })
-                    };
-                    p0_callback_value
-                })
-            } else {
-                None
-            };
-            let _: () = {};
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
-            let source_value = perftest_flat::inline_callback_rows_fast(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = match source_value {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        if !error.is_null() {
-                            unsafe {
-                                __pb_report_message(
-                                    perftest_flat::inline_packet_error(&ret_w1),
-                                    error,
-                                )
-                            };
-                        }
-                        error_reported = true;
-                        String::new()
-                    });
-                }
-            };
-            let ret_w2 = ret_w0;
-            let result = owner_inline_callback_rows_fast_result {
-                v0: ret_w2,
-            };
-            std::ptr::write(output, result);
-            let _: () = {
-                success_committed = true;
-            };
-            Ok(())
-        }
-    });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -3203,22 +2570,13 @@ pub unsafe extern "C" fn owner_inline_child_id(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut perftest_flat::InlineChild
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::InlineChild = unsafe {
                         &(*p0_w1_pointer)
@@ -3228,6 +2586,7 @@ pub unsafe extern "C" fn owner_inline_child_id(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_child_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -3279,23 +2638,11 @@ pub unsafe extern "C" fn owner_inline_inputs_borrow(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                    }
-                }
                 Some({
                     let p0_w0: &mut perftest_flat::InlinePacket = unsafe {
                         &mut *(p0_w1_pointer)
@@ -3305,134 +2652,41 @@ pub unsafe extern "C" fn owner_inline_inputs_borrow(
             } else {
                 None
             };
-            let p1_w0 = if __prebindgen_input_aliases.needs_group() {
-                let mut p1_w0: Vec<usize> = Vec::new();
-                if true {
-                    let p1_w2 = p1_w1.len;
-                    ::prebindgen_runtime::validate_slice(
-                        p1_w1.data as *const __PbRow_inline_inputs_borrow_p1_w1,
-                        p1_w2,
-                    )?;
-                    let p1_w1_rows: &[__PbRow_inline_inputs_borrow_p1_w1] = if p1_w2 == 0
-                    {
-                        &[]
-                    } else {
-                        unsafe {
-                            ::core::slice::from_raw_parts(
-                                p1_w1.data as *const __PbRow_inline_inputs_borrow_p1_w1,
-                                p1_w2,
-                            )
-                        }
+            let mut p1_w0: Vec<usize> = Vec::new();
+            if true {
+                let p1_w2 = p1_w1.len;
+                p1_w0.reserve_exact(p1_w2);
+                for p1_w3 in 0..p1_w2 {
+                    let p1_w6 = unsafe {
+                        (*((p1_w1.data as *const __PbRow_inline_inputs_borrow_p1_w1)
+                            .add(p1_w3)))
+                            .v0
                     };
-                    let mut p1_w1_accesses = __prebindgen_input_aliases
-                        .begin_group(p1_w2.saturating_mul(1usize));
-                    for p1_w3 in 0..p1_w2 {
-                        let p1_w6 = p1_w1_rows[p1_w3].v0;
-                        #[allow(unused_variables, clippy::redundant_closure_call)]
-                        let checked = (|| {
-                            let p1_w6_pointer = (p1_w6)
-                                as *mut perftest_flat::InlinePacket;
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
-                            }
-                            if true {
-                                for address in ::core::iter::once(
-                                    (p1_w6_pointer.addr()) as usize,
-                                ) {
-                                    p1_w1_accesses.push((address, false));
-                                }
-                            }
-                            Ok::<_, String>(())
-                        })();
-                        checked?;
-                    }
-                    __prebindgen_input_aliases.accept_group(p1_w1_accesses)?;
-                    p1_w0.reserve_exact(p1_w2);
-                    for p1_w3 in 0..p1_w2 {
-                        let p1_w6 = p1_w1_rows[p1_w3].v0;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p1_w1_element_built = (|| -> ::core::result::Result<
-                            usize,
-                            String,
-                        > {
-                            let p1_w6_pointer = (p1_w6)
-                                as *mut perftest_flat::InlinePacket;
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
-                            }
-                            let p1_w5: &perftest_flat::InlinePacket = unsafe {
-                                &*(p1_w6_pointer)
-                            };
-                            let p1_w4: usize = perftest_flat::inline_input_borrowed(
-                                p1_w5,
-                            );
-                            let p1_w0 = p1_w4;
-                            Ok(p1_w0)
-                        })();
-                        let element = p1_w1_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p1_w0.len();
-                            p1_w0.as_mut_ptr().add(initialized).write(element);
-                            p1_w0.set_len(initialized + 1);
-                        }
+                    #[allow(clippy::redundant_closure_call)]
+                    let p1_w1_element_built = (|| -> ::core::result::Result<
+                        usize,
+                        String,
+                    > {
+                        let p1_w6_pointer = (p1_w6) as *mut perftest_flat::InlinePacket;
+                        let p1_w5: &perftest_flat::InlinePacket = unsafe {
+                            &*(p1_w6_pointer)
+                        };
+                        let p1_w4: usize = perftest_flat::inline_input_borrowed(p1_w5);
+                        let p1_w0 = p1_w4;
+                        Ok(p1_w0)
+                    })();
+                    let element = p1_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p1_w0.len();
+                        p1_w0.as_mut_ptr().add(initialized).write(element);
+                        p1_w0.set_len(initialized + 1);
                     }
                 }
-                p1_w0
-            } else {
-                let mut p1_w0: Vec<usize> = Vec::new();
-                if true {
-                    let p1_w2 = p1_w1.len;
-                    ::prebindgen_runtime::validate_slice(
-                        p1_w1.data as *const __PbRow_inline_inputs_borrow_p1_w1,
-                        p1_w2,
-                    )?;
-                    let p1_w1_rows: &[__PbRow_inline_inputs_borrow_p1_w1] = if p1_w2 == 0
-                    {
-                        &[]
-                    } else {
-                        unsafe {
-                            ::core::slice::from_raw_parts(
-                                p1_w1.data as *const __PbRow_inline_inputs_borrow_p1_w1,
-                                p1_w2,
-                            )
-                        }
-                    };
-                    p1_w0.reserve_exact(p1_w2);
-                    for p1_w3 in 0..p1_w2 {
-                        let p1_w6 = p1_w1_rows[p1_w3].v0;
-                        #[allow(clippy::redundant_closure_call)]
-                        let p1_w1_element_built = (|| -> ::core::result::Result<
-                            usize,
-                            String,
-                        > {
-                            let p1_w6_pointer = (p1_w6)
-                                as *mut perftest_flat::InlinePacket;
-                            if true {
-                                ::prebindgen_runtime::validate_pointer(p1_w6_pointer)?;
-                            }
-                            let p1_w5: &perftest_flat::InlinePacket = unsafe {
-                                &*(p1_w6_pointer)
-                            };
-                            let p1_w4: usize = perftest_flat::inline_input_borrowed(
-                                p1_w5,
-                            );
-                            let p1_w0 = p1_w4;
-                            Ok(p1_w0)
-                        })();
-                        let element = p1_w1_element_built?;
-                        #[allow(clippy::zst_offset)]
-                        unsafe {
-                            let initialized = p1_w0.len();
-                            p1_w0.as_mut_ptr().add(initialized).write(element);
-                            p1_w0.set_len(initialized + 1);
-                        }
-                    }
-                }
-                p1_w0
-            };
+            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p1_w0_built = if true { Some(p1_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_borrow(
@@ -3519,67 +2773,25 @@ pub unsafe extern "C" fn owner_inline_inputs_bytes(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<Vec<u8>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_bytes_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_bytes_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_bytes_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(1usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w5_pointer = (p0_w5) as *mut Vec<u8>;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w5_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_bytes_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<u8>,
                         String,
                     > {
                         let p0_w5_pointer = (p0_w5) as *mut Vec<u8>;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
                         let p0_w5_empty = if true {
                             Some(<Vec<u8> as ::core::default::Default>::default())
                         } else {
@@ -3614,6 +2826,7 @@ pub unsafe extern "C" fn owner_inline_inputs_bytes(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_bytes(
                 __prebindgen_argument_0,
@@ -3646,9 +2859,7 @@ pub unsafe extern "C" fn owner_inline_inputs_bytes(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -3817,92 +3028,29 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_mixed_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_mixed_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_mixed_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(3usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
-                        let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
-                        let p0_w10_pointer = if true {
-                            (p0_w10) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w6_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w8_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w10_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_mixed_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w8 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_mixed_p0_w1)
+                            .add(p0_w3)))
+                            .v1
+                    };
+                    let p0_w10 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_mixed_p0_w1)
+                            .add(p0_w3)))
+                            .v2
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -3910,21 +3058,12 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
                         } else {
                             ::core::ptr::null_mut()
                         };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
                         let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
                         let p0_w10_pointer = if true {
                             (p0_w10) as *mut perftest_flat::OwnedResource
                         } else {
                             ::core::ptr::null_mut()
                         };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                        }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
                         } else {
@@ -3987,6 +3126,7 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_mixed(
                 __prebindgen_argument_0,
@@ -4019,214 +3159,7 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
-    match outcome {
-        Ok(()) => {
-            let value = storage.assume_init();
-            std::ptr::write(out0, value.v0);
-            true
-        }
-        Err(message) => {
-            if success_committed {
-                let value = storage.assume_init();
-            }
-            if !error_reported && !error.is_null() {
-                unsafe { __pb_report_message(message, error) };
-            }
-            false
-        }
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_inline_inputs_mixed_fast_p0_w1 {
-    pub v0: *mut perftest_flat::OwnedResource,
-    pub v1: *mut __PbOwned_packet,
-    pub v2: *mut perftest_flat::OwnedResource,
-}
-#[repr(C)]
-pub struct owner_inline_inputs_mixed_fast_result {
-    pub v0: i64,
-}
-/**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
-#[allow(
-    clippy::needless_range_loop,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-#[no_mangle]
-pub unsafe extern "C" fn owner_inline_inputs_mixed_fast(
-    p0_w1: __PbRows,
-    out0: *mut i64,
-    ownership: *mut usize,
-    error: *mut *mut std::ffi::c_char,
-) -> bool {
-    #[allow(unused_mut)]
-    let ownership_accepted = ::core::cell::Cell::new(0usize);
-    #[allow(unused_mut)]
-    let mut error_reported = false;
-    let mut success_committed = false;
-    let mut storage = std::mem::MaybeUninit::<
-        owner_inline_inputs_mixed_fast_result,
-    >::uninit();
-    let output = storage.as_mut_ptr();
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        {
-            let __prebindgen_input_consumed = &ownership_accepted;
-            let _: () = {};
-            let mut p0_w0: Vec<i64> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_mixed_fast_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_mixed_fast_p0_w1] = if p0_w2 == 0
-                {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_mixed_fast_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    let p0_w10 = p0_w1_rows[p0_w3].v2;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
-                        let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
-                        let p0_w10_pointer = if true {
-                            (p0_w10) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                        }
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w8_empty = if true {
-                            Some(perftest_flat::inline_packet_empty())
-                        } else {
-                            None
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w8_pointer,
-                                    p0_w8_empty.expect("prepared empty owner"),
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w9 = if true {
-                            Some(unsafe { Box::from_raw(p0_w10_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w5: perftest_flat::OwnedResource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: perftest_flat::InlinePacket = p0_w7
-                            .expect("active inline owner");
-                        let p0_w9: perftest_flat::OwnedResource = *p0_w9
-                            .expect("active allocation");
-                        let p0_w4: i64 = perftest_flat::inline_input_mixed(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::inline_inputs_mixed_fast(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = match source_value {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        if !error.is_null() {
-                            unsafe {
-                                __pb_report_message(
-                                    perftest_flat::inline_packet_error(&ret_w1),
-                                    error,
-                                )
-                            };
-                        }
-                        error_reported = true;
-                        String::new()
-                    });
-                }
-            };
-            let ret_w2 = ret_w0;
-            let result = owner_inline_inputs_mixed_fast_result {
-                v0: ret_w2,
-            };
-            std::ptr::write(output, result);
-            let _: () = {
-                success_committed = true;
-            };
-            Ok(())
-        }
-    });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -4282,97 +3215,29 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
-            if p0_w1 != 0 && p0_w1 != 1 {
-                return Err("invalid option presence".into());
-            }
             let mut p0_w2: Vec<Option<i64>> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w3.data as *const __PbRow_inline_inputs_optional_p0_w3,
-                    p0_w4,
-                )?;
-                let p0_w3_rows: &[__PbRow_inline_inputs_optional_p0_w3] = if p0_w4 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w3.data as *const __PbRow_inline_inputs_optional_p0_w3,
-                            p0_w4,
-                        )
-                    }
-                };
-                let mut p0_w3_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w4.saturating_mul(3usize));
-                for p0_w5 in 0..p0_w4 {
-                    let p0_w10 = p0_w3_rows[p0_w5].v0;
-                    let p0_w12 = p0_w3_rows[p0_w5].v1;
-                    let p0_w14 = p0_w3_rows[p0_w5].v2;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w7: i32 = i32::from(((p0_w10) as usize) != 0);
-                        let p0_w10_pointer = if p0_w7 == 1i32 {
-                            (p0_w10) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                        }
-                        let p0_w12_pointer = (p0_w12)
-                            as *mut perftest_flat::InlinePacket;
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
-                        }
-                        let p0_w14_pointer = if p0_w7 == 1i32 {
-                            (p0_w14) as *mut perftest_flat::OwnedResource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w14_pointer)?;
-                        }
-                        if p0_w7 == 1i32 {
-                            for address in ::core::iter::once(
-                                (p0_w10_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        if p0_w7 == 1i32 {
-                            for address in ::core::iter::once(
-                                (p0_w12_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        if p0_w7 == 1i32 {
-                            for address in ::core::iter::once(
-                                (p0_w14_pointer.addr()) as usize,
-                            ) {
-                                p0_w3_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w3_accesses)?;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w10 = p0_w3_rows[p0_w5].v0;
-                    let p0_w12 = p0_w3_rows[p0_w5].v1;
-                    let p0_w14 = p0_w3_rows[p0_w5].v2;
+                    let p0_w10 = unsafe {
+                        (*((p0_w3.data as *const __PbRow_inline_inputs_optional_p0_w3)
+                            .add(p0_w5)))
+                            .v0
+                    };
+                    let p0_w12 = unsafe {
+                        (*((p0_w3.data as *const __PbRow_inline_inputs_optional_p0_w3)
+                            .add(p0_w5)))
+                            .v1
+                    };
+                    let p0_w14 = unsafe {
+                        (*((p0_w3.data as *const __PbRow_inline_inputs_optional_p0_w3)
+                            .add(p0_w5)))
+                            .v2
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -4384,22 +3249,13 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
                         } else {
                             ::core::ptr::null_mut()
                         };
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                        }
                         let p0_w12_pointer = (p0_w12)
                             as *mut perftest_flat::InlinePacket;
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
-                        }
                         let p0_w14_pointer = if p0_w7 == 1i32 {
                             (p0_w14) as *mut perftest_flat::OwnedResource
                         } else {
                             ::core::ptr::null_mut()
                         };
-                        if p0_w7 == 1i32 {
-                            ::prebindgen_runtime::validate_pointer(p0_w14_pointer)?;
-                        }
                         let p0_w9 = if p0_w7 == 1i32 {
                             Some(unsafe { Box::from_raw(p0_w10_pointer) })
                         } else {
@@ -4480,6 +3336,7 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_optional(
                 __prebindgen_argument_0,
@@ -4512,9 +3369,7 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -4567,67 +3422,25 @@ pub unsafe extern "C" fn owner_inline_inputs_packets(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<perftest_flat::InlinePacket> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_packets_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_packets_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_packets_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(1usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w5_pointer = (p0_w5) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w5_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_packets_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::InlinePacket,
                         String,
                     > {
                         let p0_w5_pointer = (p0_w5) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
                         let p0_w5_empty = if true {
                             Some(perftest_flat::inline_packet_empty())
                         } else {
@@ -4663,6 +3476,7 @@ pub unsafe extern "C" fn owner_inline_inputs_packets(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_packets(
                 __prebindgen_argument_0,
@@ -4695,172 +3509,7 @@ pub unsafe extern "C" fn owner_inline_inputs_packets(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
-    match outcome {
-        Ok(()) => {
-            let value = storage.assume_init();
-            std::ptr::write(out0, value.v0);
-            true
-        }
-        Err(message) => {
-            if success_committed {
-                let value = storage.assume_init();
-            }
-            if !error_reported && !error.is_null() {
-                unsafe { __pb_report_message(message, error) };
-            }
-            false
-        }
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_inline_inputs_packets_fast_p0_w1 {
-    pub v0: *mut __PbOwned_packet,
-}
-#[repr(C)]
-pub struct owner_inline_inputs_packets_fast_result {
-    pub v0: usize,
-}
-/**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
-#[allow(
-    clippy::needless_range_loop,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-#[no_mangle]
-pub unsafe extern "C" fn owner_inline_inputs_packets_fast(
-    p0_w1: __PbRows,
-    out0: *mut usize,
-    ownership: *mut usize,
-    error: *mut *mut std::ffi::c_char,
-) -> bool {
-    #[allow(unused_mut)]
-    let ownership_accepted = ::core::cell::Cell::new(0usize);
-    #[allow(unused_mut)]
-    let mut error_reported = false;
-    let mut success_committed = false;
-    let mut storage = std::mem::MaybeUninit::<
-        owner_inline_inputs_packets_fast_result,
-    >::uninit();
-    let output = storage.as_mut_ptr();
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        {
-            let __prebindgen_input_consumed = &ownership_accepted;
-            let _: () = {};
-            let mut p0_w0: Vec<perftest_flat::InlinePacket> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_packets_fast_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_packets_fast_p0_w1] = if p0_w2
-                    == 0
-                {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data
-                                as *const __PbRow_inline_inputs_packets_fast_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<
-                        perftest_flat::InlinePacket,
-                        String,
-                    > {
-                        let p0_w5_pointer = (p0_w5) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
-                        let p0_w5_empty = if true {
-                            Some(perftest_flat::inline_packet_empty())
-                        } else {
-                            None
-                        };
-                        let p0_w4 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w5_pointer,
-                                    p0_w5_empty.expect("prepared empty owner"),
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w4: perftest_flat::InlinePacket = p0_w4
-                            .expect("active inline owner");
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::inline_inputs_packets_fast(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = match source_value {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        if !error.is_null() {
-                            unsafe {
-                                __pb_report_message(
-                                    perftest_flat::inline_packet_error(&ret_w1),
-                                    error,
-                                )
-                            };
-                        }
-                        error_reported = true;
-                        String::new()
-                    });
-                }
-            };
-            let ret_w2 = ret_w0;
-            let result = owner_inline_inputs_packets_fast_result {
-                v0: ret_w2,
-            };
-            std::ptr::write(output, result);
-            let _: () = {
-                success_committed = true;
-            };
-            Ok(())
-        }
-    });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -4912,81 +3561,28 @@ pub unsafe extern "C" fn owner_inline_inputs_pair(
     let mut storage = std::mem::MaybeUninit::<owner_inline_inputs_pair_result>::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_pair_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_pair_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_pair_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(2usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
-                        let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w6_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w8_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
+                    let p0_w6 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_pair_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
+                    let p0_w8 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_pair_p0_w1)
+                            .add(p0_w3)))
+                            .v1
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
                         let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
                         let p0_w6_empty = if true {
                             Some(perftest_flat::inline_packet_empty())
                         } else {
@@ -5044,6 +3640,7 @@ pub unsafe extern "C" fn owner_inline_inputs_pair(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_pair(
                 __prebindgen_argument_0,
@@ -5076,195 +3673,7 @@ pub unsafe extern "C" fn owner_inline_inputs_pair(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
-    match outcome {
-        Ok(()) => {
-            let value = storage.assume_init();
-            std::ptr::write(out0, value.v0);
-            true
-        }
-        Err(message) => {
-            if success_committed {
-                let value = storage.assume_init();
-            }
-            if !error_reported && !error.is_null() {
-                unsafe { __pb_report_message(message, error) };
-            }
-            false
-        }
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbRow_inline_inputs_pair_fast_p0_w1 {
-    pub v0: *mut __PbOwned_packet,
-    pub v1: *mut __PbOwned_packet,
-}
-#[repr(C)]
-pub struct owner_inline_inputs_pair_fast_result {
-    pub v0: i64,
-}
-/**# Safety
-Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
-#[allow(
-    clippy::needless_range_loop,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-#[no_mangle]
-pub unsafe extern "C" fn owner_inline_inputs_pair_fast(
-    p0_w1: __PbRows,
-    out0: *mut i64,
-    ownership: *mut usize,
-    error: *mut *mut std::ffi::c_char,
-) -> bool {
-    #[allow(unused_mut)]
-    let ownership_accepted = ::core::cell::Cell::new(0usize);
-    #[allow(unused_mut)]
-    let mut error_reported = false;
-    let mut success_committed = false;
-    let mut storage = std::mem::MaybeUninit::<
-        owner_inline_inputs_pair_fast_result,
-    >::uninit();
-    let output = storage.as_mut_ptr();
-    let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        {
-            let __prebindgen_input_consumed = &ownership_accepted;
-            let _: () = {};
-            let mut p0_w0: Vec<i64> = Vec::new();
-            if true {
-                let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_pair_fast_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_pair_fast_p0_w1] = if p0_w2 == 0
-                {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_pair_fast_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                p0_w0.reserve_exact(p0_w2);
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = p0_w1_rows[p0_w3].v0;
-                    let p0_w8 = p0_w1_rows[p0_w3].v1;
-                    #[allow(clippy::redundant_closure_call)]
-                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
-                        let p0_w6_pointer = (p0_w6) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                        }
-                        let p0_w8_pointer = (p0_w8) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                        }
-                        let p0_w6_empty = if true {
-                            Some(perftest_flat::inline_packet_empty())
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w6_pointer,
-                                    p0_w6_empty.expect("prepared empty owner"),
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w8_empty = if true {
-                            Some(perftest_flat::inline_packet_empty())
-                        } else {
-                            None
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w8_pointer,
-                                    p0_w8_empty.expect("prepared empty owner"),
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
-                        }
-                        let p0_w5: perftest_flat::InlinePacket = p0_w5
-                            .expect("active inline owner");
-                        let p0_w7: perftest_flat::InlinePacket = p0_w7
-                            .expect("active inline owner");
-                        let p0_w4: i64 = perftest_flat::inline_input_pair(p0_w5, p0_w7);
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
-                    })();
-                    let element = p0_w1_element_built?;
-                    #[allow(clippy::zst_offset)]
-                    unsafe {
-                        let initialized = p0_w0.len();
-                        p0_w0.as_mut_ptr().add(initialized).write(element);
-                        p0_w0.set_len(initialized + 1);
-                    }
-                }
-            }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let source_value = perftest_flat::inline_inputs_pair_fast(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = match source_value {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        if !error.is_null() {
-                            unsafe {
-                                __pb_report_message(
-                                    perftest_flat::inline_packet_error(&ret_w1),
-                                    error,
-                                )
-                            };
-                        }
-                        error_reported = true;
-                        String::new()
-                    });
-                }
-            };
-            let ret_w2 = ret_w0;
-            let result = owner_inline_inputs_pair_fast_result {
-                v0: ret_w2,
-            };
-            std::ptr::write(output, result);
-            let _: () = {
-                success_committed = true;
-            };
-            Ok(())
-        }
-    });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -5381,67 +3790,25 @@ pub unsafe extern "C" fn owner_inline_inputs_texts(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        }
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let __prebindgen_input_consumed = &ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<String> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_inputs_texts_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_inputs_texts_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_inputs_texts_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(1usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w5_pointer = (p0_w5) as *mut String;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w5_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_inputs_texts_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         String,
                         String,
                     > {
                         let p0_w5_pointer = (p0_w5) as *mut String;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
                         let p0_w5_empty = if true {
                             Some(<String as ::core::default::Default>::default())
                         } else {
@@ -5476,6 +3843,7 @@ pub unsafe extern "C" fn owner_inline_inputs_texts(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_inputs_texts(
                 __prebindgen_argument_0,
@@ -5508,9 +3876,7 @@ pub unsafe extern "C" fn owner_inline_inputs_texts(
             Ok(())
         }
     });
-    if !ownership.is_null() {
-        std::ptr::write(ownership, ownership_accepted.get());
-    }
+    std::ptr::write(ownership, ownership_accepted.get());
     match outcome {
         Ok(()) => {
             let value = storage.assume_init();
@@ -5554,7 +3920,7 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -5580,7 +3946,6 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
@@ -5593,49 +3958,60 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                             let callback_return_w1 = raw_result;
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                    __prebindgen_input_consumed,
-                                );
-                                match ::prebindgen_runtime::validate_slice(
-                                    callback_return_w1.data
-                                        as *const __PbRow_callback_805117dbed50edfb_callback_return_w1,
-                                    callback_return_w1.len,
-                                ) {
-                                    Ok(()) => {
-                                        for index in 0..callback_return_w1.len {
-                                            let callback_return_w6 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
-                                                    .add(index)))
-                                                    .v0
-                                            };
-                                            let callback_return_w8 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
-                                                    .add(index)))
-                                                    .v1
-                                            };
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive_inline(
-                                                        (::core::ptr::addr_of!(
-                                                            (* ((callback_return_w1.data as * const
-                                                            __PbRow_callback_805117dbed50edfb_callback_return_w1)
-                                                            .add(index))).v0
-                                                        ) as *const __PbOwned_packet)
-                                                            .cast::<perftest_flat::InlinePacket>(),
+                                let mut __pb_return_ordinal = 0usize;
+                                for index in 0..callback_return_w1.len {
+                                    let callback_return_w6 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
+                                            .add(index)))
+                                            .v0
+                                    };
+                                    let callback_return_w8 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
+                                            .add(index)))
+                                            .v1
+                                    };
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        ::core::ptr::read(
+                                                            (::core::ptr::addr_of!(
+                                                                (* ((callback_return_w1.data as * const
+                                                                __PbRow_callback_805117dbed50edfb_callback_return_w1)
+                                                                .add(index))).v0
+                                                            ) as *const __PbOwned_packet)
+                                                                .cast::<perftest_flat::InlinePacket>(),
+                                                        ),
                                                     );
-                                            }
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w8 as *mut perftest_flat::InlineChild,
-                                                    );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
                                             }
                                         }
                                     }
-                                    Err(error) => {
-                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        Box::from_raw(
+                                                            callback_return_w8 as *mut perftest_flat::InlineChild,
+                                                        ),
+                                                    );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                            }
+                                        }
                                     }
                                 }
                                 Ok(())
@@ -5647,64 +4023,20 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
-                                        ::prebindgen_runtime::validate_slice(
-                                            callback_return_w1.data
-                                                as *const __PbRow_callback_805117dbed50edfb_callback_return_w1,
-                                            callback_return_w2,
-                                        )?;
-                                        let callback_return_w1_rows: &[__PbRow_callback_805117dbed50edfb_callback_return_w1] = if callback_return_w2
-                                            == 0
-                                        {
-                                            &[]
-                                        } else {
-                                            unsafe {
-                                                ::core::slice::from_raw_parts(
-                                                    callback_return_w1.data
-                                                        as *const __PbRow_callback_805117dbed50edfb_callback_return_w1,
-                                                    callback_return_w2,
-                                                )
-                                            }
-                                        };
-                                        let mut callback_return_w1_accesses = __prebindgen_input_aliases
-                                            .begin_group(callback_return_w2.saturating_mul(1usize));
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
-                                            #[allow(unused_variables, clippy::redundant_closure_call)]
-                                            let checked = (|| {
-                                                #[allow(unused_parens)]
-                                                let callback_return_w6_storage = (callback_return_w6);
-                                                let callback_return_w8_pointer = if true {
-                                                    (callback_return_w8) as *mut perftest_flat::InlineChild
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w8_pointer,
-                                                    )?;
-                                                }
-                                                if true {
-                                                    for address in ::core::iter::once(
-                                                        (callback_return_w8_pointer.addr()) as usize,
-                                                    ) {
-                                                        callback_return_w1_accesses.push((address, true));
-                                                    }
-                                                }
-                                                Ok::<_, String>(())
-                                            })();
-                                            checked?;
-                                        }
-                                        __prebindgen_input_aliases
-                                            .accept_group(callback_return_w1_accesses)?;
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
+                                            let callback_return_w6 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v0
+                                            };
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_805117dbed50edfb_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v1
+                                            };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                                 perftest_flat::InlineMixed,
@@ -5717,11 +4049,6 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                                 } else {
                                                     ::core::ptr::null_mut()
                                                 };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w8_pointer,
-                                                    )?;
-                                                }
                                                 let callback_return_w5 = if true {
                                                     let callback_return_w6_pointer = ::core::ptr::addr_of!(
                                                         callback_return_w6_storage
@@ -5881,18 +4208,9 @@ pub unsafe extern "C" fn owner_inline_numbers_capacity(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut Vec<i64>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &Vec<i64> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -5900,6 +4218,7 @@ pub unsafe extern "C" fn owner_inline_numbers_capacity(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_numbers_capacity(
                 __prebindgen_argument_0,
@@ -5982,12 +4301,8 @@ pub unsafe extern "C" fn owner_inline_numbers_take(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = p0_w1 as *mut Vec<i64>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             let p0_w1_empty = if true {
                 Some(<Vec<i64> as ::core::default::Default>::default())
             } else {
@@ -5995,13 +4310,6 @@ pub unsafe extern "C" fn owner_inline_numbers_take(
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe {
                         ::core::ptr::replace(
@@ -6012,8 +4320,10 @@ pub unsafe extern "C" fn owner_inline_numbers_take(
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: Vec<i64> = p0_w0.expect("active inline owner");
                     p0_w0
@@ -6021,6 +4331,7 @@ pub unsafe extern "C" fn owner_inline_numbers_take(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_numbers_take(
                 __prebindgen_argument_0,
@@ -6065,18 +4376,9 @@ pub unsafe extern "C" fn owner_inline_packet_bytes_address(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::InlinePacket = unsafe {
                         &*(p0_w1_pointer)
@@ -6086,6 +4388,7 @@ pub unsafe extern "C" fn owner_inline_packet_bytes_address(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packet_bytes_address(
                 __prebindgen_argument_0,
@@ -6130,7 +4433,7 @@ pub unsafe extern "C" fn owner_inline_packet_callback(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -6160,7 +4463,6 @@ pub unsafe extern "C" fn owner_inline_packet_callback(
                             );
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
                             let callback_argument_0 = callback_arg_0_w0.0;
                             {
                                 ::core::mem::forget(callback_arg_0_w0);
@@ -6172,40 +4474,64 @@ pub unsafe extern "C" fn owner_inline_packet_callback(
                                 )
                             };
                             let callback_return_w1 = raw_result;
-                            let _callback_return_owner = ::prebindgen_runtime::TransferredOwner::new(
-                                __PbOwnedGuard_packet(callback_return_w1),
-                                __prebindgen_input_consumed,
-                                0,
-                            );
-                            #[allow(unused_parens)]
-                            let callback_return_w1_storage = callback_return_w1;
-                            #[allow(clippy::let_and_return, clippy::unit_arg)]
-                            let callback_return_w0_built = if true {
-                                let callback_return_w0 = if true {
-                                    let callback_return_w1_pointer = ::core::ptr::addr_of!(
-                                        callback_return_w1_storage
-                                    )
-                                        .cast::<perftest_flat::InlinePacket>();
-                                    let value = unsafe {
-                                        ::core::ptr::read(callback_return_w1_pointer)
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                            {
+                                let mut __pb_return_ordinal = 0usize;
+                                {
+                                    let ordinal = __pb_return_ordinal;
+                                    __pb_return_ordinal += 1;
+                                    if ordinal >= __prebindgen_input_consumed.get() {
+                                        if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                            unsafe {
+                                                drop(
+                                                    ::core::ptr::read(
+                                                        (&callback_return_w1 as *const __PbOwned_packet)
+                                                            .cast::<perftest_flat::InlinePacket>(),
+                                                    ),
+                                                );
+                                            }
+                                            Ok(())
+                                        }) {
+                                            ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                        }
+                                    }
+                                }
+                                Ok(())
+                            });
+                            let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                #[allow(unused_parens)]
+                                let callback_return_w1_storage = callback_return_w1;
+                                #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                let callback_return_w0_built = if true {
+                                    let callback_return_w0 = if true {
+                                        let callback_return_w1_pointer = ::core::ptr::addr_of!(
+                                            callback_return_w1_storage
+                                        )
+                                            .cast::<perftest_flat::InlinePacket>();
+                                        let value = unsafe {
+                                            ::core::ptr::read(callback_return_w1_pointer)
+                                        };
+                                        __prebindgen_input_consumed
+                                            .set(__prebindgen_input_consumed.get() + 1);
+                                        Some(value)
+                                    } else {
+                                        None
                                     };
-                                    __prebindgen_input_consumed
-                                        .set(__prebindgen_input_consumed.get() + 1);
-                                    Some(value)
+                                    Some({
+                                        let callback_return_w0: perftest_flat::InlinePacket = callback_return_w0
+                                            .expect("active inline owner");
+                                        callback_return_w0
+                                    })
                                 } else {
                                     None
                                 };
-                                Some({
-                                    let callback_return_w0: perftest_flat::InlinePacket = callback_return_w0
-                                        .expect("active inline owner");
-                                    callback_return_w0
-                                })
-                            } else {
-                                None
+                                let callback_return_value = callback_return_w0_built
+                                    .expect("active input");
+                                Ok(callback_return_value)
                             };
-                            let callback_return_value = callback_return_w0_built
-                                .expect("active input");
-                            Ok(callback_return_value)
+                            let callback_decoded = callback_outcome?;
+                            callback_return_cleanup.commit();
+                            Ok(callback_decoded)
                         });
                         result
                             .unwrap_or_else(|error| {
@@ -6303,18 +4629,9 @@ pub unsafe extern "C" fn owner_inline_packet_len(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::InlinePacket = unsafe {
                         &*(p0_w1_pointer)
@@ -6324,6 +4641,7 @@ pub unsafe extern "C" fn owner_inline_packet_len(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packet_len(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -6404,9 +4722,6 @@ pub unsafe extern "C" fn owner_inline_packet_optional(
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if out1.is_null() {
-            return Err("null success output".into());
-        }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -6480,18 +4795,9 @@ pub unsafe extern "C" fn owner_inline_packet_ref(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::InlinePacket = unsafe {
                         &*(p0_w1_pointer)
@@ -6501,6 +4807,7 @@ pub unsafe extern "C" fn owner_inline_packet_ref(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packet_ref(__prebindgen_argument_0);
             let ret_w0: *const perftest_flat::InlineChild = source_value
@@ -6548,12 +4855,6 @@ pub unsafe extern "C" fn owner_inline_packet_result(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        if out1.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let source_value = perftest_flat::inline_packet_result();
             let ret_w0 = match source_value {
@@ -6634,12 +4935,8 @@ pub unsafe extern "C" fn owner_inline_packet_take(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             let p0_w1_empty = if true {
                 Some(perftest_flat::inline_packet_empty())
             } else {
@@ -6647,13 +4944,6 @@ pub unsafe extern "C" fn owner_inline_packet_take(
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe {
                         ::core::ptr::replace(
@@ -6664,8 +4954,10 @@ pub unsafe extern "C" fn owner_inline_packet_take(
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: perftest_flat::InlinePacket = p0_w0
                         .expect("active inline owner");
@@ -6674,6 +4966,7 @@ pub unsafe extern "C" fn owner_inline_packet_take(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packet_take(
                 __prebindgen_argument_0,
@@ -6718,18 +5011,9 @@ pub unsafe extern "C" fn owner_inline_packet_text_address(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut perftest_flat::InlinePacket;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::InlinePacket = unsafe {
                         &*(p0_w1_pointer)
@@ -6739,6 +5023,7 @@ pub unsafe extern "C" fn owner_inline_packet_text_address(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packet_text_address(
                 __prebindgen_argument_0,
@@ -6807,12 +5092,6 @@ pub unsafe extern "C" fn owner_inline_packets_rows(
     >::uninit();
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
-        if out0.is_null() {
-            return Err("null success-output pointer".into());
-        }
-        if out1.is_null() {
-            return Err("null success-output pointer".into());
-        }
         {
             let source_value = perftest_flat::inline_packets_rows();
             let ret_w0 = match source_value {
@@ -6950,59 +5229,23 @@ pub unsafe extern "C" fn owner_inline_packets_take(p0_w1: __PbRows) -> usize {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
             let _: () = {};
             let mut p0_w0: Vec<perftest_flat::InlinePacket> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
-                ::prebindgen_runtime::validate_slice(
-                    p0_w1.data as *const __PbRow_inline_packets_take_p0_w1,
-                    p0_w2,
-                )?;
-                let p0_w1_rows: &[__PbRow_inline_packets_take_p0_w1] = if p0_w2 == 0 {
-                    &[]
-                } else {
-                    unsafe {
-                        ::core::slice::from_raw_parts(
-                            p0_w1.data as *const __PbRow_inline_packets_take_p0_w1,
-                            p0_w2,
-                        )
-                    }
-                };
-                let mut p0_w1_accesses = __prebindgen_input_aliases
-                    .begin_group(p0_w2.saturating_mul(1usize));
-                for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
-                    #[allow(unused_variables, clippy::redundant_closure_call)]
-                    let checked = (|| {
-                        let p0_w5_pointer = (p0_w5) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
-                        if true {
-                            for address in ::core::iter::once(
-                                (p0_w5_pointer.addr()) as usize,
-                            ) {
-                                p0_w1_accesses.push((address, true));
-                            }
-                        }
-                        Ok::<_, String>(())
-                    })();
-                    checked?;
-                }
-                __prebindgen_input_aliases.accept_group(p0_w1_accesses)?;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = p0_w1_rows[p0_w3].v0;
+                    let p0_w5 = unsafe {
+                        (*((p0_w1.data as *const __PbRow_inline_packets_take_p0_w1)
+                            .add(p0_w3)))
+                            .v0
+                    };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::InlinePacket,
                         String,
                     > {
                         let p0_w5_pointer = (p0_w5) as *mut perftest_flat::InlinePacket;
-                        if true {
-                            ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                        }
                         let p0_w5_empty = if true {
                             Some(perftest_flat::inline_packet_empty())
                         } else {
@@ -7038,6 +5281,7 @@ pub unsafe extern "C" fn owner_inline_packets_take(p0_w1: __PbRows) -> usize {
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_packets_take(
                 __prebindgen_argument_0,
@@ -7082,7 +5326,7 @@ pub unsafe extern "C" fn owner_inline_return_catch(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -7107,87 +5351,100 @@ pub unsafe extern "C" fn owner_inline_return_catch(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
                             let callback_return_w2 = raw_result.v0;
                             let callback_return_w4 = raw_result.v1;
-                            let mut __pb_guard_index = 0usize;
-                            let callback_return_w2_return_guard = if true {
-                                let ordinal = __pb_guard_index;
-                                __pb_guard_index += 1;
-                                Some(
-                                    ::prebindgen_runtime::TransferredOwner::new(
-                                        __PbOwnedGuard_packet(callback_return_w2),
-                                        __prebindgen_input_consumed,
-                                        ordinal,
-                                    ),
-                                )
-                            } else {
-                                None
-                            };
+                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                #[allow(unused_parens)]
-                                let callback_return_w2_storage = callback_return_w2;
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w1_built = if true {
-                                    let callback_return_w1 = if true {
-                                        let callback_return_w2_pointer = ::core::ptr::addr_of!(
-                                            callback_return_w2_storage
-                                        )
-                                            .cast::<perftest_flat::InlinePacket>();
-                                        let value = unsafe {
-                                            ::core::ptr::read(callback_return_w2_pointer)
+                                let mut __pb_return_ordinal = 0usize;
+                                {
+                                    let ordinal = __pb_return_ordinal;
+                                    __pb_return_ordinal += 1;
+                                    if ordinal >= __prebindgen_input_consumed.get() {
+                                        if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                            unsafe {
+                                                drop(
+                                                    ::core::ptr::read(
+                                                        (&callback_return_w2 as *const __PbOwned_packet)
+                                                            .cast::<perftest_flat::InlinePacket>(),
+                                                    ),
+                                                );
+                                            }
+                                            Ok(())
+                                        }) {
+                                            ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                        }
+                                    }
+                                }
+                                Ok(())
+                            });
+                            {
+                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                                    #[allow(unused_parens)]
+                                    let callback_return_w2_storage = callback_return_w2;
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w1_built = if true {
+                                        let callback_return_w1 = if true {
+                                            let callback_return_w2_pointer = ::core::ptr::addr_of!(
+                                                callback_return_w2_storage
+                                            )
+                                                .cast::<perftest_flat::InlinePacket>();
+                                            let value = unsafe {
+                                                ::core::ptr::read(callback_return_w2_pointer)
+                                            };
+                                            __prebindgen_input_consumed
+                                                .set(__prebindgen_input_consumed.get() + 1);
+                                            Some(value)
+                                        } else {
+                                            None
                                         };
-                                        __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1);
-                                        Some(value)
+                                        Some({
+                                            let callback_return_w1: perftest_flat::InlinePacket = callback_return_w1
+                                                .expect("active inline owner");
+                                            callback_return_w1
+                                        })
                                     } else {
                                         None
                                     };
-                                    Some({
-                                        let callback_return_w1: perftest_flat::InlinePacket = callback_return_w1
-                                            .expect("active inline owner");
-                                        callback_return_w1
-                                    })
-                                } else {
-                                    None
+                                    let callback_return_w3 = if true {
+                                        Some(unsafe {
+                                            char::from_u32_unchecked(callback_return_w4)
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w3_built = if true {
+                                        Some({
+                                            let callback_return_w3: char = ::core::convert::Into::into(
+                                                callback_return_w3.expect("active value"),
+                                            );
+                                            callback_return_w3
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                    let callback_return_w0_built = if true {
+                                        Some({
+                                            let callback_return_w0: perftest_flat::InlineReturn = perftest_flat::inline_return_new(
+                                                callback_return_w1_built.expect("active input"),
+                                                callback_return_w3_built.expect("active input"),
+                                            );
+                                            callback_return_w0
+                                        })
+                                    } else {
+                                        None
+                                    };
+                                    let callback_return_value = callback_return_w0_built
+                                        .expect("active input");
+                                    Ok(callback_return_value)
                                 };
-                                let callback_return_w3 = if true {
-                                    Some(
-                                        char::from_u32(callback_return_w4)
-                                            .ok_or("invalid Unicode scalar")?,
-                                    )
-                                } else {
-                                    None
-                                };
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w3_built = if true {
-                                    Some({
-                                        let callback_return_w3: char = ::core::convert::Into::into(
-                                            callback_return_w3.expect("active value"),
-                                        );
-                                        callback_return_w3
-                                    })
-                                } else {
-                                    None
-                                };
-                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                let callback_return_w0_built = if true {
-                                    Some({
-                                        let callback_return_w0: perftest_flat::InlineReturn = perftest_flat::inline_return_new(
-                                            callback_return_w1_built.expect("active input"),
-                                            callback_return_w3_built.expect("active input"),
-                                        );
-                                        callback_return_w0
-                                    })
-                                } else {
-                                    None
-                                };
-                                let callback_return_value = callback_return_w0_built
-                                    .expect("active input");
-                                Ok(callback_return_value)
+                                let callback_decoded = callback_outcome?;
+                                callback_return_cleanup.commit();
+                                Ok(callback_decoded)
                             }
                         });
                         result
@@ -7248,7 +5505,7 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_callback_run = if true {
-                Some(p0_callback.run.ok_or("null callback function")?)
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
@@ -7274,7 +5531,6 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                         let result = ::prebindgen_runtime::boundary(|| {
                             let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
                             let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let mut __prebindgen_input_aliases = ::prebindgen_runtime::DynamicInputs::default();
                             let raw_result = unsafe {
                                 p0_callback_run(p0_callback_owner.context())
                             };
@@ -7287,43 +5543,42 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                             let callback_return_w1 = raw_result;
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
-                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                    __prebindgen_input_consumed,
-                                );
-                                match ::prebindgen_runtime::validate_slice(
-                                    callback_return_w1.data
-                                        as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1,
-                                    callback_return_w1.len,
-                                ) {
-                                    Ok(()) => {
-                                        for index in 0..callback_return_w1.len {
-                                            let callback_return_w6 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
-                                                    .add(index)))
-                                                    .v0
-                                            };
-                                            let callback_return_w8 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
-                                                    .add(index)))
-                                                    .v1
-                                            };
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive_inline(
-                                                        (::core::ptr::addr_of!(
-                                                            (* ((callback_return_w1.data as * const
-                                                            __PbRow_callback_f5d26722508e30c3_callback_return_w1)
-                                                            .add(index))).v0
-                                                        ) as *const __PbOwned_packet)
-                                                            .cast::<perftest_flat::InlinePacket>(),
+                                let mut __pb_return_ordinal = 0usize;
+                                for index in 0..callback_return_w1.len {
+                                    let callback_return_w6 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
+                                            .add(index)))
+                                            .v0
+                                    };
+                                    let callback_return_w8 = unsafe {
+                                        (*((callback_return_w1.data
+                                            as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
+                                            .add(index)))
+                                            .v1
+                                    };
+                                    {
+                                        let ordinal = __pb_return_ordinal;
+                                        __pb_return_ordinal += 1;
+                                        if ordinal >= __prebindgen_input_consumed.get() {
+                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                                unsafe {
+                                                    drop(
+                                                        ::core::ptr::read(
+                                                            (::core::ptr::addr_of!(
+                                                                (* ((callback_return_w1.data as * const
+                                                                __PbRow_callback_f5d26722508e30c3_callback_return_w1)
+                                                                .add(index))).v0
+                                                            ) as *const __PbOwned_packet)
+                                                                .cast::<perftest_flat::InlinePacket>(),
+                                                        ),
                                                     );
+                                                }
+                                                Ok(())
+                                            }) {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
                                             }
                                         }
-                                    }
-                                    Err(error) => {
-                                        ::prebindgen_runtime::report_callback_cleanup_error(&error)
                                     }
                                 }
                                 Ok(())
@@ -7335,30 +5590,20 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
-                                        ::prebindgen_runtime::validate_slice(
-                                            callback_return_w1.data
-                                                as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1,
-                                            callback_return_w2,
-                                        )?;
-                                        let callback_return_w1_rows: &[__PbRow_callback_f5d26722508e30c3_callback_return_w1] = if callback_return_w2
-                                            == 0
-                                        {
-                                            &[]
-                                        } else {
-                                            unsafe {
-                                                ::core::slice::from_raw_parts(
-                                                    callback_return_w1.data
-                                                        as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1,
-                                                    callback_return_w2,
-                                                )
-                                            }
-                                        };
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = callback_return_w1_rows[callback_return_w3]
-                                                .v0;
-                                            let callback_return_w8 = callback_return_w1_rows[callback_return_w3]
-                                                .v1;
+                                            let callback_return_w6 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v0
+                                            };
+                                            let callback_return_w8 = unsafe {
+                                                (*((callback_return_w1.data
+                                                    as *const __PbRow_callback_f5d26722508e30c3_callback_return_w1)
+                                                    .add(callback_return_w3)))
+                                                    .v1
+                                            };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
                                                 perftest_flat::InlineReturn,
@@ -7367,10 +5612,9 @@ pub unsafe extern "C" fn owner_inline_rows_catch(
                                                 #[allow(unused_parens)]
                                                 let callback_return_w6_storage = (callback_return_w6);
                                                 let callback_return_w7 = if true {
-                                                    Some(
-                                                        char::from_u32(callback_return_w8)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
+                                                    Some(unsafe {
+                                                        char::from_u32_unchecked(callback_return_w8)
+                                                    })
                                                 } else {
                                                     None
                                                 };
@@ -7523,18 +5767,9 @@ pub unsafe extern "C" fn owner_inline_text_capacity(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut String;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &String = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -7542,6 +5777,7 @@ pub unsafe extern "C" fn owner_inline_text_capacity(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_text_capacity(
                 __prebindgen_argument_0,
@@ -7620,12 +5856,8 @@ pub unsafe extern "C" fn owner_inline_text_take(p0_w1: *mut __PbOwned_text) -> u
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let _: () = {};
             let p0_w1_pointer = p0_w1 as *mut String;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             let p0_w1_empty = if true {
                 Some(<String as ::core::default::Default>::default())
             } else {
@@ -7633,13 +5865,6 @@ pub unsafe extern "C" fn owner_inline_text_take(p0_w1: *mut __PbOwned_text) -> u
             };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                let mut p0_w0_built_transferred_0 = 0usize;
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, true)?;
-                        p0_w0_built_transferred_0 += 1;
-                    }
-                }
                 let p0_w0 = if true {
                     Some(unsafe {
                         ::core::ptr::replace(
@@ -7650,8 +5875,10 @@ pub unsafe extern "C" fn owner_inline_text_take(p0_w1: *mut __PbOwned_text) -> u
                 } else {
                     None
                 };
-                __prebindgen_input_consumed
-                    .set(__prebindgen_input_consumed.get() + p0_w0_built_transferred_0);
+                if true {
+                    __prebindgen_input_consumed
+                        .set(__prebindgen_input_consumed.get() + 1usize);
+                }
                 Some({
                     let p0_w0: String = p0_w0.expect("active inline owner");
                     p0_w0
@@ -7659,6 +5886,7 @@ pub unsafe extern "C" fn owner_inline_text_take(p0_w1: *mut __PbOwned_text) -> u
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::inline_text_take(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -7701,9 +5929,6 @@ pub unsafe extern "C" fn owner_mutable_bytes_vector_expanded(
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if out1.is_null() {
-            return Err("null success output".into());
-        }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             #[allow(clippy::let_and_return, clippy::unit_arg)]
@@ -7809,22 +6034,13 @@ pub unsafe extern "C" fn owner_owned_resource_id(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1 as *mut perftest_flat::OwnedResource
             } else {
                 ::core::ptr::null_mut()
             };
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &perftest_flat::OwnedResource = unsafe {
                         &(*p0_w1_pointer)
@@ -7834,6 +6050,7 @@ pub unsafe extern "C" fn owner_owned_resource_id(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::owned_resource_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -7874,18 +6091,9 @@ pub unsafe extern "C" fn owner_shared_input_bytes(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut Vec<u8>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &Vec<u8> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -7893,6 +6101,7 @@ pub unsafe extern "C" fn owner_shared_input_bytes(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::shared_input_bytes(
                 __prebindgen_argument_0,
@@ -7937,18 +6146,9 @@ pub unsafe extern "C" fn owner_shared_input_string(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut String;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &String = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -7956,6 +6156,7 @@ pub unsafe extern "C" fn owner_shared_input_string(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::shared_input_string(
                 __prebindgen_argument_0,
@@ -8000,18 +6201,9 @@ pub unsafe extern "C" fn owner_shared_input_vector(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_input_consumed = &_ownership_accepted;
-            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = p0_w1 as *mut Vec<i64>;
-            if true {
-                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true {
-                if true {
-                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_input_aliases.access(address, false)?;
-                    }
-                }
                 Some({
                     let p0_w0: &Vec<i64> = unsafe { &*(p0_w1_pointer) };
                     p0_w0
@@ -8019,6 +6211,7 @@ pub unsafe extern "C" fn owner_shared_input_vector(
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::shared_input_vector(
                 __prebindgen_argument_0,

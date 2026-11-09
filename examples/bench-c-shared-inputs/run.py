@@ -26,7 +26,7 @@ for version,checkout in [('before',a.before.resolve()),('after',ROOT)]:
    command=['python3',str(ROOT/'examples/bench-c-collections/build.py'),'--checkout',str(checkout),'--output',str(directory),'--target-dir',str(a.target_dir)]
    if kind=='count':command+=['--count-allocations']
    with (out/f'build-{version}-{kind}.log').open('w') as log:subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True,env=os.environ|{'CARGO_BUILD_JOBS':'2'})
-  d=json.loads((directory/'build.json').read_text());assert d['count_allocations']==(kind=='count') and d['alias_checks']
+  d=json.loads((directory/'build.json').read_text());assert d['count_allocations']==(kind=='count')
   assert sha(d['library'])==d['library_sha256']
   header=(directory/'bindings.h').read_text()
   direct=bool(re.search(r'uintptr_t bench_shared_input_inspect\(bench_i64_slice_view ',header))

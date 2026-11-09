@@ -19,9 +19,7 @@ impl COwned {
     pub(crate) fn ident(&self) -> syn::Ident {
         format_ident!("__PbOwned_{}", self.name)
     }
-    pub(crate) fn guard_ident(&self) -> syn::Ident {
-        format_ident!("__PbOwnedGuard_{}", self.name)
-    }
+
     pub(crate) fn helper(&self, operation: &str) -> syn::Ident {
         helper(&self.name, operation)
     }
@@ -197,7 +195,7 @@ pub(crate) fn input(
         ),
     };
     InputPlan {
-        fallible: !by_value,
+        fallible: false,
         context: Default::default(),
         acknowledgement: None,
         node: prebindgen_flat::WireNode::Leaf(vec![Wire {
@@ -212,7 +210,7 @@ pub(crate) fn input(
             quote!(#storage)
         } else {
             let prepare = (!defer_empty).then_some(&prepare_empty);
-            quote!(#storage let #pointer = #ptr; if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;} #prepare)
+            quote!(#storage let #pointer = #ptr; #prepare)
         },
         acquire: if defer_empty {
             quote!(#prepare_empty #acquire)
@@ -469,8 +467,8 @@ pub(crate) fn emit_accessors(
         } else {
             "void".into()
         };
-        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while an element pointer is used."] #[no_mangle] pub unsafe extern "C" fn #get(value:*const #carrier,index:usize)->*const #element {(*value).as_rust().get(index).map_or(::core::ptr::null(), |element|element as *const #element)}));
-        header.push_str(&format!("/* Borrowed element; null for an out-of-range index. */\nconst {c_element} *{get}(const {prefix}_{} *value,size_t index);\n",owner.name));
+        tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while an element pointer is used."] #[no_mangle] pub unsafe extern "C" fn #get(value:*const #carrier,index:usize)->*const #element {(*value).as_rust().get_unchecked(index) as *const #element}));
+        header.push_str(&format!("/* Borrowed element; index must be smaller than the owner length. */\nconst {c_element} *{get}(const {prefix}_{} *value,size_t index);\n",owner.name));
     }
     Ok(())
 }

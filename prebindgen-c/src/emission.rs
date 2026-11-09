@@ -7,11 +7,6 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct CContext {
-    /// Compile-time native history limit; None uses the runtime default.
-    pub input_alias_index_threshold: Option<usize>,
-    /// Alias policy of the owning function; None defers to its enclosing wrapper
-    /// while preparing a callback that may be retained beyond registration.
-    pub emit_alias_checks: Option<bool>,
     /// Generated ABI row types keyed by sequence carrier name in this function.
     pub row_types: std::collections::BTreeMap<String, syn::Ident>,
     /// Wrapper-local Cell counting acquired owned wire values.
@@ -35,16 +30,7 @@ pub struct CContext {
 }
 impl TemplateContext for CContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        let code = if let Some(enabled) = self.emit_alias_checks {
-            prebindgen_conversions::render_input_alias_checks_with_threshold(
-                code,
-                enabled,
-                self.input_alias_index_threshold,
-            )?
-        } else {
-            code.clone()
-        };
-        render_template(&code, &|name| match name {
+        render_template(code, &|name| match name {
             "input_consumed" => {
                 let counter = &self.acknowledgement;
                 Ok(quote::quote!(&#counter))

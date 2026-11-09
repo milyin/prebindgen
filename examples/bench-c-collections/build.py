@@ -70,9 +70,6 @@ def build(args):
     revisions={str(p):revision(p) for p in {checkout,ROOT}}
     project=prepare(checkout,output)
     env=dict(os.environ,CARGO_TARGET_DIR=str(args.target_dir.resolve() if args.target_dir else output/'target'))
-    env.pop("BENCH_ALIAS_INDEX_THRESHOLD", None)
-    if args.alias_index_threshold is not None:env["BENCH_ALIAS_INDEX_THRESHOLD"]=args.alias_index_threshold
-    env["BENCH_ALIAS_CHECKS"]="0" if args.disable_alias_checks else "1"
     rustc=subprocess.check_output(['rustc','-vV'],text=True)
     host=next(line.split(': ',1)[1] for line in rustc.splitlines() if line.startswith('host: '))
     if args.fetch:subprocess.run(['cargo','fetch','--locked'],cwd=project,env=env,check=True)
@@ -112,7 +109,7 @@ def build(args):
         for name in ['.cargo/config','.cargo/config.toml','config','config.toml']:
             path=parent/name
             if path.is_file():configs.append(path)
-    report=dict(alias_index_threshold=args.alias_index_threshold,revisions=revisions,checkout=str(checkout),count_allocations=args.count_allocations,alias_checks=not args.disable_alias_checks,
+    report=dict(revisions=revisions,checkout=str(checkout),count_allocations=args.count_allocations,
                 fixture_sha256={name:sha(FIXTURE/name) for name in FILES},
                 rustc=rustc,
                 cc=subprocess.check_output([*cc,'--version'],text=True),compile_command=compile_command,
@@ -138,8 +135,6 @@ if __name__=='__main__':
     p.add_argument('--checkout',type=Path,default=ROOT)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--count-allocations',action='store_true')
-    p.add_argument('--alias-index-threshold',help='sorted-history limit, or max to retain vectors')
-    p.add_argument('--disable-alias-checks',action='store_true',help='omit C input alias validation; valid unique owners are still required')
     p.add_argument('--target-dir',type=Path,help='optional shared Cargo cache; libraries are copied into frozen output storage')
     p.add_argument('--fetch',action='store_true')
     p.add_argument('--record-generated',action='store_true')

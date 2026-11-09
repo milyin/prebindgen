@@ -55,27 +55,18 @@ pub fn inline_inputs_mixed(rows: Vec<i64>) -> Result<i64, String> {
     CALLS.with(|n| n.set(n.get() + 1));
     Ok(rows.iter().sum())
 }
-#[prebindgen]
-pub fn inline_inputs_mixed_fast(rows: Vec<i64>) -> Result<i64, String> {
-    inline_inputs_mixed(rows)
-}
+
 #[prebindgen]
 pub fn inline_inputs_pair(rows: Vec<i64>) -> Result<i64, String> {
     inline_inputs_mixed(rows)
 }
-#[prebindgen]
-pub fn inline_inputs_pair_fast(rows: Vec<i64>) -> Result<i64, String> {
-    inline_inputs_mixed(rows)
-}
+
 #[prebindgen]
 pub fn inline_inputs_packets(rows: Vec<InlinePacket>) -> Result<usize, String> {
     CALLS.with(|n| n.set(n.get() + 1));
     Ok(rows.iter().map(|v| packet(v) as usize).sum())
 }
-#[prebindgen]
-pub fn inline_inputs_packets_fast(rows: Vec<InlinePacket>) -> Result<usize, String> {
-    inline_inputs_packets(rows)
-}
+
 #[prebindgen]
 pub fn inline_inputs_optional(rows: Option<Vec<Option<i64>>>) -> Result<i64, String> {
     CALLS.with(|n| n.set(n.get() + 1));
@@ -175,12 +166,7 @@ pub fn inline_callback_rows(callback: impl Fn() -> Vec<InlineCallbackRow>) -> Re
         })
         .sum())
 }
-#[prebindgen]
-pub fn inline_callback_rows_fast(
-    callback: impl Fn() -> Vec<InlineCallbackRow>,
-) -> Result<i64, String> {
-    inline_callback_rows(callback)
-}
+
 #[prebindgen]
 pub fn inline_callback_optional(
     callback: impl Fn() -> Option<Vec<Option<InlineCallbackRow>>>,

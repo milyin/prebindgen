@@ -238,20 +238,6 @@ pub(crate) fn sequence_input(
         values.push((name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
-        // The enclosing bulk frame is cached once in native memory. These
-        // fields are Copy native values; buffer/enum decoding is deferred by
-        // the row leaf hook. Nested rows and callbacks retain their transport.
-        reread_rows: crate::group::row_fields(element).all(|w| {
-            matches!(
-                w.kind,
-                JniWire::Scalar { .. }
-                    | JniWire::Selector { .. }
-                    | JniWire::Handle { .. }
-                    | JniWire::Enum { .. }
-                    | JniWire::NativeBuffer { .. }
-                    | JniWire::Native128 { .. }
-            )
-        }),
         controls: vec![Wire {
             name: wire.clone(),
             kind: JniWire::NativeRows {
@@ -261,8 +247,7 @@ pub(crate) fn sequence_input(
         metadata: JniChain::Sequence(JniSequence::Bulk),
         open: quote!(let(#start,#length)=#reader.rows(#wire,::core::mem::size_of::<#row>())?;),
         bind,
-        validation_values: values.clone(),
-        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
+        validation_values: values,
         release: quote!(),
     })
 }

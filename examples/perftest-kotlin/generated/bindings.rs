@@ -140,6 +140,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
             let (
@@ -675,6 +676,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             } else {
                 None
             };
+            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_opt(

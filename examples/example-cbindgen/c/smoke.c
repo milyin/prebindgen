@@ -16,8 +16,7 @@ int main(void) {
     assert(caption != 0);
     example_drop_caption(caption);
     caption = NULL;
-    const unsigned char invalid[] = {255};
-    EXPECT_ABORT(example_caption_new(0, (example_buffer){invalid, 1}, 0));
+
     assert(caption == NULL);
     example_foo * foo = {0};
     uint64_t id = {0};
@@ -28,10 +27,10 @@ int main(void) {
     uint64_t value = {0};
     counter = example_local_counter_new(42);
     value = example_local_counter_value(counter); assert(value == 42);
-    EXPECT_ABORT(example_local_counter_label(counter, (example_buffer){invalid, 1}));
+
     value = example_local_counter_value(counter); assert(value == 42);
     labeled = example_local_counter_label(counter, (example_buffer){text, sizeof(text)});
     value = example_local_counter_value(labeled); assert(value == 46);
     example_drop_local_counter(labeled);
-    puts("example-cbindgen PASS: typed pointers, non-Send counter, Caption constructor, invalid UTF-8 and aborting invalid input validation");
+    puts("example-cbindgen PASS: typed pointers, non-Send counter and Caption constructor");
 }

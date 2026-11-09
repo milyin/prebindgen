@@ -21,11 +21,11 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Validate this value before using it. Compiled recipes also acquire and
     /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Acquire this leaf after validation and alias checks. Acquisition must be
+    /// Acquire this leaf after its adapter-specific validation. Acquisition must be
     /// infallible unless each moved resource records its own successful transfer
     /// through `Resource::records_consumption`. Empty for eagerly built recipes.
     pub acquire: TokenStream,
-    /// Active foreign resources whose identities must be checked across all arguments.
+    /// Active foreign resources used for ownership receipts and foreign preflight.
     pub resources: Vec<Resource>,
     /// Construct this value from acquired inputs, including source constructor calls.
     pub statements: TokenStream,
@@ -76,7 +76,7 @@ pub enum ResourceIdentity {
     /// Expression implementing IntoIterator<Item = usize>.
     Many(TokenStream),
 }
-/// The adapter supplies identity; flat enforces call-wide access conflicts.
+/// Resource metadata for ownership receipts and adapter-specific preflight.
 #[derive(Clone, Debug)]
 pub struct Resource {
     /// Independent root allocation class represented by this declared type.
@@ -85,13 +85,13 @@ pub struct Resource {
     /// resource matches a handle wire of this type and access mode. The adapter
     /// must establish that distinct allocation classes cannot alias.
     pub allocation_type: Option<syn::Type>,
-    /// This access has already been registered during input preparation.
-    /// Its identity then describes cardinality for call setup, not a later read.
+    /// This resource is acquired during input preparation. Its ownership count
+    /// is already included in the generated preparation code.
     pub registered: bool,
     /// Acquisition updates `__prebindgen_input_consumed` after each successful
     /// ownership transfer. The compiler must not also count this resource.
     /// Use this for acquisition that can fail or unwind between transfers.
-    /// This does not register or suppress alias checks. Ignored for borrows.
+    /// Ignored for borrows.
     pub records_consumption: bool,
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
     /// All identities compared within a call must share an equality-compatible domain.

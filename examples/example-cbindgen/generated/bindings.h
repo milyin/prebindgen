@@ -10,6 +10,7 @@ typedef struct { uint64_t hi; uint64_t lo; } example_int128;
  typedef struct { const uint8_t *data; size_t len; } example_buffer;
 void example_free_buffer(example_buffer b);
 void example_free_error(char *error);
+/* Trusted C ABI: arguments and callback results are not validated. Required pointers must be nonnull, correctly aligned, live and of the declared type; buffers and row ranges must be valid for their lengths. Strings must be UTF-8; characters, enum tags, option tags, selectors and fixed-array lengths must have valid declared representations. Owned values transfer exactly once. Shared/exclusive loans must satisfy Rust aliasing and lifetime rules, including interior pointers. Output pointers must be writable and disjoint from live inputs and each other. Row storage must remain live and unchanged throughout conversion and cleanup. Violating these preconditions is undefined behavior. Explicitly nullable values retain their documented meaning. */
 /* Binding target identity; use the matching Rust library. */
 #define example_TARGET "x86_64-unknown-linux-gnu"
 #ifdef __cplusplus
