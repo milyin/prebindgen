@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["InputFragment","OutputFragment"],"fn":["emit_call","input_alias_checks"],"struct":["ParameterAliasCheck"]};
+window.SIDEBAR_ITEMS = {"enum":["InputFragment","OutputFragment"],"fn":["emit_call"]};
