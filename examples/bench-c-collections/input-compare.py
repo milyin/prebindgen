@@ -38,7 +38,7 @@ for d in builds.values():
 effective=builds if not a.same_build else {v:builds[a.same_build] for v in builds}
 # One executable for both versions. The loader path selects the native library,
 # and dladdr in the executable verifies the library that actually answered.
-driver=effective['before']['input_driver']
+driver=builds['before']['input_driver']
 cases=a.cases.split(',');sizes=[int(n) for n in a.sizes.split(',')]
 assert set(cases)<=set(['handles','records','wide','text','bytes','buffers','text_large','bytes_large','buffers_large','numbers','control','fixed_move','fixed_borrow','callback_fixed','callback_many','tagged','tagged_buffers','native','native_mixed','callback_native','callback_native_mixed'])
 single={'control','fixed_move','fixed_borrow','callback_fixed'}

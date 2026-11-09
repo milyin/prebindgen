@@ -1,0 +1,323 @@
+{
+  "latency": {
+    "settings": {
+      "before": "/tmp/c-trust-perf/before",
+      "after": "/tmp/c-trust-perf/after-final",
+      "output": "/tmp/c-trust-perf/latency",
+      "kind": "time",
+      "forks": 4,
+      "same_build": null,
+      "smoke": false,
+      "cases": "handles,records,buffers,callback_many,numbers,control,fixed_borrow,callback_fixed",
+      "sizes": "1,64,512,8192",
+      "batches": null,
+      "target_ms": 20
+    },
+    "affinity": [
+      0
+    ],
+    "driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+    "runner_sha256": "716185d8260de019d5079db2be33a0ccd8e0a49671d6a878e1911ca37a4c2fdd",
+    "samples_sha256": "c5a586b4429d921fe38c52925cbdde39f45938a65ff8bb640aac7205c696c4d4",
+    "builds": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "5ec09ff10188e2daaa23abe08b0086bc87775fce",
+          "/tmp/c-trust-baseline": "ab57d20502117539c598c9116d7936d923e83760"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "4e398c7f13bbc10fc3774cdb8f94a7dcb4db2b71a1a072668cd91bd74142dba4",
+        "input_driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "b260ea432623746b2d3fd7050fe3f04d82ce040e"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "816ae139e43a8d5365915621a8bde8a7b0d2e7f3e4bfc163a91c47cc21830408",
+        "input_driver_sha256": "9c88a00fa6781d274652dff9a225c7edbde481cf2a1d58319d164e56ebd94bd9",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      }
+    }
+  },
+  "latency-cached": {
+    "settings": {
+      "before": "/tmp/c-trust-perf/before",
+      "after": "/tmp/c-trust-perf/after-cached",
+      "output": "/tmp/c-trust-perf/latency-cached",
+      "kind": "time",
+      "forks": 4,
+      "same_build": null,
+      "smoke": false,
+      "cases": "handles,records,buffers,callback_many,numbers,control,fixed_borrow,callback_fixed",
+      "sizes": "1,64,512,8192",
+      "batches": null,
+      "target_ms": 20
+    },
+    "affinity": [
+      0
+    ],
+    "driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+    "runner_sha256": "716185d8260de019d5079db2be33a0ccd8e0a49671d6a878e1911ca37a4c2fdd",
+    "samples_sha256": "793f17f1e77c35cb35367d86e788d83903a25164db5660f41e888fe8ac69cbc9",
+    "builds": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "5ec09ff10188e2daaa23abe08b0086bc87775fce",
+          "/tmp/c-trust-baseline": "ab57d20502117539c598c9116d7936d923e83760"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "4e398c7f13bbc10fc3774cdb8f94a7dcb4db2b71a1a072668cd91bd74142dba4",
+        "input_driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "64d77e68c9f52c7ee7bc52d54c22fff58f857e7d"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "e5e2d63dba513be3574d3a18809520c206012740c77609ddbd2c155241d805a4",
+        "input_driver_sha256": "f9e734cd8b8819d311606009b264f7c458c0b8bbdf9c79de5649a929317a69aa",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      }
+    }
+  },
+  "counts-cached": {
+    "settings": {
+      "before": "/tmp/c-trust-perf/before-count",
+      "after": "/tmp/c-trust-perf/after-cached-count",
+      "output": "/tmp/c-trust-perf/counts-cached",
+      "kind": "count",
+      "forks": 2,
+      "same_build": null,
+      "smoke": false,
+      "cases": "handles,records,buffers,callback_many,numbers,control,fixed_borrow,callback_fixed",
+      "sizes": "1,64,512,8192",
+      "batches": 3,
+      "target_ms": 20
+    },
+    "affinity": [
+      0,
+      1
+    ],
+    "driver_sha256": "0916c6d6595a81042391baa113248493dfdf8b9f265586825e2428c4739ec279",
+    "runner_sha256": "716185d8260de019d5079db2be33a0ccd8e0a49671d6a878e1911ca37a4c2fdd",
+    "samples_sha256": "9d1ad0c8f7ece450072e5be6b324bf9e688fca37b1c4e82e20169ff254023eec",
+    "builds": {
+      "before": {
+        "revisions": {
+          "/tmp/c-trust-baseline": "ab57d20502117539c598c9116d7936d923e83760",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "5ec09ff10188e2daaa23abe08b0086bc87775fce"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "68e03a22ea63bb821542544a5778d9ed095862ecc48990b74f49464b16dd03db",
+        "input_driver_sha256": "0916c6d6595a81042391baa113248493dfdf8b9f265586825e2428c4739ec279",
+        "count_allocations": true,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "64d77e68c9f52c7ee7bc52d54c22fff58f857e7d"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "472a97e11f081d3ae8bc189e75e75039fa297427ef963c5bd4619a0c39b61694",
+        "input_driver_sha256": "bf53a02d835d8ac587b9b79064fd1f44f988bfb260bb70d15594a80558926c8d",
+        "count_allocations": true,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      }
+    }
+  },
+  "aa-fixed-caller": {
+    "settings": {
+      "before": "/tmp/c-trust-perf/before",
+      "after": "/tmp/c-trust-perf/after-cached",
+      "output": "/tmp/c-trust-perf/aa-fixed-caller",
+      "kind": "time",
+      "forks": 4,
+      "same_build": "after",
+      "smoke": false,
+      "cases": "handles,callback_many,numbers,control",
+      "sizes": "1,512,8192",
+      "batches": null,
+      "target_ms": 20
+    },
+    "affinity": [
+      0
+    ],
+    "driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+    "runner_sha256": "2357ffe6254b1605bd5d7da9d810be626a777becf0b6e8d996216ed1e0563f76",
+    "samples_sha256": "d89ebfe98d4f0c64e276c85b45fbdaadd1eb16836972748e43dd3f6ce3a8c718",
+    "builds": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "5ec09ff10188e2daaa23abe08b0086bc87775fce",
+          "/tmp/c-trust-baseline": "ab57d20502117539c598c9116d7936d923e83760"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "4e398c7f13bbc10fc3774cdb8f94a7dcb4db2b71a1a072668cd91bd74142dba4",
+        "input_driver_sha256": "b48bbd541b13e5f30909d4f2168bf181542f9c760bc66675791d92263f314f2d",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-trusted-inputs": "64d77e68c9f52c7ee7bc52d54c22fff58f857e7d"
+        },
+        "fixture_sha256": {
+          "flat.rs": "20fe94177ec231bed93ee7e0fd60f77ab7c769a5075c34dced5c4fda3f0f6afa",
+          "bindings.rs": "bfbdaed779842d67d52ede26d64295bb726a87d747125367421d303e5c0cdf4d",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+          "build.py": "d354cb170b0d2e64e8534da962d823ba8c2daa83f961769329ef4de8972e27e9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "library_sha256": "e5e2d63dba513be3574d3a18809520c206012740c77609ddbd2c155241d805a4",
+        "input_driver_sha256": "f9e734cd8b8819d311606009b264f7c458c0b8bbdf9c79de5649a929317a69aa",
+        "count_allocations": false,
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "header_abi_sha256": "2a18efcc8edb0855bed3da835f6893848d72f4b63187978a664e819e1d976425"
+      }
+    }
+  }
+}
