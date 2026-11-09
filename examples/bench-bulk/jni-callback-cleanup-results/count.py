@@ -14,6 +14,7 @@ p = argparse.ArgumentParser(__doc__)
 p.add_argument('--before', type=Path, required=True)
 p.add_argument('--after', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
+p.add_argument('--java-flag', action='append', default=[], help='additional JVM option; repeat as --java-flag=-Xss16m')
 p.add_argument('--forks', type=int, default=2)
 p.add_argument('--smoke', action='store_true')
 p.add_argument('--cell', action='append', help='MODE:CASE:SIZE; replaces the default cells')
@@ -48,7 +49,7 @@ if a.smoke:
 if a.cell:
     cells = [(mode, case, int(size)) for mode, case, size in (cell.split(':') for cell in a.cell)]
     assert all(mode in ['plain', 'bulk'] and size >= 0 for mode, case, size in cells)
-flags = ['-Xms256m', '-Xmx256m', '-XX:+UseG1GC', '-XX:ActiveProcessorCount=2']
+flags = ['-Xms256m', '-Xmx256m', '-XX:+UseG1GC', '-XX:ActiveProcessorCount=2'] + a.java_flag
 samples, runs = [], []
 for fork in range(a.forks):
     order = cells.copy()

@@ -5,6 +5,7 @@ p=argparse.ArgumentParser(__doc__)
 p.add_argument('--before',type=Path,required=True)
 p.add_argument('--after',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
+p.add_argument('--java-flag', action='append', default=[], help='additional JVM option; repeat as --java-flag=-Xss16m')
 p.add_argument('--forks',type=int,default=6)
 p.add_argument('--aa',action='store_true')
 p.add_argument('--group',action='append',help='MODE:SIZES:CASES; replaces the default groups')
@@ -22,7 +23,7 @@ for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sh
 for d in info.values():
  assert not d['native_allocations']
  assert sha(d['jar'])==d['jar_sha256'] and sha(d['library'])==d['native_sha256']
-flags=['-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2']
+flags=['-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2'] + a.java_flag
 groups=[('bulk','0,1,8,64,512,4096','callback_owned_records'),('bulk','1','callback_owned_record'),('plain','1,512','callback_owned_records'),('plain','1','callback_owned_record'),('bulk','1,512','owned_handle_records_roundtrip,numbers_input'),('bulk','1','control')]
 if a.aa: groups=[('bulk','0,1,512,4096','callback_owned_records'),('bulk','1','callback_owned_record'),('bulk','512','owned_handle_records_roundtrip,numbers_input')]
 if a.group:
