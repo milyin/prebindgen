@@ -298,7 +298,7 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: example_flat::Foo = *p0_w0.expect("active allocation");
@@ -307,7 +307,6 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = example_flat::foo_get_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -418,7 +417,7 @@ pub unsafe extern "C" fn example_local_counter_label(
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: example_flat::LocalCounter = *p0_w0
@@ -443,7 +442,6 @@ pub unsafe extern "C" fn example_local_counter_label(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = example_flat::local_counter_label(
@@ -569,7 +567,6 @@ pub unsafe extern "C" fn example_local_counter_value(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = example_flat::local_counter_value(
                 __prebindgen_argument_0,

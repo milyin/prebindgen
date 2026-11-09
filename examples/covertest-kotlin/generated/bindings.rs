@@ -8010,7 +8010,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_a_read(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -8208,7 +8207,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_b_read(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -8697,7 +8695,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -8855,7 +8852,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -9123,7 +9119,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -9368,7 +9363,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_mut_lists(
@@ -9611,7 +9605,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_mixed(
@@ -9726,7 +9719,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0_f0: perftest_flat::TypeInputA = p0_w0_f0
@@ -9757,7 +9750,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0_f1: perftest_flat::TypeInputB = p0_w0_f1
@@ -9780,7 +9773,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_row(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -9905,7 +9897,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 };
                 if p0_w1_f0_present == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0_f0_some_f0: perftest_flat::TypeInputA = p0_w0_f0_some_f0
@@ -9936,7 +9928,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 };
                 if p0_w1_f0_present == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0_f0_some_f1: perftest_flat::TypeInputB = p0_w0_f0_some_f1
@@ -9983,7 +9975,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_holder(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -10171,11 +10162,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_f0_pointer) })
@@ -10217,7 +10208,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_rows(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -10388,11 +10378,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_f0_pointer) })
@@ -10429,7 +10419,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_rows_plain(
                 __prebindgen_argument_0,
@@ -10642,11 +10631,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w10_f0 = if true {
                                         Some(unsafe { Box::from_raw(p0_w11_f0_pointer) })
@@ -10702,7 +10691,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_nested(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -11017,11 +11005,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 let callback_return_w6_f0 = if true {
                                                                     Some(unsafe {
@@ -11446,11 +11434,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                                             }
                                                                             if true {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             if true {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             let callback_return_w10_f0 = if true {
                                                                                 Some(unsafe {
@@ -11707,7 +11695,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w8 = if true {
                             Some(unsafe { Box::from_raw(p0_w9_pointer) })
@@ -11750,7 +11738,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_optional(
                 __prebindgen_argument_0,
@@ -11915,7 +11902,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
@@ -11954,7 +11941,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::type_input_array(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -12334,7 +12320,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_len(__prebindgen_argument_0);
             let ret_w0 = (source_value) as i64;
@@ -12436,7 +12421,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_ref(__prebindgen_argument_0);
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -12557,7 +12541,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_optional(
@@ -12685,7 +12668,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_ref_expanded(
                 __prebindgen_argument_0,
@@ -12858,7 +12840,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -13025,7 +13006,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -13205,7 +13185,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -13367,7 +13346,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -13514,7 +13492,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_emit_worker(
@@ -13792,7 +13769,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_no_clone_value(
                 __prebindgen_argument_0,
@@ -13939,7 +13915,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1borro
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::borrow_no_clone_emit(
@@ -18043,11 +18018,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_f0_pointer) })
@@ -18158,7 +18133,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_replay_rows(__prebindgen_argument_0);
             let ret_w0 = (source_value) as i64;
@@ -18414,11 +18388,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w7_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w8_f0_pointer) })
@@ -18535,7 +18509,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_replay_redundant_rows(
                 __prebindgen_argument_0,
@@ -18816,11 +18789,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w13_f0 = if true {
                                         Some(unsafe { Box::from_raw(p0_w14_f0_pointer) })
@@ -18963,7 +18936,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_replay_nested_rows(
                 __prebindgen_argument_0,
@@ -19402,11 +19374,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             }
                                                                             if true {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             if true {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             let callback_return_w11_f0 = if true {
                                                                                 Some(unsafe {
@@ -19839,11 +19811,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_f0_pointer) })
@@ -19954,7 +19926,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_replay_object_rows(
                 __prebindgen_argument_0,
@@ -20345,11 +20316,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 let callback_return_w6_f0 = if true {
                                                                     Some(unsafe {
@@ -20700,7 +20671,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     }
                                     if p0_w16 == 1i32 {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w17 = if p0_w16 == 1i32 {
                                         Some(unsafe { Box::from_raw(p0_w18_pointer) })
@@ -20778,7 +20749,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_nested_handles_input(
                 __prebindgen_argument_0,
@@ -21150,7 +21120,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             }
                                                                             if callback_return_w13 == 1i32 {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             let callback_return_w15 = if callback_return_w13 == 1i32 {
                                                                                 Some(unsafe { Box::from_raw(callback_return_w16_pointer) })
@@ -21591,7 +21561,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                         };
                                                         if true {
                                                             __prebindgen_input_consumed
-                                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                                         }
                                                         Some({
                                                             let callback_return_w2_f1: perftest_flat::BulkHandle = callback_return_w2_f1
@@ -22010,7 +21980,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 };
                 if p0_w4 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w5: perftest_flat::BulkHandle = p0_w5
@@ -22115,7 +22085,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     }
                                     if p0_w20 == 1i32 {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w21 = if p0_w20 == 1i32 {
                                         Some(unsafe { Box::from_raw(p0_w22_pointer) })
@@ -22208,7 +22178,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w23: perftest_flat::BulkHandle = p0_w23
@@ -22238,7 +22208,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_patch_rows(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -22648,7 +22617,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             }
                                                                             if callback_return_w13 == 1i32 {
                                                                                 __prebindgen_input_consumed
-                                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                                             }
                                                                             let callback_return_w15 = if callback_return_w13 == 1i32 {
                                                                                 Some(unsafe { Box::from_raw(callback_return_w16_pointer) })
@@ -23320,7 +23289,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 let callback_return_w6_f1 = if true {
                                                                     Some(unsafe {
@@ -23571,7 +23540,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_f0_pointer) })
@@ -23622,7 +23591,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_handle_texts(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -23853,7 +23821,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
@@ -23938,7 +23906,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p1_w4 = if true {
                             Some(unsafe { Box::from_raw(p1_w5_pointer) })
@@ -24030,7 +23998,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_callback_value_built.expect("active input");
@@ -24219,7 +24186,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w11 = if true {
                                         Some(unsafe { Box::from_raw(p0_w12_pointer) })
@@ -24269,7 +24236,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_handle_nested(
                 __prebindgen_argument_0,
@@ -24651,7 +24617,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 let callback_return_w6_f0 = if true {
                                                                     Some(unsafe {
@@ -24910,7 +24876,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_optional_borrow_pair(
                 __prebindgen_argument_0,
@@ -26662,7 +26627,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                 }
                                                                 if true {
                                                                     __prebindgen_input_consumed
-                                                                        .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                                 }
                                                                 let callback_return_w9 = if true {
                                                                     Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
@@ -27858,7 +27823,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_handle_value(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -28314,7 +28278,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w7 = if true {
                             Some(unsafe { Box::from_raw(p0_w8_pointer) })
@@ -28344,7 +28308,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_handles(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
@@ -28548,7 +28511,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_borrow(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -28686,7 +28648,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::BulkHandle = p0_w2
@@ -28750,7 +28712,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_checked(
@@ -30167,7 +30128,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                         }
                                                         if true {
                                                             __prebindgen_input_consumed
-                                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                                         }
                                                         let callback_return_w7 = if true {
                                                             Some(unsafe { Box::from_raw(callback_return_w8_pointer) })
@@ -31467,7 +31428,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         }
                         if p0_w10 == 1i32 {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w11 = if p0_w10 == 1i32 {
                             Some(unsafe { Box::from_raw(p0_w12_pointer) })
@@ -31515,7 +31476,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::bulk_optional_handles(
                 __prebindgen_argument_0,
@@ -36903,7 +36863,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_handle_read(
                 __prebindgen_argument_0,
@@ -37021,7 +36980,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_handle_optional(
                 __prebindgen_argument_0,
@@ -37968,7 +37926,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_value_sum(
                 __prebindgen_argument_0,
@@ -38388,7 +38345,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_value_bulk(
                 __prebindgen_argument_0,
@@ -38593,7 +38549,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_value_optional(
                 __prebindgen_argument_0,
@@ -39223,7 +39178,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
@@ -39261,7 +39216,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nullability_handles_optional(
                 __prebindgen_argument_0,
@@ -41500,7 +41454,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_value(__prebindgen_argument_0);
             let ret_w0 = (source_value) as i64;
@@ -41610,7 +41563,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::GcResource = p0_w0
@@ -41621,7 +41574,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_consume(
                 __prebindgen_argument_0,
@@ -41743,7 +41695,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::GcResource = p0_w0
@@ -41754,7 +41706,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_fail(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -41889,7 +41840,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::GcResource = p0_w0
@@ -41920,7 +41871,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w0: perftest_flat::GcResource = p1_w0
@@ -41931,7 +41882,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_pair(
@@ -42183,7 +42133,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -42326,7 +42275,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -42351,7 +42300,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_consume_rows(
                 __prebindgen_argument_0,
@@ -42509,7 +42457,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::gc_resource_read_rows(
                 __prebindgen_argument_0,
@@ -42793,7 +42740,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::gc_resource_hold(
@@ -42942,7 +42888,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                                                     };
                                                     if true {
                                                         __prebindgen_input_consumed
-                                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                                     }
                                                     Some({
                                                         let callback_return_w0: perftest_flat::GcResource = callback_return_w0
@@ -43499,7 +43445,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::plain_resource_value(
                 __prebindgen_argument_0,
@@ -47087,7 +47032,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -47189,7 +47133,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_leaf_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -47372,7 +47315,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_read(__prebindgen_argument_0);
             let ret_w0 = perftest_flat::getter_child_number(source_value);
@@ -49510,7 +49452,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_boundary_fire(
@@ -52036,7 +51977,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             };
                                                             if true {
                                                                 __prebindgen_input_consumed
-                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w4_f0 = if true {
                                                                 Some(unsafe {
@@ -52252,7 +52193,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     };
                                                     if true {
                                                         __prebindgen_input_consumed
-                                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                                     }
                                                     Some({
                                                         let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
@@ -55530,7 +55471,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     };
                                                     if true {
                                                         __prebindgen_input_consumed
-                                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                                     }
                                                     Some({
                                                         let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
@@ -55717,7 +55658,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             };
                                             if true {
                                                 __prebindgen_input_consumed
-                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                             }
                                             Some({
                                                 let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
@@ -55892,7 +55833,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     };
                                                     if callback_return_w1 == 1i32 {
                                                         __prebindgen_input_consumed
-                                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                                     }
                                                     Some({
                                                         let callback_return_w2: perftest_flat::CallbackReturnResource = callback_return_w2
@@ -56160,7 +56101,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             }
                                                             if true {
                                                                 __prebindgen_input_consumed
-                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w4 = if true {
                                                                 Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
@@ -56473,7 +56414,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackReturnJob = p0_w0
@@ -56484,7 +56425,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_return_join(
                 __prebindgen_argument_0,
@@ -56795,7 +56735,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_return_handler_call(
@@ -57517,7 +57456,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             }
                                                             if true {
                                                                 __prebindgen_input_consumed
-                                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w4 = if true {
                                                                 Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
@@ -65578,7 +65517,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             };
                                             if true {
                                                 __prebindgen_input_consumed
-                                                    .set(__prebindgen_input_consumed.get() + 1usize);
+                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                             }
                                             Some({
                                                 let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
@@ -65696,7 +65635,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_unique_resource_id(
                 __prebindgen_argument_0,
@@ -66226,7 +66164,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_row_resource_id(
                 __prebindgen_argument_0,
@@ -66513,7 +66450,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_row_resource_hold(
@@ -71282,7 +71218,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_row_job_finished(
                 __prebindgen_argument_0,
@@ -71484,7 +71419,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_read(
                 __prebindgen_argument_0,
@@ -71600,7 +71534,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_write(
@@ -71705,7 +71638,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackReentry = p0_w0
@@ -71716,7 +71649,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_take(
                 __prebindgen_argument_0,
@@ -71862,7 +71794,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_shared(
@@ -72000,7 +71931,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_exclusive(
@@ -72115,7 +72045,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackReentry = p0_w0
@@ -72157,7 +72087,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_consuming(
@@ -72328,7 +72257,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_callback_value_built.expect("active input");
@@ -72491,7 +72419,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_callback_value_built.expect("active input");
@@ -72631,7 +72558,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_worker(
@@ -72737,7 +72663,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_probe(
                 __prebindgen_argument_0,
@@ -72887,7 +72812,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_optional(
@@ -73036,7 +72960,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_reentry_constructed(
@@ -74328,7 +74251,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackConstructorJob = p0_w0
@@ -74339,7 +74262,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_constructor_run(
                 __prebindgen_argument_0,
@@ -74513,7 +74435,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w5: perftest_flat::CallbackConstructor = p0_w5
@@ -74549,7 +74471,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_constructor_selected(
@@ -75311,7 +75232,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_set_fire(
@@ -75421,7 +75341,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_set_spawn(
@@ -75540,7 +75459,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackJob = p0_w0
@@ -75551,7 +75470,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_job_join(__prebindgen_argument_0);
             let _: () = {
@@ -75752,7 +75670,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_owned_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -76096,7 +76013,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_owned_borrow(
@@ -76193,7 +76109,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_transferred_id(
                 __prebindgen_argument_0,
@@ -76666,7 +76581,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_projected_id(
                 __prebindgen_argument_0,
@@ -76778,7 +76692,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackOwned = p0_w0
@@ -76820,7 +76734,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::callback_preflight(
@@ -81799,7 +81712,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5 = if true {
                             Some(unsafe { Box::from_raw(p0_w6_pointer) })
@@ -81827,7 +81740,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_construct_all(
                 __prebindgen_argument_0,
@@ -82264,7 +82176,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
@@ -82302,7 +82214,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_optional_handles(
                 __prebindgen_argument_0,
@@ -82568,7 +82479,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
@@ -82608,7 +82519,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
@@ -83002,7 +82912,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0.as_slice()) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_resource_ids(
                 __prebindgen_argument_0,
@@ -85551,7 +85460,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -85609,7 +85518,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -85837,7 +85745,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -85884,7 +85792,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_alias(
@@ -86321,7 +86228,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -86358,7 +86265,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_result_optional(
@@ -86683,7 +86589,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p1_w0_built = if true { Some(p1_w0.as_slice()) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_slice(
@@ -86778,7 +86683,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
@@ -88053,7 +87957,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::OwnedResource = p0_w0
@@ -88097,7 +88001,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -88826,7 +88729,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::payload_priority(__prebindgen_argument_0);
             let ret_w0: i32 = match &(source_value) {
@@ -90274,7 +90176,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w9: perftest_flat::NicheChoiceHandle = p0_w9
@@ -90311,7 +90213,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::niche_choice_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -91699,7 +91600,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
                 };
                 if ((p0_w1 == 1i32) && (p0_w3 == 1i32)) && (p0_w5 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w11: perftest_flat::NicheChoiceHandle = p0_w11
@@ -91749,7 +91650,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::nested_niche_choice_id(
                 __prebindgen_argument_0,
@@ -92200,7 +92100,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::OptionCtor = p0_w7
@@ -92224,7 +92124,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_ctor_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -92348,7 +92247,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w4: perftest_flat::OwnedResource = p0_w4
@@ -92385,7 +92284,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_nested_resource(
                 __prebindgen_argument_0,
@@ -92586,7 +92484,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::OptionChoice = p0_w7
@@ -92623,7 +92521,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_choice_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -93492,7 +93389,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::OwnedResource = p0_w2
@@ -93537,7 +93434,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w2: perftest_flat::OwnedResource = p1_w2
@@ -93561,7 +93458,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_pair(
@@ -93687,7 +93583,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w3: perftest_flat::OwnedResource = p0_w3
@@ -93735,7 +93631,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::resource_choice_id(
                 __prebindgen_argument_0,
@@ -94280,7 +94175,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_mut(
                 __prebindgen_argument_0,
@@ -94397,7 +94291,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::option_projection_ref(
@@ -95801,7 +95694,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::OwnedResource = p0_w2
@@ -95846,7 +95739,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_echo(
@@ -95998,7 +95890,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_id(
                 __prebindgen_argument_0,
@@ -97901,7 +97792,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w7: perftest_flat::Summary = p1_w7
@@ -97925,7 +97816,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::archive_store(
@@ -98030,7 +97920,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::archive_latest(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
@@ -98233,7 +98122,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
             let (
@@ -98457,7 +98345,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_opt(
@@ -99243,7 +99130,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                 };
                 if p0_w1 == 0i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::Report = p0_w2
@@ -99320,7 +99207,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::report_into_struct(
                 __prebindgen_argument_0,
@@ -99919,7 +99805,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::Summary = p0_w7
@@ -99943,7 +99829,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::summary_total_raw(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -101660,7 +101545,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                 };
                 if p0_w2 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w8: perftest_flat::Summary = p0_w8
@@ -101711,7 +101596,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::report_label(__prebindgen_argument_0);
             let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
@@ -101835,7 +101719,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::Report = p0_w0
@@ -101861,7 +101745,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::report_relabel(
@@ -102022,7 +101905,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_len(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -102135,7 +102017,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_contains(
@@ -102281,7 +102162,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -102569,7 +102449,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -102752,7 +102631,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_by_take(
@@ -102900,7 +102778,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::Summary = p0_w7
@@ -102981,7 +102859,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w7: perftest_flat::Summary = p1_w7
@@ -103005,7 +102883,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::summary_merge(
@@ -103132,7 +103009,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_summary_handle(
                 __prebindgen_argument_0,
@@ -104542,7 +104418,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::owned_resource_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -105988,7 +105863,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::Storage = p0_w0
@@ -106286,7 +106161,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::data_with_storage(
@@ -110515,7 +110389,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if true {
                             Some(unsafe { Box::from_raw(p0_w7_pointer) })
@@ -110553,7 +110427,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_optional_handles(
                 __prebindgen_argument_0,
@@ -110836,7 +110709,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1usize);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
@@ -110876,7 +110749,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
@@ -113592,7 +113464,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -113650,7 +113522,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -114142,7 +114013,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -114179,7 +114050,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_result_optional(
@@ -115046,7 +114916,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {

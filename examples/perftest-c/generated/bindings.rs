@@ -864,7 +864,7 @@ pub unsafe extern "C" fn perftest_owned_vec_i64_8f793c725f29723e_view(
     }
 }
 /**# Safety
-The owner must remain live and unmodified while an element pointer is used.*/
+The owner must remain live and unmodified while an element pointer is used. The index must be smaller than the owner length.*/
 #[no_mangle]
 pub unsafe extern "C" fn perftest_owned_vec_i64_8f793c725f29723e_get(
     value: *const __PbOwned_owned_vec_i64_8f793c725f29723e,
@@ -2192,6 +2192,7 @@ pub unsafe extern "C" fn perftest_alias_callback_rows(
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
                                 let mut __pb_return_ordinal = 0usize;
+                                #[allow(clippy::explicit_counter_loop)]
                                 for index in 0..callback_return_w1.len {
                                     let callback_return_w5 = unsafe {
                                         (*((callback_return_w1.data
@@ -2227,13 +2228,12 @@ pub unsafe extern "C" fn perftest_alias_callback_rows(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
+                                        let callback_return_w1_data = callback_return_w1.data
+                                            as *const __PbRow_callback_8735da2fee137b57_callback_return_w1;
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w5 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_8735da2fee137b57_callback_return_w1)
-                                                    .add(callback_return_w3)))
-                                                    .v0
+                                                (*callback_return_w1_data.add(callback_return_w3)).v0
                                             };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
@@ -2252,7 +2252,7 @@ pub unsafe extern "C" fn perftest_alias_callback_rows(
                                                 };
                                                 if true {
                                                     __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                 }
                                                 let callback_return_w4: perftest_flat::OwnedResource = *callback_return_w4
                                                     .expect("active allocation");
@@ -2399,7 +2399,6 @@ pub unsafe extern "C" fn perftest_alias_handler_call(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::alias_handler_call(
                 __prebindgen_argument_0,
@@ -2562,7 +2561,7 @@ pub unsafe extern "C" fn perftest_alias_handler_new(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w1: perftest_flat::OwnedResource = *callback_return_w1
@@ -2586,7 +2585,7 @@ pub unsafe extern "C" fn perftest_alias_handler_new(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w3: perftest_flat::OwnedResource = *callback_return_w3
@@ -2730,7 +2729,6 @@ pub unsafe extern "C" fn perftest_archive_latest(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::archive_latest(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
@@ -2894,7 +2892,7 @@ pub unsafe extern "C" fn perftest_archive_store(
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w7: perftest_flat::Summary = *p1_w7
@@ -2917,7 +2915,6 @@ pub unsafe extern "C" fn perftest_archive_store(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::archive_store(
@@ -2974,7 +2971,7 @@ pub unsafe extern "C" fn perftest_blob_value_echo(
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::BlobValue = *p0_w0
@@ -2984,7 +2981,6 @@ pub unsafe extern "C" fn perftest_blob_value_echo(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::blob_value_echo(__prebindgen_argument_0);
             let ret_w0: *mut perftest_flat::BlobValue = Box::into_raw(
@@ -3176,7 +3172,6 @@ pub unsafe extern "C" fn perftest_borrow_no_clone_emit(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::borrow_no_clone_emit(
@@ -3279,7 +3274,6 @@ pub unsafe extern "C" fn perftest_borrow_no_clone_value(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_no_clone_value(
                 __prebindgen_argument_0,
@@ -3461,7 +3455,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -3597,7 +3590,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit_copy(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -3729,7 +3721,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit_expanded(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -3861,7 +3852,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit_expanded_other(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -4005,7 +3995,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -4122,7 +4111,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_emit_worker(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_emit_worker(
@@ -4182,7 +4170,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_len(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_len(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -4312,7 +4299,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_optional(
@@ -4386,7 +4372,6 @@ pub unsafe extern "C" fn perftest_borrow_packet_ref(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::borrow_packet_ref(__prebindgen_argument_0);
             let ret_w0: *const perftest_flat::BorrowPacket = source_value
@@ -4564,53 +4549,19 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_buffer_rows_alternatives_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
-                    let p0_w12 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v3
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v4
-                    };
-                    let p0_w16 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v5
-                    };
-                    let p0_w19 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v6
-                    };
-                    let p0_w21 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v7
-                    };
-                    let p0_w23 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v8
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w10 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
+                    let p0_w12 = unsafe { (*p0_w1_data.add(p0_w3)).v3 };
+                    let p0_w14 = unsafe { (*p0_w1_data.add(p0_w3)).v4 };
+                    let p0_w16 = unsafe { (*p0_w1_data.add(p0_w3)).v5 };
+                    let p0_w19 = unsafe { (*p0_w1_data.add(p0_w3)).v6 };
+                    let p0_w21 = unsafe { (*p0_w1_data.add(p0_w3)).v7 };
+                    let p0_w23 = unsafe { (*p0_w1_data.add(p0_w3)).v8 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w8_pointer = if (p0_w5) == 0i32 {
@@ -4654,7 +4605,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
                         };
                         if (p0_w5) == 0i32 {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: i64 = match p0_w5 {
                             0i32 => {
@@ -4716,7 +4667,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_alternatives(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_alternatives(
                 __prebindgen_argument_0,
@@ -4825,23 +4775,12 @@ pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
             let mut p1_w0: Vec<i64> = Vec::new();
             if true {
                 let p1_w2 = p1_w1.len;
+                let p1_w1_data = p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1;
                 p1_w0.reserve_exact(p1_w2);
                 for p1_w3 in 0..p1_w2 {
-                    let p1_w6 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1)
-                            .add(p1_w3)))
-                            .v0
-                    };
-                    let p1_w8 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1)
-                            .add(p1_w3)))
-                            .v1
-                    };
-                    let p1_w10 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_buffer_rows_borrowed_p1_w1)
-                            .add(p1_w3)))
-                            .v2
-                    };
+                    let p1_w6 = unsafe { (*p1_w1_data.add(p1_w3)).v0 };
+                    let p1_w8 = unsafe { (*p1_w1_data.add(p1_w3)).v1 };
+                    let p1_w10 = unsafe { (*p1_w1_data.add(p1_w3)).v2 };
                     #[allow(clippy::redundant_closure_call)]
                     let p1_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p1_w6_pointer = if true {
@@ -4887,7 +4826,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_borrowed(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p1_w0_built = if true { Some(p1_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_borrowed(
@@ -4985,38 +4923,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
-                    let p0_w13 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v3
-                    };
-                    let p0_w16 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v4
-                    };
-                    let p0_w19 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v5
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w10 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
+                    let p0_w13 = unsafe { (*p0_w1_data.add(p0_w3)).v3 };
+                    let p0_w16 = unsafe { (*p0_w1_data.add(p0_w3)).v4 };
+                    let p0_w19 = unsafe { (*p0_w1_data.add(p0_w3)).v5 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5063,7 +4978,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -5110,7 +5025,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_enum(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_enum(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -5203,23 +5117,12 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
             let mut p0_w2: Vec<Option<perftest_flat::BufferInputRow>> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w10 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w12 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_buffer_rows_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v2
-                    };
+                    let p0_w10 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
+                    let p0_w12 = unsafe { (*p0_w3_data.add(p0_w5)).v1 };
+                    let p0_w14 = unsafe { (*p0_w3_data.add(p0_w5)).v2 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<perftest_flat::BufferInputRow>,
@@ -5250,7 +5153,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
                         };
                         if p0_w7 == 1i32 {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if p0_w7 == 1i32 {
                             let p0_w9: perftest_flat::OwnedResource = *p0_w9
@@ -5297,7 +5200,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_optional(
                 __prebindgen_argument_0,
@@ -5393,38 +5295,15 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_buffer_rows_optional_temporaries_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_buffer_rows_optional_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_buffer_rows_optional_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w11 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_buffer_rows_optional_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_buffer_rows_optional_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v3
-                    };
-                    let p0_w17 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_buffer_rows_optional_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v4
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w11 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
+                    let p0_w14 = unsafe { (*p0_w1_data.add(p0_w3)).v3 };
+                    let p0_w17 = unsafe { (*p0_w1_data.add(p0_w3)).v4 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5455,7 +5334,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -5500,7 +5379,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_optional_temporaries(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_optional_temporaries(
                 __prebindgen_argument_0,
@@ -5592,23 +5470,12 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
             let mut p0_w0: Vec<perftest_flat::BufferInputRow> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_sum_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w10 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::BufferInputRow,
@@ -5638,7 +5505,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -5667,7 +5534,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_sum(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_sum(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -5759,23 +5625,13 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_buffer_rows_temporaries_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w9 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w13 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_temporaries_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w9 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w13 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5806,7 +5662,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -5841,7 +5697,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_temporaries(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_temporaries(
                 __prebindgen_argument_0,
@@ -5937,33 +5792,14 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
-                    let p0_w12 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1)
-                            .add(p0_w3)))
-                            .v3
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_buffer_rows_views_p0_w1)
-                            .add(p0_w3)))
-                            .v4
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w10 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
+                    let p0_w12 = unsafe { (*p0_w1_data.add(p0_w3)).v3 };
+                    let p0_w14 = unsafe { (*p0_w1_data.add(p0_w3)).v4 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -5990,7 +5826,7 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -6031,7 +5867,6 @@ pub unsafe extern "C" fn perftest_buffer_rows_views(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::buffer_rows_views(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -9873,7 +9708,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_call(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::callback_return_handler_call(
@@ -9925,14 +9759,11 @@ pub unsafe extern "C" fn perftest_callback_return_handler_many(p0_w1: __PbRows) 
             let mut p0_w0: Vec<perftest_flat::CallbackReturnHandler> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_callback_return_handler_many_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_callback_return_handler_many_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::CallbackReturnHandler,
@@ -10736,7 +10567,7 @@ pub unsafe extern "C" fn perftest_callback_return_join(
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::CallbackReturnJob = *p0_w0
@@ -10746,7 +10577,6 @@ pub unsafe extern "C" fn perftest_callback_return_join(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_return_join(
                 __prebindgen_argument_0,
@@ -11036,7 +10866,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w0: perftest_flat::CallbackReturnResource = *callback_return_w0
@@ -11195,7 +11025,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_optional(
                                         };
                                         if callback_return_w1 == 1i32 {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w2: perftest_flat::CallbackReturnResource = *callback_return_w2
@@ -11338,6 +11168,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
                                 let mut __pb_return_ordinal = 0usize;
+                                #[allow(clippy::explicit_counter_loop)]
                                 for index in 0..callback_return_w1.len {
                                     let callback_return_w5 = unsafe {
                                         (*((callback_return_w1.data
@@ -11374,13 +11205,12 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
+                                        let callback_return_w1_data = callback_return_w1.data
+                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1;
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w5 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                    .add(callback_return_w3)))
-                                                    .v0
+                                                (*callback_return_w1_data.add(callback_return_w3)).v0
                                             };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
@@ -11400,7 +11230,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                                 };
                                                 if true {
                                                     __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                 }
                                                 let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
                                                     .expect("active allocation");
@@ -11533,6 +11363,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                             let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                             {
                                 let mut __pb_return_ordinal = 0usize;
+                                #[allow(clippy::explicit_counter_loop)]
                                 for index in 0..callback_return_w1.len {
                                     let callback_return_w5 = unsafe {
                                         (*((callback_return_w1.data
@@ -11569,13 +11400,12 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w2 = callback_return_w1.len;
+                                        let callback_return_w1_data = callback_return_w1.data
+                                            as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1;
                                         callback_return_w0.reserve_exact(callback_return_w2);
                                         for callback_return_w3 in 0..callback_return_w2 {
                                             let callback_return_w5 = unsafe {
-                                                (*((callback_return_w1.data
-                                                    as *const __PbRow_callback_0c7ae0f660edb387_callback_return_w1)
-                                                    .add(callback_return_w3)))
-                                                    .v0
+                                                (*callback_return_w1_data.add(callback_return_w3)).v0
                                             };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w1_element_built = (|| -> ::core::result::Result<
@@ -11595,7 +11425,7 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                                 };
                                                 if true {
                                                     __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                 }
                                                 let callback_return_w4: perftest_flat::CallbackReturnResource = *callback_return_w4
                                                     .expect("active allocation");
@@ -11760,7 +11590,7 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w1: perftest_flat::CallbackReturnResource = *callback_return_w1
@@ -12051,7 +11881,6 @@ pub unsafe extern "C" fn perftest_callback_return_resource_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_return_resource_id(
                 __prebindgen_argument_0,
@@ -12889,13 +12718,12 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                             let mut callback_return_w0: Vec<i64> = Vec::new();
                             if true {
                                 let callback_return_w2 = callback_return_w1.len;
+                                let callback_return_w1_data = callback_return_w1.data
+                                    as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1;
                                 callback_return_w0.reserve_exact(callback_return_w2);
                                 for callback_return_w3 in 0..callback_return_w2 {
                                     let callback_return_w5 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_aaca2bf4492ad16a_callback_return_w1)
-                                            .add(callback_return_w3)))
-                                            .v0
+                                        (*callback_return_w1_data.add(callback_return_w3)).v0
                                     };
                                     #[allow(clippy::redundant_closure_call)]
                                     let callback_return_w1_element_built = (|| -> ::core::result::Result<
@@ -13288,7 +13116,6 @@ pub unsafe extern "C" fn perftest_callback_row_resource_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::callback_row_resource_id(
                 __prebindgen_argument_0,
@@ -13436,6 +13263,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                         }
                                     }
                                 }
+                                #[allow(clippy::explicit_counter_loop)]
                                 for index in 0..callback_return_w4.len {
                                     let callback_return_w8 = unsafe {
                                         (*((callback_return_w4.data
@@ -13443,6 +13271,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                             .add(index)))
                                             .v0
                                     };
+                                    #[allow(clippy::explicit_counter_loop)]
                                     for index in 0..callback_return_w8.len {
                                         let callback_return_w13 = unsafe {
                                             (*((callback_return_w8.data
@@ -13544,7 +13373,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w1: perftest_flat::OwnedResource = *callback_return_w1
@@ -13559,13 +13388,12 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                     > = Vec::new();
                                     if true {
                                         let callback_return_w5 = callback_return_w4.len;
+                                        let callback_return_w4_data = callback_return_w4.data
+                                            as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4;
                                         callback_return_w3.reserve_exact(callback_return_w5);
                                         for callback_return_w6 in 0..callback_return_w5 {
                                             let callback_return_w8 = unsafe {
-                                                (*((callback_return_w4.data
-                                                    as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w4)
-                                                    .add(callback_return_w6)))
-                                                    .v0
+                                                (*callback_return_w4_data.add(callback_return_w6)).v0
                                             };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w4_element_built = (|| -> ::core::result::Result<
@@ -13577,31 +13405,21 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                                 > = Vec::new();
                                                 if true {
                                                     let callback_return_w9 = (callback_return_w8).len;
+                                                    let callback_return_w8_data = (callback_return_w8).data
+                                                        as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8;
                                                     callback_return_w7.reserve_exact(callback_return_w9);
                                                     for callback_return_w10 in 0..callback_return_w9 {
                                                         let callback_return_w13 = unsafe {
-                                                            (*(((callback_return_w8).data
-                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
-                                                                .add(callback_return_w10)))
-                                                                .v0
+                                                            (*callback_return_w8_data.add(callback_return_w10)).v0
                                                         };
                                                         let callback_return_w15 = unsafe {
-                                                            (*(((callback_return_w8).data
-                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
-                                                                .add(callback_return_w10)))
-                                                                .v1
+                                                            (*callback_return_w8_data.add(callback_return_w10)).v1
                                                         };
                                                         let callback_return_w17 = unsafe {
-                                                            (*(((callback_return_w8).data
-                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
-                                                                .add(callback_return_w10)))
-                                                                .v2
+                                                            (*callback_return_w8_data.add(callback_return_w10)).v2
                                                         };
                                                         let callback_return_w21 = unsafe {
-                                                            (*(((callback_return_w8).data
-                                                                as *const __PbRow_callback_5b6f807c27356f4b_callback_return_w8)
-                                                                .add(callback_return_w10)))
-                                                                .v3
+                                                            (*callback_return_w8_data.add(callback_return_w10)).v3
                                                         };
                                                         #[allow(clippy::redundant_closure_call)]
                                                         let callback_return_w8_element_built = (|| -> ::core::result::Result<
@@ -13646,7 +13464,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                                             };
                                                             if true {
                                                                 __prebindgen_input_consumed
-                                                                    .set(__prebindgen_input_consumed.get() + 1);
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w20 = if callback_return_w19 == 1i32 {
                                                                 Some(unsafe { Box::from_raw(callback_return_w21_pointer) })
@@ -13655,7 +13473,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                                             };
                                                             if callback_return_w19 == 1i32 {
                                                                 __prebindgen_input_consumed
-                                                                    .set(__prebindgen_input_consumed.get() + 1);
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w12: perftest_flat::OwnedResource = *callback_return_w12
                                                                 .expect("active allocation");
@@ -13735,7 +13553,7 @@ pub unsafe extern "C" fn perftest_cleanup_group_call(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w22: perftest_flat::OwnedResource = *callback_return_w22
@@ -13906,6 +13724,7 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                             {
                                 let mut __pb_return_ordinal = 0usize;
                                 if callback_return_w1 == 1 {
+                                    #[allow(clippy::explicit_counter_loop)]
                                     for index in 0..callback_return_w3.len {
                                         let callback_return_w10 = unsafe {
                                             (*((callback_return_w3.data
@@ -13982,31 +13801,21 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                     > = Vec::new();
                                     if callback_return_w1 == 1i32 {
                                         let callback_return_w4 = callback_return_w3.len;
+                                        let callback_return_w3_data = callback_return_w3.data
+                                            as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3;
                                         callback_return_w2.reserve_exact(callback_return_w4);
                                         for callback_return_w5 in 0..callback_return_w4 {
                                             let callback_return_w10 = unsafe {
-                                                (*((callback_return_w3.data
-                                                    as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
-                                                    .add(callback_return_w5)))
-                                                    .v0
+                                                (*callback_return_w3_data.add(callback_return_w5)).v0
                                             };
                                             let callback_return_w12 = unsafe {
-                                                (*((callback_return_w3.data
-                                                    as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
-                                                    .add(callback_return_w5)))
-                                                    .v1
+                                                (*callback_return_w3_data.add(callback_return_w5)).v1
                                             };
                                             let callback_return_w14 = unsafe {
-                                                (*((callback_return_w3.data
-                                                    as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
-                                                    .add(callback_return_w5)))
-                                                    .v2
+                                                (*callback_return_w3_data.add(callback_return_w5)).v2
                                             };
                                             let callback_return_w18 = unsafe {
-                                                (*((callback_return_w3.data
-                                                    as *const __PbRow_callback_0605b38a2f053a56_callback_return_w3)
-                                                    .add(callback_return_w5)))
-                                                    .v3
+                                                (*callback_return_w3_data.add(callback_return_w5)).v3
                                             };
                                             #[allow(clippy::redundant_closure_call)]
                                             let callback_return_w3_element_built = (|| -> ::core::result::Result<
@@ -14056,7 +13865,7 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                                 };
                                                 if callback_return_w7 == 1i32 {
                                                     __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                 }
                                                 let callback_return_w17 = if (callback_return_w7 == 1i32)
                                                     && (callback_return_w16 == 1i32)
@@ -14069,7 +13878,7 @@ pub unsafe extern "C" fn perftest_cleanup_optional_call(
                                                     && (callback_return_w16 == 1i32)
                                                 {
                                                     __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
+                                                        .set(__prebindgen_input_consumed.get() + (1usize));
                                                 }
                                                 let callback_return_w6 = if callback_return_w7 == 1i32 {
                                                     let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
@@ -14245,13 +14054,10 @@ pub unsafe extern "C" fn perftest_collection_alias(
             let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_alias_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_alias_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -14269,7 +14075,7 @@ pub unsafe extern "C" fn perftest_collection_alias(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
@@ -14303,7 +14109,6 @@ pub unsafe extern "C" fn perftest_collection_alias(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_alias(
@@ -14375,13 +14180,10 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w2: __PbRows) -> __PbRows
             let mut p0_w1: Vec<i64> = Vec::new();
             if true {
                 let p0_w3 = p0_w2.len;
+                let p0_w2_data = p0_w2.data as *const __PbRow_collection_borrow_p0_w2;
                 p0_w1.reserve_exact(p0_w3);
                 for p0_w4 in 0..p0_w3 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w2.data as *const __PbRow_collection_borrow_p0_w2)
-                            .add(p0_w4)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w2_data.add(p0_w4)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -14503,13 +14305,11 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
             let mut p0_w1: Vec<i64> = Vec::new();
             if true {
                 let p0_w3 = p0_w2.len;
+                let p0_w2_data = p0_w2.data
+                    as *const __PbRow_collection_borrow_each_p0_w2;
                 p0_w1.reserve_exact(p0_w3);
                 for p0_w4 in 0..p0_w3 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w2.data as *const __PbRow_collection_borrow_each_p0_w2)
-                            .add(p0_w4)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w2_data.add(p0_w4)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -14746,13 +14546,10 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             let mut p0_w0: Vec<Vec<u8>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_bytes_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_bytes_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<u8>,
@@ -14879,13 +14676,11 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
             let mut p0_w0: Vec<Vec<u8>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_bytes_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_bytes_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<u8>,
@@ -14984,13 +14779,11 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
             let mut p0_w0: Vec<perftest_flat::CollectionItem> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_construct_all_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::CollectionItem,
@@ -15008,7 +14801,7 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -15029,7 +14822,6 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_construct_all(
                 __prebindgen_argument_0,
@@ -15097,13 +14889,10 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
             let mut p0_w0: Vec<perftest_flat::SparseCode> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_enum_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_enum_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::SparseCode,
@@ -15235,13 +15024,10 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
             let mut p0_w0: Vec<perftest_flat::SparseCode> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_enum_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_enum_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::SparseCode,
@@ -15479,13 +15265,10 @@ pub unsafe extern "C" fn perftest_collection_handles(
             let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_handles_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -15503,7 +15286,7 @@ pub unsafe extern "C" fn perftest_collection_handles(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
@@ -15549,7 +15332,6 @@ pub unsafe extern "C" fn perftest_collection_handles(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -15718,13 +15500,11 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
             let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_handles_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_handles_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -15742,7 +15522,7 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
@@ -15788,7 +15568,6 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -15917,13 +15696,10 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_i64_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_i64_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -16031,13 +15807,10 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_i64_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_i64_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -16125,13 +15898,11 @@ pub unsafe extern "C" fn perftest_collection_input_array(p0_w1: __PbRows) -> i64
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_input_array_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_array_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -16211,13 +15982,11 @@ pub unsafe extern "C" fn perftest_collection_input_custom(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_input_custom_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_custom_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -16305,13 +16074,11 @@ pub unsafe extern "C" fn perftest_collection_input_optional(
             let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_input_optional_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_input_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -16397,14 +16164,11 @@ pub unsafe extern "C" fn perftest_collection_input_optional_array(
             let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_input_optional_array_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_input_optional_array_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -16497,13 +16261,11 @@ pub unsafe extern "C" fn perftest_collection_input_plain(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_input_plain_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_input_plain_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -17067,13 +16829,10 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
             let mut p0_w0: Vec<Vec<i64>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_nested_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_nested_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<i64>,
@@ -17082,13 +16841,11 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
                         let mut p0_w4: Vec<i64> = Vec::new();
                         if true {
                             let p0_w6 = (p0_w5).len;
+                            let p0_w5_data = (p0_w5).data
+                                as *const __PbRow_collection_nested_p0_w5;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data as *const __PbRow_collection_nested_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = unsafe { (*p0_w5_data.add(p0_w7)).v0 };
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     i64,
@@ -17286,13 +17043,11 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
             let mut p0_w0: Vec<Vec<i64>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_nested_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_nested_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<i64>,
@@ -17301,14 +17056,11 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                         let mut p0_w4: Vec<i64> = Vec::new();
                         if true {
                             let p0_w6 = (p0_w5).len;
+                            let p0_w5_data = (p0_w5).data
+                                as *const __PbRow_collection_nested_each_p0_w5;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_each_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = unsafe { (*p0_w5_data.add(p0_w7)).v0 };
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     i64,
@@ -17504,13 +17256,11 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
             let mut p0_w0: Vec<Vec<perftest_flat::OwnedResource>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_nested_handles_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_nested_handles_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<perftest_flat::OwnedResource>,
@@ -17519,14 +17269,11 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                         let mut p0_w4: Vec<perftest_flat::OwnedResource> = Vec::new();
                         if true {
                             let p0_w6 = (p0_w5).len;
+                            let p0_w5_data = (p0_w5).data
+                                as *const __PbRow_collection_nested_handles_p0_w5;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = unsafe { (*p0_w5_data.add(p0_w7)).v0 };
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     perftest_flat::OwnedResource,
@@ -17544,7 +17291,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                                     };
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8: perftest_flat::OwnedResource = *p0_w8
                                         .expect("active allocation");
@@ -17576,7 +17323,6 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
@@ -17769,14 +17515,11 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
             let mut p0_w0: Vec<Vec<perftest_flat::OwnedResource>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_nested_handles_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_nested_handles_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Vec<perftest_flat::OwnedResource>,
@@ -17785,14 +17528,11 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                         let mut p0_w4: Vec<perftest_flat::OwnedResource> = Vec::new();
                         if true {
                             let p0_w6 = (p0_w5).len;
+                            let p0_w5_data = (p0_w5).data
+                                as *const __PbRow_collection_nested_handles_each_p0_w5;
                             p0_w4.reserve_exact(p0_w6);
                             for p0_w7 in 0..p0_w6 {
-                                let p0_w9 = unsafe {
-                                    (*(((p0_w5).data
-                                        as *const __PbRow_collection_nested_handles_each_p0_w5)
-                                        .add(p0_w7)))
-                                        .v0
-                                };
+                                let p0_w9 = unsafe { (*p0_w5_data.add(p0_w7)).v0 };
                                 #[allow(clippy::redundant_closure_call)]
                                 let p0_w5_element_built = (|| -> ::core::result::Result<
                                     perftest_flat::OwnedResource,
@@ -17810,7 +17550,7 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                                     };
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(__prebindgen_input_consumed.get() + 1);
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8: perftest_flat::OwnedResource = *p0_w8
                                         .expect("active allocation");
@@ -17842,7 +17582,6 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_nested_handles(
                 __prebindgen_argument_0,
@@ -18093,13 +17832,10 @@ pub unsafe extern "C" fn perftest_collection_optional(
             let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data as *const __PbRow_collection_optional_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -18252,13 +17988,11 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
             let mut p0_w2: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_optional_each_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6 = if true { Some(p0_w7) } else { None };
@@ -18402,14 +18136,11 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
             let mut p0_w2: Vec<perftest_flat::OwnedResource> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_optional_handles_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -18427,7 +18158,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6: perftest_flat::OwnedResource = *p0_w6
                             .expect("active allocation");
@@ -18458,7 +18189,6 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_optional_handles(
                 __prebindgen_argument_0,
@@ -18598,14 +18328,11 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
             let mut p0_w2: Vec<perftest_flat::OwnedResource> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_optional_handles_each_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_handles_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -18623,7 +18350,7 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6: perftest_flat::OwnedResource = *p0_w6
                             .expect("active allocation");
@@ -18654,7 +18381,6 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_optional_handles(
                 __prebindgen_argument_0,
@@ -18770,18 +18496,12 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
             let mut p0_w2: Vec<Option<i64>> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_optional_items_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_items_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w9 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_collection_optional_items_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
+                    let p0_w9 = unsafe { (*p0_w3_data.add(p0_w5)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -18958,20 +18678,12 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
             let mut p0_w2: Vec<Option<i64>> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data
+                    as *const __PbRow_collection_optional_items_each_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_items_each_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w9 = unsafe {
-                        (*((p0_w3.data
-                            as *const __PbRow_collection_optional_items_each_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
+                    let p0_w7 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
+                    let p0_w9 = unsafe { (*p0_w3_data.add(p0_w5)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -19133,18 +18845,11 @@ pub unsafe extern "C" fn perftest_collection_options(
             let mut p0_w0: Vec<Option<i64>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_options_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w7 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w7 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -19289,18 +18994,12 @@ pub unsafe extern "C" fn perftest_collection_options_each(
             let mut p0_w0: Vec<Option<i64>> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_options_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w7 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_options_each_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w7 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -19447,13 +19146,10 @@ pub unsafe extern "C" fn perftest_collection_probe(
             let mut p0_w0: Vec<char> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_probe_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_probe_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         char,
@@ -19606,13 +19302,11 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w2: __PbRows) -> __
             let mut p0_w1: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w3 = p0_w2.len;
+                let p0_w2_data = p0_w2.data
+                    as *const __PbRow_collection_resource_ids_p0_w2;
                 p0_w1.reserve_exact(p0_w3);
                 for p0_w4 in 0..p0_w3 {
-                    let p0_w7 = unsafe {
-                        (*((p0_w2.data as *const __PbRow_collection_resource_ids_p0_w2)
-                            .add(p0_w4)))
-                            .v0
-                    };
+                    let p0_w7 = unsafe { (*p0_w2_data.add(p0_w4)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w2_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -19658,7 +19352,6 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w2: __PbRows) -> __
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_resource_ids(
                 __prebindgen_argument_0,
@@ -19832,13 +19525,10 @@ pub unsafe extern "C" fn perftest_collection_result(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_result_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_result_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -20007,13 +19697,11 @@ pub unsafe extern "C" fn perftest_collection_result_each(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_result_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_result_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w4 = if true { Some(p0_w5) } else { None };
@@ -20183,14 +19871,11 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
             let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_result_optional_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -20208,7 +19893,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
@@ -20238,7 +19923,6 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_result_optional(
@@ -20436,14 +20120,11 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
             let mut p0_w0: Vec<perftest_flat::OwnedResource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_result_optional_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_result_optional_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::OwnedResource,
@@ -20461,7 +20142,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: perftest_flat::OwnedResource = *p0_w4
                             .expect("active allocation");
@@ -20491,7 +20172,6 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::collection_result_optional(
@@ -20829,13 +20509,10 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             let mut p0_w0: Vec<String> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_text_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_text_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         String,
@@ -20961,13 +20638,10 @@ pub unsafe extern "C" fn perftest_collection_text_each(
             let mut p0_w0: Vec<String> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_collection_text_each_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_collection_text_each_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         String,
@@ -21076,14 +20750,11 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
             let mut p0_w0: Vec<perftest_flat::CollectionItem> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_collection_try_construct_all_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data
-                            as *const __PbRow_collection_try_construct_all_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::CollectionItem,
@@ -21101,7 +20772,7 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -21122,7 +20793,6 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::collection_try_construct_all(
                 __prebindgen_argument_0,
@@ -21387,33 +21057,15 @@ pub unsafe extern "C" fn perftest_enum_inputs_alternatives(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_enum_inputs_alternatives_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w5 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
-                    let p0_w10 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v2
-                    };
-                    let p0_w13 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v3
-                    };
-                    let p0_w17 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_alternatives_p0_w1)
-                            .add(p0_w3)))
-                            .v4
-                    };
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
+                    let p0_w10 = unsafe { (*p0_w1_data.add(p0_w3)).v2 };
+                    let p0_w13 = unsafe { (*p0_w1_data.add(p0_w3)).v3 };
+                    let p0_w17 = unsafe { (*p0_w1_data.add(p0_w3)).v4 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w8_pointer = if (p0_w5) == 0i32 {
@@ -21458,7 +21110,7 @@ pub unsafe extern "C" fn perftest_enum_inputs_alternatives(
                         };
                         if (p0_w5) == 0i32 {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4: i64 = match p0_w5 {
                             0i32 => {
@@ -21502,7 +21154,6 @@ pub unsafe extern "C" fn perftest_enum_inputs_alternatives(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::enum_inputs_alternatives(
                 __prebindgen_argument_0,
@@ -21610,18 +21261,11 @@ pub unsafe extern "C" fn perftest_enum_inputs_borrow(
             let mut p1_w0: Vec<i64> = Vec::new();
             if true {
                 let p1_w2 = p1_w1.len;
+                let p1_w1_data = p1_w1.data as *const __PbRow_enum_inputs_borrow_p1_w1;
                 p1_w0.reserve_exact(p1_w2);
                 for p1_w3 in 0..p1_w2 {
-                    let p1_w6 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_enum_inputs_borrow_p1_w1)
-                            .add(p1_w3)))
-                            .v0
-                    };
-                    let p1_w10 = unsafe {
-                        (*((p1_w1.data as *const __PbRow_enum_inputs_borrow_p1_w1)
-                            .add(p1_w3)))
-                            .v1
-                    };
+                    let p1_w6 = unsafe { (*p1_w1_data.add(p1_w3)).v0 };
+                    let p1_w10 = unsafe { (*p1_w1_data.add(p1_w3)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p1_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p1_w6_pointer = if true {
@@ -21668,7 +21312,6 @@ pub unsafe extern "C" fn perftest_enum_inputs_borrow(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p1_w0_built = if true { Some(p1_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::enum_inputs_borrow(
@@ -21839,18 +21482,11 @@ pub unsafe extern "C" fn perftest_enum_inputs_optional(
             let mut p0_w2: Vec<Option<i64>> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w4 = p0_w3.len;
+                let p0_w3_data = p0_w3.data as *const __PbRow_enum_inputs_optional_p0_w3;
                 p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w10 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_enum_inputs_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v0
-                    };
-                    let p0_w14 = unsafe {
-                        (*((p0_w3.data as *const __PbRow_enum_inputs_optional_p0_w3)
-                            .add(p0_w5)))
-                            .v1
-                    };
+                    let p0_w10 = unsafe { (*p0_w3_data.add(p0_w5)).v0 };
+                    let p0_w14 = unsafe { (*p0_w3_data.add(p0_w5)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w3_element_built = (|| -> ::core::result::Result<
                         Option<i64>,
@@ -21882,7 +21518,7 @@ pub unsafe extern "C" fn perftest_enum_inputs_optional(
                         };
                         if p0_w7 == 1i32 {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w6 = if p0_w7 == 1i32 {
                             let p0_w9: perftest_flat::OwnedResource = *p0_w9
@@ -21928,7 +21564,6 @@ pub unsafe extern "C" fn perftest_enum_inputs_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::enum_inputs_optional(
                 __prebindgen_argument_0,
@@ -22056,18 +21691,11 @@ pub unsafe extern "C" fn perftest_enum_inputs_take(
             let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_enum_inputs_take_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_take_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
-                    let p0_w8 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_enum_inputs_take_p0_w1)
-                            .add(p0_w3)))
-                            .v1
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    let p0_w8 = unsafe { (*p0_w1_data.add(p0_w3)).v1 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w6_pointer = if true {
@@ -22094,7 +21722,7 @@ pub unsafe extern "C" fn perftest_enum_inputs_take(
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + 1);
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w5: perftest_flat::OwnedResource = *p0_w5
                             .expect("active allocation");
@@ -22114,7 +21742,6 @@ pub unsafe extern "C" fn perftest_enum_inputs_take(
             }
             #[allow(clippy::let_and_return, clippy::unit_arg)]
             let p0_w0_built = if true { Some(p0_w0) } else { None };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::enum_inputs_take(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -22571,7 +22198,7 @@ pub unsafe extern "C" fn perftest_fixed_cleanup_call(
                                         };
                                         if true {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w1: perftest_flat::OwnedResource = *callback_return_w1
@@ -22637,7 +22264,7 @@ pub unsafe extern "C" fn perftest_fixed_cleanup_call(
                                         };
                                         if callback_return_w8 == 1i32 {
                                             __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + 1usize);
+                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                         }
                                         Some({
                                             let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9
@@ -22791,7 +22418,6 @@ pub unsafe extern "C" fn perftest_getter_child_name(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_child_name(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -22854,7 +22480,6 @@ pub unsafe extern "C" fn perftest_getter_child_number(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_child_number(
                 __prebindgen_argument_0,
@@ -22929,7 +22554,6 @@ pub unsafe extern "C" fn perftest_getter_child_set_number(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_child_set_number(
@@ -23137,7 +22761,6 @@ pub unsafe extern "C" fn perftest_getter_leaf_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_leaf_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -23196,7 +22819,6 @@ pub unsafe extern "C" fn perftest_getter_owner_child(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_child(
                 __prebindgen_argument_0,
@@ -23275,7 +22897,6 @@ pub unsafe extern "C" fn perftest_getter_owner_child_matches(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_child_matches(
@@ -23338,7 +22959,6 @@ pub unsafe extern "C" fn perftest_getter_owner_child_mut(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_child_mut(
                 __prebindgen_argument_0,
@@ -23398,7 +23018,6 @@ pub unsafe extern "C" fn perftest_getter_owner_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -23547,7 +23166,6 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_optional(
                 __prebindgen_argument_0,
@@ -23642,7 +23260,6 @@ pub unsafe extern "C" fn perftest_getter_owner_optional_mut(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_optional_mut(
                 __prebindgen_argument_0,
@@ -23714,7 +23331,6 @@ pub unsafe extern "C" fn perftest_getter_owner_optional_pointer(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_optional_pointer(
                 __prebindgen_argument_0,
@@ -23788,7 +23404,6 @@ pub unsafe extern "C" fn perftest_getter_owner_read(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_read(__prebindgen_argument_0);
             let ret_w0 = perftest_flat::getter_child_number(source_value);
@@ -23874,7 +23489,6 @@ pub unsafe extern "C" fn perftest_getter_owner_try_child(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_try_child(
@@ -23985,7 +23599,6 @@ pub unsafe extern "C" fn perftest_getter_owner_try_child_mut(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_try_child_mut(
@@ -24097,7 +23710,6 @@ pub unsafe extern "C" fn perftest_getter_owner_try_optional_child(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_try_optional_child(
@@ -24219,7 +23831,6 @@ pub unsafe extern "C" fn perftest_getter_owner_try_optional_mut(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::getter_owner_try_optional_mut(
@@ -24448,7 +24059,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_address(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_address(
                 __prebindgen_argument_0,
@@ -24509,7 +24119,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_capacity(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_capacity(
                 __prebindgen_argument_0,
@@ -24608,7 +24217,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_mut(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_mut(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -24688,7 +24296,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_nested(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_nested(
@@ -24877,7 +24484,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_optional(
@@ -24983,7 +24589,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_result(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_result(
@@ -25114,7 +24719,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_result_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -25247,7 +24851,6 @@ pub unsafe extern "C" fn perftest_mutable_bytes_value(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::mutable_bytes_value(
@@ -25411,7 +25014,7 @@ pub unsafe extern "C" fn perftest_niche_choice_id(
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w9: perftest_flat::NicheChoiceHandle = *p0_w9
@@ -25447,7 +25050,6 @@ pub unsafe extern "C" fn perftest_niche_choice_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::niche_choice_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -25595,7 +25197,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_address(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_address(
@@ -25658,7 +25259,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_capacity(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_capacity(
                 __prebindgen_argument_0,
@@ -25737,7 +25337,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_checked(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_checked(
@@ -25858,7 +25457,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_copy(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_copy(__prebindgen_argument_0);
             let ret_w0_source = &(source_value);
@@ -26028,7 +25626,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_emit(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -26090,7 +25687,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_fixed(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_fixed(
                 __prebindgen_argument_0,
@@ -26231,7 +25827,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_optional(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_optional(
@@ -26479,7 +26074,6 @@ pub unsafe extern "C" fn perftest_numeric_loan_values(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::numeric_loan_values(
                 __prebindgen_argument_0,
@@ -26878,7 +26472,7 @@ pub unsafe extern "C" fn perftest_option_choice_id(
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::OptionChoice = *p0_w7
@@ -26914,7 +26508,6 @@ pub unsafe extern "C" fn perftest_option_choice_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_choice_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -27013,7 +26606,7 @@ pub unsafe extern "C" fn perftest_option_ctor_id(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::OptionCtor = *p0_w7
@@ -27036,7 +26629,6 @@ pub unsafe extern "C" fn perftest_option_ctor_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_ctor_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -27551,7 +27143,7 @@ pub unsafe extern "C" fn perftest_option_nested_resource(
                 };
                 if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w4: perftest_flat::OwnedResource = *p0_w4
@@ -27587,7 +27179,6 @@ pub unsafe extern "C" fn perftest_option_nested_resource(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_nested_resource(
                 __prebindgen_argument_0,
@@ -27803,7 +27394,7 @@ pub unsafe extern "C" fn perftest_option_resource_echo(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::OwnedResource = *p0_w2
@@ -27842,7 +27433,6 @@ pub unsafe extern "C" fn perftest_option_resource_echo(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_echo(
@@ -27938,7 +27528,6 @@ pub unsafe extern "C" fn perftest_option_resource_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_id(
                 __prebindgen_argument_0,
@@ -28074,7 +27663,7 @@ pub unsafe extern "C" fn perftest_option_resource_pair(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::OwnedResource = *p0_w2
@@ -28112,7 +27701,7 @@ pub unsafe extern "C" fn perftest_option_resource_pair(
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w2: perftest_flat::OwnedResource = *p1_w2
@@ -28135,7 +27724,6 @@ pub unsafe extern "C" fn perftest_option_resource_pair(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::option_resource_pair(
@@ -30035,7 +29623,6 @@ pub unsafe extern "C" fn perftest_payload_priority(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::payload_priority(__prebindgen_argument_0);
             let ret_w0: i32 = match &(source_value) {
@@ -31190,7 +30777,7 @@ pub unsafe extern "C" fn perftest_report_into_struct(
                 };
                 if p0_w1 == 0i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w2: perftest_flat::Report = *p0_w2
@@ -31266,7 +30853,6 @@ pub unsafe extern "C" fn perftest_report_into_struct(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::report_into_struct(
                 __prebindgen_argument_0,
@@ -31369,7 +30955,7 @@ pub unsafe extern "C" fn perftest_report_label(
                 };
                 if p0_w2 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w8: perftest_flat::Summary = *p0_w8
@@ -31419,7 +31005,6 @@ pub unsafe extern "C" fn perftest_report_label(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::report_label(__prebindgen_argument_0);
             let ret_w0 = __PbOwned_owned_string::guard(source_value);
@@ -31605,7 +31190,7 @@ pub unsafe extern "C" fn perftest_resource_choice_id(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w3: perftest_flat::OwnedResource = *p0_w3
@@ -31652,7 +31237,6 @@ pub unsafe extern "C" fn perftest_resource_choice_id(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::resource_choice_id(
                 __prebindgen_argument_0,
@@ -31944,7 +31528,7 @@ pub unsafe extern "C" fn perftest_result_owned(
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w0: perftest_flat::OwnedResource = *p0_w0
@@ -31982,7 +31566,6 @@ pub unsafe extern "C" fn perftest_result_owned(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -33001,13 +32584,10 @@ pub unsafe extern "C" fn perftest_shared_input_copy(p0_w2: __PbRows) -> usize {
             let mut p0_w1: Vec<i64> = Vec::new();
             if true {
                 let p0_w3 = p0_w2.len;
+                let p0_w2_data = p0_w2.data as *const __PbRow_shared_input_copy_p0_w2;
                 p0_w1.reserve_exact(p0_w3);
                 for p0_w4 in 0..p0_w3 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w2.data as *const __PbRow_shared_input_copy_p0_w2)
-                            .add(p0_w4)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w2_data.add(p0_w4)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -33691,7 +33271,7 @@ pub unsafe extern "C" fn perftest_shared_input_move(
                 };
                 if true {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w1: perftest_flat::OwnedResource = *p0_w1
@@ -33728,7 +33308,6 @@ pub unsafe extern "C" fn perftest_shared_input_move(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::shared_input_move(
@@ -33892,14 +33471,11 @@ pub unsafe extern "C" fn perftest_shared_input_optional_vector(
             let mut p0_w3: Vec<i64> = Vec::new();
             if p0_w1 == 1i32 {
                 let p0_w5 = p0_w4.len;
+                let p0_w4_data = p0_w4.data
+                    as *const __PbRow_shared_input_optional_vector_p0_w4;
                 p0_w3.reserve_exact(p0_w5);
                 for p0_w6 in 0..p0_w5 {
-                    let p0_w8 = unsafe {
-                        (*((p0_w4.data
-                            as *const __PbRow_shared_input_optional_vector_p0_w4)
-                            .add(p0_w6)))
-                            .v0
-                    };
+                    let p0_w8 = unsafe { (*p0_w4_data.add(p0_w6)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w4_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w7 = if true { Some(p0_w8) } else { None };
@@ -34056,13 +33632,10 @@ pub unsafe extern "C" fn perftest_shared_input_rows(p0_w1: __PbRows) -> i64 {
             let mut p0_w0: Vec<perftest_flat::SharedInputRow> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_shared_input_rows_p0_w1;
                 p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w1.data as *const __PbRow_shared_input_rows_p0_w1)
-                            .add(p0_w3)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<
                         perftest_flat::SharedInputRow,
@@ -34524,13 +34097,10 @@ pub unsafe extern "C" fn perftest_shared_input_vector(p0_w2: __PbRows) -> usize 
             let mut p0_w1: Vec<i64> = Vec::new();
             if true {
                 let p0_w3 = p0_w2.len;
+                let p0_w2_data = p0_w2.data as *const __PbRow_shared_input_vector_p0_w2;
                 p0_w1.reserve_exact(p0_w3);
                 for p0_w4 in 0..p0_w3 {
-                    let p0_w6 = unsafe {
-                        (*((p0_w2.data as *const __PbRow_shared_input_vector_p0_w2)
-                            .add(p0_w4)))
-                            .v0
-                    };
+                    let p0_w6 = unsafe { (*p0_w2_data.add(p0_w4)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w2_element_built = (|| -> ::core::result::Result<i64, String> {
                         let p0_w5 = if true { Some(p0_w6) } else { None };
@@ -35243,7 +34813,6 @@ pub unsafe extern "C" fn perftest_storage_accumulate_lengths(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -35331,7 +34900,6 @@ pub unsafe extern "C" fn perftest_storage_contains(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_contains(
@@ -35398,7 +34966,6 @@ pub unsafe extern "C" fn perftest_storage_get(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
             let (
@@ -35509,7 +35076,6 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
@@ -35647,7 +35213,6 @@ pub unsafe extern "C" fn perftest_storage_get_vec_each(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
@@ -35749,7 +35314,6 @@ pub unsafe extern "C" fn perftest_storage_len(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_len(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -35915,7 +35479,6 @@ pub unsafe extern "C" fn perftest_storage_put_by_take(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_by_take(
@@ -36053,7 +35616,6 @@ pub unsafe extern "C" fn perftest_storage_put_opt(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_opt(
@@ -36128,28 +35690,13 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
             let mut p1_w1: Vec<perftest_flat::Payload> = Vec::new();
             if true {
                 let p1_w3 = p1_w2.len;
+                let p1_w2_data = p1_w2.data as *const __PbRow_storage_put_slice_p1_w2;
                 p1_w1.reserve_exact(p1_w3);
                 for p1_w4 in 0..p1_w3 {
-                    let p1_w7 = unsafe {
-                        (*((p1_w2.data as *const __PbRow_storage_put_slice_p1_w2)
-                            .add(p1_w4)))
-                            .v0
-                    };
-                    let p1_w9 = unsafe {
-                        (*((p1_w2.data as *const __PbRow_storage_put_slice_p1_w2)
-                            .add(p1_w4)))
-                            .v1
-                    };
-                    let p1_w11 = unsafe {
-                        (*((p1_w2.data as *const __PbRow_storage_put_slice_p1_w2)
-                            .add(p1_w4)))
-                            .v2
-                    };
-                    let p1_w13 = unsafe {
-                        (*((p1_w2.data as *const __PbRow_storage_put_slice_p1_w2)
-                            .add(p1_w4)))
-                            .v3
-                    };
+                    let p1_w7 = unsafe { (*p1_w2_data.add(p1_w4)).v0 };
+                    let p1_w9 = unsafe { (*p1_w2_data.add(p1_w4)).v1 };
+                    let p1_w11 = unsafe { (*p1_w2_data.add(p1_w4)).v2 };
+                    let p1_w13 = unsafe { (*p1_w2_data.add(p1_w4)).v3 };
                     #[allow(clippy::redundant_closure_call)]
                     let p1_w2_element_built = (|| -> ::core::result::Result<
                         perftest_flat::Payload,
@@ -36206,7 +35753,6 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_slice(
@@ -36264,7 +35810,6 @@ pub unsafe extern "C" fn perftest_storage_summary_handle(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_summary_handle(
                 __prebindgen_argument_0,
@@ -36358,7 +35903,6 @@ pub unsafe extern "C" fn perftest_storage_total_len(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let __prebindgen_argument_2 = p2_w0_built.expect("active input");
@@ -36798,7 +36342,7 @@ pub unsafe extern "C" fn perftest_summary_merge(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::Summary = *p0_w7
@@ -36871,7 +36415,7 @@ pub unsafe extern "C" fn perftest_summary_merge(
                 };
                 if p1_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p1_w7: perftest_flat::Summary = *p1_w7
@@ -36894,7 +36438,6 @@ pub unsafe extern "C" fn perftest_summary_merge(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::summary_merge(
@@ -37033,7 +36576,6 @@ pub unsafe extern "C" fn perftest_summary_total(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::summary_total(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -37130,7 +36672,7 @@ pub unsafe extern "C" fn perftest_summary_total_raw(
                 };
                 if p0_w1 == 1i32 {
                     __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + 1usize);
+                        .set(__prebindgen_input_consumed.get() + (1usize));
                 }
                 Some({
                     let p0_w7: perftest_flat::Summary = *p0_w7
@@ -37153,7 +36695,6 @@ pub unsafe extern "C" fn perftest_summary_total_raw(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::summary_total_raw(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -37212,7 +36753,6 @@ pub unsafe extern "C" fn perftest_unsigned_data_maybe(
             } else {
                 None
             };
-            __prebindgen_input_consumed.set(__prebindgen_input_consumed.get());
             let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::unsigned_data_maybe(
                 __prebindgen_argument_0,
