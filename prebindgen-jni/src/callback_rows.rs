@@ -1,35 +1,53 @@
-//! Failure-only ownership cleanup for flat rows returned by Kotlin callbacks.
+//! Failure-only ownership cleanup for ordinary Kotlin callback result trees.
 use super::*;
 use crate::kotlin::JniNode;
 use prebindgen_flat::{Wire, WireNode};
 
 /// Generated Kotlin creates private row arrays, retained by the JNI local frame.
-/// Nested collections and bulk carriers retain their existing cleanup paths.
-pub(crate) fn cleanup(node: &JniNode, context: &JniContext) -> Result<Option<TokenStream>> {
-    fn flat(node: &JniNode, row: bool) -> bool {
+/// Internal native callers must keep those wire values stable through decoding
+/// and rollback, as required by the generated preparation/ownership protocol.
+/// Bulk carriers retain their existing cleanup paths.
+pub(crate) fn cleanup(
+    node: &JniNode,
+    context: &JniContext,
+    root: &syn::Ident,
+) -> Result<Option<TokenStream>> {
+    // Find ordinary collections transferring ownership, rejecting any packed
+    // subtree. Fixed handles alone already have native-only cleanup guards.
+    fn rows(node: &JniNode) -> Option<bool> {
         match node {
-            WireNode::Leaf(_) => true,
+            WireNode::Leaf(_) => Some(false),
             WireNode::Chain {
                 meta: JniChain::Sequence(JniSequence::Buffered),
                 child,
                 ..
-            } => !row && flat(child, true),
+            } => {
+                let nested = rows(child)?;
+                Some(nested || kotlin::input_handles(child, true))
+            }
             WireNode::Chain {
                 meta: JniChain::Sequence(_) | JniChain::Bulk(_),
                 ..
-            } => false,
-            WireNode::Chain { child, .. } => flat(child, row),
-            WireNode::Branch { children, .. } => children.iter().all(|child| flat(child, row)),
+            } => None,
+            WireNode::Chain { child, .. } => rows(child),
+            WireNode::Branch { children, .. } => children
+                .iter()
+                .try_fold(false, |found, child| Some(rows(child)? || found)),
         }
     }
     let fields = group::argument_parameters(node).collect::<Vec<_>>();
-    if !matches!(fields.as_slice(), [field] if matches!(field.kind, JniWire::Rows { .. }))
-        || !kotlin::input_handles(node, true)
-        || !flat(node, false)
-    {
+    if rows(node) != Some(true) {
         return Ok(None);
     }
-    receive(node, context, None, &[]).map(Some)
+    // A single field is already a decoded native local. Composite results stay
+    // in their private root array, just like rows at any deeper nesting level.
+    let composite = fields.len() != 1;
+    let scan = receive(node, context, composite.then_some(root), &fields)?;
+    Ok(Some(if composite {
+        quote!(if !#root.is_null() { #scan })
+    } else {
+        scan
+    }))
 }
 
 // Each fallible JNI read has its own rollback boundary, so a missing or invalid
@@ -44,6 +62,8 @@ fn read(
     quote! {
         ::prebindgen_jni_runtime::reclaim_output(&mut #env, |#env| {
             let mut #env = #env;
+            // Keep sibling reference columns bounded even in wide result trees.
+            let cleanup_read_frame = unsafe { ::prebindgen_jni_runtime::LocalFrame::new(&#env, 8) }?;
             match #expression {
                 Ok(#name) => { #next }
                 Err(error) => {
@@ -56,6 +76,7 @@ fn read(
                     ::prebindgen_runtime::report_callback_cleanup_error(&error);
                 }
             }
+            drop(cleanup_read_frame);
             Ok(())
         });
     }
@@ -96,6 +117,9 @@ fn receive(
     row: Option<&syn::Ident>,
     fields: &[&Wire<JniWire>],
 ) -> Result<TokenStream> {
+    if !kotlin::input_handles(node, true) {
+        return Ok(quote!());
+    }
     Ok(match node {
         WireNode::Leaf(wires) => {
             let mut code = TokenStream::new();
@@ -119,25 +143,27 @@ fn receive(
         } => {
             let carrier = &controls[0].name;
             let env = &context.environment;
-            let row = format_ident!("{carrier}_cleanup_row");
-            let fields = group::row_fields(child).collect::<Vec<_>>();
-            let capacity =
-                i32::try_from(fields.len() + 8).map_err(|_| "too many callback row fields")?;
-            let scan = receive(child, context, Some(&row), &fields)?;
+            let child_row = format_ident!("{carrier}_cleanup_row");
+            let index = format_ident!("{carrier}_cleanup_index");
+            let child_fields = group::row_fields(child).collect::<Vec<_>>();
+            let capacity = i32::try_from(child_fields.len() + 8)
+                .map_err(|_| "too many callback row fields")?;
+            let scan = receive(child, context, Some(&child_row), &child_fields)?;
             let scan = read(
                 context,
-                &row,
-                quote!(::prebindgen_jni_runtime::row_rows(&mut #env, &#carrier, index)),
-                quote!(if !#row.is_null() { #scan }),
+                &child_row,
+                quote!(::prebindgen_jni_runtime::row_rows(&mut #env, &#carrier, #index)),
+                quote!(if !#child_row.is_null() { #scan }),
             );
-            quote!(if !#carrier.is_null() {
+            let scan = quote!(if !#carrier.is_null() {
                 let length = #env.get_array_length(&#carrier).map_err(|e| e.to_string())? as usize;
-                for index in 0..length {
+                for #index in 0..length {
                     let frame = unsafe { ::prebindgen_jni_runtime::LocalFrame::new(&#env, #capacity) }?;
                     #scan
                     drop(frame);
                 }
-            })
+            });
+            field(context, row, fields, carrier, scan)?
         }
         WireNode::Chain {
             meta: JniChain::Optional(optional),

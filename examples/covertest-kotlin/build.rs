@@ -518,6 +518,20 @@ fn main() {
         .package(package!("callbackreturns")
             .class(data_class!(CallbackWireRow))
             .class(data_class!(CallbackFixedResult))
+            .class(data_class!(CallbackNestedBatch))
+            .fun(fun!(callback_nested_batch_echo).expand_param("batch",Input::Record(vec![
+                Input::Leaf, Input::Leaf, callback_nested_rows_input(), Input::Leaf,
+                Input::Sequence(Box::new(callback_result_row_input())), Input::Leaf])))
+            .fun(fun!(callback_nested_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
+                    .expand_return(callback_nested_rows_input())))
+            .fun(fun!(callback_nested_batch).expand_param("callback",
+                callback!(impl Fn() -> CallbackNestedBatch).name("NestedBatchCallback")
+                    .expand_return(Input::Record(vec![Input::Leaf,
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),
+                        callback_nested_rows_input(),
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),
+                        Input::Sequence(Box::new(callback_result_row_input())),Input::Leaf]))))
             .fun(fun!(callback_fixed_result).expand_param("callback",
                 callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
                     .expand_return(Input::Record(vec![Input::Leaf,Input::Leaf,
@@ -1954,4 +1968,18 @@ fn main() {
         std::fs::remove_dir_all(&kotlin).unwrap();
     }
     jni.write_kotlin(&kotlin).unwrap();
+}
+
+fn callback_result_row_input() -> Input<prebindgen_jni::InputRequest> {
+    Input::Record(vec![
+        Input::Leaf,
+        Input::Leaf,
+        Input::constructor("callback_fixed_marker", [Input::Leaf]),
+        Input::Leaf,
+    ])
+}
+fn callback_nested_rows_input() -> Input<prebindgen_jni::InputRequest> {
+    Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
+        Box::new(callback_result_row_input()),
+    )))))
 }

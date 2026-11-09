@@ -4101,7 +4101,7 @@ fn callback_results_and_arguments_omit_all_native_alias_history() {
 }
 
 #[test]
-fn callback_results_defer_ownership_tracking_for_fixed_fields_and_flat_rows() {
+fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
     let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}pub fn nested(cb:impl Fn()->Vec<Vec<Reply>>){}";
     for (function, returned, deferred) in [
         ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
@@ -4115,7 +4115,7 @@ fn callback_results_defer_ownership_tracking_for_fixed_fields_and_flat_rows() {
             Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Record(
                 vec![Input::Leaf; 4],
             ))))),
-            false,
+            true,
         ),
     ] {
         let ty = if function == "fixed" {
@@ -4149,7 +4149,7 @@ fn callback_results_defer_ownership_tracking_for_fixed_fields_and_flat_rows() {
         );
         assert_eq!(
             generated.rust.contains("callback_return_decoded.is_err()"),
-            function == "rows"
+            deferred && function != "fixed"
         );
         assert_eq!(
             generated.rust.contains("callback_return_owners.check()?"),
@@ -4157,5 +4157,61 @@ fn callback_results_defer_ownership_tracking_for_fixed_fields_and_flat_rows() {
         );
         assert_eq!(generated.rust.contains("_ownership_row"), !deferred);
         assert!(!syntax.items.is_empty());
+    }
+}
+
+#[test]
+fn ordinary_callback_with_a_packed_child_retains_its_cleanup_path() {
+    let returned = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Leaf,
+        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))).bulk(),
+    ])));
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle}pub struct Batch{pub first:Handle,pub packed:Vec<Reply>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(data_class!(Reply)).class(data_class!(Batch))
+            .fun(fun!(mixed).expand_param("cb",callback!(impl Fn()->Vec<Batch>).expand_return(returned))))
+        .build().unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(generated.rust.contains("callback_return_owners.check()?"));
+    assert!(generated.rust.contains("_ownership_row"));
+    assert!(!generated.rust.contains("callback_return_decoded.is_err()"));
+}
+
+#[test]
+fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub handle:Handle}pub struct Batch{pub rows:Vec<Option<Vec<Row>>>,pub bytes:Vec<u8>,pub nested_bytes:Vec<Vec<u8>>,pub kinds:Vec<Kind>,pub numbers:Vec<u64>}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(enum_class!(Kind)).class(data_class!(Row)).class(data_class!(Batch)))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Batch.kt"];
+    assert!(kotlin.contains("rows: kotlin.collections.List<kotlin.collections.List<test.Row>?>"));
+    assert!(kotlin.contains("bytes: kotlin.ByteArray"));
+    assert!(kotlin.contains("nested_bytes: kotlin.collections.List<kotlin.ByteArray>"));
+    assert!(kotlin.contains("kinds: kotlin.collections.List<test.Kind>"));
+    assert!(kotlin.contains("numbers: kotlin.collections.List<kotlin.ULong>"));
+    for (source, reason) in [
+        (
+            "pub struct Node{pub children:Vec<Node>}",
+            "recursive data class",
+        ),
+        (
+            "pub struct Node{pub children:Vec<&i64>}",
+            "cannot be references",
+        ),
+        (
+            "pub struct Node{pub children:Vec<Option<Option<i64>>>}",
+            "nested Option",
+        ),
+    ] {
+        let error = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Node)))
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains(reason), "{error}");
     }
 }

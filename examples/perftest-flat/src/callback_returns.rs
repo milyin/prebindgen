@@ -411,3 +411,80 @@ pub fn callback_fixed_borrowed_results(
 ) -> i64 {
     callback_fixed_results(callback, retry, worker)
 }
+
+fn callback_retry<R: 'static>(
+    callback: impl Fn() -> R + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+    consume: fn(R) -> i64,
+) -> i64 {
+    let run = move || {
+        let retained = callback_return_resource_live();
+        if retry {
+            assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback)).is_err());
+            assert_eq!(
+                callback_return_resource_live(),
+                retained,
+                "nested callback owners leaked before retry"
+            );
+        }
+        consume(callback())
+    };
+    if worker {
+        std::thread::spawn(run).join().unwrap()
+    } else {
+        run()
+    }
+}
+fn callback_row_total(row: CallbackFixedResult) -> i64 {
+    assert_eq!(row.character, 'c');
+    row.first.0 + row.optional.as_ref().map_or(0, |r| r.0) + row.last.0
+}
+fn callback_nested_total(groups: Vec<Option<Vec<CallbackFixedResult>>>) -> i64 {
+    // Distinguish None from an empty inner list as well as checking row values.
+    groups
+        .into_iter()
+        .map(|rows| {
+            rows.map_or(1000, |rows| {
+                10 + rows.len() as i64 + rows.into_iter().map(callback_row_total).sum::<i64>()
+            })
+        })
+        .sum()
+}
+#[prebindgen]
+pub fn callback_nested_results(
+    callback: impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>> + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    callback_retry(callback, retry, worker, callback_nested_total)
+}
+#[prebindgen]
+pub struct CallbackNestedBatch {
+    pub first: CallbackReturnResource,
+    pub observed: CallbackReturnResource,
+    pub groups: Vec<Option<Vec<CallbackFixedResult>>>,
+    pub marker: char,
+    pub tail: Vec<CallbackFixedResult>,
+    pub last: CallbackReturnResource,
+}
+#[prebindgen]
+pub fn callback_nested_batch(
+    callback: impl Fn() -> CallbackNestedBatch + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    callback_retry(callback, retry, worker, |batch| {
+        assert_eq!(batch.marker, 'c');
+        batch.first.0
+            + batch.observed.0
+            + callback_nested_total(batch.groups)
+            + batch.tail.into_iter().map(callback_row_total).sum::<i64>()
+            + batch.last.0
+    })
+}
+
+#[prebindgen]
+pub fn callback_nested_batch_echo(batch: CallbackNestedBatch) -> CallbackNestedBatch {
+    batch
+}

@@ -6,9 +6,10 @@ use std::rc::Rc;
 /// A Kotlin data class whose fields are converted across the JNI boundary.
 ///
 /// Supports owned public named-field records containing scalars, `String`,
-/// `Vec<u8>`, other declared data classes, declared opaque handles, and optional fields.
-/// Records containing handles (including nested ones) support output positions,
-/// including returns and callback arguments; they remain unsupported as inputs.
+/// `Vec<T>` collections (`Vec<u8>` is a byte array), other declared data classes,
+/// declared opaque handles, and optional fields. Records containing handles,
+/// including through collections, support outputs; inputs require an explicit
+/// field or constructor expansion describing their ownership.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
 /// field overrides. `field_self()` and unexpanded outputs follow the source:
@@ -18,6 +19,8 @@ use std::rc::Rc;
 /// Callers close each returned handle explicitly; data-class `copy` shares those
 /// handle objects and does not duplicate native ownership. References, empty
 /// records, and recursive records are rejected.
+/// Collection properties use standard Kotlin list equality and hash codes;
+/// byte arrays directly nested in lists therefore compare by reference.
 ///
 /// ```
 /// use prebindgen_jni::{JniGen, data_class, package, fun};
@@ -133,6 +136,56 @@ pub(crate) struct DataCodec<'a> {
 }
 /// Complete class and enum declarations already attached to their source types.
 pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
+    fn element(
+        flat: &mut Bindings,
+        ty: &syn::Type,
+        stack: &mut Vec<String>,
+        resolved: &mut BTreeSet<String>,
+    ) -> Result<(String, bool)> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            if prebindgen_declarations::option_inner(inner).is_some() {
+                return Err("nested Option data fields require an explicit expansion".into());
+            }
+            let (ty, handles) = element(flat, inner, stack, resolved)?;
+            return Ok((format!("{ty}?"), handles));
+        }
+        if matches!(ty, syn::Type::Reference(_)) {
+            return Err("data class collection elements cannot be references".into());
+        }
+        if let Some(value) = Value::of(ty) {
+            return Ok((
+                match value {
+                    Value::Scalar(Primitive::I128 | Primitive::U128) => {
+                        "java.math.BigInteger".into()
+                    }
+                    Value::Scalar(p) => format!("kotlin.{}", scalar::kotlin(p)),
+                    Value::Text => "kotlin.String".into(),
+                    Value::Bytes => "kotlin.ByteArray".into(),
+                },
+                false,
+            ));
+        }
+        if let Some(class) = flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.class.clone())
+        {
+            let handles = if class.data {
+                resolve(flat, &type_key(ty), stack, resolved)?
+            } else {
+                !class.enumeration
+            };
+            return Ok((class.fqn(), handles));
+        }
+        if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+            let (ty, handles) = element(flat, inner, stack, resolved)?;
+            return Ok((format!("kotlin.collections.List<{ty}>"), handles));
+        }
+        Err(format!(
+            "unsupported data class collection element `{}`",
+            type_key(ty)
+        ))
+    }
     fn resolve(
         flat: &mut Bindings,
         key: &str,
@@ -226,8 +279,13 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
                     has_handles = true;
                 }
                 child.fqn()
+            } else if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+                let (ty, handles) = element(flat, inner, stack, resolved)
+                    .map_err(|error| format!("data class `{key}` field `{name}`: {error}"))?;
+                has_handles |= handles;
+                format!("kotlin.collections.List<{ty}>")
             } else {
-                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<u8>, declared data class, or declared handle"));
+                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<T>, declared data class, or declared handle"));
             };
             if optional.is_some() {
                 kotlin_type.push('?');

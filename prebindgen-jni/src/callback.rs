@@ -650,14 +650,16 @@ impl CallbackReturn {
         input.rust.validation = crate::bulk::cached_reads(&input.rust.validation)?;
         let fields = self.fields();
         let result = format_ident!("callback_result");
-        let cleanup_rows = crate::callback_rows::cleanup(self.input.input_node(), context)?;
+        let root_row = format_ident!("callback_result_rows");
+        let cleanup_rows =
+            crate::callback_rows::cleanup(self.input.input_node(), context, &root_row)?;
         let (owners, commit_owners) = if cleanup_rows.is_some() {
             (quote!(), quote!())
         } else {
             self.ownership_guard(context)?
         };
         let ownership_reads = quote!(#owners #cache);
-        let (return_type, decode, late_decode) = match fields.as_slice() {
+        let (return_type, decode, mut late_decode) = match fields.as_slice() {
             [field] => {
                 let name = &field.name;
                 let read = field.kind.read_callback_return(&result);
@@ -725,11 +727,12 @@ impl CallbackReturn {
             });
         }
         if let Some(cleanup) = cleanup_rows {
+            let reads = std::mem::take(&mut late_decode);
             // End every decoding borrow and drop partial Rust rows before using
             // JNI again for rollback. reclaim_output preserves a pending JVM
             // exception while the failure-only scan releases unread owners.
             body = quote!({
-                let callback_return_decoded = ::prebindgen_runtime::boundary(|| { #body });
+                let callback_return_decoded = ::prebindgen_runtime::boundary(|| { #reads #body });
                 if callback_return_decoded.is_err() {
                     ::prebindgen_jni_runtime::reclaim_output(&mut #env, |#env| {
                         let mut #env = #env;
