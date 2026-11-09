@@ -1,6 +1,605 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.callbackreturns
 
+public fun callbackMixedOptionalBatches(callback: io.prebindgen.covertest.MixedOptionalBatchesCallback, retry: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackOptionalBatch>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val __pb_callback_return_w5_field0 = callback_return_w5.first
+val __pb_callback_return_w5_field1 = callback_return_w5.rows
+val __pb_callback_return_w5_field2 = callback_return_w5.last
+val callback_return_w7_elements = if (true) __pb_callback_return_w5_field1?.toList() else null
+val callback_return_w6_writer_state = if (true) run { val callback_return_w6_writer = io.prebindgen.covertest.BulkInputs.Input_Range_08a37f4477600073()
+val callback_return_w7_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w7_elements }
+if (callback_return_w7_bulkList == null) { callback_return_w6_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0]) } else {
+val callback_return_w7_bulkStart = callback_return_w6_writer.rows(callback_return_w7_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+callback_return_w6_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0], callback_return_w7_bulkStart, callback_return_w7_bulkList.size)
+callback_return_w7_bulkList.forEachIndexed { callback_return_w7_bulkIndex, callback_return_w11 ->
+val __pb_callback_return_w11_field0 = callback_return_w11.first
+val __pb_callback_return_w11_field1 = callback_return_w11.optional
+val __pb_callback_return_w11_field2 = callback_return_w11.character
+val __pb_callback_return_w11_field3 = callback_return_w11.last
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field0 }, true, 0)
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w11_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w11_field1) else null) { "invalid option payload" } else null }, true, 0)
+callback_return_w6_writer.int((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field2 })
+callback_return_w6_writer.handle((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w11_field3 }, true, 0)
+}
+}
+
+callback_return_w6_writer } else null
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w5_field0 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w5_field0) else null) { "invalid option payload" } else null }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state?.length ?: 0 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field2 }) }, intArrayOf(2, 0, 0, 2), 1, null) } else null
+ run { val __pb_handle0: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w1_elements?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withInputHandleLocks((__pb_handle0), true) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.callbackreturns.CallbackOptionalBatch)?.let { returnedValue1 -> (returnedValue1.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue4 -> returnedHandles.add(returnedValue4); returnedOwners.add(returnedValue4) }
+(returnedValue1.rows as? Iterable<*>)?.forEach { returnedValue7 -> (returnedValue7 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue8 -> (returnedValue8.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue10 -> returnedHandles.add(returnedValue10); returnedOwners.add(returnedValue10) }
+(returnedValue8.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue13 -> returnedHandles.add(returnedValue13); returnedOwners.add(returnedValue13) }
+(returnedValue8.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue15 -> returnedHandles.add(returnedValue15); returnedOwners.add(returnedValue15) }
+ }
+ }
+(returnedValue1.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue17 -> returnedHandles.add(returnedValue17); returnedOwners.add(returnedValue17) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { retry } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_optional_batches_76b06f5cc7757da1(nativeArgument0, nativeArgument1, nativeArgument2) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun callbackMixedScalars(callback: io.prebindgen.covertest.MixedScalarBatchesCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackScalarBatch>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val callback_return_w7_elements = if (true) callback_return_w5.rows?.toList() else null
+val callback_return_w6_writer_state = if (true) run { val callback_return_w6_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r5803381f2d3ce1a6.size)
+val callback_return_w7_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w7_elements }
+if (callback_return_w7_bulkList == null) { callback_return_w6_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r5803381f2d3ce1a6.offsets[0]) } else {
+val callback_return_w7_bulkStart = callback_return_w6_writer.rows(callback_return_w7_bulkList.size, io.prebindgen.covertest.BulkLayouts.r0d4a0111cad6e1de)
+callback_return_w6_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r5803381f2d3ce1a6.offsets[0], callback_return_w7_bulkStart, callback_return_w7_bulkList.size)
+callback_return_w7_bulkList.forEachIndexed { callback_return_w7_bulkIndex, callback_return_w11 ->
+callback_return_w6_writer.long((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r0d4a0111cad6e1de.size) + io.prebindgen.covertest.BulkLayouts.r0d4a0111cad6e1de.offsets[0], io.prebindgen.covertest.InputValidation.value { callback_return_w11.number })
+callback_return_w6_writer.text((callback_return_w7_bulkStart + callback_return_w7_bulkIndex * io.prebindgen.covertest.BulkLayouts.r0d4a0111cad6e1de.size) + io.prebindgen.covertest.BulkLayouts.r0d4a0111cad6e1de.offsets[1], io.prebindgen.covertest.InputValidation.value { callback_return_w11.label })
+}
+}
+
+callback_return_w6_writer } else null
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { callback_return_w5.stamp }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state?.array }, io.prebindgen.covertest.InputValidation.value { callback_return_w6_writer_state?.length ?: 0 }) } } else null
+ run { val callbackReturnWire = callback_return_w1_elements
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+
+callbackReturnWire } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_scalars_b3ffdfdc953994c9(nativeArgument0, nativeArgument1) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun callbackReturnResourceAuditStart(onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_resource_audit_start_a5392cdfc5cff176(nativeArgument0) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    Unit
+    } finally { returnCapture.release() }
+}
+
+public fun callbackReturnResourceAuditFinish(onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_resource_audit_finish_a13e6bda7dfc3d9b(nativeArgument0) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    Unit
+    } finally { returnCapture.release() }
+}
+
+public fun callbackMixedBatch(callback: io.prebindgen.covertest.MixedBatchCallback, retry: Boolean, worker: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackNestedBatch
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val __pb_callback_return_w1_field0 = callback_return_w1.first
+val __pb_callback_return_w1_field1 = callback_return_w1.observed
+val __pb_callback_return_w1_field2 = callback_return_w1.groups
+val __pb_callback_return_w1_field3 = callback_return_w1.marker
+val __pb_callback_return_w1_field4 = callback_return_w1.tail
+val __pb_callback_return_w1_field5 = callback_return_w1.last
+val callback_return_w5_elements = if (true) __pb_callback_return_w1_field2?.toList() else null
+val callback_return_w4_writer_state = if (true) run { val callback_return_w4_writer = io.prebindgen.covertest.BulkInputs.Input_Range_31afb2a04211128a()
+val callback_return_w5_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w5_elements }
+if (callback_return_w5_bulkList == null) { callback_return_w4_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0]) } else {
+val callback_return_w5_bulkStart = callback_return_w4_writer.rows(callback_return_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2)
+callback_return_w4_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0], callback_return_w5_bulkStart, callback_return_w5_bulkList.size)
+callback_return_w5_bulkList.forEachIndexed { callback_return_w5_bulkIndex, callback_return_w11 ->
+val callback_return_w11_elements = if (callback_return_w11 != null) (if (true) requireNotNull(callback_return_w11).toList() else null) else (null)
+callback_return_w4_writer.int((callback_return_w5_bulkStart + callback_return_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w11 != null) 1 else 0) })
+val callback_return_w11_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w11 != null) callback_return_w11_elements else null }
+if (callback_return_w11_bulkList == null) { callback_return_w4_writer.absent((callback_return_w5_bulkStart + callback_return_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
+val callback_return_w11_bulkStart = callback_return_w4_writer.rows(callback_return_w11_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+callback_return_w4_writer.range((callback_return_w5_bulkStart + callback_return_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1], callback_return_w11_bulkStart, callback_return_w11_bulkList.size)
+callback_return_w11_bulkList.forEachIndexed { callback_return_w11_bulkIndex, callback_return_w15 ->
+val __pb_callback_return_w15_field0 = callback_return_w15.first
+val __pb_callback_return_w15_field1 = callback_return_w15.optional
+val __pb_callback_return_w15_field2 = callback_return_w15.character
+val __pb_callback_return_w15_field3 = callback_return_w15.last
+callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w15_field0 }, true, 0)
+callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w15_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w15_field1) else null) { "invalid option payload" } else null }, true, 0)
+callback_return_w4_writer.int((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w15_field2 })
+callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w15_field3 }, true, 0)
+}
+}
+}
+}
+
+callback_return_w4_writer } else null
+val callback_return_w20_elements = if (true) __pb_callback_return_w1_field4?.toList()?.let { callback_return_w20_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w20_snapshot.size) { callback_return_w20_index -> val callback_return_w24 = callback_return_w20_snapshot[callback_return_w20_index]
+val __pb_callback_return_w24_field0 = callback_return_w24.first
+val __pb_callback_return_w24_field1 = callback_return_w24.optional
+val __pb_callback_return_w24_field2 = callback_return_w24.character
+val __pb_callback_return_w24_field3 = callback_return_w24.last
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w24_field0 }, io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w24_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w24_field1) else null) { "invalid option payload" } else null }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w24_field2 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w24_field3 }) }, intArrayOf(2, 2, 0, 2), 1, null) } else null
+ run { val __pb_handle0: io.prebindgen.covertest.NativeHandle? = try { __pb_callback_return_w1_field0 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle1: io.prebindgen.covertest.NativeHandle? = try { __pb_callback_return_w1_field1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle2: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w4_writer_state?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle3: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w20_elements?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle4: io.prebindgen.covertest.NativeHandle? = try { __pb_callback_return_w1_field5 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withMixedInputLocks(kotlin.collections.listOfNotNull(__pb_handle1), ((kotlin.collections.listOfNotNull(__pb_handle0, __pb_handle4) + (__pb_handle2)) + (__pb_handle3))) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(__pb_handle0?.raw ?: 0L, __pb_handle1?.raw ?: 0L, callback_return_w4_writer_state?.encode(), callback_return_w4_writer_state?.length ?: 0, __pb_callback_return_w1_field3, callback_return_w20_elements?.encode(), __pb_handle4?.raw ?: 0L)
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+__pb_handle0?.let { __pb_consume(it) }; callback_return_w4_writer_state?.consume(__pb_consume); callback_return_w20_elements?.consume(__pb_consume); __pb_handle4?.let { __pb_consume(it) }
+callbackReturnWire } } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.callbackreturns.CallbackNestedBatch)?.let { returnedValue0 -> (returnedValue0.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue2 -> returnedHandles.add(returnedValue2); returnedOwners.add(returnedValue2) }
+(returnedValue0.observed as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue6 -> returnedHandles.add(returnedValue6);  }
+(returnedValue0.groups as? Iterable<*>)?.forEach { returnedValue9 -> (returnedValue9 as? Iterable<*>)?.forEach { returnedValue11 -> (returnedValue11 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue12 -> (returnedValue12.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue14 -> returnedHandles.add(returnedValue14); returnedOwners.add(returnedValue14) }
+(returnedValue12.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue17 -> returnedHandles.add(returnedValue17); returnedOwners.add(returnedValue17) }
+(returnedValue12.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue19 -> returnedHandles.add(returnedValue19); returnedOwners.add(returnedValue19) }
+ }
+ }
+ }
+(returnedValue0.tail as? Iterable<*>)?.forEach { returnedValue21 -> (returnedValue21 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue22 -> (returnedValue22.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue24 -> returnedHandles.add(returnedValue24); returnedOwners.add(returnedValue24) }
+(returnedValue22.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue27 -> returnedHandles.add(returnedValue27); returnedOwners.add(returnedValue27) }
+(returnedValue22.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue29 -> returnedHandles.add(returnedValue29); returnedOwners.add(returnedValue29) }
+ }
+ }
+(returnedValue0.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue31 -> returnedHandles.add(returnedValue31); returnedOwners.add(returnedValue31) }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { retry } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { worker } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_batch_0e29c21fa132f86f(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun callbackMixedBatchesEcho(batches: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch> = run {
+    val p0_w3_elements = try { if (true) batches?.toList() else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_Range_d0f85d5de64becff()
+val p0_w3_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w3_elements }
+if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rd0f85d5de64becff.offsets[0]) } else {
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89)
+p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rd0f85d5de64becff.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
+p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w7 ->
+val __pb_p0_w7_field0 = p0_w7.first
+val __pb_p0_w7_field1 = p0_w7.observed
+val __pb_p0_w7_field2 = p0_w7.groups
+val __pb_p0_w7_field3 = p0_w7.marker
+val __pb_p0_w7_field4 = p0_w7.tail
+val __pb_p0_w7_field5 = p0_w7.last
+val p0_w8_elements = if (true) __pb_p0_w7_field2?.toList() else null
+val p0_w23_elements = if (true) __pb_p0_w7_field4?.toList() else null
+p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field0 }, true, 0)
+p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[1], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field1 }, true, 0)
+val p0_w8_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w8_elements }
+if (p0_w8_bulkList == null) { p0_w1_writer.absent((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[2]) } else {
+val p0_w8_bulkStart = p0_w1_writer.rows(p0_w8_bulkList.size, io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2)
+p0_w1_writer.range((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[2], p0_w8_bulkStart, p0_w8_bulkList.size)
+p0_w8_bulkList.forEachIndexed { p0_w8_bulkIndex, p0_w14 ->
+val p0_w14_elements = if (p0_w14 != null) (if (true) requireNotNull(p0_w14).toList() else null) else (null)
+p0_w1_writer.int((p0_w8_bulkStart + p0_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (p0_w14 != null) 1 else 0) })
+val p0_w14_bulkList = io.prebindgen.covertest.InputValidation.value { if (p0_w14 != null) p0_w14_elements else null }
+if (p0_w14_bulkList == null) { p0_w1_writer.absent((p0_w8_bulkStart + p0_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
+val p0_w14_bulkStart = p0_w1_writer.rows(p0_w14_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+p0_w1_writer.range((p0_w8_bulkStart + p0_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1], p0_w14_bulkStart, p0_w14_bulkList.size)
+p0_w14_bulkList.forEachIndexed { p0_w14_bulkIndex, p0_w18 ->
+val __pb_p0_w18_field0 = p0_w18.first
+val __pb_p0_w18_field1 = p0_w18.optional
+val __pb_p0_w18_field2 = p0_w18.character
+val __pb_p0_w18_field3 = p0_w18.last
+p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w18_field0 }, true, 0)
+p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w18_field1 != null) requireNotNull(if (true) requireNotNull(__pb_p0_w18_field1) else null) { "invalid option payload" } else null }, true, 0)
+p0_w1_writer.int((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_p0_w18_field2 })
+p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_p0_w18_field3 }, true, 0)
+}
+}
+}
+}
+p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field3 })
+val p0_w23_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w23_elements }
+if (p0_w23_bulkList == null) { p0_w1_writer.absent((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[4]) } else {
+val p0_w23_bulkStart = p0_w1_writer.rows(p0_w23_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+p0_w1_writer.range((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[4], p0_w23_bulkStart, p0_w23_bulkList.size)
+p0_w23_bulkList.forEachIndexed { p0_w23_bulkIndex, p0_w27 ->
+val __pb_p0_w27_field0 = p0_w27.first
+val __pb_p0_w27_field1 = p0_w27.optional
+val __pb_p0_w27_field2 = p0_w27.character
+val __pb_p0_w27_field3 = p0_w27.last
+p0_w1_writer.handle((p0_w23_bulkStart + p0_w23_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w27_field0 }, true, 0)
+p0_w1_writer.handle((p0_w23_bulkStart + p0_w23_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w27_field1 != null) requireNotNull(if (true) requireNotNull(__pb_p0_w27_field1) else null) { "invalid option payload" } else null }, true, 0)
+p0_w1_writer.int((p0_w23_bulkStart + p0_w23_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_p0_w27_field2 })
+p0_w1_writer.handle((p0_w23_bulkStart + p0_w23_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_p0_w27_field3 }, true, 0)
+}
+}
+p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[5], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field5 }, true, 0)
+}
+}
+
+p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val __pb_handle0: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { p0_w1_writer_state?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withInputHandleLocks((__pb_handle0), true) { val ownership = LongArray(1) { -1L }
+        try { run { val nativeArgument0 = try { p0_w1_writer_state?.encode() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer_state?.length ?: 0 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_batches_echo_b1e56234e999f1fa(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }; p0_w1_writer_state?.consume(__pb_consume) } else { var remaining = -1L - ownership[0]; val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { handle.markConsumed(); remaining-- } }; p0_w1_writer_state?.consume(__pb_consume) } } } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message); var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch>? = null
+ if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4e69bfcf823e0723.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g1_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+var outputbulkItem_g2_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>?>? = null
+var outputbulkItem_g4_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g4_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+        var outputbulkItem_g5_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+try { if (outputbulkItem_g2_g0_bulkRange == null) outputbulkItem_g2_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[2])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size)
+for (outputbulkItem_g2_g0_bulkIndex in 0 until outputbulkItem_g2_g0_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkBase = outputbulkItem_g2_g0_bulkRange!!.offset + outputbulkItem_g2_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size
+var outputbulkItem_g2_g0_bulkFailure: Throwable? = outputbulkFailure
+try { var outputbulkItem_g2_g0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+
+            if ((requireNotNull(outputbulkReader).int((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[0])) == 1) {
+try { if (outputbulkItem_g2_g0_bulkItem_bulkRange == null) outputbulkItem_g2_g0_bulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+for (outputbulkItem_g2_g0_bulkItem_bulkIndex in 0 until outputbulkItem_g2_g0_bulkItem_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkItem_bulkBase = outputbulkItem_g2_g0_bulkItem_bulkRange!!.offset + outputbulkItem_g2_g0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+var outputbulkItem_g2_g0_bulkItem_bulkFailure: Throwable? = outputbulkItem_g2_g0_bulkFailure
+try {         var outputbulkItem_g2_g0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_g2_g0_bulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkCleanupError else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== outputbulkItem_g2_g0_bulkItem_bulkCleanupError) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkItem_bulkCleanupError) }
+outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkFailure
+} } catch (outputbulkItem_g2_g0_bulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkFailure == null) outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkCleanupError else if (outputbulkItem_g2_g0_bulkFailure !== outputbulkItem_g2_g0_bulkItem_bulkCleanupError) outputbulkItem_g2_g0_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkItem_bulkCleanupError) }
+            }
+ } catch (outputbulkItem_g2_g0_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkFailure == null) outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkCleanupError else if (outputbulkItem_g2_g0_bulkFailure !== outputbulkItem_g2_g0_bulkCleanupError) outputbulkItem_g2_g0_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_g2_g0_bulkFailure
+} } catch (outputbulkItem_g2_g0_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_g2_g0_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_g2_g0_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkCleanupError) }
+try { if (outputbulkItem_g4_g0_bulkRange == null) outputbulkItem_g4_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[4])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+for (outputbulkItem_g4_g0_bulkIndex in 0 until outputbulkItem_g4_g0_bulkRange!!.length) {
+val outputbulkItem_g4_g0_bulkBase = outputbulkItem_g4_g0_bulkRange!!.offset + outputbulkItem_g4_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+var outputbulkItem_g4_g0_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_g4_g0_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+            }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_g4_g0_bulkCleanupError: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = outputbulkItem_g4_g0_bulkCleanupError else if (outputbulkItem_g4_g0_bulkFailure !== outputbulkItem_g4_g0_bulkCleanupError) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(outputbulkItem_g4_g0_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_g4_g0_bulkFailure
+} } catch (outputbulkItem_g4_g0_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_g4_g0_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_g4_g0_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_g4_g0_bulkCleanupError) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[5])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+ }
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
+var outputowners: io.prebindgen.covertest.CollectionOwners? = null
+var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch>? = null
+        try {
+outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+outputowners = io.prebindgen.covertest.CollectionOwners()
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4e69bfcf823e0723.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size)
+outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size
+        var outputbulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g1_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+var outputbulkItem_g2_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>?>? = null
+var outputbulkItem_g4_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g4_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+        var outputbulkItem_g5_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            outputbulkItem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[0])) as Long))
+            outputbulkItem_g1_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[1])) as Long))
+outputbulkItem_g2_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[2])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size)
+outputbulkItem_g2_g0_bulkList = kotlin.collections.ArrayList(outputbulkItem_g2_g0_bulkRange!!.length)
+for (outputbulkItem_g2_g0_bulkIndex in 0 until outputbulkItem_g2_g0_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkBase = outputbulkItem_g2_g0_bulkRange!!.offset + outputbulkItem_g2_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size
+var outputbulkItem_g2_g0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+
+            if ((requireNotNull(outputbulkReader).int((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[0])) == 1) {
+outputbulkItem_g2_g0_bulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+outputbulkItem_g2_g0_bulkItem_bulkList = kotlin.collections.ArrayList(outputbulkItem_g2_g0_bulkItem_bulkRange!!.length)
+for (outputbulkItem_g2_g0_bulkItem_bulkIndex in 0 until outputbulkItem_g2_g0_bulkItem_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkItem_bulkBase = outputbulkItem_g2_g0_bulkItem_bulkRange!!.offset + outputbulkItem_g2_g0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            outputbulkItem_g2_g0_bulkItem_bulkItem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long))
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            outputbulkItem_g2_g0_bulkItem_bulkItem_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long))
+            }
+            outputbulkItem_g2_g0_bulkItem_bulkItem_g3_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long))
+
+outputbulkItem_g2_g0_bulkItem_bulkList!!.add(io.prebindgen.covertest.callbackreturns.CallbackFixedResult(requireNotNull(outputbulkItem_g2_g0_bulkItem_bulkItem_g0_0), if ((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) requireNotNull(outputbulkItem_g2_g0_bulkItem_bulkItem_g1_g0_0) else null, (requireNotNull(outputbulkReader).int((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[2])) as Int, requireNotNull(outputbulkItem_g2_g0_bulkItem_bulkItem_g3_0)))
+}
+            }
+
+outputbulkItem_g2_g0_bulkList!!.add(if ((requireNotNull(outputbulkReader).int((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[0])) == 1) requireNotNull(outputbulkItem_g2_g0_bulkItem_bulkList) else null)
+}
+outputbulkItem_g4_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[4])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+outputbulkItem_g4_g0_bulkList = kotlin.collections.ArrayList(outputbulkItem_g4_g0_bulkRange!!.length)
+for (outputbulkItem_g4_g0_bulkIndex in 0 until outputbulkItem_g4_g0_bulkRange!!.length) {
+val outputbulkItem_g4_g0_bulkBase = outputbulkItem_g4_g0_bulkRange!!.offset + outputbulkItem_g4_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+        var outputbulkItem_g4_g0_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            outputbulkItem_g4_g0_bulkItem_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long))
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            outputbulkItem_g4_g0_bulkItem_g1_g0_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long))
+            }
+            outputbulkItem_g4_g0_bulkItem_g3_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long))
+
+outputbulkItem_g4_g0_bulkList!!.add(io.prebindgen.covertest.callbackreturns.CallbackFixedResult(requireNotNull(outputbulkItem_g4_g0_bulkItem_g0_0), if ((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) requireNotNull(outputbulkItem_g4_g0_bulkItem_g1_g0_0) else null, (requireNotNull(outputbulkReader).int((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[2])) as Int, requireNotNull(outputbulkItem_g4_g0_bulkItem_g3_0)))
+}
+            outputbulkItem_g5_0 = requireNotNull(outputowners).own(io.prebindgen.covertest.callbackreturns.CallbackReturnResource((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[5])) as Long))
+
+outputbulkList!!.add(io.prebindgen.covertest.callbackreturns.CallbackNestedBatch(requireNotNull(outputbulkItem_g0_0), requireNotNull(outputbulkItem_g1_0), requireNotNull(outputbulkItem_g2_g0_bulkList), (requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[3])) as Int, requireNotNull(outputbulkItem_g4_g0_bulkList), requireNotNull(outputbulkItem_g5_0)))
+}
+
+outputowners!!.complete = true
+            requireNotNull(outputbulkList)
+        } catch (failure: Throwable) {
+if (outputbulkReader == null) { outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
+ }
+outputowners?.close(failure)
+if (outputowners?.complete != true) {
+try { if (outputbulkRange == null) outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r4e69bfcf823e0723.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size)
+for (outputbulkIndex in 0 until outputbulkRange!!.length) {
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.size
+var outputbulkFailure: Throwable? = failure
+try {         var outputbulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g1_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+var outputbulkItem_g2_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkList: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>?>? = null
+var outputbulkItem_g4_g0_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g4_g0_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+        var outputbulkItem_g5_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+try { if (outputbulkItem_g2_g0_bulkRange == null) outputbulkItem_g2_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[2])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size)
+for (outputbulkItem_g2_g0_bulkIndex in 0 until outputbulkItem_g2_g0_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkBase = outputbulkItem_g2_g0_bulkRange!!.offset + outputbulkItem_g2_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.size
+var outputbulkItem_g2_g0_bulkFailure: Throwable? = outputbulkFailure
+try { var outputbulkItem_g2_g0_bulkItem_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var outputbulkItem_g2_g0_bulkItem_bulkList: kotlin.collections.MutableList<io.prebindgen.covertest.callbackreturns.CallbackFixedResult>? = null
+
+            if ((requireNotNull(outputbulkReader).int((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[0])) == 1) {
+try { if (outputbulkItem_g2_g0_bulkItem_bulkRange == null) outputbulkItem_g2_g0_bulkItem_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkItem_g2_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r1bd5c2ae3f2b872e.offsets[1])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+for (outputbulkItem_g2_g0_bulkItem_bulkIndex in 0 until outputbulkItem_g2_g0_bulkItem_bulkRange!!.length) {
+val outputbulkItem_g2_g0_bulkItem_bulkBase = outputbulkItem_g2_g0_bulkItem_bulkRange!!.offset + outputbulkItem_g2_g0_bulkItem_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+var outputbulkItem_g2_g0_bulkItem_bulkFailure: Throwable? = outputbulkItem_g2_g0_bulkFailure
+try {         var outputbulkItem_g2_g0_bulkItem_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g2_g0_bulkItem_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+            }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g2_g0_bulkItem_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = cleanup else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== cleanup) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_g2_g0_bulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkItem_bulkFailure == null) outputbulkItem_g2_g0_bulkItem_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkCleanupError else if (outputbulkItem_g2_g0_bulkItem_bulkFailure !== outputbulkItem_g2_g0_bulkItem_bulkCleanupError) outputbulkItem_g2_g0_bulkItem_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkItem_bulkCleanupError) }
+outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkFailure
+} } catch (outputbulkItem_g2_g0_bulkItem_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkFailure == null) outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkItem_bulkCleanupError else if (outputbulkItem_g2_g0_bulkFailure !== outputbulkItem_g2_g0_bulkItem_bulkCleanupError) outputbulkItem_g2_g0_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkItem_bulkCleanupError) }
+            }
+ } catch (outputbulkItem_g2_g0_bulkCleanupError: Throwable) { if (outputbulkItem_g2_g0_bulkFailure == null) outputbulkItem_g2_g0_bulkFailure = outputbulkItem_g2_g0_bulkCleanupError else if (outputbulkItem_g2_g0_bulkFailure !== outputbulkItem_g2_g0_bulkCleanupError) outputbulkItem_g2_g0_bulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_g2_g0_bulkFailure
+} } catch (outputbulkItem_g2_g0_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_g2_g0_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_g2_g0_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_g2_g0_bulkCleanupError) }
+try { if (outputbulkItem_g4_g0_bulkRange == null) outputbulkItem_g4_g0_bulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[4])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size)
+for (outputbulkItem_g4_g0_bulkIndex in 0 until outputbulkItem_g4_g0_bulkRange!!.length) {
+val outputbulkItem_g4_g0_bulkBase = outputbulkItem_g4_g0_bulkRange!!.offset + outputbulkItem_g4_g0_bulkIndex * io.prebindgen.covertest.BulkLayouts.r49d713334761702d.size
+var outputbulkItem_g4_g0_bulkFailure: Throwable? = outputbulkFailure
+try {         var outputbulkItem_g4_g0_bulkItem_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g1_g0_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+        var outputbulkItem_g4_g0_bulkItem_g3_0: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[0])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+            if ((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) != 0L) {
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[1])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+            }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkItem_g4_g0_bulkBase) + io.prebindgen.covertest.BulkLayouts.r49d713334761702d.offsets[3])) as Long) } } catch (cleanup: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = cleanup else if (outputbulkItem_g4_g0_bulkFailure !== cleanup) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkItem_g4_g0_bulkCleanupError: Throwable) { if (outputbulkItem_g4_g0_bulkFailure == null) outputbulkItem_g4_g0_bulkFailure = outputbulkItem_g4_g0_bulkCleanupError else if (outputbulkItem_g4_g0_bulkFailure !== outputbulkItem_g4_g0_bulkCleanupError) outputbulkItem_g4_g0_bulkFailure!!.addSuppressed(outputbulkItem_g4_g0_bulkCleanupError) }
+outputbulkFailure = outputbulkItem_g4_g0_bulkFailure
+} } catch (outputbulkItem_g4_g0_bulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkItem_g4_g0_bulkCleanupError else if (outputbulkFailure !== outputbulkItem_g4_g0_bulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkItem_g4_g0_bulkCleanupError) }
+            try { if (outputowners?.unread() != false) { io.prebindgen.covertest.JNINative.drop_CallbackReturnResource_289c5b28e5450a79((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r9d90eb6e2d1173db.offsets[5])) as Long) } } catch (cleanup: Throwable) { if (outputbulkFailure == null) outputbulkFailure = cleanup else if (outputbulkFailure !== cleanup) outputbulkFailure!!.addSuppressed(cleanup) }
+ } catch (outputbulkCleanupError: Throwable) { if (outputbulkFailure == null) outputbulkFailure = outputbulkCleanupError else if (outputbulkFailure !== outputbulkCleanupError) outputbulkFailure!!.addSuppressed(outputbulkCleanupError) }
+
+} } catch (outputbulkCleanupError: Throwable) { if (failure !== outputbulkCleanupError) failure.addSuppressed(outputbulkCleanupError) }
+
+}
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun callbackMixedBatches(callback: io.prebindgen.covertest.MixedBatchesCallback, retry: Boolean, worker: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.let { callback_return_w1_snapshot -> io.prebindgen.covertest.InputRows(kotlin.Array<kotlin.Any?>(callback_return_w1_snapshot.size) { callback_return_w1_index -> val callback_return_w5 = callback_return_w1_snapshot[callback_return_w1_index]
+val __pb_callback_return_w5_field0 = callback_return_w5.first
+val __pb_callback_return_w5_field1 = callback_return_w5.observed
+val __pb_callback_return_w5_field2 = callback_return_w5.groups
+val __pb_callback_return_w5_field3 = callback_return_w5.marker
+val __pb_callback_return_w5_field4 = callback_return_w5.tail
+val __pb_callback_return_w5_field5 = callback_return_w5.last
+val callback_return_w9_elements = if (true) __pb_callback_return_w5_field2?.toList() else null
+val callback_return_w8_writer_state = if (true) run { val callback_return_w8_writer = io.prebindgen.covertest.BulkInputs.Input_Range_31afb2a04211128a()
+val callback_return_w9_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w9_elements }
+if (callback_return_w9_bulkList == null) { callback_return_w8_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0]) } else {
+val callback_return_w9_bulkStart = callback_return_w8_writer.rows(callback_return_w9_bulkList.size, io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2)
+callback_return_w8_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0], callback_return_w9_bulkStart, callback_return_w9_bulkList.size)
+callback_return_w9_bulkList.forEachIndexed { callback_return_w9_bulkIndex, callback_return_w15 ->
+val callback_return_w15_elements = if (callback_return_w15 != null) (if (true) requireNotNull(callback_return_w15).toList() else null) else (null)
+callback_return_w8_writer.int((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w15 != null) 1 else 0) })
+val callback_return_w15_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w15 != null) callback_return_w15_elements else null }
+if (callback_return_w15_bulkList == null) { callback_return_w8_writer.absent((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
+val callback_return_w15_bulkStart = callback_return_w8_writer.rows(callback_return_w15_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+callback_return_w8_writer.range((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1], callback_return_w15_bulkStart, callback_return_w15_bulkList.size)
+callback_return_w15_bulkList.forEachIndexed { callback_return_w15_bulkIndex, callback_return_w19 ->
+val __pb_callback_return_w19_field0 = callback_return_w19.first
+val __pb_callback_return_w19_field1 = callback_return_w19.optional
+val __pb_callback_return_w19_field2 = callback_return_w19.character
+val __pb_callback_return_w19_field3 = callback_return_w19.last
+callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w19_field0 }, true, 0)
+callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w19_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w19_field1) else null) { "invalid option payload" } else null }, true, 0)
+callback_return_w8_writer.int((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w19_field2 })
+callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w19_field3 }, true, 0)
+}
+}
+}
+}
+
+callback_return_w8_writer } else null
+val callback_return_w25_elements = if (true) __pb_callback_return_w5_field4?.toList() else null
+val callback_return_w24_writer_state = if (true) run { val callback_return_w24_writer = io.prebindgen.covertest.BulkInputs.Input_Range_08a37f4477600073()
+val callback_return_w25_bulkList = io.prebindgen.covertest.InputValidation.value { callback_return_w25_elements }
+if (callback_return_w25_bulkList == null) { callback_return_w24_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0]) } else {
+val callback_return_w25_bulkStart = callback_return_w24_writer.rows(callback_return_w25_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
+callback_return_w24_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0], callback_return_w25_bulkStart, callback_return_w25_bulkList.size)
+callback_return_w25_bulkList.forEachIndexed { callback_return_w25_bulkIndex, callback_return_w29 ->
+val __pb_callback_return_w29_field0 = callback_return_w29.first
+val __pb_callback_return_w29_field1 = callback_return_w29.optional
+val __pb_callback_return_w29_field2 = callback_return_w29.character
+val __pb_callback_return_w29_field3 = callback_return_w29.last
+callback_return_w24_writer.handle((callback_return_w25_bulkStart + callback_return_w25_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w29_field0 }, true, 0)
+callback_return_w24_writer.handle((callback_return_w25_bulkStart + callback_return_w25_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w29_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w29_field1) else null) { "invalid option payload" } else null }, true, 0)
+callback_return_w24_writer.int((callback_return_w25_bulkStart + callback_return_w25_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w29_field2 })
+callback_return_w24_writer.handle((callback_return_w25_bulkStart + callback_return_w25_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w29_field3 }, true, 0)
+}
+}
+
+callback_return_w24_writer } else null
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field0 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field1 }, io.prebindgen.covertest.InputValidation.value { callback_return_w8_writer_state }, io.prebindgen.covertest.InputValidation.value { callback_return_w8_writer_state?.length ?: 0 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field3 }, io.prebindgen.covertest.InputValidation.value { callback_return_w24_writer_state }, io.prebindgen.covertest.InputValidation.value { callback_return_w24_writer_state?.length ?: 0 }, io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w5_field5 }) }, intArrayOf(2, 1, 0, 0, 0, 0, 0, 2), 2, arrayOf(intArrayOf(1), intArrayOf(0), intArrayOf(1), intArrayOf(), intArrayOf(), intArrayOf(1), intArrayOf(), intArrayOf(1))) } else null
+ run { val __pb_handle0: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w1_elements?.handleGroup(0).orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle1: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w1_elements?.handleGroup(1).orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withMixedInputLocks((__pb_handle0), (__pb_handle1)) { val callbackReturnWire = callback_return_w1_elements?.encode()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements?.consume(__pb_consume)
+callbackReturnWire } } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? Iterable<*>)?.forEach { returnedValue0 -> (returnedValue0 as? io.prebindgen.covertest.callbackreturns.CallbackNestedBatch)?.let { returnedValue1 -> (returnedValue1.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue3 -> returnedHandles.add(returnedValue3); returnedOwners.add(returnedValue3) }
+(returnedValue1.observed as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue7 -> returnedHandles.add(returnedValue7);  }
+(returnedValue1.groups as? Iterable<*>)?.forEach { returnedValue10 -> (returnedValue10 as? Iterable<*>)?.forEach { returnedValue12 -> (returnedValue12 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue13 -> (returnedValue13.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue15 -> returnedHandles.add(returnedValue15); returnedOwners.add(returnedValue15) }
+(returnedValue13.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue18 -> returnedHandles.add(returnedValue18); returnedOwners.add(returnedValue18) }
+(returnedValue13.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue20 -> returnedHandles.add(returnedValue20); returnedOwners.add(returnedValue20) }
+ }
+ }
+ }
+(returnedValue1.tail as? Iterable<*>)?.forEach { returnedValue23 -> (returnedValue23 as? io.prebindgen.covertest.callbackreturns.CallbackFixedResult)?.let { returnedValue24 -> (returnedValue24.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue26 -> returnedHandles.add(returnedValue26); returnedOwners.add(returnedValue26) }
+(returnedValue24.optional as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue29 -> returnedHandles.add(returnedValue29); returnedOwners.add(returnedValue29) }
+(returnedValue24.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue31 -> returnedHandles.add(returnedValue31); returnedOwners.add(returnedValue31) }
+ }
+ }
+(returnedValue1.last as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue33 -> returnedHandles.add(returnedValue33); returnedOwners.add(returnedValue33) }
+ }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { retry } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { worker } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_mixed_batches_2277ce12060893e9(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
 public fun callbackNestedBatchEcho(batch: io.prebindgen.covertest.callbackreturns.CallbackNestedBatch, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbackreturns.CallbackNestedBatch> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbackreturns.CallbackNestedBatch = run {
     val __pb_p0_w1_field0 = try { batch.first } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val __pb_p0_w1_field1 = try { batch.observed } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }

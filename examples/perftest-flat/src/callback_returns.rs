@@ -88,16 +88,51 @@ pub fn callback_return_enum(
 static RESOURCE_LIVE: AtomicUsize = AtomicUsize::new(0);
 #[prebindgen]
 pub type CallbackReturnResource = CallbackReturnResourceImpl;
-pub struct CallbackReturnResourceImpl(i64);
+pub struct CallbackReturnResourceImpl(i64, usize);
+#[derive(Default)]
+struct ResourceAudit {
+    live: std::collections::BTreeSet<usize>,
+    duplicate_drop: bool,
+}
+static RESOURCE_AUDIT: std::sync::Mutex<Option<ResourceAudit>> = std::sync::Mutex::new(None);
+static RESOURCE_SERIAL: AtomicUsize = AtomicUsize::new(1);
+#[prebindgen]
+pub fn callback_return_resource_audit_start() {
+    let mut audit = RESOURCE_AUDIT.lock().unwrap();
+    assert!(audit.is_none());
+    *audit = Some(Default::default());
+}
+#[prebindgen]
+pub fn callback_return_resource_audit_finish() {
+    let audit = RESOURCE_AUDIT.lock().unwrap().take().unwrap();
+    assert!(!audit.duplicate_drop, "callback allocation dropped twice");
+    assert!(
+        audit.live.is_empty(),
+        "callback allocations were not all dropped"
+    );
+}
+
 impl Drop for CallbackReturnResourceImpl {
     fn drop(&mut self) {
+        if self.1 != 0 {
+            let mut audit = RESOURCE_AUDIT.lock().unwrap();
+            let audit = audit.as_mut().unwrap();
+            if !audit.live.remove(&self.1) {
+                audit.duplicate_drop = true;
+            }
+        }
         RESOURCE_LIVE.fetch_sub(1, Ordering::SeqCst);
     }
 }
 #[prebindgen]
 pub fn callback_return_resource_new(value: i64) -> CallbackReturnResource {
     RESOURCE_LIVE.fetch_add(1, Ordering::SeqCst);
-    CallbackReturnResourceImpl(value)
+    let serial = RESOURCE_AUDIT.lock().unwrap().as_mut().map_or(0, |audit| {
+        let serial = RESOURCE_SERIAL.fetch_add(1, Ordering::Relaxed);
+        assert!(audit.live.insert(serial));
+        serial
+    });
+    CallbackReturnResourceImpl(value, serial)
 }
 #[prebindgen]
 pub fn callback_return_resource_live() -> u64 {
@@ -474,17 +509,84 @@ pub fn callback_nested_batch(
     retry: bool,
     worker: bool,
 ) -> i64 {
-    callback_retry(callback, retry, worker, |batch| {
-        assert_eq!(batch.marker, 'c');
-        batch.first.0
-            + batch.observed.0
-            + callback_nested_total(batch.groups)
-            + batch.tail.into_iter().map(callback_row_total).sum::<i64>()
-            + batch.last.0
-    })
+    callback_retry(callback, retry, worker, callback_batch_total)
 }
 
 #[prebindgen]
 pub fn callback_nested_batch_echo(batch: CallbackNestedBatch) -> CallbackNestedBatch {
     batch
+}
+
+fn callback_batch_total(batch: CallbackNestedBatch) -> i64 {
+    assert_eq!(batch.marker, 'c');
+    batch.first.0
+        + batch.observed.0
+        + callback_nested_total(batch.groups)
+        + batch.tail.into_iter().map(callback_row_total).sum::<i64>()
+        + batch.last.0
+}
+#[prebindgen]
+pub fn callback_mixed_batches(
+    callback: impl Fn() -> Vec<CallbackNestedBatch> + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    callback_retry(callback, retry, worker, |batches| {
+        batches.into_iter().map(callback_batch_total).sum()
+    })
+}
+#[prebindgen]
+pub fn callback_mixed_batches_echo(batches: Vec<CallbackNestedBatch>) -> Vec<CallbackNestedBatch> {
+    batches
+}
+
+#[prebindgen]
+pub fn callback_mixed_batch(
+    callback: impl Fn() -> CallbackNestedBatch + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    callback_retry(callback, retry, worker, callback_batch_total)
+}
+
+#[prebindgen]
+pub struct CallbackScalarBatch {
+    pub stamp: i64,
+    pub rows: Vec<CallbackReturnRecord>,
+}
+#[prebindgen]
+pub fn callback_mixed_scalars(callback: impl Fn() -> Vec<CallbackScalarBatch>) -> i64 {
+    callback()
+        .into_iter()
+        .map(|batch| {
+            batch.stamp
+                + batch
+                    .rows
+                    .into_iter()
+                    .map(|row| row.number + row.label.len() as i64)
+                    .sum::<i64>()
+        })
+        .sum()
+}
+
+#[prebindgen]
+pub struct CallbackOptionalBatch {
+    pub first: Option<CallbackReturnResource>,
+    pub rows: Vec<CallbackFixedResult>,
+    pub last: CallbackReturnResource,
+}
+#[prebindgen]
+pub fn callback_mixed_optional_batches(
+    callback: impl Fn() -> Vec<CallbackOptionalBatch> + Send + Sync + 'static,
+    retry: bool,
+) -> i64 {
+    callback_retry(callback, retry, false, |rows| {
+        rows.into_iter()
+            .map(|row| {
+                row.first.as_ref().map_or(0, |r| r.0)
+                    + row.rows.into_iter().map(callback_row_total).sum::<i64>()
+                    + row.last.0
+            })
+            .sum()
+    })
 }

@@ -122,6 +122,7 @@ fun checkCallbackReturns() {
     checkFixedCallbackResults()
     checkCallbackResultRows()
     checkNestedCallbackResults()
+    checkMixedCallbackResults()
     println("callback returns PASS: scalars, records, collections, owned handles, errors and retained native workers")
 }
 

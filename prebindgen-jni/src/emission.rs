@@ -43,10 +43,7 @@ impl TemplateContext for JniContext {
             }
             "output_committed" => Ok(self.output_committed.clone()),
             name if name.starts_with("bulk_read_") => {
-                let wire = quote::format_ident!("{}", &name[10..]);
-                let length = quote::format_ident!("{wire}_length");
-                let env = &self.environment;
-                Ok(quote::quote!(::prebindgen_jni_runtime::bulk::input(&mut #env,&#wire,#length)))
+                Ok(quote::quote!(::prebindgen_jni_runtime::bulk::input))
             }
             _ => Err(format!("unknown emission parameter `{name}`")),
         })

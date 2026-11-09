@@ -7,6 +7,17 @@ internal object Counters {
 private class Measured(val run: () -> Long, val close: () -> Unit)
 private fun makePlain(kind: String, size: Int): Measured {
     return when (kind) {
+        "callback_batches", "callback_batches_many", "callback_mixed_batches", "callback_mixed_batches_many" -> {
+            val small = kind.endsWith("_many")
+            val mixed = kind.startsWith("callback_mixed")
+            fun batch(count: Int) = bench.plain.HandleBatch(bench.plain.inputHandleNew(1),
+                List(count) { bench.plain.HandleRecord(bench.plain.inputHandleNew(it.toLong()), it.toLong()) })
+            var rows = if (small) List(size) { batch(1) } else listOf(batch(size))
+            val callback = bench.plain.OwnedBatchesCallback { rows }
+            val packedCallback = bench.plain.OwnedMixedBatchesCallback { rows }
+            Measured({ rows = if (mixed) bench.plain.callbackMixedBatchesOwnedHandles(packedCallback) else bench.plain.callbackBatchesOwnedHandles(callback); rows.sumOf { it.rows.size }.toLong() },
+                { rows.forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        }
         "callback_nested", "callback_nested_many" -> {
             var rows=if(kind=="callback_nested") listOf(emptyList(),List(size) {bench.plain.inputHandleNew(it.toLong())},emptyList())
                      else List(size) {listOf(bench.plain.inputHandleNew(it.toLong()))}
@@ -57,6 +68,17 @@ private fun makePlain(kind: String, size: Int): Measured {
 }
 private fun makeBulk(kind: String, size: Int): Measured {
     return when (kind) {
+        "callback_batches", "callback_batches_many", "callback_mixed_batches", "callback_mixed_batches_many" -> {
+            val small = kind.endsWith("_many")
+            val mixed = kind.startsWith("callback_mixed")
+            fun batch(count: Int) = bench.bulk.HandleBatch(bench.bulk.inputHandleNew(1),
+                List(count) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(it.toLong()), it.toLong()) })
+            var rows = if (small) List(size) { batch(1) } else listOf(batch(size))
+            val callback = bench.bulk.OwnedBatchesCallback { rows }
+            val packedCallback = bench.bulk.OwnedMixedBatchesCallback { rows }
+            Measured({ rows = if (mixed) bench.bulk.callbackMixedBatchesOwnedHandles(packedCallback) else bench.bulk.callbackBatchesOwnedHandles(callback); rows.sumOf { it.rows.size }.toLong() },
+                { rows.forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        }
         "callback_nested", "callback_nested_many" -> {
             var rows=if(kind=="callback_nested") listOf(emptyList(),List(size) {bench.bulk.inputHandleNew(it.toLong())},emptyList())
                      else List(size) {listOf(bench.bulk.inputHandleNew(it.toLong()))}

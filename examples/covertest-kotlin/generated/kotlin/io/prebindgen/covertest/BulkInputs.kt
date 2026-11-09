@@ -2,6 +2,22 @@
 package io.prebindgen.covertest
 
 internal object BulkInputs {
+internal class Input_Range_08a37f4477600073 : BulkHandleWriter(BulkLayouts.r08a37f4477600073.size, 1) {
+override fun patchHandles() {
+var handleIndex0 = 0
+val rows0Start = long((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0]).toInt()
+if (rows0Start >= 0) {
+val rows0Count = long(((0) + io.prebindgen.covertest.BulkLayouts.r08a37f4477600073.offsets[0]) + 8).toInt()
+var rows0Index = 0
+while (rows0Index < rows0Count) {
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], handleIndex0, 0)
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], handleIndex0, 0)
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], handleIndex0, 0)
+rows0Index++
+}
+}
+}
+}
 internal class Input_Range_2997fc5de2832bba : BulkHandleWriter(BulkLayouts.r2997fc5de2832bba.size, 2) {
 override fun patchHandles() {
 var handleIndex0 = 0
@@ -33,6 +49,30 @@ var rows1Index = 0
 while (rows1Index < rows1Count) {
 handleIndex0 = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], handleIndex0, 0)
 handleIndex0 = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], handleIndex0, 0)
+rows1Index++
+}
+}
+rows0Index++
+}
+}
+}
+}
+internal class Input_Range_31afb2a04211128a : BulkHandleWriter(BulkLayouts.r31afb2a04211128a.size, 1) {
+override fun patchHandles() {
+var handleIndex0 = 0
+val rows0Start = long((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0]).toInt()
+if (rows0Start >= 0) {
+val rows0Count = long(((0) + io.prebindgen.covertest.BulkLayouts.r31afb2a04211128a.offsets[0]) + 8).toInt()
+var rows0Index = 0
+while (rows0Index < rows0Count) {
+val rows1Start = long((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]).toInt()
+if (rows1Start >= 0) {
+val rows1Count = long(((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) + 8).toInt()
+var rows1Index = 0
+while (rows1Index < rows1Count) {
+handleIndex0 = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], handleIndex0, 0)
+handleIndex0 = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], handleIndex0, 0)
+handleIndex0 = patchHandle((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], handleIndex0, 0)
 rows1Index++
 }
 }
@@ -219,6 +259,52 @@ val rows0Count = long(((0) + io.prebindgen.covertest.BulkLayouts.rcedc43bd1c5d31
 var rows0Index = 0
 while (rows0Index < rows0Count) {
 handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rf3410c1e0e62c978.size) + io.prebindgen.covertest.BulkLayouts.rf3410c1e0e62c978.offsets[0], handleIndex0, 0)
+rows0Index++
+}
+}
+}
+}
+internal class Input_Range_d0f85d5de64becff : BulkHandleWriter(BulkLayouts.rd0f85d5de64becff.size, 1) {
+override fun patchHandles() {
+var handleIndex0 = 0
+val rows0Start = long((0) + io.prebindgen.covertest.BulkLayouts.rd0f85d5de64becff.offsets[0]).toInt()
+if (rows0Start >= 0) {
+val rows0Count = long(((0) + io.prebindgen.covertest.BulkLayouts.rd0f85d5de64becff.offsets[0]) + 8).toInt()
+var rows0Index = 0
+while (rows0Index < rows0Count) {
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[0], handleIndex0, 0)
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[1], handleIndex0, 0)
+val rows1Start = long((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[2]).toInt()
+if (rows1Start >= 0) {
+val rows1Count = long(((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[2]) + 8).toInt()
+var rows1Index = 0
+while (rows1Index < rows1Count) {
+val rows2Start = long((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]).toInt()
+if (rows2Start >= 0) {
+val rows2Count = long(((rows1Start + rows1Index * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) + 8).toInt()
+var rows2Index = 0
+while (rows2Index < rows2Count) {
+handleIndex0 = patchHandle((rows2Start + rows2Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], handleIndex0, 0)
+handleIndex0 = patchHandle((rows2Start + rows2Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], handleIndex0, 0)
+handleIndex0 = patchHandle((rows2Start + rows2Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], handleIndex0, 0)
+rows2Index++
+}
+}
+rows1Index++
+}
+}
+val rows3Start = long((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[4]).toInt()
+if (rows3Start >= 0) {
+val rows3Count = long(((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[4]) + 8).toInt()
+var rows3Index = 0
+while (rows3Index < rows3Count) {
+handleIndex0 = patchHandle((rows3Start + rows3Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[0], handleIndex0, 0)
+handleIndex0 = patchHandle((rows3Start + rows3Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], handleIndex0, 0)
+handleIndex0 = patchHandle((rows3Start + rows3Index * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], handleIndex0, 0)
+rows3Index++
+}
+}
+handleIndex0 = patchHandle((rows0Start + rows0Index * io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.size) + io.prebindgen.covertest.BulkLayouts.rd54b28f5270f2e89.offsets[5], handleIndex0, 0)
 rows0Index++
 }
 }

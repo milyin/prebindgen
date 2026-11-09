@@ -277,6 +277,13 @@ internal object JNINative {
     @JvmStatic external fun call_callback_config_nested_c023613beb216159(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_optional_c1ccbb78d74cca03(p0_w1: Int, p0_w4: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_config_ordinary_7a1de11aa6329a97(p0_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_mixed_optional_batches_76b06f5cc7757da1(p0_callback: Any?, p1_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_mixed_scalars_b3ffdfdc953994c9(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_return_resource_audit_start_a5392cdfc5cff176(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_return_resource_audit_finish_a13e6bda7dfc3d9b(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
+    @JvmStatic external fun call_callback_mixed_batch_0e29c21fa132f86f(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_callback_mixed_batches_echo_b1e56234e999f1fa(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_callback_mixed_batches_2277ce12060893e9(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_nested_batch_echo_3dada1cd491c5035(p0_w1_f0: Long, p0_w1_f1: Long, p0_w2: Array<Any?>?, p0_w1_f3: Int, p0_w15: Array<Any?>?, p0_w1_f5: Long, ownership: LongArray, returns: Return_Long_Long_Array_Any__6_ErrorEmpty_5b53ecd9dac487e2): Unit
     @JvmStatic external fun call_callback_nested_results_b9be5ae57009af02(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_nested_batch_2c220f1124510108(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

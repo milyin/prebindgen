@@ -151,6 +151,17 @@ fn main() {
         } else {
             nested_callback.callback_return()
         };
+        let batch_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])))])));
+        let mixed_batch_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk()])));
+        let batches = fun!(callback_batches_owned_handles).expand_param("callback",
+            callback!(impl Fn() -> Vec<HandleBatch>).name("OwnedBatchesCallback")
+                .expand_return(if bulk { batch_input.bulk() } else { batch_input }))
+            .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
+        let mixed_batches = fun!(callback_mixed_batches_owned_handles).expand_param("callback",
+            callback!(impl Fn() -> Vec<HandleBatch>).name("OwnedMixedBatchesCallback").expand_return(mixed_batch_input))
+            .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
         let callback_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
         let callback_input = if bulk {
             callback_input.bulk()
@@ -209,6 +220,8 @@ fn main() {
                 package!()
                     .class(ptr_class!(InputHandle))
                     .class(data_class!(HandleRecord))
+                    .class(data_class!(HandleBatch))
+                    .fun(batches).fun(mixed_batches)
                     .class(data_class!(BufferRecord))
                     .fun(fun!(input_handle_new))
                     .fun(fun!(input_handle_value))

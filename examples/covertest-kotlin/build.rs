@@ -519,6 +519,24 @@ fn main() {
             .class(data_class!(CallbackWireRow))
             .class(data_class!(CallbackFixedResult))
             .class(data_class!(CallbackNestedBatch))
+            .class(data_class!(CallbackOptionalBatch))
+            .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+                        Input::Sequence(Box::new(callback_result_row_input())).bulk(), Input::Leaf]))))))
+            .class(data_class!(CallbackScalarBatch))
+            .fun(fun!(callback_mixed_scalars).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+                        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()]))))))
+            .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
+            .fun(fun!(callback_mixed_batch).expand_param("callback",
+                callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
+                    .expand_return(callback_mixed_batch_input(true, false))))
+            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", Input::Sequence(Box::new(callback_mixed_batch_input(false, true)))))
+            .fun(fun!(callback_mixed_batches).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackNestedBatch>).name("MixedBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(callback_mixed_batch_input(true, true))))))
             .fun(fun!(callback_nested_batch_echo).expand_param("batch",Input::Record(vec![
                 Input::Leaf, Input::Leaf, callback_nested_rows_input(), Input::Leaf,
                 Input::Sequence(Box::new(callback_result_row_input())), Input::Leaf])))
@@ -1982,4 +2000,26 @@ fn callback_nested_rows_input() -> Input<prebindgen_jni::InputRequest> {
     Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
         Box::new(callback_result_row_input()),
     )))))
+}
+
+fn callback_mixed_batch_input(
+    borrowed: bool,
+    bulk_tail: bool,
+) -> Input<prebindgen_jni::InputRequest> {
+    Input::Record(vec![
+        Input::Leaf,
+        if borrowed {
+            Input::constructor("callback_return_resource_copy", [Input::Leaf])
+        } else {
+            Input::Leaf
+        },
+        callback_nested_rows_input().bulk(),
+        Input::constructor("callback_fixed_marker", [Input::Leaf]),
+        if bulk_tail {
+            Input::Sequence(Box::new(callback_result_row_input())).bulk()
+        } else {
+            Input::Sequence(Box::new(callback_result_row_input()))
+        },
+        Input::Leaf,
+    ])
 }

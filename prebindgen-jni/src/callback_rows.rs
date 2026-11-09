@@ -3,30 +3,38 @@ use super::*;
 use crate::kotlin::JniNode;
 use prebindgen_flat::{Wire, WireNode};
 
-/// Generated Kotlin creates private row arrays, retained by the JNI local frame.
+/// Generated Kotlin creates private row arrays and fresh packed byte arrays per
+/// occurrence, retained by the JNI local frame. Packed capacity starts zeroed;
+/// these arrays are never pooled or reused across invocations.
 /// Internal native callers must keep those wire values stable through decoding
 /// and rollback, as required by the generated preparation/ownership protocol.
-/// Bulk carriers retain their existing cleanup paths.
+/// Packed children reuse the native bulk cleanup traversal.
 pub(crate) fn cleanup(
     node: &JniNode,
     context: &JniContext,
     root: &syn::Ident,
 ) -> Result<Option<TokenStream>> {
-    // Find ordinary collections transferring ownership, rejecting any packed
-    // subtree. Fixed handles alone already have native-only cleanup guards.
+    // Find ordinary collections transferring ownership. Packed children are
+    // scanned natively after reading their own carrier. Results without ordinary
+    // owner collections retain the existing native-only cleanup guards.
     fn rows(node: &JniNode) -> Option<bool> {
+        if !kotlin::input_handles(node, true) {
+            return Some(false);
+        }
         match node {
             WireNode::Leaf(_) => Some(false),
             WireNode::Chain {
                 meta: JniChain::Sequence(JniSequence::Buffered),
                 child,
                 ..
-            } => {
-                let nested = rows(child)?;
-                Some(nested || kotlin::input_handles(child, true))
-            }
+            } => rows(child).map(|_| true),
             WireNode::Chain {
-                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                meta: JniChain::Bulk(_) | JniChain::Sequence(JniSequence::Bulk),
+                child,
+                ..
+            } => rows(child),
+            WireNode::Chain {
+                meta: JniChain::Sequence(_),
                 ..
             } => None,
             WireNode::Chain { child, .. } => rows(child),
@@ -35,10 +43,10 @@ pub(crate) fn cleanup(
                 .try_fold(false, |found, child| Some(rows(child)? || found)),
         }
     }
-    let fields = group::argument_parameters(node).collect::<Vec<_>>();
     if rows(node) != Some(true) {
         return Ok(None);
     }
+    let fields = group::argument_parameters(node).collect::<Vec<_>>();
     // A single field is already a decoded native local. Composite results stay
     // in their private root array, just like rows at any deeper nesting level.
     let composite = fields.len() != 1;
@@ -64,7 +72,8 @@ fn read(
             let mut #env = #env;
             // Keep sibling reference columns bounded even in wide result trees.
             let cleanup_read_frame = unsafe { ::prebindgen_jni_runtime::LocalFrame::new(&#env, 8) }?;
-            match #expression {
+            let cleanup_read = #expression;
+            match cleanup_read {
                 Ok(#name) => { #next }
                 Err(error) => {
                     // Format errors permit sibling cleanup. A JVM failure that
@@ -164,6 +173,34 @@ fn receive(
                 }
             });
             field(context, row, fields, carrier, scan)?
+        }
+        WireNode::Chain {
+            meta: JniChain::Bulk(layout),
+            controls,
+            child,
+        } => {
+            let carrier = &controls[0].name;
+            let bytes = format_ident!("{carrier}_cleanup_bytes");
+            let scan = crate::bulk::cleanup_buffer(layout, child, &bytes)?;
+            let env = &context.environment;
+            let scan = read(
+                context,
+                &bytes,
+                // Cleanup owns the whole private carrier. A malformed declared
+                // used length must not hide readable owners in its actual bytes.
+                quote!({
+                    let actual = #env.get_array_length(&#carrier).map_err(|e| e.to_string())?;
+                    ::prebindgen_jni_runtime::bulk::input(&mut #env, &#carrier, actual)
+                }),
+                scan,
+            );
+            field(
+                context,
+                row,
+                fields,
+                carrier,
+                quote!(if !#carrier.is_null() { #scan }),
+            )?
         }
         WireNode::Chain {
             meta: JniChain::Optional(optional),

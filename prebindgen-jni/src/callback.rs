@@ -604,7 +604,9 @@ impl CallbackReturn {
         let collect = returned_handle_cleanup(self.input.input_node(), value, prefix, &mut 0)?;
         Ok(Some(format!("val returnedOwners = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); {collect}\nval released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) {{ if (owner.isClosed) continue; try {{ if (released.add(owner.address)) owner.close() else owner.markConsumed() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }} }}; for (handle in returnedHandles) {{ if (handle.address in released) handle.markConsumed() }}")))
     }
-    fn ownership_guard(&self, context: &JniContext) -> Result<(TokenStream, TokenStream)> {
+    // Fixed addresses and cached native buffers permit a Drop guard. JVM row
+    // cleanup instead waits for decoding to finish before borrowing JNIEnv again.
+    fn ownership_guard(&self) -> Result<(TokenStream, TokenStream)> {
         let fields = self.fields();
         if let [field] = fields.as_slice() {
             if let JniWire::Handle { handle, .. } = &field.kind {
@@ -619,26 +621,20 @@ impl CallbackReturn {
             }
         }
         let node = self.input.input_node();
-        let cleanup_only = native_return_owners(node, false);
-        let scan = receive_return_owners(node, context, cleanup_only)?;
+        let scan = receive_native_return_owners(node)?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
-        if cleanup_only {
-            return Ok((
-                quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
-                    let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
-                    #scan
-                    Ok(())
-                });),
-                quote!(callback_return_cleanup.commit();),
-            ));
-        }
         Ok((
-            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed); #scan callback_return_owners.check()?;),
-            quote!(),
+            quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
+                let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
+                #scan
+                Ok(())
+            });),
+            quote!(callback_return_cleanup.commit();),
         ))
     }
+
     fn rust_invoke(
         &self,
         context: &JniContext,
@@ -646,17 +642,24 @@ impl CallbackReturn {
         env: &syn::Ident,
     ) -> Result<TokenStream> {
         let mut input = self.input.clone();
-        let cache = crate::bulk::callback_cache(input.input_node(), context)?;
-        input.rust.validation = crate::bulk::cached_reads(&input.rust.validation)?;
         let fields = self.fields();
         let result = format_ident!("callback_result");
         let root_row = format_ident!("callback_result_rows");
         let cleanup_rows =
             crate::callback_rows::cleanup(self.input.input_node(), context, &root_row)?;
+        let cache = if cleanup_rows.is_some() {
+            // Decode each occurrence in its own scope. On failure the private
+            // result arrays retain all ordinary and packed carriers for cleanup.
+            quote!()
+        } else {
+            input.rust.validation =
+                crate::bulk::cached_reads(&input.rust.validation, input.input_node())?;
+            crate::bulk::callback_cache(input.input_node(), context)?
+        };
         let (owners, commit_owners) = if cleanup_rows.is_some() {
             (quote!(), quote!())
         } else {
-            self.ownership_guard(context)?
+            self.ownership_guard()?
         };
         let ownership_reads = quote!(#owners #cache);
         let (return_type, decode, mut late_decode) = match fields.as_slice() {
@@ -815,37 +818,6 @@ fn returned_handle_cleanup(
     })
 }
 
-// Cleanup may use fixed handle addresses already decoded into native locals
-// and independently cached bulk roots. It must never rescan mutable JVM rows
-// or borrow JNIEnv while ordinary decoding is using it.
-fn native_return_owners(node: &kotlin::JniNode, cached: bool) -> bool {
-    match node {
-        WireNode::Leaf(_) => true,
-        WireNode::Chain {
-            meta: JniChain::Bulk(_),
-            ..
-        } if cached => false,
-        WireNode::Chain {
-            meta: JniChain::Bulk(_),
-            child,
-            ..
-        } => native_return_owners(child, true),
-        WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Bulk),
-            child,
-            ..
-        } if cached => native_return_owners(child, true),
-        WireNode::Chain {
-            meta: JniChain::Sequence(_),
-            ..
-        } => !kotlin::input_handles(node, true),
-        WireNode::Chain { child, .. } => native_return_owners(child, cached),
-        WireNode::Branch { children, .. } => children
-            .iter()
-            .all(|child| native_return_owners(child, cached)),
-    }
-}
-
 fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
     code.clone().into_iter().any(|token| match token {
         proc_macro2::TokenTree::Ident(value) => value == *name,
@@ -853,49 +825,46 @@ fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
         _ => false,
     })
 }
-pub(crate) fn receive_return_owners(
-    node: &kotlin::JniNode,
-    context: &JniContext,
-    cleanup_only: bool,
-) -> Result<TokenStream> {
+// Fixed native locals and cached bulk roots can be reclaimed without JNI.
+// Ordinary collection occurrences are handled by callback_rows instead.
+fn receive_native_return_owners(node: &kotlin::JniNode) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} => if cleanup_only {
-            crate::bulk::cleanup_cached(layout,controls,child)?
-        } else { crate::bulk::scan_bulk(layout,controls,child,context)? },
-        WireNode::Chain {meta:JniChain::Sequence(JniSequence::Bulk),controls,child} => crate::bulk::scan_rows(controls,child,context)?,
-        WireNode::Leaf(fields)=>fields.iter().filter_map(|field| {
-            if let JniWire::Handle {handle,..}=&field.kind {
-                if handle.access==Access::Move {let name=&field.name;let ty=&handle.ty;return Some(quote!(unsafe {callback_return_owners.receive(#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>);}));}
+        WireNode::Chain { meta: JniChain::Bulk(layout), controls, child } => crate::bulk::cleanup_cached(layout, controls, child)?,
+        WireNode::Leaf(fields) => fields.iter().filter_map(|field| {
+            if let JniWire::Handle { handle, .. } = &field.kind {
+                if handle.access == Access::Move {
+                    let name=&field.name; let ty=&handle.ty;
+                    return Some(quote!(unsafe { callback_return_owners.receive(#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>); }));
+                }
             }
             None
         }).collect(),
-        WireNode::Chain { meta:JniChain::Optional(optional),child,..}=> {
-            let scan=receive_return_owners(child,context,cleanup_only)?;
-            if scan.is_empty(){return Ok(scan);}
+        WireNode::Chain { meta: JniChain::Optional(optional), child, .. } => {
+            let scan=receive_native_return_owners(child)?;
+            if scan.is_empty() { return Ok(scan); }
             let name=optional.discriminator();
-            let present=if let Some(niche)=optional.niche(){let field=group::argument_parameters(child).find(|w|w.name==*name).ok_or("missing callback return optional discriminator")?; niche.present(&field.kind,quote!(#name))} else {quote!(#name==1)};
-            quote!(if #present {#scan})
+            let present=if let Some(niche)=optional.niche() {
+                let field=group::argument_parameters(child).find(|w| w.name==*name).ok_or("missing callback return optional discriminator")?;
+                niche.present(&field.kind, quote!(#name))
+            } else { quote!(#name==1) };
+            quote!(if #present { #scan })
         }
-        WireNode::Chain {meta:JniChain::Sequence(_),controls,child}=> {
-            let scan=receive_return_owners(child,context,cleanup_only)?;
-            if scan.is_empty(){return Ok(scan);}
-            let carrier=&controls[0].name;let row=format_ident!("{carrier}_ownership_row");
-            let fields=group::argument_parameters(child).collect::<Vec<_>>();let count=fields.len();let capacity=i32::try_from(count+8).map_err(|_|"too many returned fields")?;
-            let reads=fields.into_iter().enumerate().filter(|(_,field)|mentions_value(&scan,&field.name)).map(|(index,field)|{let name=&field.name;let read=field.kind.read_array_element(&quote!(#row),index);quote!(let #name=#read?;)});
-            let env=&context.environment;
-            let code=quote!(if !#carrier.is_null() {let length=#env.get_array_length(&#carrier).map_err(|e|e.to_string())? as usize;for index in 0..length {
-                let frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;
-                let #row=::prebindgen_jni_runtime::row(&mut #env,&#carrier,index,#count)?;
-                #(#reads)* #scan drop(frame);
-            }});
-            context.render(&code)?
+        WireNode::Chain { meta: JniChain::Sequence(_), .. } => {
+            if kotlin::input_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
+            quote!()
         }
-        WireNode::Branch {meta:JniBranch::Alternatives,controls,children}=> {
-            let selector=&controls[0].name;let scans=children.iter().enumerate().map(|(i,child)|{let scan=receive_return_owners(child,context,cleanup_only)?;let i=i as i32;Ok(quote!(if #selector==#i {#scan}))}).collect::<Result<Vec<_>>>()?;quote!(#(#scans)*)
+        WireNode::Branch { meta: JniBranch::Alternatives, controls, children } => {
+            let selector=&controls[0].name;
+            let scans=children.iter().enumerate().map(|(i,child)| {
+                let scan=receive_native_return_owners(child)?; let i=i as i32;
+                Ok(quote!(if #selector==#i { #scan }))
+            }).collect::<Result<Vec<_>>>()?;
+            quote!(#(#scans)*)
         }
-        WireNode::Branch {children,..}=>children.iter().map(|child|receive_return_owners(child,context,cleanup_only)).collect::<Result<Vec<_>>>()?.into_iter().collect(),
+        WireNode::Branch { children, .. } => children.iter().map(receive_native_return_owners).collect::<Result<Vec<_>>>()?.into_iter().collect(),
     })
 }
+
 fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Result<TokenStream> {
     let code = prebindgen_conversions::render_template(code, &|name| {
         Ok(if name == "source_result" {

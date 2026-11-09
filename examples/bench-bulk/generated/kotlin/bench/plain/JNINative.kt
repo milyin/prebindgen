@@ -13,6 +13,9 @@ internal object JNINative {
     internal class SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04(@JvmField val c0: Long, @JvmField val c1: String?, @JvmField val c2: ByteArray?)
     @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
     init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java)) }
+    @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_callback_batches_owned_handles_33b783abb5780e95(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_callback_mixed_batches_owned_handles_2c0ba11b9a082cc3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_input_handle_value_ae1ea4e2f311cdb7(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_buffer_sizes_09330eed51da0791(p0_w1: String?, p1_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
