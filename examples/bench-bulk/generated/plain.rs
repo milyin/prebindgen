@@ -1087,11 +1087,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -1335,11 +1331,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_f0_pointer.addr()) as usize))
-                                            .count(),
-                                );
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_f0_pointer) })
@@ -1668,13 +1660,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                             };
                                                             if true {
                                                                 __prebindgen_input_consumed
-                                                                    .set(
-                                                                        __prebindgen_input_consumed.get()
-                                                                            + (::core::iter::once(
-                                                                                (callback_return_w5_f0_pointer.addr()) as usize,
-                                                                            ))
-                                                                                .count(),
-                                                                    );
+                                                                    .set(__prebindgen_input_consumed.get() + (1usize));
                                                             }
                                                             let callback_return_w4_f0 = if true {
                                                                 Some(unsafe {
@@ -1940,11 +1926,6 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                 }
                                                 #[allow(clippy::let_and_return, clippy::unit_arg)]
                                                 let callback_return_w0_f0_built = if true {
-                                                    let callback_return_w0_f0_built_transferred_0 = if true {
-                                                        1usize
-                                                    } else {
-                                                        0usize
-                                                    };
                                                     let callback_return_w0_f0 = if true {
                                                         Some(unsafe {
                                                             Box::from_raw(callback_return_w1_f0_pointer)
@@ -1952,11 +1933,10 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                     } else {
                                                         None
                                                     };
-                                                    __prebindgen_input_consumed
-                                                        .set(
-                                                            __prebindgen_input_consumed.get()
-                                                                + callback_return_w0_f0_built_transferred_0,
-                                                        );
+                                                    if true {
+                                                        __prebindgen_input_consumed
+                                                            .set(__prebindgen_input_consumed.get() + (1usize));
+                                                    }
                                                     Some({
                                                         let callback_return_w0_f0: bench_flat::InputHandle = callback_return_w0_f0
                                                             .expect("active allocation")
@@ -2208,11 +2188,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1buffer_1re
                         };
                         if true {
                             __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_f0_pointer.addr()) as usize))
-                                            .count(),
-                                );
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4_f0 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_f0_pointer) })
@@ -2518,11 +2494,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w9_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
@@ -2960,13 +2932,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
                                                                         }
                                                                         if true {
                                                                             __prebindgen_input_consumed
-                                                                                .set(
-                                                                                    __prebindgen_input_consumed.get()
-                                                                                        + (::core::iter::once(
-                                                                                            (callback_return_w9_pointer.addr()) as usize,
-                                                                                        ))
-                                                                                            .count(),
-                                                                                );
+                                                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                                                         }
                                                                         let callback_return_w8 = if true {
                                                                             Some(unsafe { Box::from_raw(callback_return_w9_pointer) })
@@ -7512,11 +7478,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                         }
                         if true {
                             __prebindgen_input_consumed
-                                .set(
-                                    __prebindgen_input_consumed.get()
-                                        + (::core::iter::once((p0_w5_pointer.addr()) as usize))
-                                            .count(),
-                                );
+                                .set(__prebindgen_input_consumed.get() + (1usize));
                         }
                         let p0_w4 = if true {
                             Some(unsafe { Box::from_raw(p0_w5_pointer) })
@@ -7812,11 +7774,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                                     }
                                     if true {
                                         __prebindgen_input_consumed
-                                            .set(
-                                                __prebindgen_input_consumed.get()
-                                                    + (::core::iter::once((p0_w9_pointer.addr()) as usize))
-                                                        .count(),
-                                            );
+                                            .set(__prebindgen_input_consumed.get() + (1usize));
                                     }
                                     let p0_w8 = if true {
                                         Some(unsafe { Box::from_raw(p0_w9_pointer) })
@@ -8284,13 +8242,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
                                                                         }
                                                                         if true {
                                                                             __prebindgen_input_consumed
-                                                                                .set(
-                                                                                    __prebindgen_input_consumed.get()
-                                                                                        + (::core::iter::once(
-                                                                                            (callback_return_w9_pointer.addr()) as usize,
-                                                                                        ))
-                                                                                            .count(),
-                                                                                );
+                                                                                .set(__prebindgen_input_consumed.get() + (1usize));
                                                                         }
                                                                         let callback_return_w8 = if true {
                                                                             Some(unsafe { Box::from_raw(callback_return_w9_pointer) })
