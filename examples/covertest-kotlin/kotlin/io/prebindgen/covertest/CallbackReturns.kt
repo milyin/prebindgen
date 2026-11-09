@@ -120,6 +120,7 @@ fun checkCallbackReturns() {
     callbackReturnUnit({ unit = it })
     check(unit == 21L)
     checkFixedCallbackResults()
+    checkCallbackResultRows()
     println("callback returns PASS: scalars, records, collections, owned handles, errors and retained native workers")
 }
 
@@ -166,4 +167,89 @@ private fun checkFixedCallbackResults() {
         check(calls == 2 && callbackReturnResourceLive() == 0UL)
     }
     println("fixed callback results PASS: optional/multiple owners, partial moves, unread-owner cleanup, malformed fields, retries and workers")
+}
+
+private fun checkCallbackResultRows() {
+    for (worker in listOf(false, true)) for (present in listOf(false, true)) {
+        for (bad in listOf('c'.code, 0xd800, 'p'.code)) {
+            var calls = 0
+            val transferred = mutableListOf<CallbackReturnResource>()
+            val result = callbackFixedResults(FixedResultsCallback {
+                check(callbackReturnResourceLive() == 0UL)
+                val fail = calls++ == 0
+                List(3) { row ->
+                    val first = callbackReturnResourceNew(10)
+                    val optional = if (present) callbackReturnResourceNew(20) else null
+                    val last = callbackReturnResourceNew(30)
+                    transferred.add(first); optional?.let { transferred.add(it) }; transferred.add(last)
+                    CallbackFixedResult(first, optional, if (fail && row == 1) bad else 'c'.code, last)
+                }
+            }, bad != 'c'.code, worker)
+            check(result == if (present) 180L else 120L)
+            check(calls == if (bad == 'c'.code) 1 else 2)
+            check(transferred.all { it.isClosed } && callbackReturnResourceLive() == 0UL)
+        }
+        val borrowed = callbackReturnResourceNew(10)
+        var calls = 0
+        val result = callbackFixedBorrowedResults(BorrowedFixedResultsCallback {
+            check(callbackReturnResourceLive() == 1UL)
+            val fail = calls++ == 0
+            List(3) { row -> CallbackFixedResult(borrowed,
+                if (present) callbackReturnResourceNew(20) else null,
+                if (fail && row == 1) 'p'.code else 'c'.code, callbackReturnResourceNew(30)) }
+        }, true, worker)
+        check(result == if (present) 180L else 120L)
+        check(calls == 2 && !borrowed.isClosed && callbackReturnResourceLive() == 1UL)
+        borrowed.close()
+    }
+    // Mandatory Kotlin validation rejects the same moved handle in two rows.
+    for (worker in listOf(false, true)) {
+        var calls = 0
+        val result = callbackFixedResults(FixedResultsCallback {
+            check(callbackReturnResourceLive() == 0UL)
+            val duplicate = if (calls++ == 0) callbackReturnResourceNew(10) else null
+            List(3) { CallbackFixedResult(duplicate ?: callbackReturnResourceNew(10),
+                null, 'c'.code, callbackReturnResourceNew(30)) }
+        }, true, worker)
+        check(result == 120L && calls == 2 && callbackReturnResourceLive() == 0UL)
+    }
+    check(callbackFixedResults(FixedResultsCallback { emptyList() }, false, false) == 0L)
+    check(callbackFixedOptionalResults(OptionalFixedResultsCallback { null }) == -1L)
+    check(callbackFixedOptionalResults(OptionalFixedResultsCallback { emptyList() }) == 0L)
+    check(callbackFixedOptionalResults(OptionalFixedResultsCallback {
+        listOf(CallbackFixedResult(callbackReturnResourceNew(10), null, 'c'.code, callbackReturnResourceNew(30)))
+    }) == 40L)
+    check(callbackReturnResourceLive() == 0UL)
+
+    val method = JNINative::class.java.declaredMethods.single {
+        it.name.startsWith("call_callback_fixed_results_")
+    }.also { it.isAccessible = true }
+    // Corruption in the middle row must not strand owners in this or later rows.
+    for (worker in listOf(false, true)) for (present in listOf(false, true)) {
+        for (mode in listOf("scalar", "pointer", "boxed", "short", "short_optional", "extra", "row")) {
+            var calls = 0
+            val raw = RawReturnedFields {
+                check(callbackReturnResourceLive() == 0UL)
+                val fail = calls++ == 0
+                Array<Any?>(3) { index ->
+                    val bad = fail && index == 1
+                    if (bad && mode == "row") return@Array "wrong row class"
+                    val first = callbackReturnResourceNew(10)
+                    val optional = if (present && !(bad && mode == "short_optional")) callbackReturnResourceNew(20) else null
+                    val last = if (bad && mode in listOf("pointer", "boxed", "short", "short_optional")) null else callbackReturnResourceNew(30)
+                    val fields = mutableListOf<Any?>(first.raw, optional?.raw ?: 0L,
+                        if (bad && mode == "scalar") "wrong boxed class" else 'c'.code)
+                    if (bad && mode == "short_optional") { fields.removeAt(2); fields.removeAt(1) }
+                    if (!(bad && mode in listOf("short", "short_optional"))) fields.add(if (bad && mode == "boxed") "wrong handle class" else last?.raw ?: 1L)
+                    if (bad && mode == "extra") fields.add(123)
+                    first.markConsumed(); optional?.markConsumed(); last?.markConsumed()
+                    fields.toTypedArray()
+                }
+            }
+            val result = method.invokePacket(raw, true, worker)
+            check(result[0] == null && result[1] == if (present) 180L else 120L)
+            check(calls == 2 && callbackReturnResourceLive() == 0UL)
+        }
+    }
+    println("callback result rows PASS: optional/multiple owners, borrowing, partial rows, malformed fields/rows, retries and workers")
 }

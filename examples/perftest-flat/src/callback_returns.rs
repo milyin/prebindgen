@@ -357,3 +357,57 @@ pub fn callback_fixed_result(
         run()
     }
 }
+
+#[prebindgen]
+pub fn callback_fixed_results(
+    callback: impl Fn() -> Vec<CallbackFixedResult> + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    let run = move || {
+        let retained = callback_return_resource_live();
+        if retry {
+            assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(&callback)).is_err());
+            assert_eq!(
+                callback_return_resource_live(),
+                retained,
+                "callback rows leaked before retry"
+            );
+        }
+        callback()
+            .into_iter()
+            .map(|row| {
+                assert_eq!(row.character, 'c');
+                row.first.0 + row.optional.as_ref().map_or(0, |r| r.0) + row.last.0
+            })
+            .sum()
+    };
+    if worker {
+        std::thread::spawn(run).join().unwrap()
+    } else {
+        run()
+    }
+}
+
+#[prebindgen]
+pub fn callback_fixed_optional_results(
+    callback: impl Fn() -> Option<Vec<CallbackFixedResult>>,
+) -> i64 {
+    callback().map_or(-1, |rows| {
+        rows.into_iter().map(|row| row.first.0 + row.last.0).sum()
+    })
+}
+
+#[prebindgen]
+pub fn callback_return_resource_copy(value: &CallbackReturnResource) -> CallbackReturnResource {
+    callback_return_resource_new(value.0)
+}
+
+#[prebindgen]
+pub fn callback_fixed_borrowed_results(
+    callback: impl Fn() -> Vec<CallbackFixedResult> + Send + Sync + 'static,
+    retry: bool,
+    worker: bool,
+) -> i64 {
+    callback_fixed_results(callback, retry, worker)
+}

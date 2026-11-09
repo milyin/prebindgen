@@ -650,7 +650,12 @@ impl CallbackReturn {
         input.rust.validation = crate::bulk::cached_reads(&input.rust.validation)?;
         let fields = self.fields();
         let result = format_ident!("callback_result");
-        let (owners, commit_owners) = self.ownership_guard(context)?;
+        let cleanup_rows = crate::callback_rows::cleanup(self.input.input_node(), context)?;
+        let (owners, commit_owners) = if cleanup_rows.is_some() {
+            (quote!(), quote!())
+        } else {
+            self.ownership_guard(context)?
+        };
         let ownership_reads = quote!(#owners #cache);
         let (return_type, decode, late_decode) = match fields.as_slice() {
             [field] => {
@@ -717,6 +722,23 @@ impl CallbackReturn {
                 let callback_return_decoded = (#body)?;
                 #commit_owners
                 Ok::<_,String>(callback_return_decoded)
+            });
+        }
+        if let Some(cleanup) = cleanup_rows {
+            // End every decoding borrow and drop partial Rust rows before using
+            // JNI again for rollback. reclaim_output preserves a pending JVM
+            // exception while the failure-only scan releases unread owners.
+            body = quote!({
+                let callback_return_decoded = ::prebindgen_runtime::boundary(|| { #body });
+                if callback_return_decoded.is_err() {
+                    ::prebindgen_jni_runtime::reclaim_output(&mut #env, |#env| {
+                        let mut #env = #env;
+                        let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed);
+                        #cleanup
+                        Ok(())
+                    });
+                }
+                callback_return_decoded
             });
         }
         context.render(&quote!({

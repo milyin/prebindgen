@@ -17,6 +17,7 @@ mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
 mod callback;
+mod callback_rows;
 #[cfg(test)]
 mod callback_tests;
 mod cleanup;
