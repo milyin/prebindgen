@@ -1,6 +1,7 @@
 //! Retained source callbacks exercised by the Kotlin/JNI covertest.
 use crate::CallbackReturnResource;
 use crate::Priority;
+use crate::ResultFailure;
 use prebindgen_proc_macro::prebindgen;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -464,6 +465,111 @@ fn callback_row(index: i64) -> CallbackRow {
         second: callback_row_resource_new(index * 10 + 2),
     }
 }
+fn native_bulk_values(fail_at: i64) -> Vec<CallbackRow> {
+    (0..3)
+        .map(|i| {
+            let mut row = callback_row(i);
+            if i == fail_at {
+                row.second = callback_row_resource_new(-1);
+            }
+            row
+        })
+        .collect()
+}
+/// Explicit clone projections inject a native conversion panic after prior rows.
+#[prebindgen]
+pub fn native_bulk_rows(fail_at: i64) -> Vec<CallbackRow> {
+    native_bulk_values(fail_at)
+}
+#[prebindgen]
+pub struct NativeBulkNested {
+    pub first: Vec<CallbackRow>,
+    pub second: Vec<CallbackRow>,
+}
+#[prebindgen]
+pub fn native_bulk_nested(fail_at: i64) -> Vec<Vec<CallbackRow>> {
+    (0..3)
+        .map(|i| native_bulk_values(if i == 1 { fail_at } else { -1 }))
+        .collect()
+}
+/// Two independent bulk frames; the second may fail after the first was encoded.
+#[prebindgen]
+pub fn native_bulk_pair(fail_at: i64) -> NativeBulkNested {
+    NativeBulkNested {
+        first: native_bulk_values(-1),
+        second: native_bulk_values(fail_at),
+    }
+}
+#[prebindgen]
+pub fn native_bulk_callback(fail_at: i64, callback: impl Fn(Vec<Vec<CallbackRow>>)) {
+    callback(native_bulk_nested(fail_at));
+}
+
+// C buffered-output failure injection. Copies are explicit test projections,
+// allowing a later field to fail after prior rows have transferred ownership.
+#[prebindgen]
+pub fn c_output_rows(fail_at: i64) -> Result<Vec<CallbackRow>, ResultFailure> {
+    Ok(native_bulk_rows(fail_at))
+}
+#[prebindgen]
+pub fn jni_output_fold(fail_at: i64) -> Result<Vec<CallbackRow>, ResultFailure> {
+    c_output_rows(fail_at)
+}
+#[prebindgen]
+pub fn jni_output_optional(fail_at: i64) -> Vec<Option<Vec<CallbackRow>>> {
+    vec![
+        None,
+        Some(native_bulk_values(-1)),
+        None,
+        Some(native_bulk_values(fail_at)),
+    ]
+}
+#[prebindgen]
+pub fn jni_output_mixed(fail_at: i64) -> Vec<Vec<CallbackRowResource>> {
+    native_bulk_nested(fail_at)
+        .into_iter()
+        .map(|rows| rows.into_iter().map(|row| row.second).collect())
+        .collect()
+}
+#[prebindgen]
+pub fn jni_output_mixed_frames(fail_at: i64) -> Vec<Vec<CallbackRowResource>> {
+    jni_output_mixed(fail_at)
+}
+
+// Move these handles into the fold so the sentinel destructor runs during
+// Kotlin failure cleanup, after earlier rows have reached the user's fold.
+#[prebindgen]
+pub fn jni_output_fold_drop() -> Vec<Vec<CallbackRowResource>> {
+    [[1, 2], [777, 3], [4, 5]]
+        .into_iter()
+        .map(|ids| ids.into_iter().map(callback_row_resource_new).collect())
+        .collect()
+}
+
+#[prebindgen]
+pub fn c_output_nested(fail_at: i64) -> Result<Vec<Vec<CallbackRow>>, ResultFailure> {
+    Ok(native_bulk_nested(fail_at))
+}
+#[prebindgen]
+pub fn c_output_pair(fail_at: i64) -> Result<NativeBulkNested, ResultFailure> {
+    Ok(native_bulk_pair(fail_at))
+}
+#[prebindgen]
+pub fn c_output_callback(fail_at: i64, callback: impl Fn(Vec<Vec<CallbackRow>>)) {
+    callback(native_bulk_nested(fail_at));
+}
+#[prebindgen]
+pub fn c_output_first(row: &CallbackRow) -> CallbackRowResource {
+    row.first.clone()
+}
+#[prebindgen]
+pub fn c_output_label(row: &CallbackRow) -> String {
+    row.label.clone()
+}
+#[prebindgen]
+pub fn c_output_second(row: &CallbackRow) -> CallbackRowResource {
+    row.second.clone()
+}
 #[prebindgen]
 pub fn callback_rows_owned(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {
     callback((0..3).map(callback_row).collect());
@@ -673,4 +779,41 @@ pub fn callback_row_return_cleanup_failure(
         resource: CallbackUniqueResourceImpl(callback_row_resource_new(777)),
         label: "drop failure".into(),
     }]));
+}
+
+// Ordinary row-array ABI entry points used only by malformed-boundary probes.
+#[prebindgen]
+pub fn callback_rows_owned_probe(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {
+    callback_rows_owned(callback);
+}
+#[prebindgen]
+pub fn callback_rows_optional_probe(
+    callback: impl Fn(Option<Vec<Option<CallbackRow>>>) + Send + Sync + 'static,
+    mode: i32,
+) {
+    callback_rows_optional(callback, mode);
+}
+#[prebindgen]
+pub fn callback_rows_nested_probe(
+    callback: impl Fn(Vec<Vec<Option<CallbackNestedRow>>>) + Send + Sync + 'static,
+) {
+    callback_rows_nested(callback);
+}
+#[prebindgen]
+pub fn callback_rows_pair_probe(
+    callback: impl Fn(Vec<CallbackRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback_rows_pair(callback);
+}
+#[prebindgen]
+pub fn callback_rows_transferred_probe(
+    callback: impl Fn(Vec<CallbackTransferredRow>) + Send + Sync + 'static,
+) {
+    callback_rows_transferred(callback);
+}
+#[prebindgen]
+pub fn callback_rows_transferred_pair_probe(
+    callback: impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback_rows_transferred_pair(callback);
 }

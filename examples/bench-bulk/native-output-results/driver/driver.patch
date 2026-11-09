@@ -1,0 +1,63 @@
+--- Bench.kt
++++ isolated/Bench.kt
+@@ -17 +17 @@
+-private data class Sample(val nanos: Long, val allocated: Long)
++private data class Sample(val nanos: Long, val allocated: Long, val cpuNanos: Long)
+@@ -247,0 +248,11 @@
++    check(bean.isCurrentThreadCpuTimeSupported)
++    bean.isThreadCpuTimeEnabled = true
++    val runtime = ManagementFactory.getRuntimeMXBean()
++    val compiler = ManagementFactory.getCompilationMXBean()
++    check(compiler.isCompilationTimeMonitoringSupported)
++    val collectors = ManagementFactory.getGarbageCollectorMXBeans()
++    fun gcCount() = collectors.sumOf { it.collectionCount.coerceAtLeast(0L) }
++    fun gcTime() = collectors.sumOf { it.collectionTime.coerceAtLeast(0L) }
++    val minWarmup = System.getenv("PB_MIN_WARMUP_MS").toLong() * 1000000L
++    val quietPeriod = System.getenv("PB_COMPILE_QUIET_MS").toLong() * 1000000L
++    val maxWarmup = System.getenv("PB_MAX_WARMUP_MS").toLong() * 1000000L
+@@ -252,0 +264 @@
++    require(selectedCases.size == 1) { "one case and size per JVM required" }
+@@ -258,0 +271 @@
++        val cpuStart = bean.currentThreadCpuTime
+@@ -263,0 +277 @@
++        val cpuNanos = bean.currentThreadCpuTime - cpuStart
+@@ -268 +282 @@
+-        return Sample(elapsed, allocated)
++        return Sample(elapsed, allocated, cpuNanos)
+@@ -277 +291,22 @@
+-            repeat(warmup) { last = sample(case, iterations).nanos }
++            val warmStart = System.nanoTime()
++            var compilation = compiler.totalCompilationTime
++            var lastCompilation = warmStart
++            var warmBatches = 0
++            while (warmBatches <= warmup || System.nanoTime() - warmStart < minWarmup || System.nanoTime() - lastCompilation < quietPeriod) {
++                // Many short calls settle entry compilation; finish with full-sized batches.
++                val warmIterations = if (warmBatches < warmup) (iterations / 10).coerceAtLeast(1) else iterations
++                last = sample(case, warmIterations).nanos
++                warmBatches++
++                val current = compiler.totalCompilationTime
++                if (current != compilation) {
++                    compilation = current
++                    lastCompilation = System.nanoTime()
++                }
++                // Exercise the diagnostics outside the timed operation loop.
++                gcCount(); gcTime(); runtime.uptime
++                if (System.nanoTime() - warmStart >= maxWarmup) break
++            }
++            val quietMillis = (System.nanoTime() - lastCompilation) / 1000000L
++            val stable = warmBatches > warmup && System.nanoTime() - warmStart >= minWarmup && System.nanoTime() - lastCompilation >= quietPeriod
++            check(warmBatches > warmup) { "warmup did not reach full-sized batches" }
++            println("BENCH_WARMUP,${case.name},${case.size},$warmBatches,${runtime.uptime},$quietMillis,$stable")
+@@ -278,0 +314 @@
++            println("BENCH_PHASE,${case.name},${case.size},start,${runtime.uptime},${compiler.totalCompilationTime}")
+@@ -279,0 +316,3 @@
++                val gcBefore = gcCount(); val gcMillisBefore = gcTime()
++                val compilationBefore = compiler.totalCompilationTime
++                val startMillis = runtime.uptime
+@@ -280,0 +320,4 @@
++                val endMillis = runtime.uptime
++                val compilationAfter = compiler.totalCompilationTime
++                val gcAfter = gcCount(); val gcMillisAfter = gcTime()
++                println("BENCH_DIAG,${case.name},${case.size},$batch,$startMillis,$endMillis,${s.cpuNanos},$compilationBefore,$compilationAfter,$gcBefore,$gcAfter,$gcMillisBefore,$gcMillisAfter")
+@@ -283,0 +327 @@
++        println("BENCH_PHASE,${cases.single().name},${cases.single().size},end,${runtime.uptime},${compiler.totalCompilationTime}")

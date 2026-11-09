@@ -1,5 +1,7 @@
 #![allow(non_camel_case_types, unused_variables)]
+mod callback_frames;
 mod diagnostics;
+mod output_rows;
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 // Binding-error delivery and its native fallback must preserve pending JVM exceptions.
@@ -21,11 +23,17 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
     _: prebindgen_jni_runtime::jni::objects::JClass<'_>,
     object: prebindgen_jni_runtime::jni::objects::JObject<'_>,
     mode: prebindgen_jni_runtime::jni::sys::jint,
+    row_class: prebindgen_jni_runtime::jni::objects::JClass<'_>,
 ) -> i64 {
     use prebindgen_jni_runtime::{array, handle_object, jni::sys::jvalue, Allocation, Callback};
     let count = if mode == 1 || mode == 3 { 2 } else { 1 };
     let descriptor = format!("({})V", "[Ljava/lang/Object;".repeat(count));
     let callback = Callback::new(&mut env, &object, &descriptor).unwrap();
+    let row_type = prebindgen_jni_runtime::OutputRowType::new();
+    row_type
+        .initialize(&mut env, &row_class, &["J", "Ljava/lang/String;", "J"])
+        .unwrap();
+    let constructor = row_type.get().unwrap();
     let mut failed = false;
     callback.with_env(128, |env| {
         let mut allocations = vec![];
@@ -46,28 +54,36 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
                         .map_err(|e| e.to_string())?;
                     continue;
                 }
-                let row = array(env, 3)?;
+                let mut handles = Vec::new();
                 for column in [0, 2] {
                     let allocation = Box::new(Allocation {
                         value: perftest_flat::callback_row_resource_new(
                             (index * 10 + column) as i64,
                         ),
                     });
-                    let pointer = (&*allocation as *const _) as u64;
+                    handles.push((&*allocation as *const _) as i64);
                     allocations.push(allocation);
-                    let value = handle_object(env, pointer)?;
-                    env.set_object_array_element(&row, column, value)
-                        .map_err(|e| e.to_string())?;
                 }
-                if mode <= 1 && index == 1 && argument == count - 1 {
-                    let invalid = handle_object(env, 123)?;
-                    env.set_object_array_element(&row, 1, invalid)
-                        .map_err(|e| e.to_string())?;
+                // Typed rows cannot hold an object of the wrong JVM field type.
+                // A null in the non-null logical text field still exercises the
+                // generated decoder's failed current row and unread-row cleanup.
+                let text = if mode <= 1 && index == 1 && argument == count - 1 {
+                    prebindgen_jni_runtime::jni::objects::JObject::null()
                 } else {
-                    let text = env.new_string("valid row").map_err(|e| e.to_string())?;
-                    env.set_object_array_element(&row, 1, text)
-                        .map_err(|e| e.to_string())?;
-                }
+                    env.new_string("valid row")
+                        .map_err(|e| e.to_string())?
+                        .into()
+                };
+                let row = unsafe {
+                    constructor.construct(
+                        env,
+                        &[
+                            jvalue { j: handles[0] },
+                            jvalue { l: text.as_raw() },
+                            jvalue { j: handles[1] },
+                        ],
+                    )
+                }?;
                 env.set_object_array_element(&rows, index, row)
                     .map_err(|e| e.to_string())?;
             }
@@ -93,3 +109,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
 }
 
 mod boundary_faults;
+
+mod buffer_allocations;
+
+mod row_metadata;

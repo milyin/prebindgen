@@ -1,16 +1,21 @@
 //! Array row transport and Kotlin list conversion; schemas live in sequence nodes.
 use super::*;
-use crate::kotlin::{
-    input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
-};
+use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
 /// Selected delivery of a logical sequence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JniSequence {
-    /// All rows travel in one collection carrier.
+    /// Array of legacy `Object[]` rows, also used for inputs and custom schemas.
     Buffered,
-    /// Each row is delivered through the function's sequence callback.
+    /// JVM array of generated immutable typed rows, with cached constructors.
+    /// Custom writers must create this exact schema's row objects through the
+    /// registered `prebindgen_jni_runtime::OutputRowType`, never `Object[]` rows.
+    TypedBuffered,
+    /// Native row ranges inside an enclosing bulk frame.
+    Bulk,
+    /// Each row is delivered through the function's sequence callback; the
+    /// collection's scalar status distinguishes present (zero) from absent.
     Callback,
 }
 
@@ -28,7 +33,6 @@ pub(crate) fn input(
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
-    let mut prepared_values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
@@ -40,14 +44,6 @@ pub(crate) fn input(
         validation_values.push((
             field.name.clone(),
             quote!(#borrow #name.as_ref().map_err(|e|e.clone())?),
-        ));
-        prepared_values.push((
-            field.name.clone(),
-            if field.kind.is_reference() {
-                None
-            } else {
-                Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
-            },
         ));
     }
     Ok(SequenceInput {
@@ -62,7 +58,6 @@ pub(crate) fn input(
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
-        prepared_values,
         release: quote!(drop(#frame);),
     })
 }
@@ -77,8 +72,76 @@ pub(crate) fn output(
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
-    let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
+    let typed = typed_rows::supported(element);
+    let needs_frame = !typed || group::row_fields(element).any(|w| w.kind.is_reference());
+    let constructor = format_ident!("{wire}_row_constructor");
+    let (prepare, encode) = if typed {
+        let cache = typed_rows::cache(element)?;
+        let mut statements = TokenStream::new();
+        let mut arguments = Vec::new();
+        for (i, (field, value)) in crate::group::row_values(element, values)?
+            .into_iter()
+            .enumerate()
+        {
+            let argument = field
+                .kind
+                .output_argument(value, &format_ident!("{wire}_row_argument_{i}"));
+            statements.extend(argument.statements);
+            arguments.push(argument.value);
+        }
+        (
+            quote!(let #constructor=#cache.get()?;),
+            quote!(#statements let #row=unsafe {#constructor.construct(&mut #env,&[#(#arguments),*])}?;),
+        )
+    } else {
+        (
+            quote!(),
+            quote!(let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;),
+        )
+    };
+    let encode = if typed {
+        encode
+    } else {
+        let fields = encode_array(crate::group::row_values(element, values)?, &row, 0);
+        quote!(#encode #fields)
+    };
     let frame = format_ident!("{wire}_frame");
+    let (enter, leave) = if needs_frame {
+        (
+            quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+            quote!(drop(#frame);),
+        )
+    } else {
+        (quote!(), quote!())
+    };
+    let retain_row = if needs_frame {
+        quote!()
+    } else {
+        quote!(let #row=#env.auto_local(#row);)
+    };
+    let owner = format_ident!("{wire}_owner");
+    let release = crate::cleanup::helper(
+        element,
+        if typed {
+            crate::cleanup::Carrier::TypedObjects
+        } else {
+            crate::cleanup::Carrier::Objects
+        },
+    )?;
+    let (own, complete, commit) = if let Some(release) = release {
+        (
+            if typed {
+                quote!(let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new_objects(&mut #env, &#wire, #release)};)
+            } else {
+                quote!(let mut #owner=unsafe {::prebindgen_jni_runtime::OutputRows::new(&mut #env, &#wire, #release)}?;)
+            },
+            quote!(unsafe {#owner.complete_row();}),
+            quote!(#owner.commit();),
+        )
+    } else {
+        (quote!(), quote!(), quote!())
+    };
+    let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
         controls: vec![prebindgen_flat::Wire {
             name: wire.clone(),
@@ -87,19 +150,26 @@ pub(crate) fn output(
                 null_niche_available: true,
             },
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: true,
-        metadata: JniChain::Sequence(JniSequence::Buffered),
-        begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
-        enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
+        metadata: JniChain::Sequence(if typed {
+            JniSequence::TypedBuffered
+        } else {
+            JniSequence::Buffered
+        }),
+        begin: quote!(#prepare let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
+        enter,
         store: quote! {
-            let #row=::prebindgen_jni_runtime::array(&mut #env,#count)?;#encode
+            #encode
+            #retain_row
             #env.set_object_array_element(&#wire,#index as i32,&#row).map_err(|e|e.to_string())?;
-            drop(#frame);
+            #commit_element
+            #complete
+            #leave
         },
         finish: quote!(let #wire=Some(#wire);),
         values: vec![(wire.clone(), quote!(#wire))],
-        commit: quote!(),
+        commit,
     })
 }
 
@@ -108,13 +178,16 @@ pub(crate) fn input_list(
     sequence: &JniSequence,
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
-    if *sequence != JniSequence::Buffered {
-        return Err(
-            "callback sequence is only supported as the function's successful return".into(),
-        );
+    if *sequence == JniSequence::Bulk {
+        return crate::bulk::input_list(carrier, element, context, active);
     }
-    let child = input_kotlin(element, context)?;
+    if *sequence != JniSequence::Buffered {
+        return Err("collection input requires a buffered array or bulk sequence".into());
+    }
+    let mut child = input_kotlin(element, context)?;
+    child.prepare_arguments(crate::kotlin::input_handles(element, false))?;
     if child.parameters.len() != 1 {
         return Err("Kotlin collection elements must expose exactly one value; declare a data class for expanded fields".into());
     }
@@ -126,45 +199,78 @@ pub(crate) fn input_list(
     let JniWire::Rows { condition, .. } = &carrier.kind else {
         return Err("sequence requires an object-array control".into());
     };
-    let mut code = String::new();
+    let resources = crate::kotlin::input_handles(element, false);
+    let owned = crate::kotlin::input_handles(element, true);
+    let values = child
+        .prepared_arguments
+        .iter()
+        .map(|value| format!("{}.InputValidation.value {{ {value} }}", context.package))
+        .collect::<Vec<_>>();
+    if values.len() != child.arguments.len() {
+        return Err("collection input converter must provide prepared wire values".into());
+    }
+    let mut setup = String::new();
     for binding in &child.setup {
-        code.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
+        setup.push_str("val ");
+        setup.push_str(&binding.name);
+        setup.push_str(" = ");
+        setup.push_str(&binding.expression);
+        setup.push('\n');
     }
-    let mut locks = if child.locks.is_empty() {
-        "kotlin.collections.emptyList<Nothing>()".into()
+    let snapshot = format!("{name}_snapshot");
+    let index = format!("{name}_index");
+    let rows = format!("kotlin.Array<kotlin.Any?>({snapshot}.size) {{ {index} -> val {parameter} = {snapshot}[{index}]\n{setup}kotlin.arrayOf<kotlin.Any?>({}) }}",values.join(", "));
+    let columns =
+        if crate::group::row_fields(element).any(|w| matches!(w.kind, JniWire::Handle { .. })) {
+            format!(
+                "intArrayOf({})",
+                crate::group::row_fields(element)
+                    .map(|w| match &w.kind {
+                        JniWire::Handle { handle, .. } if handle.access == Access::Move => "2",
+                        JniWire::Handle { .. } => "1",
+                        _ => "0",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        } else {
+            "null".into()
+        };
+    let expression = if resources {
+        let count = crate::handles::kinds(element).len();
+        let groups = crate::handles::column_groups(element)?;
+        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {}.InputRows({rows}, {columns}, {count}, {groups}) }} else null",context.package)
     } else {
-        format!(
-            "kotlin.collections.listOfNotNull({})",
-            child.locks.join(", ")
-        )
+        format!("if ({condition}) {name}?.toList()?.let {{ {snapshot} -> {rows} }} else null")
     };
-    for group in &child.lock_groups {
-        locks = format!("({locks} + ({group}))");
-    }
-    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),child.consumed.join("; "));
     Ok(KotlinInput {
+        handle_inputs: Some(crate::handles::carrier_inputs(element, &state)),
+        parameter_paths: vec![prebindgen_declarations::ComponentPath::default()],
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
-            if condition == "true" { "" } else { "?" }
+            if active == "true" { "" } else { "?" }
         )],
         setup: vec![KotlinBinding {
             name: state.clone(),
             expression,
             absent: "null".into(),
         }],
-        arguments: vec![format!(
-            "{state}?.map {{ it.first() }}?.toTypedArray<kotlin.Any?>()"
-        )],
-        locks: Vec::new(),
-        lock_groups: if child.locks.is_empty() && child.lock_groups.is_empty() {
-            vec![]
+        arguments: vec![if resources {
+            format!("{state}?.encode()")
         } else {
-            vec![format!("{state}.orEmpty().flatMap {{ it.second() }}")]
+            state.clone()
+        }],
+        prepared_arguments: vec![state.clone()],
+        locks: vec![],
+        lock_groups: if resources {
+            vec![format!("{state}?.handles.orEmpty()")]
+        } else {
+            vec![]
         },
-        consumed: if child.consumed.is_empty() {
-            vec![]
+        consumed: if owned {
+            vec![format!("{state}?.consume(__pb_consume)")]
         } else {
-            vec![format!("{state}.orEmpty().forEach {{ it.third() }}")]
+            vec![]
         },
     })
 }
@@ -172,39 +278,47 @@ pub(crate) fn input_list(
 pub(crate) fn output_list(
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
+    typed: bool,
 ) -> Result<KotlinOutput> {
+    if owners.is_none() && crate::kotlin::input_handles(element, false) {
+        return Err("handle collection output requires an ownership scope".into());
+    }
     let row = format!("{}_row", context.output_prefix);
-    let prefix = format!("{}item_", context.output_prefix);
     let failure = format!("{}failure", context.output_prefix);
     let ctx = KotlinContext {
         failure: &failure,
         cleanup_failure: Some(&failure),
         result: &row,
-        output_prefix: &prefix,
+        output_prefix: &format!("{}item_", context.output_prefix),
         ..*context
     };
-    let child = output_kotlin(element, &ctx)?;
+    let mut child = crate::kotlin::output_kotlin_scoped(element, &ctx, owners)?;
+    if typed {
+        let fields = group::row_fields(element).collect::<Vec<_>>();
+        let values = (0..fields.len())
+            .map(|i| format!("{row}.c{i}"))
+            .collect::<Vec<_>>();
+        returns::remap(&mut child, &row, &fields, 0, &values);
+    }
     if child.delivered.len() != 1 {
         return Err("Kotlin collection elements must deliver exactly one value; declare a data class for expanded outputs".into());
     }
     let ty = &child.result_types[0];
     let value = &child.delivered[0];
     let raw = format!("({}[0] as kotlin.Array<*>)", context.result);
+    let row_type = if typed {
+        let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
+        format!("{}.JNINative.{name}", context.package)
+    } else {
+        "kotlin.Array<*>".into()
+    };
     let output = format!("{}list", context.output_prefix);
-    let actions = format!("{}cleanups", context.output_prefix);
-    let initial = format!("{}initialFailure", context.output_prefix);
-    let action = format!("{}cleanupAction", context.output_prefix);
-    let raw_row = format!("{}rawRow", context.output_prefix);
     let index = format!("{}index", context.output_prefix);
     let cleanup = format!("{}cleanupError", context.output_prefix);
     let record_row_failure = kotlin::record_cleanup_failure(&ctx, &cleanup);
     let record_outer_failure = kotlin::record_cleanup_failure(context, &cleanup);
     let current_failure = context.cleanup_failure.unwrap_or(context.failure);
-    let run_action = if let Some(target) = context.cleanup_failure {
-        format!("{target} = {action}({target})")
-    } else {
-        format!("{action}({current_failure})")
-    };
     let finish_row = context
         .cleanup_failure
         .map(|target| format!("{target} = {failure}"))
@@ -213,15 +327,15 @@ pub(crate) fn output_list(
         result_names: vec![None],
         delivered: vec![format!("requireNotNull({output})")],
         result_types: vec![format!("kotlin.collections.List<{ty}>")],
-        output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\nvar {actions}: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null\n"),
+        output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\n"),
         materialize: format!(
-            "{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor ({raw_row} in {raw}) {{\nval {row} = {raw_row} as kotlin.Array<*>\n{}\n{actions}.add {{ {initial} -> var {failure} = {initial}; try {{ {} }} catch ({cleanup}: Throwable) {{ {record_row_failure} }}; {failure} }}\n{}\n{output}.add({value})\n}}\n",
-            child.output_locals, child.cleanup, child.materialize
+            "{output} = kotlin.collections.ArrayList({raw}.size)\nfor ({index} in {raw}.indices) {{\nval {row} = {raw}[{index}] as {row_type}\n{}\n{}\n{output}.add({value})\n}}\n",
+            child.output_locals, child.materialize
         ),
-        cleanup: format!(
-            "try {{\nfor ({action} in {actions}.orEmpty()) {{ try {{ {run_action} }} catch ({cleanup}: Throwable) {{ {record_outer_failure} }} }}\nfor ({index} in ({actions}?.size ?: 0) until {raw}.size) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
+        cleanup: if child.cleanup.is_empty() { String::new() } else { format!(
+            "try {{\nfor ({index} in {raw}.indices) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as {row_type}\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
             child.output_locals, child.cleanup
-        ),
+        ) },
     })
 }
 
@@ -266,11 +380,45 @@ pub(crate) fn callback_delivery(
     {
         return Ok(false);
     }
+    callback_optional(node)?;
     callback_target(node)?;
     if crate::group::result_packet_fields(node).len() != 1 {
         return Err("callback_return cannot discard additional return values".into());
     }
     Ok(true)
+}
+
+/// A fold's nullable accumulator can represent one absent collection, not
+/// distinguish None from Some(None). Integer niches must not silently enable
+/// that previously unsupported shape. Options inside rows are independent.
+pub(crate) fn callback_optional(
+    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+) -> Result<bool> {
+    use prebindgen_flat::WireNode;
+    match node {
+        WireNode::Chain {
+            meta: JniChain::Optional(_),
+            child,
+            ..
+        } => {
+            if callback_optional(child)? {
+                return Err("callback_return cannot discard additional return values from nested optional collections".into());
+            }
+            Ok(true)
+        }
+        WireNode::Branch {
+            meta: JniBranch::Group(_),
+            children,
+            ..
+        } => {
+            let mut optional = false;
+            for child in children {
+                optional |= callback_optional(child)?;
+            }
+            Ok(optional)
+        }
+        _ => Ok(false),
+    }
 }
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
@@ -293,7 +441,7 @@ pub(crate) fn validate_buffered(
             validate_buffered(element)?;
         }
         prebindgen_flat::WireNode::Chain {
-            meta: JniChain::Optional(_),
+            meta: JniChain::Optional(_) | JniChain::Bulk(_),
             child: element,
             ..
         } => validate_buffered(element)?,
@@ -369,7 +517,11 @@ mod delivery_tests {
         element: prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
     ) -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
         let kind = match delivery {
-            JniSequence::Buffered | JniSequence::Callback => JniWire::Rows {
+            JniSequence::Bulk => JniWire::NativeRows {
+                condition: "true".into(),
+            },
+            JniSequence::Callback => JniWire::selector(),
+            JniSequence::Buffered | JniSequence::TypedBuffered => JniWire::Rows {
                 condition: "true".into(),
                 null_niche_available: true,
             },

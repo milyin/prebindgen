@@ -20,6 +20,7 @@ crates=(
   prebindgen-proc-macro
   prebindgen-flat
   prebindgen-conversions
+  prebindgen-reprc
   prebindgen-declarations
   prebindgen-c
   prebindgen-jni

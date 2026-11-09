@@ -593,94 +593,6 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 }
 
 #[test]
-fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
-    let code = validate_resources(&[
-        Resource {
-            identity: crate::ResourceIdentity::Single(quote!(left)),
-            access: Access::Move,
-            active: quote!(enabled && count > 0),
-        },
-        Resource {
-            identity: crate::ResourceIdentity::Single(quote!(
-                right.expect("inactive identity must not be evaluated")
-            )),
-            access: Access::Shared,
-            active: quote!(count % 2 == 0),
-        },
-    ]);
-    let mut pair_checks = TokenStream::new();
-    let mut assertions = TokenStream::new();
-    for (i, first) in [Access::Shared, Access::Exclusive, Access::Move]
-        .into_iter()
-        .enumerate()
-    {
-        for (j, second) in [Access::Shared, Access::Exclusive, Access::Move]
-            .into_iter()
-            .enumerate()
-        {
-            let name = quote::format_ident!("pair_{i}_{j}");
-            let pair = validate_resources(&[
-                Resource {
-                    identity: crate::ResourceIdentity::Single(quote!(left)),
-                    access: first,
-                    active: quote!(true),
-                },
-                Resource {
-                    identity: crate::ResourceIdentity::Single(quote!(right)),
-                    access: second,
-                    active: quote!(true),
-                },
-            ]);
-            pair_checks.extend(quote! {
-                fn #name(left: usize, right: usize) -> Result<(), String> {
-                    #pair
-                    Ok(())
-                }
-            });
-            let shared = first == Access::Shared && second == Access::Shared;
-            assertions.extend(quote! {
-                assert_eq!(#name(7, 7).is_ok(), #shared);
-                assert!(#name(7, 8).is_ok());
-            });
-        }
-    }
-    let source = quote! {
-        #pair_checks
-        fn check(enabled: bool, count: usize, left: usize, right: Option<usize>) -> Result<(), String> {
-            #code
-            Ok(())
-        }
-        fn main() {
-            #assertions
-            assert!(check(true, 2, 7, Some(7)).is_err());
-            assert!(check(true, 2, 7, Some(8)).is_ok());
-            assert!(check(false, 2, 7, Some(7)).is_ok());
-            assert!(check(true, 1, 7, None).is_ok());
-        }
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("predicates.rs");
-    let executable = dir.path().join("predicates");
-    std::fs::write(&file, source.to_string()).unwrap();
-    let compiled = std::process::Command::new("rustc")
-        .arg("--edition=2021")
-        .arg(&file)
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compiled.stderr)
-    );
-    assert!(std::process::Command::new(executable)
-        .status()
-        .unwrap()
-        .success());
-}
-
-#[test]
 fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     let item = syn::parse_quote!(
         pub fn length(value: &str) -> usize {
@@ -776,31 +688,6 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         .success());
 }
 
-fn validate_resources(resources: &[Resource]) -> TokenStream {
-    let plan = InputPlan::<syn::Type> {
-        fallible: false,
-        context: Default::default(),
-        node: Default::default(),
-        acknowledgement: None,
-        validation: quote!(),
-        acquire: quote!(),
-        statements: quote!(),
-        argument: quote!(()),
-        resources: resources.to_vec(),
-    };
-    let seen = syn::parse_quote!(seen);
-    let check = plan
-        .code_fragment_slot(
-            InputFragment::CheckAliases {
-                context: &(),
-                seen: &seen,
-            },
-            &syn::parse_quote!(()),
-        )
-        .unwrap();
-    quote!(let mut #seen: Vec<(usize, bool)> = Vec::new(); #check;)
-}
-
 #[derive(Debug)]
 struct TestPacketValue<'a, W: prebindgen_flat::WireKind> {
     wire: &'a Wire<W>,
@@ -890,4 +777,42 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
     )
     .unwrap_err()
     .contains("duplicate"));
+}
+
+#[test]
+fn mixed_eager_and_deferred_resources_cannot_report_a_consumed_prefix() {
+    let mut flat = Flat::<syn::Type>::parse(
+        syn::parse_file("pub fn add(a:i32,b:i32)->i32{a+b}")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let f = flat.function_mut("add").unwrap();
+    for (i, param) in f.params.iter_mut().enumerate() {
+        let mut plan = Input(i).plan();
+        plan.resources = vec![Resource {
+            allocation_type: None,
+            registered: i == 0,
+            records_consumption: false,
+            count: quote!(1usize),
+            access: Access::Move,
+            active: quote!(true),
+        }];
+        param.ty.slot = Some(plan);
+    }
+    f.ret.slot = Some(Output.plan());
+    let error = emit_call(
+        f,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(i32),
+        &test_parameter_names(f),
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("cannot mix deferred resource conversions"),
+        "{error}"
+    );
 }

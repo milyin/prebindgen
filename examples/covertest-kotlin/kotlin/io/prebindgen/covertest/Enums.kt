@@ -41,17 +41,17 @@ fun checkEnums() {
     // the typed wrapper to check actual native discriminant validation and
     // nested sentinels, independently of Kotlin's enum factory.
     val native = JNINative::class.java.declaredMethods.single {
-        it.name.startsWith("call") && it.parameterTypes.contentEquals(
+        it.name.startsWith("call") && it.parameterTypes.dropLast(1).toTypedArray().contentEquals(
             arrayOf(ByteArray::class.java, Int::class.javaPrimitiveType, String::class.java))
     }
     for (tag in listOf(-4, -3, -2, -1, 0, 7, 8, Int.MIN_VALUE, Int.MAX_VALUE)) {
-        val packet = native.invoke(null, byteArrayOf(), tag, "") as Array<*>
+        val packet = native.invokePacket(byteArrayOf(), tag, "")
         check(packet[0] == null)
         val result = packet.drop(1)
         check(result.size == 1 && result[0] == tag)
     }
     for (bad in listOf(-5, 1, 6, 9)) {
-        val packet = native.invoke(null, byteArrayOf(), bad, "") as Array<*>
+        val packet = native.invokePacket(byteArrayOf(), bad, "")
         check(packet[0] is String)
     }
     check(enumBoundaryProbe(byteArrayOf(), false, Code.Seven, "") { present, code -> !present && code == null })

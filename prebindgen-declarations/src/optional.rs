@@ -113,7 +113,7 @@ pub fn optional_input<C: Codec>(
     if let Some(reservation) = &reservation {
         let present = codec.optional_presence(&child.node, reservation)?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
-    } else {
+    } else if codec.validates_inputs() {
         child.fallible = true;
         let bad = active.and(quote!(#tag != 0 && #tag != 1));
         validation.extend(quote!(if #bad {return Err("invalid option presence".into());}));

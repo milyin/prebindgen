@@ -47,9 +47,9 @@ impl Storage {
 /// Prepare a boxed-address input for `T`, `&T` or `&mut T`.
 ///
 /// `T` transfers ownership; references borrow the allocation for the call.
-/// Validation checks only nonnull/aligned encoding. The caller must guarantee
-/// allocation provenance, type, liveness and synchronization. The wrapper must
-/// run call-wide resource validation before acquisition (see [`InputPlan`]).
+/// Direct storage trusts the foreign caller. Wrapped storage checks only
+/// nonnull/aligned encoding. The caller or foreign wrapper must guarantee
+/// allocation provenance, type, liveness, synchronization and valid borrows.
 /// The returned resource records the allocation address and required access.
 /// Generated code uses `prebindgen_runtime`.
 ///
@@ -114,9 +114,11 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         Storage::Direct => quote!(*#var.expect("active allocation")),
         Storage::Wrapped(_) => quote!(#var.expect("active allocation").value),
     };
+    let check = matches!(storage, Storage::Wrapped(_))
+        .then(|| quote!(if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}));
     let validation = quote!(
         let #pointer = if #condition { #wire as *mut #allocation } else { ::core::ptr::null_mut() };
-        if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}
+        #check
     );
     let (acquire, statements) = match access {
         Access::Move => (
@@ -133,7 +135,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         ),
     };
     Ok(InputPlan {
-        fallible: true,
+        fallible: matches!(storage, Storage::Wrapped(_)),
         context: Default::default(),
         acknowledgement: None,
         node: prebindgen_flat::WireNode::Leaf(vec![Wire {
@@ -148,7 +150,13 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         statements,
         argument: quote!(#var),
         resources: vec![Resource {
-            identity: crate::ResourceIdentity::Single(quote!(#pointer.addr())),
+            allocation_type: match storage {
+                Storage::Wrapped(_) => Some(target.clone()),
+                Storage::Direct => None,
+            },
+            registered: false,
+            records_consumption: false,
+            count: quote!(1usize),
             active: active.clone(),
             access,
         }],
@@ -206,6 +214,8 @@ pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
         },
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![(wire.clone(), quote!((&mut *#wire) as *mut #allocation))],
-        commit: quote!(let _ = Box::into_raw(#wire);),
+        // Moving the Box can retag its allocation. Integer wire addresses must
+        // recover the final raw pointer's provenance, including native rollback.
+        commit: quote!(let _ = Box::into_raw(#wire).expose_provenance();),
     })
 }

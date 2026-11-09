@@ -10,6 +10,436 @@ fn flat(source: &str) -> Bindings {
     )
     .unwrap()
 }
+
+#[test]
+fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
+    let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
+    let recipe = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4])));
+    for bulk in [false, true] {
+        let input = if bulk {
+            recipe.clone().bulk()
+        } else {
+            recipe.clone()
+        };
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Row))
+                    .class(enum_class!(Kind))
+                    .fun(fun!(rows).expand_param("values", input)),
+            )
+            .build()
+            .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert!(!generated.rust.contains("_prepared"));
+        if bulk {
+            assert_eq!(generated.rust.matches("for p0_w").count(), 1);
+            assert!(!generated.rust.contains("accept_group"));
+        }
+    }
+}
+
+#[test]
+fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
+    let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
+    for bulk in [false, true] {
+        let handle = if bulk {
+            Input::Leaf.bulk()
+        } else {
+            Input::Leaf
+        };
+        let row = Input::Record(vec![
+            Input::Constructor {
+                function: "make".into(),
+                args: vec![handle],
+            },
+            Input::Leaf,
+        ]);
+        let input = Input::Sequence(Box::new(Input::Sequence(Box::new(row))));
+        let input = if bulk { input.bulk() } else { input };
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Row))
+                    .fun(fun!(nested).expand_param("values", input)),
+            )
+            .build()
+            .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert!(!generated.rust.contains("_prepared"));
+        assert!(!generated.rust.contains("accept_group"));
+        if bulk {
+            struct Checks(usize);
+            impl syn::visit_mut::VisitMut for Checks {
+                fn visit_expr_for_loop_mut(&mut self, node: &mut syn::ExprForLoop) {
+                    let body = quote::quote!(#node).to_string();
+                    if node.body.stmts.iter().any(|stmt| {
+                        matches!(stmt,
+                        syn::Stmt::Local(local) if matches!(&local.pat,
+                            syn::Pat::Ident(pat) if pat.ident == "checked"))
+                    }) {
+                        self.0 += 1;
+                        assert!(!body.contains("_built"));
+                        assert!(!body.contains("Box :: from_raw"));
+                        assert!(!body.contains("make ("));
+                        assert!(!body.contains("__prebindgen_input_aliases . access ("));
+                    }
+                    syn::visit_mut::visit_expr_for_loop_mut(self, node);
+                }
+            }
+            let mut checks = Checks(0);
+            syn::visit_mut::VisitMut::visit_file_mut(
+                &mut checks,
+                &mut syn::parse_file(&generated.rust).unwrap(),
+            );
+            assert_eq!(checks.0, 0); // Kotlin preflight replaces the native address pass.
+        }
+    }
+}
+
+#[test]
+fn gc_managed_is_opt_in_and_preserves_native_call_generation() {
+    let generate_handle = |managed: bool| {
+        let class = ptr_class!(Handle).name("Resource");
+        let class = if managed { class.gc_managed() } else { class };
+        JniGen::builder()
+            .flat(flat("pub type Handle=String;pub fn make()->Handle{}pub fn read(v:&Handle)->u64{}pub fn consume(v:Handle)->u64{}"))
+            .set_package_prefix("example")
+            .package(package!("objects").class(class))
+            .package(package!().fun(fun!(make)).fun(fun!(read)).fun(fun!(consume)))
+            .prepare().unwrap()
+    };
+    let plain = generate(&generate_handle(false)).unwrap();
+    let managed_flat = generate_handle(true);
+    let managed = generate(&managed_flat.clone()).unwrap();
+    assert_eq!(plain.rust, managed.rust);
+    assert_eq!(
+        plain.kotlin["example/Functions.kt"],
+        managed.kotlin["example/Functions.kt"].replace("withGcHandleLocks", "withHandleLocks")
+    );
+    assert_eq!(
+        plain.kotlin["example/NativeHandle.kt"],
+        managed.kotlin["example/NativeHandle.kt"].replace(
+            "internal open fun markConsumed()",
+            "internal fun markConsumed()"
+        )
+    );
+    assert!(!plain
+        .kotlin
+        .keys()
+        .any(|p| p.ends_with("/GcNativeHandle.kt")));
+    assert!(!plain
+        .kotlin
+        .values()
+        .any(|s| s.contains("java.lang.ref.Cleaner")));
+    assert!(plain.kotlin["example/objects/Resource.kt"].contains("example.NativeHandle(raw)"));
+    assert!(managed.kotlin["example/objects/Resource.kt"]
+        .contains("example.GcNativeHandle(raw, { example.JNINative.drop"));
+    let helper = &managed.kotlin["example/GcNativeHandle.kt"];
+    assert!(helper.contains("register(this, release)"));
+    assert!(helper.contains("internal class Release(raw: Long"));
+    assert!(!helper.contains("inner class"));
+    assert!(helper.contains("release.disarm()"));
+    assert!(helper.contains("cleanable?.clean()"));
+}
+
+#[test]
+fn gc_support_class_names_are_reserved() {
+    for name in ["GcNativeHandle", "NativeCleaner"] {
+        let error = JniGen::builder()
+            .flat(flat("pub type Handle=String;"))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle).name(name)))
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reserved"), "{name}: {error}");
+    }
+}
+
+#[test]
+fn gc_managed_callback_returns_reject_borrowed_constructor_inputs() {
+    use crate::callback;
+    for managed in [false, true] {
+        let class = ptr_class!(Handle);
+        let class = if managed { class.gc_managed() } else { class };
+        let generated = JniGen::builder()
+            .flat(flat("pub type Handle=String;pub type Produced=String;pub fn construct(h:&Handle)->Produced{}pub fn call(cb:impl Fn()->Produced){}"))
+            .set_package_prefix("test")
+            .package(package!().class(class).fun(fun!(call).expand_param("cb",
+                callback!(impl Fn()->Produced).expand_return(expand_param!(Produced).variant(fun!(construct))))))
+            .build();
+        if managed {
+            assert!(generated
+                .err()
+                .unwrap()
+                .contains("cannot borrow gc-managed handles"));
+        } else {
+            generated.unwrap();
+        }
+    }
+}
+
+#[test]
+fn gc_managed_handles_in_borrowed_collection_constructors_are_kept_reachable() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub type Item=String;pub fn item(value:&Handle)->Item{}pub fn read(values:Vec<Item>)->u64{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle).gc_managed())
+            .fun(fun!(read).expand_param("values", expand_param!(Item).variant(fun!(item)))))
+        .build().unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("withGcInputHandleLocks("));
+    assert!(!generated.kotlin["test/Functions.kt"].contains("markConsumed"));
+}
+
+#[test]
+fn mutable_reference_returns_never_fall_back_to_cloned_jni_handles() {
+    for returned in ["&mut Child", "Option<&mut Child>", "Result<&mut Child,i64>"] {
+        let source=format!("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->{returned}{{}}");
+        let error = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Owner))
+                    .class(ptr_class!(Child))
+                    .fun(fun!(child)),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable-reference outputs"),
+            "{returned}: {error}"
+        );
+    }
+}
+
+#[test]
+fn expanded_reference_to_option_keeps_jni_value_conversion() {
+    let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,i64>{}pub fn length(child:&Child)->i64{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+                .fun(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length)))),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("Long?"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn static_reference_outputs_keep_independent_jni_handles() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub type Child=String;pub fn fixed()->&'static Child{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Child))
+                .fun(fun!(fixed).expand_return(expand_return!(Child).field_self_ref())),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("Clone"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("Child"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn borrowed_opaque_defaults_are_diagnosed_in_results_callbacks_and_rows() {
+    for signature in [
+        "pub fn f(v:&Handle)->&Handle{}",
+        "pub fn f(v:&Handle)->Option<&Handle>{}",
+        "pub fn f(cb:impl Fn(&Handle)){}",
+        "pub fn f(cb:impl Fn(Option<&Handle>)){}",
+        "pub fn f(cb:impl Fn(&[Row])){}",
+    ] {
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(&format!(
+                    "pub type Handle=String; pub struct Row {{pub owner:Handle}} {signature}"
+                )))
+                .set_package_prefix("test")
+                .package(
+                    package!()
+                        .class(ptr_class!(Handle))
+                        .class(data_class!(Row))
+                        .fun(fun!(f)),
+                ),
+        );
+        assert!(
+            error.contains("would clone and allocate"),
+            "{signature}: {error}"
+        );
+        assert!(error.contains("field_self_ref()"));
+    }
+}
+
+#[test]
+fn reference_copy_defaults_and_callback_local_views_are_independent() {
+    for local in [false, true] {
+        let callback = if local {
+            fun!(call).expand_param(
+                "cb",
+                callback!(impl Fn(&Handle))
+                    .expand_param(0, expand_return!(Handle).field(fun!(length))),
+            )
+        } else {
+            fun!(call)
+        };
+        let generated=JniGen::builder()
+            .flat(flat("pub type Handle=String;pub fn read(v:&Handle)->&Handle{}pub fn call(cb:impl Fn(&Handle)){}pub fn length(v:&Handle)->i64{}"))
+            .set_package_prefix("test")
+            .expand(expand_return!(&Handle).field_self_ref())
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(callback))
+            .build().unwrap();
+        assert_eq!(
+            generated.rust.matches("Clone::clone").count(),
+            if local { 1 } else { 2 }
+        );
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn explicit_borrowed_record_and_collection_copies_work_in_bulk_and_ordinary_outputs() {
+    for bulk in [false, true] {
+        for container in [false, true] {
+            let mut expansion = if container {
+                expand_return!(&'static [Row]).field_self_ref()
+            } else {
+                expand_return!(Row).field_self_ref()
+            };
+            if bulk {
+                expansion = expansion.bulk();
+            }
+            let generated=JniGen::builder()
+                .flat(flat("pub type Handle=String;pub struct Row {pub owner:Handle,pub text:String,pub number:i64}pub fn rows()->&'static [Row]{}"))
+                .set_package_prefix("test")
+                .set_bulk_collection_outputs(false)
+                .package(package!().class(ptr_class!(Handle)).class(data_class!(Row))
+                    .fun(fun!(rows).expand_return(expansion)))
+                .build().unwrap();
+            assert!(generated.rust.contains("Clone::clone"));
+            assert_eq!(generated.kotlin.contains_key("test/BulkLayouts.kt"), bulk);
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
+}
+
+#[test]
+fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
+    fn generate_example(extra: bool, reverse: bool) -> JniGen {
+        let source = "pub type Handle=String;pub type Added=String;pub type Error=String;pub fn code(e:&Error)->i64{}pub fn message(e:&Error)->String{}pub fn keep(value:&Handle)->i64{}pub fn values()->Result<Vec<i64>,Error>{}pub fn mapped()->Result<i64,Error>{}pub fn added()->Result<i64,i64>{}";
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Error).field(fun!(code)));
+        if extra {
+            builder = builder.package(package!("added").class(ptr_class!(Added)).fun(fun!(added)));
+        }
+        let mut functions = vec![
+            fun!(keep),
+            fun!(values).callback_return(),
+            fun!(mapped).on_error(fun!(message)),
+        ];
+        if reverse {
+            functions.reverse();
+        }
+        let mut api = package!("api").class(ptr_class!(Handle));
+        for function in functions {
+            api = api.fun(function);
+        }
+        builder.package(api).build().unwrap()
+    }
+    fn rust_functions(generation: &JniGen) -> BTreeMap<String, String> {
+        syn::parse_file(&generation.rust)
+            .unwrap()
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                if let syn::Item::Fn(function) = item {
+                    Some((
+                        function.sig.ident.to_string(),
+                        quote!(#function).to_string(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    let original = generate_example(false, false);
+    let functions = rust_functions(&original);
+    assert!(original.rust.contains("__pb_jni_error_Error_typed_"));
+    assert!(original.rust.contains("__pb_jni_error_Error_mapped_"));
+    assert!(original.kotlin["test/JNINative.kt"].contains("SequenceSink_values_fold_"));
+    assert!(original.kotlin["test/api/Handle.kt"].contains("JNINative.drop_Handle_"));
+    for reverse in [false, true] {
+        let extended = generate_example(true, reverse);
+        for line in original.kotlin["test/JNINative.kt"].lines() {
+            assert!(
+                extended.kotlin["test/JNINative.kt"]
+                    .lines()
+                    .any(|candidate| candidate == line),
+                "native declaration changed: {line}"
+            );
+        }
+        let extended_functions = rust_functions(&extended);
+        for (name, body) in &functions {
+            assert_eq!(
+                Some(body),
+                extended_functions.get(name),
+                "binding changed: {name}"
+            );
+        }
+        for (path, text) in &original.kotlin {
+            if path != "test/JNINative.kt" && !(reverse && path == "test/api/Functions.kt") {
+                assert_eq!(
+                    Some(text),
+                    extended.kotlin.get(path),
+                    "Kotlin changed: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn native_name_identity_has_a_fixed_encoding_and_ignores_destination_renaming() {
+    let generate = |name: &str| {
+        JniGen::builder()
+            .flat(flat("pub fn read()->i64{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(read).name(name)))
+            .build()
+            .unwrap()
+    };
+    let original = generate("read");
+    let renamed = generate("readRenamed");
+    assert!(original.kotlin["test/JNINative.kt"].contains("call_read_e42fa77bcd21ca1a("));
+    assert!(original
+        .rust
+        .contains("Java_test_JNINative_call_1read_1e42fa77bcd21ca1a"));
+    assert_eq!(original.rust, renamed.rust);
+    assert_eq!(
+        original.kotlin["test/JNINative.kt"],
+        renamed.kotlin["test/JNINative.kt"]
+    );
+}
 fn fail(builder: JniGenBuilder) -> String {
     match builder.build() {
         Ok(_) => panic!("expected generation error"),
@@ -90,12 +520,10 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
         .build().unwrap();
     assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
     let functions = &generated.kotlin["test/Functions.kt"];
-    assert!(functions.contains("p0_w1: test.Envelope"));
-    assert!(functions.contains("p0_w1.`inner`.`bytes`"));
+    assert!(functions.contains("x: test.Envelope"));
+    assert!(functions.contains("x.`inner`.bytes"));
     assert!(functions.contains("test.Envelope(test.model.Inner("));
-    assert!(
-        functions.contains("public fun `make`(p0_w1: ULong, onError: test.JniErrorHandler<ULong>")
-    );
+    assert!(functions.contains("public fun make(id: ULong, onError: test.JniErrorHandler<ULong>"));
     assert!(!generated.rust.contains("drop_pointer"));
     assert!(generated.kotlin["test/model/Inner.kt"].contains("contentEquals"));
 }
@@ -170,6 +598,68 @@ fn data_classes_reject_borrowed_occurrences_and_duplicate_representations() {
 }
 
 #[test]
+fn borrowed_getter_outputs_reject_moves_and_mutable_views() {
+    for returned in ["&Child", "Option<&Child>", "&Option<Child>"] {
+        let source = format!("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->{returned}{{}}pub fn read()->Owner{{}}");
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .expand(expand_return!(Child).field_self_into())
+                .package(
+                    package!()
+                        .class(ptr_class!(Owner))
+                        .class(ptr_class!(Child))
+                        .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child)))),
+                ),
+        );
+        assert!(error.contains("owned projection cannot consume"), "{error}");
+    }
+    let error = fail(JniGen::builder()
+        .flat(flat("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->&mut Child{}pub fn read()->Owner{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).class(ptr_class!(Child))
+            .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child))))));
+    assert!(
+        error.contains("mutable-reference getter results are unsupported"),
+        "{error}"
+    );
+}
+
+#[test]
+fn explicit_shared_data_outputs_resolve_ordinary_record_defaults() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub struct Value { pub n:i64,pub text:String }pub fn read()->&Value{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Value))
+                .fun(fun!(read).expand_return(expand_return!(Value).field_self_ref())),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains(": test.Value"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn borrowed_handles_require_explicit_copies_while_views_can_expand() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub fn label(v:&Handle)->&str{}pub fn plain()->Option<&Handle>{}pub fn projected()->&Handle{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Handle).field(fun!(label)))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(plain)
+            .expand_return(expand_return!(Handle).field_self_ref()))
+            .fun(fun!(projected).expand_return(expand_return!(Handle).field(fun!(label)))))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains(": test.Handle?"), "{kotlin}");
+    assert!(kotlin.contains(": String"), "{kotlin}");
+}
+
+#[test]
 fn data_classes_check_copy_and_flattened_call_parameter_limits() {
     let fields = (0..126)
         .map(|i| format!("pub f{i}: i64"))
@@ -225,7 +715,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
             .package(package!().class(data_class!(Value)).fun(function))
             .build();
         if replace {
-            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("p0_w1: test.Value"));
+            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("`value`: test.Value"));
         } else {
             assert!(result.err().unwrap().contains("no handle class"));
         }
@@ -241,7 +731,7 @@ fn data_class_properties_and_operators_use_qualified_standard_types() {
         .build()
         .unwrap();
     let class = &generated.kotlin["test/Long.kt"];
-    assert!(class.contains("val `n`: kotlin.Long"));
+    assert!(class.contains("val n: kotlin.Long"));
     assert!(class.contains("equals(other: kotlin.Any?): kotlin.Boolean"));
     assert!(class.contains("hashCode(): kotlin.Int"));
     assert!(class.contains("toString(): kotlin.String"));
@@ -254,7 +744,6 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
-            .expand(expand_return!(Bundle).field_self_into())
             .package(
                 package!()
                     .class(data_class!(Bundle))
@@ -273,11 +762,11 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     )))
     .contains("consume the same value twice"));
     assert!(fail(
-        base().package(
-            package!().fun(
+        base()
+            .expand(expand_return!(Bundle).field_self_into())
+            .package(package!().fun(
                 fun!(outer).expand_return(expand_return!(Outer).fields(fields!(outer_fields)))
-            )
-        )
+            ))
     )
     .contains("shared-reference occurrence"));
 }
@@ -359,13 +848,13 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .build()
         .unwrap();
     let kt = &generated.kotlin["test/Functions.kt"];
-    assert!(kt.contains(
-        "public fun `h`(p0_w3: test.Handle?, onError: test.JniErrorHandler<test.Handle?>"
-    ));
+    assert!(
+        kt.contains("public fun h(x: test.Handle?, onError: test.JniErrorHandler<test.Handle?>")
+    );
     assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
     assert!(kt.contains("invalid option payload"));
-    assert!(kt.contains("if (result[1] != 0L)"));
-    assert!(kt.contains("if (result[1] == 1)"));
+    assert!(kt.contains("if (nativeResult != 0L)"));
+    assert!(kt.contains("if (returnCapture.s0 == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
     let d = prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
@@ -635,7 +1124,6 @@ fn collections_reject_unsupported_element_and_view_contracts() {
         "pub fn f(x:Vec<()>) {}",
         "pub fn f(x:Vec<Result<i64,i64>>) {}",
         "pub fn f()->Vec<Result<i64,i64>> {}",
-        "pub fn f()->Vec<()> {}",
         "pub fn f()->Vec<&i64> {}",
     ] {
         let b = JniGen::builder()
@@ -644,6 +1132,13 @@ fn collections_reject_unsupported_element_and_view_contracts() {
             .package(package!().fun(fun!(f)));
         assert!(!fail(b).is_empty());
     }
+    // Unit rows have a bulk representation, but no ordinary object-array element.
+    let units = JniGen::builder()
+        .flat(flat("pub fn f()->Vec<()> {}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(f)));
+    assert!(!fail(units).is_empty());
     let borrowed = JniGen::builder()
         .flat(flat("pub type Handle=String; pub fn f(x:&[Handle]) {}"))
         .set_package_prefix("test")
@@ -686,7 +1181,12 @@ fn result_unit_error_has_a_zero_argument_domain_handler() {
         .package(package!().fun(fun!(empty)))
         .build()
         .unwrap();
-    assert!(generated.kotlin["test/EmptyErrorHandler.kt"].contains("run(): R"));
+    let handler = generated
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert!(handler.1.contains("run(): R"));
     syn::parse_file(&generated.rust).unwrap();
 }
 
@@ -708,7 +1208,7 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
     let kotlin = &generated.kotlin["test/Functions.kt"];
     assert!(kotlin.contains("valuesFold"));
     assert!(kotlin.contains("fold: (A, Long, String) -> A"));
-    assert!(!kotlin.contains("`values`("));
+    assert!(!kotlin.contains("values("));
     assert!(generated.rust.contains("call_method_unchecked"));
     assert!(generated.rust.contains("(JLjava/lang/String;)V"));
     syn::parse_file(&generated.rust).unwrap();
@@ -718,8 +1218,8 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
         .package(package!().fun(fun!(values).callback_return()))
         .build()
         .unwrap();
-    assert!(both.kotlin["test/Functions.kt"].contains("`values`("));
-    assert!(both.kotlin["test/Functions.kt"].contains("`valuesFold`("));
+    assert!(both.kotlin["test/Functions.kt"].contains("values("));
+    assert!(both.kotlin["test/Functions.kt"].contains("valuesFold("));
     for source in [
         "pub fn f()->i64{}",
         "pub fn f()->Vec<i64>{} pub fn f_fold(){}",
@@ -789,8 +1289,50 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
         .build()
         .unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
-    assert!(kotlin.contains("`readFold`"));
+    assert!(kotlin.contains("readFold"));
     assert!(kotlin.contains("fold: (A, Long) -> A): A?"));
+}
+
+#[test]
+fn callback_collection_presence_is_a_direct_integer_without_a_jvm_marker() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn rows()->Vec<i64>{} pub fn optional()->Option<Vec<i64>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(optional).callback_return_only()),
+        )
+        .build()
+        .unwrap();
+    let mut checked = 0;
+    for item in syn::parse_file(&generated.rust).unwrap().items {
+        if let syn::Item::Fn(function) = item {
+            if function.sig.ident.to_string().contains("call_1") {
+                assert_eq!(function.sig.output, syn::parse_quote!(-> i32));
+                let block = &function.block;
+                let body = quote!(#block).to_string();
+                assert!(!body.contains("prebindgen_jni_runtime :: array"));
+                assert!(!body.contains("new_local_ref"));
+                checked += 1;
+            }
+        }
+    }
+    assert_eq!(checked, 2);
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("if (nativeResult == 0)"));
+    assert!(!kotlin.contains("if (nativeResult != null)"));
+    // Keep the pre-existing diagnostic instead of collapsing two absent states
+    // into the fold's one nullable accumulator.
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat("pub fn nested()->Option<Option<Vec<i64>>>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(nested).callback_return_only()))
+    )
+    .contains("additional return"));
 }
 
 #[test]
@@ -888,18 +1430,25 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         .callback_variant(&mut flat, &codec, &decl, "f_fold", &())
         .unwrap();
     defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
-    assert_eq!(
-        shape(
-            &(flat
-                .function("f_fold")
-                .unwrap()
-                .output_conversion()
-                .unwrap())
+    let callback_shape = shape(
+        &flat
+            .function("f_fold")
+            .unwrap()
+            .output_conversion()
+            .unwrap()
             .output_outcomes()
-            .success
-        ),
-        expected
+            .success,
     );
+    // Both deliveries retain the logical scopes and row fields. Only the
+    // collection carrier changes from an array to scalar presence status.
+    assert_eq!(callback_shape.len(), expected.len());
+    assert_eq!(callback_shape[0].0, expected[0].0);
+    assert_eq!(
+        callback_shape[0].1,
+        prebindgen_flat::type_key(&syn::parse_quote!(i32))
+    );
+    assert_ne!(callback_shape[0].1, expected[0].1);
+    assert_eq!(callback_shape[1..], expected[1..]);
 }
 
 #[test]
@@ -991,7 +1540,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             builder = builder.configure(|flat| install(flat, true));
         }
         let generated = builder.build().unwrap();
-        assert!(generated.kotlin["test/Functions.kt"].contains("native_input: Long"));
+        assert!(generated.kotlin["test/Functions.kt"].contains("`value`: Long"));
     }
     let builder = JniGen::builder()
         .flat(flat("pub fn echo(value:i64)->i64{}"))
@@ -1096,7 +1645,7 @@ fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
         .prepare()
         .unwrap();
     let files = generate(&prepared).unwrap().kotlin;
-    assert!(files["test/EHandler.kt"].contains("run(`message`: String)"));
+    assert!(files["test/EHandler.kt"].contains("run(message: String)"));
 }
 
 #[test]
@@ -1115,9 +1664,10 @@ fn explicit_view_names_reach_builders_and_duplicate_parameters_are_rejected() {
             .build()
     };
     let generated = build("message").unwrap();
-    assert!(generated.kotlin["test/Functions.kt"]
-        .contains("build: (`code`: Long, `message`: String) -> R"));
-    assert!(generated.kotlin["test/EHandler.kt"].contains("run(`code`: Long, `message`: String)"));
+    assert!(
+        generated.kotlin["test/Functions.kt"].contains("build: (code: Long, message: String) -> R")
+    );
+    assert!(generated.kotlin["test/EHandler.kt"].contains("run(code: Long, message: String)"));
     assert!(build("code")
         .err()
         .unwrap()
@@ -1195,9 +1745,9 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
         .keys()
         .any(|name| name.starts_with("__pb_jni_error_")));
     let generated = generate(&prepared).unwrap();
-    assert!(generated.kotlin["canonical/Functions.kt"].contains("`renamed`"));
-    assert!(generated.kotlin["canonical/Functions.kt"].contains("`rowsFold`"));
-    assert!(!generated.kotlin["canonical/Functions.kt"].contains("`rows`("));
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("renamed"));
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("rowsFold"));
+    assert!(!generated.kotlin["canonical/Functions.kt"].contains("rows("));
     assert!(generated.kotlin["canonical/JNINative.kt"].contains("canonical init"));
     assert!(generated.kotlin.contains_key("canonical/EHandler.kt"));
     assert!(generated
@@ -1385,21 +1935,24 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
         .package(
             package!("calls")
                 .fun(fun!(first))
-                .fun(fun!(second))
+                .fun(
+                    fun!(second).expand_param(
+                        "cb",
+                        callback!(impl Fn(&Original))
+                            .name("OriginalBorrowedCopy")
+                            .expand_param(0, expand_return!(Original).field_self_ref()),
+                    ),
+                )
                 .fun(fun!(empty)),
         )
         .prepare()
         .unwrap();
     let output = generate(&prepared).unwrap();
-    assert!(
-        output.kotlin["example/values/OriginalCallback.kt"]
-            .contains("arg0_0: example.values.Renamed")
-            || output.kotlin["example/values/OriginalCallback.kt"]
-                .contains("`arg0_0`: example.values.Renamed")
-    );
+    assert!(output.kotlin["example/values/OriginalCallback.kt"]
+        .contains("arg0_0: example.values.Renamed"));
     assert!(output.kotlin["example/VoidCallback.kt"].contains("public fun run()"));
     assert!(
-        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback?")
+        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback,")
     );
     syn::parse_file(&output.rust).unwrap();
 }
@@ -1508,7 +2061,7 @@ fn callback_constructor_is_resolved_without_exporting_the_helper() {
     assert!(prepared.function("make").unwrap().metadata.is_none());
     let generated = generate(&prepared).unwrap();
     assert!(generated.kotlin.contains_key("test/i64Callback.kt"));
-    assert!(!generated.kotlin["test/Functions.kt"].contains("`make`("));
+    assert!(!generated.kotlin["test/Functions.kt"].contains("make("));
     syn::parse_file(&generated.rust).unwrap();
 }
 
@@ -1609,7 +2162,9 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
         .flat(flat("pub type Handle=String; pub struct Row { pub handle:Handle, pub optional:Option<Handle>, pub label:String } pub fn owned(cb:impl Fn(Vec<Row>)){} pub fn borrowed(cb:impl Fn(&[Row])){} pub fn nested(cb:impl Fn(Option<Vec<Option<Row>>>)){} pub fn handles(cb:impl Fn(Vec<Handle>)){}"))
         .set_package_prefix("test")
         .package(package!("rows").class(ptr_class!(Handle)).class(data_class!(Row)))
-        .package(package!().fun(fun!(owned)).fun(fun!(borrowed)).fun(fun!(nested)).fun(fun!(handles)))
+        .package(package!().fun(fun!(owned)).fun(fun!(borrowed).expand_param("cb",callback!(impl Fn(&[Row]))
+            .expand_param(0,expand_return!(Row).field_self_ref())))
+            .fun(fun!(nested)).fun(fun!(handles)))
         .build().unwrap();
     assert!(generated.kotlin["test/RowVecCallback.kt"]
         .contains("kotlin.collections.List<test.rows.Row>"));
@@ -1626,10 +2181,10 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
 fn callbacks_return_typed_values_and_keep_unit_interfaces() {
     let generated=JniGen::builder().flat(flat("pub fn unit(cb:impl Fn(i64)) {} pub fn number(cb:impl Fn(i64)->i64)->i64{} pub fn flag(cb:impl Fn(i64)->bool)->bool{} pub fn zero(cb:impl Fn()->String)->String{}"))
         .set_package_prefix("test").package(package!().fun(fun!(unit)).fun(fun!(number)).fun(fun!(flag)).fun(fun!(zero))).build().unwrap();
-    assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(`arg0_0`: Long)"));
+    assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(arg0_0: Long)"));
     assert!(generated.kotlin["test/i64Toi64Callback.kt"].contains(": Long"));
     assert!(generated.kotlin["test/i64ToboolCallback.kt"].contains(": Boolean"));
-    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String?"));
+    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
     assert!(generated.rust.contains("invoke_return"));
     syn::parse_file(&generated.rust).unwrap();
 }
@@ -1653,7 +2208,7 @@ fn callback_returns_reject_borrows_and_unrepresented_results_in_preparation() {
 }
 
 #[test]
-fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
+fn trusted_c_callback_inputs_need_no_validation_error_policy() {
     let source = syn::parse_file("pub fn f(cb:impl Fn(i64)->i64)->i64{}").unwrap();
     let model = prebindgen_c::Bindings::parse(
         source
@@ -1662,10 +2217,2020 @@ fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
             .map(|item| (item, Default::default())),
     )
     .unwrap();
-    let error = prebindgen_c::Cbindgen::new(model)
+    let generated = prebindgen_c::Cbindgen::new(model)
         .function(fun!(f))
         .build()
+        .unwrap();
+    assert!(!generated.rust.contains("null callback function"));
+}
+
+#[test]
+fn unnamed_error_handlers_are_independent_of_their_first_caller() {
+    let source = "pub fn first()->Result<i64,()>{}pub fn second()->Result<i64,()>{}";
+    let generate = |reverse| {
+        let package = if reverse {
+            package!().fun(fun!(second)).fun(fun!(first))
+        } else {
+            package!().fun(fun!(first)).fun(fun!(second))
+        };
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package)
+            .build()
+            .unwrap()
+    };
+    let original = generate(false);
+    let reordered = generate(true);
+    let (name, text) = original
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert_eq!(Some(text), reordered.kotlin.get(name));
+    assert!(!original
+        .kotlin
+        .keys()
+        .any(|path| path.contains("FirstError") || path.contains("SecondError")));
+}
+
+#[test]
+fn generic_error_types_get_distinct_readable_handlers() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn first()->Result<i64,Vec<i64>>{}pub fn second()->Result<i64,Vec<String>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(first)).fun(fun!(second)))
+        .build()
+        .unwrap();
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_i64_typed_")));
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_String_typed_")));
+}
+
+#[test]
+fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
+    let records="pub struct Handle {pub id:i64}pub struct Inner {pub handle:Handle}pub struct Bundle {pub inner:Inner,pub text:String,pub bytes:Vec<u8>,pub maybe:Option<Handle>}";
+    let classes = || {
+        package!()
+            .class(data_class!(Bundle))
+            .class(data_class!(Inner))
+            .class(ptr_class!(Handle))
+    };
+    for returned in [
+        "Bundle",
+        "Option<Bundle>",
+        "Vec<Bundle>",
+        "Result<Bundle,i64>",
+    ] {
+        let source = format!("{records}pub fn make()->{returned}{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(fun!(make)))
+            .build()
+            .unwrap();
+        assert!(
+            !generated.rust.contains("Clone::clone"),
+            "{returned}: {}",
+            generated.rust
+        );
+    }
+    let source = format!("{records}pub fn make()->Bundle{{}}");
+    for local in [0, 1, 2] {
+        let function = match local {
+            1 => fun!(make).expand_return(expand_return!(Bundle).field_self_into()),
+            2 => fun!(make).expand_return(expand_return!(Bundle).field_self()),
+            _ => fun!(make),
+        };
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Bundle).field_self_ref())
+            .package(classes().fun(function))
+            .build()
+            .unwrap();
+        assert_eq!(generated.rust.contains("Clone::clone"), local == 0);
+    }
+    let error = fail(
+        JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(
+                fun!(make).expand_return(expand_return!(Bundle).field_self().field_self_into()),
+            )),
+    );
+    assert!(error.contains("field_self_ref()"));
+    // Two views of optional references are observations, never two moves.
+    let source =
+        format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
+    let view = prebindgen_declarations::Output::Optional(Box::new(
+        prebindgen_declarations::Output::Record {
+            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+            fields: vec![prebindgen_declarations::Output::Leaf; 4],
+        },
+    ));
+    JniGen::builder()
+        .flat(flat(&source))
+        .set_package_prefix("test")
+        .package(classes().class(ptr_class!(Owner)).fun(fun!(maybe).output(
+            prebindgen_declarations::Output::combine([view.clone(), view]),
+        )))
+        .build()
+        .unwrap();
+}
+
+#[test]
+fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
+    for bytes in [false, true] {
+        let ty = if bytes { "Vec<u8>" } else { "String" };
+        let source = format!("pub fn make()->{ty}{{}}pub fn observe(value:&{ty})->usize{{}}");
+        for copy in [false, true] {
+            let expansion = match (bytes, copy) {
+                (false, false) => expand_return!(String).field_self().field(fun!(observe)),
+                (true, false) => expand_return!(Vec<u8>).field_self().field(fun!(observe)),
+                (false, true) => expand_return!(String).field_self_ref().field_self(),
+                (true, true) => expand_return!(Vec<u8>).field_self_ref().field_self(),
+            };
+            let jni = JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+                .build()
+                .unwrap();
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .unwrap();
+            // Independent JVM views need independent JVM objects, without an
+            // intermediate Rust clone even for an explicit borrowing view.
+            assert!(!jni.rust.contains("Clone::clone"), "JNI {ty}");
+            assert_eq!(c.rust.contains("Clone::clone"), copy, "C {ty}");
+            let declaration = c
+                .header
+                .lines()
+                .find(|line| line.contains("_make("))
+                .unwrap();
+            assert!(declaration.contains("_owned_"), "{declaration}");
+        }
+        for mixed in [false, true] {
+            let expansion = match (bytes, mixed) {
+                (false, false) => expand_return!(String).field_self().field_self(),
+                (true, false) => expand_return!(Vec<u8>).field_self().field_self(),
+                (false, true) => expand_return!(String).field_self().field_self_into(),
+                (true, true) => expand_return!(Vec<u8>).field_self().field_self_into(),
+            };
+            let error = fail(
+                JniGen::builder()
+                    .flat(flat(&source))
+                    .set_package_prefix("test")
+                    .package(package!().fun(fun!(make).expand_return(expansion.clone()))),
+            );
+            assert!(error.contains("field_self_ref()"), "{error}");
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+            assert!(c.contains("field_self_ref()"), "{c}");
+        }
+        let source = format!(
+            "pub fn make()->Option<{ty}>{{}}pub fn observe(value:&Option<{ty}>)->usize{{}}"
+        );
+        let expansion = if bytes {
+            expand_return!(Option<Vec<u8>>)
+                .field_self()
+                .field(fun!(observe))
+        } else {
+            expand_return!(Option<String>)
+                .field_self()
+                .field(fun!(observe))
+        };
+        let jni = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+            .build()
+            .unwrap();
+        let c = prebindgen_c::Cbindgen::new(
+            prebindgen_flat::Flat::parse(
+                syn::parse_file(&source)
+                    .unwrap()
+                    .items
+                    .into_iter()
+                    .map(|i| (i, Default::default())),
+            )
+            .unwrap(),
+        )
+        .function(fun!(make).expand_return(expansion))
+        .panic()
+        .build()
+        .unwrap();
+        assert!(!jni.rust.contains("Clone::clone"));
+        assert!(!c.rust.contains("Clone::clone"));
+    }
+}
+
+#[test]
+fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks() {
+    for returned in ["Handle", "Option<Handle>", "Vec<Handle>"] {
+        let source=format!("pub struct Handle {{pub n:i64}}pub fn call(callback:impl Fn()->{returned}+Send+Sync+'static)->i64{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let wrapper = &generated.kotlin["test/Functions.kt"];
+        if returned == "Vec<Handle>" {
+            assert!(wrapper.contains("test.withInputHandleLocks("));
+            assert!(wrapper.contains(".handles.orEmpty()"));
+            assert!(!wrapper.contains("kotlin.Triple("));
+        } else {
+            assert!(wrapper.contains("test.withHandleLocks("));
+            assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
+            assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");
+        }
+    }
+}
+
+#[test]
+fn buffer_outputs_prepare_jvm_objects_without_native_staging() {
+    for ty in [
+        "String",
+        "Vec<u8>",
+        "&'static str",
+        "&'static String",
+        "&'static [u8]",
+        "&'static Vec<u8>",
+    ] {
+        for optional in [false, true] {
+            let returned = if optional {
+                format!("Option<Option<{ty}>>")
+            } else {
+                ty.into()
+            };
+            let generated = JniGen::builder()
+                .flat(flat(&format!("pub fn make()->{returned}{{}}")))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(make)))
+                .build()
+                .unwrap();
+            for staging in ["Clone::clone", ").to_string()", ").to_vec()"] {
+                assert!(!generated.rust.contains(staging), "{returned}: {staging}");
+            }
+            // Ordinary small results must not gain a capacity JNI call.
+            assert!(!generated.rust.contains("ensure_local_capacity"));
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
+}
+
+#[test]
+fn wide_buffer_outputs_reserve_capacity_without_small_call_overhead() {
+    for count in [1, 13, 14, 48] {
+        let views = (0..count).fold(expand_return!(String), |views, _| views.field(fun!(view)));
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub fn make()->String{}pub fn view(value:&String)->&str{}",
+            ))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(views)))
+            .build()
+            .unwrap();
+        assert_eq!(generated.rust.contains("ensure_local_capacity"), count > 13);
+        assert!(!generated.rust.contains("Clone::clone"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn reference_capacity_counts_row_carriers_and_domain_error_payloads() {
+    for error in [false, true] {
+        let source = if error {
+            "pub type Owner=String;pub fn make()->Result<i64,Owner>{}pub fn text(owner:&Owner)->&str{}pub fn rows(owner:&Owner)->Vec<i64>{}"
+        } else {
+            "pub type Owner=String;pub fn make()->Owner{}pub fn text(owner:&Owner)->&str{}pub fn rows(owner:&Owner)->Vec<i64>{}"
+        };
+        let views = (0..14)
+            .fold(expand_return!(Owner), |views, _| views.field(fun!(text)))
+            .field(fun!(rows));
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(views)
+            .package(package!().fun(fun!(make)))
+            .build()
+            .unwrap();
+        // Fourteen buffers + row array + packet, boxing class and temporary.
+        assert!(
+            generated.rust.contains("ensure_local_capacity(18"),
+            "error={error}"
+        );
+    }
+}
+
+#[test]
+fn primitive_before_buffer_fields_has_capacity_for_boxing_class_and_value() {
+    for count in [13, 14] {
+        let views = (0..count).fold(expand_return!(Owner).field(fun!(number)), |views, _| {
+            views.field(fun!(text))
+        });
+        let generated = JniGen::builder()
+            .flat(flat("pub type Owner=String;pub fn make()->Owner{}pub fn number(owner:&Owner)->i64{}pub fn text(owner:&Owner)->&str{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(views)))
+            .build().unwrap();
+        assert_eq!(
+            generated.rust.contains("ensure_local_capacity"),
+            count == 14
+        );
+    }
+}
+
+#[test]
+fn bulk_expansions_share_target_layouts_and_local_overrides_replace_defaults() {
+    let generated=JniGen::builder().flat(flat("#[repr(C)] pub struct Row {pub tag:i32,pub number:i64} pub fn bulk(value:Vec<Row>)->Vec<Row>{} pub fn plain(value:Row)->Row{}"))
+        .set_package_prefix("test")
+        .expand(expand_param!(Row).variant_self().bulk())
+        .expand(expand_return!(Row).field_self_into().bulk())
+        .package(package!().class(data_class!(Row)).fun(fun!(bulk)).fun(fun!(plain).expand_param("value",expand_param!(Row).variant_self()).expand_return(expand_return!(Row).field_self_into())))
+        .build().unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(generated.rust.contains("offset_of!(__PbBulk_"));
+    assert!(!generated.rust.contains("get_object_array_element"));
+    assert!(!generated.rust.contains("new_object_array"));
+    assert!(generated.kotlin["test/BulkLayouts.kt"].contains("JNINative.bulkLayouts()"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("List<test.Row>"));
+    let native = &generated.kotlin["test/JNINative.kt"];
+    let plain = native
+        .lines()
+        .find(|line| line.contains("call_plain_"))
+        .unwrap();
+    assert!(!plain.contains("ByteArray"), "{plain}");
+    let bulk = native
+        .lines()
+        .find(|line| line.contains("call_bulk_"))
+        .unwrap();
+    assert!(bulk.contains("ByteArray"), "{bulk}");
+}
+
+#[test]
+fn bulk_selector_and_empty_expansion_generate_valid_boundaries() {
+    for source in [
+        "pub fn identity(x:i64)->i64{} pub fn call(x:i64)->i64{}",
+        "pub fn identity(){} pub fn call(){}",
+    ] {
+        let is_unit = source.contains("identity()");
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test");
+        let call = if is_unit {
+            fun!(call).output(Output::auto().bulk())
+        } else {
+            fun!(call)
+                .expand_param(
+                    "x",
+                    expand_param!(i64)
+                        .variant(fun!(identity))
+                        .variant_self()
+                        .bulk(),
+                )
+                .expand_return(expand_return!(i64).field_self().bulk())
+        };
+        builder = builder.package(package!().fun(call));
+        let generated = builder.build().unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert!(generated.kotlin.contains_key("test/BulkRuntime.kt"));
+    }
+}
+
+#[test]
+fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
+    let callback = JniGen::builder()
+        .set_package_prefix("test")
+        .flat(flat("pub fn call(callback:impl Fn(i64)){}"))
+        .package(package!().fun(fun!(call).expand_param("callback", Input::auto().bulk())))
+        .build()
         .err()
-        .expect("non-Result callback binding needs explicit panic policy");
-    assert!(error.contains("declare .panic()"), "{error}");
+        .unwrap();
+    assert!(callback.contains("callback"), "{callback}");
+    let delivery = JniGen::builder()
+        .set_package_prefix("test")
+        .flat(flat("pub fn call()->Vec<i64>{}"))
+        .package(
+            package!().fun(
+                fun!(call)
+                    .expand_return(expand_return!(Vec<i64>).field_self().bulk())
+                    .callback_return(),
+            ),
+        )
+        .build()
+        .err()
+        .unwrap();
+    assert!(
+        delivery.contains("bulk cannot enclose callback delivery")
+            && delivery.contains("callback element"),
+        "{delivery}"
+    );
+}
+
+#[test]
+fn bulk_runtime_filename_is_reserved_for_all_class_kinds() {
+    for class in [
+        ClassDecl::from(data_class!(Row).name("BulkRuntime")),
+        ClassDecl::from(ptr_class!(Row).name("BulkRuntime")),
+        ClassDecl::from(enum_class!(Kind).name("BulkRuntime")),
+        ClassDecl::from(callback!(impl Fn(i64)).name("BulkRuntime")),
+    ] {
+        let error = JniGen::builder()
+            .flat(flat(
+                "pub struct Row{pub number:i64} pub enum Kind{A,B} pub fn call(value:Row)->Row{} pub fn install(value:impl Fn(i64)){}",
+            ))
+            .set_package_prefix("test")
+            .package(
+                package!().class(class).fun(fun!(install)).fun(
+                    fun!(call)
+                        .expand_param("value", expand_param!(Row).variant_self().bulk())
+                        .expand_return(expand_return!(Row).field_self_into().bulk()),
+                ),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reserved generated class name"), "{error}");
+    }
+}
+
+#[test]
+fn bulk_collections_require_the_same_single_value_elements_as_ordinary_collections() {
+    for bulk in [false, true] {
+        for input in [false, true] {
+            let mut model=String::from("pub struct Row{pub number:i64,pub text:String} pub fn from(number:i64,text:String)->Row{} pub fn number(value:&Row)->i64{} pub fn text(value:&Row)->&str{}");
+            model.push_str(if input {
+                "pub fn call(value:Vec<Row>){}"
+            } else {
+                "pub fn call()->Vec<Row>{}"
+            });
+            let mut builder = JniGen::builder()
+                .flat(flat(&model))
+                .set_package_prefix("test");
+            if input {
+                let mut expansion = expand_param!(Row).variant(fun!(from));
+                if bulk {
+                    expansion = expansion.bulk();
+                }
+                builder = builder.expand(expansion);
+            } else {
+                let mut expansion = expand_return!(Row).field(fun!(number)).field(fun!(text));
+                if bulk {
+                    expansion = expansion.bulk();
+                }
+                builder = builder.expand(expansion);
+            }
+            let error = builder
+                .package(package!().fun(fun!(call)))
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("declare a data class"),
+                "bulk={bulk}, input={input}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn type_derived_bulk_runtime_names_are_also_reserved() {
+    for (source, class) in [
+        (
+            "pub struct BulkRuntime{pub value:i64}",
+            ClassDecl::from(data_class!(BulkRuntime)),
+        ),
+        (
+            "pub struct BulkRuntime{pub value:i64}",
+            ClassDecl::from(ptr_class!(BulkRuntime)),
+        ),
+        (
+            "pub enum BulkRuntime{A,B}",
+            ClassDecl::from(enum_class!(BulkRuntime)),
+        ),
+    ] {
+        let source = format!("{source} pub fn call(value:i64)->i64{{}}");
+        let error = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(
+                package!().class(class).fun(
+                    fun!(call)
+                        .expand_param("value", expand_param!(i64).variant_self().bulk())
+                        .expand_return(expand_return!(i64).field_self().bulk()),
+                ),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reserved generated class name"), "{error}");
+    }
+}
+
+fn bulk_result(model: &Bindings, name: &str) -> bool {
+    let output = model.function(name).unwrap().output_conversion().unwrap();
+    group::result_packet_fields(&output.output_outcomes().success)
+        .any(|wire| matches!(wire.kind, JniWire::BulkBuffer { .. }))
+}
+
+#[test]
+fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
+    let source = "pub struct Row { pub x:i64, pub y:f64 } pub struct TextRow { pub n:i64, pub text:String } pub struct BytesRow { pub n:i64, pub bytes:Vec<u8> } pub type Handle=String; pub fn numbers()->Vec<i64>{} pub fn rows()->Vec<Row>{} pub fn optional()->Option<Vec<Row>>{} pub fn array()->[Row;2]{} pub fn single()->Row{} pub fn bytes()->Vec<u8>{} pub fn texts()->Vec<TextRow>{} pub fn payloads()->Vec<BytesRow>{} pub fn handles()->Vec<Handle>{} pub fn echo(value:Vec<Row>)->Vec<Row>{}";
+    let model = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .class(data_class!(TextRow))
+                .class(data_class!(BytesRow))
+                .class(ptr_class!(Handle))
+                .fun(fun!(numbers))
+                .fun(fun!(rows))
+                .fun(fun!(optional))
+                .fun(fun!(array))
+                .fun(fun!(single))
+                .fun(fun!(bytes))
+                .fun(fun!(texts))
+                .fun(fun!(payloads))
+                .fun(fun!(handles))
+                .fun(fun!(echo)),
+        )
+        .prepare()
+        .unwrap();
+    for name in [
+        "numbers", "rows", "optional", "array", "echo", "texts", "payloads", "handles",
+    ] {
+        assert!(bulk_result(&model, name), "{name}");
+    }
+    for name in ["single", "bytes"] {
+        assert!(!bulk_result(&model, name), "{name}");
+    }
+    let input = model.function("echo").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap();
+    assert!(matches!(
+        input.input_node(),
+        prebindgen_flat::WireNode::Chain {
+            meta: JniChain::Sequence(JniSequence::Buffered),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn bulk_array_default_respects_project_type_and_local_transport_choices() {
+    let source = "pub struct Row { pub x:i64 } pub fn rows()->Vec<Row>{} pub fn plain()->Vec<Row>{} pub fn explicit()->Vec<Row>{}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let functions = || {
+        package!()
+            .class(data_class!(Row))
+            .fun(fun!(rows))
+            .fun(fun!(plain).expand_return(expand_return!(Vec<Row>).field_self()))
+            .fun(fun!(explicit).expand_return(expand_return!(Vec<Row>).field_self().bulk()))
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    assert!(bulk_result(&model, "rows"));
+    assert!(!bulk_result(&model, "plain"));
+    assert!(bulk_result(&model, "explicit"));
+    let model = base()
+        .set_bulk_collection_outputs(false)
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "rows"));
+    assert!(!bulk_result(&model, "plain"));
+    assert!(bulk_result(&model, "explicit"));
+    let model = base()
+        .expand(expand_return!(Vec<Row>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "rows"));
+    assert!(bulk_result(&model, "explicit"));
+}
+
+#[test]
+fn automatic_bulk_collections_preserve_fold_and_callback_local_overrides() {
+    let generated=JniGen::builder().flat(flat("pub struct Row {pub x:i64} pub fn rows()->Vec<Row>{} pub fn only()->Vec<Row>{} pub fn receive(cb:impl Fn(Vec<Row>)){} pub fn receive_plain(cb:impl Fn(Vec<Row>)){}"))
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(Row))
+            .fun(fun!(rows).callback_return()).fun(fun!(only).callback_return_only())
+            .fun(fun!(receive).expand_param("cb",callback!(impl Fn(Vec<Row>)).name("PackedRows")))
+            .fun(fun!(receive_plain).expand_param("cb",callback!(impl Fn(Vec<Row>)).name("PlainRows")
+                .expand_param(0,expand_return!(Vec<Row>).field_self()))))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("rows("));
+    assert!(kotlin.contains("rowsFold("));
+    assert!(kotlin.contains("onlyFold("));
+    assert!(!kotlin.contains("only("));
+    assert!(kotlin.contains("fun run(raw0: ByteArray?)"));
+    assert!(kotlin.contains("fun run(raw0: Array<Any?>?)"), "{kotlin}");
+    assert!(kotlin.contains("SequenceCollector_rows_fold_"));
+}
+
+#[test]
+fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types() {
+    let source="pub struct Row {pub x:i64} pub fn text(row:&Row)->String{} pub fn number(row:&Row)->i64{} pub fn rows()->Vec<Row>{}";
+    let build = |projection: ExpandReturnDecl| {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(projection)
+            .package(package!().class(data_class!(Row)).fun(fun!(rows)))
+            .prepare()
+            .unwrap()
+    };
+    assert!(bulk_result(
+        &build(expand_return!(Row).field(fun!(text))),
+        "rows"
+    ));
+    assert!(bulk_result(
+        &build(expand_return!(Row).field(fun!(number))),
+        "rows"
+    ));
+    let local = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .fun(fun!(rows).expand_return(expand_return!(Row).field(fun!(text)))),
+        )
+        .prepare()
+        .unwrap();
+    assert!(bulk_result(&local, "rows"));
+}
+
+#[test]
+fn automatic_bulk_canonicalizes_collection_spellings_and_preserves_explicit_defaults() {
+    let source="pub struct Row {pub x:i64} pub fn first()->Vec<Row>{} pub fn second()->std::vec::Vec<crate::Row>{} pub fn borrowed()->&'static [Row]{}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let functions = || {
+        package!()
+            .class(data_class!(Row))
+            .fun(fun!(first))
+            .fun(fun!(second))
+            .fun(fun!(borrowed))
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    for name in ["first", "second", "borrowed"] {
+        assert!(bulk_result(&model, name), "{name}");
+    }
+    let model = base()
+        .expand(expand_return!(std::vec::Vec<crate::Row>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "first"));
+    assert!(!bulk_result(&model, "second"));
+    assert!(bulk_result(&model, "borrowed"));
+}
+
+#[test]
+fn default_nested_numeric_outputs_share_one_frame() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn nested()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(nested)))
+        .build()
+        .unwrap();
+    assert_eq!(generated.rust.matches("byte_array_from_slice").count(), 1);
+    assert_eq!(generated.rust.matches("bulk::Writer::new").count(), 1);
+    assert!(!generated.rust.contains("set_object_array_element"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("List<kotlin.collections.List<Long>>"));
+}
+
+#[test]
+fn expanded_result_uses_bulk_for_automatic_collection_without_packing_string_sibling() {
+    let model=JniGen::builder()
+        .flat(flat("pub struct Outer {pub rows:Vec<i64>,pub label:String} pub fn parts(value:Outer)->Outer{} pub fn make()->Outer{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(make).expand_return(expand_return!(Outer).fields_into(fields!(parts)))))
+        .prepare().unwrap();
+    let plan = model.function("make").unwrap().output_conversion().unwrap();
+    let fields = group::result_packet_fields(&plan.output_outcomes().success).collect::<Vec<_>>();
+    assert_eq!(fields.len(), 2);
+    assert!(matches!(fields[0].kind, JniWire::BulkBuffer { .. }));
+    assert!(matches!(fields[1].kind, JniWire::Text { .. }));
+}
+
+#[test]
+fn nested_ordinary_overrides_do_not_inherit_implicit_inner_bulk_defaults() {
+    let source="pub fn nested()->Vec<Vec<i64>>{} pub fn numbers()->Vec<i64>{} pub fn plain()->Vec<Vec<i64>>{} pub fn receive(cb:impl Fn(Vec<Vec<i64>>,Vec<Vec<i64>>)){}";
+    let functions = || {
+        package!()
+            .fun(fun!(nested))
+            .fun(fun!(numbers))
+            .fun(fun!(plain).expand_return(expand_return!(Vec<Vec<i64>>).field_self()))
+            .fun(
+                fun!(receive).expand_param(
+                    "cb",
+                    callback!(impl Fn(Vec<Vec<i64>>, Vec<Vec<i64>>))
+                        .expand_param(0, expand_return!(Vec<Vec<i64>>).field_self()),
+                ),
+            )
+    };
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    assert!(bulk_result(&model, "nested"));
+    assert!(bulk_result(&model, "numbers"));
+    assert!(!bulk_result(&model, "plain"));
+    let kotlin = generate(&model).unwrap().kotlin;
+    assert!(kotlin["test/Functions.kt"].contains("fun run(raw0: Array<Any?>?, raw1: ByteArray?)"));
+    let model = base()
+        .expand(expand_return!(Vec<Vec<i64>>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "nested"));
+    assert!(bulk_result(&model, "numbers"));
+}
+
+#[test]
+fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
+    for only in [false, true] {
+        let declaration = if only {
+            fun!(rows).callback_return_only()
+        } else {
+            fun!(rows).callback_return()
+        };
+        let generated = JniGen::builder()
+            .flat(flat("pub fn rows()->Vec<Vec<i64>>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(declaration))
+            .build()
+            .unwrap();
+        assert!(generated.kotlin["test/Functions.kt"].contains("rowsFold("));
+    }
+    // This Flat API maps fixed arrays to lists, including byte arrays. The
+    // legacy generator's primitive-array representation is not used here.
+    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Int")] {
+        for enabled in [false, true] {
+            let generated = JniGen::builder()
+                .flat(flat(&format!("pub fn array()->{ty}{{}}")))
+                .set_bulk_collection_outputs(enabled)
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(array)))
+                .build()
+                .unwrap();
+            assert!(generated.kotlin["test/Functions.kt"]
+                .contains(&format!(": kotlin.collections.List<{kotlin}>")));
+            assert_eq!(generated.rust.contains("bulk::Writer::new"), enabled);
+        }
+    }
+}
+
+#[test]
+fn explicit_nested_outputs_have_no_hidden_bulk_frames_in_rows_or_callbacks() {
+    let plain = JniGen::builder()
+        .flat(flat("pub fn plain()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(plain).expand_return(expand_return!(Vec<Vec<i64>>).field_self())),
+        )
+        .build()
+        .unwrap();
+    assert!(!plain.rust.contains("byte_array_from_slice"));
+    assert!(!plain.rust.contains("bulk::Writer::new"));
+    for (argument, tree) in [
+        ("Vec<Vec<i64>>", expand_return!(Vec<Vec<i64>>).field_self()),
+        ("&Vec<Vec<i64>>", expand_return!(Vec<Vec<i64>>).field_self()),
+        ("&[Vec<i64>]", expand_return!(&[Vec<i64>]).field_self()),
+    ] {
+        let source = format!("pub fn receive(cb:impl Fn({argument})){{}}");
+        let callback = syn::parse_str::<syn::Type>(&format!("impl Fn({argument})")).unwrap();
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(receive).expand_param(
+                "cb",
+                prebindgen_declarations::CallbackDecl::new(callback).expand_param(0, tree),
+            )))
+            .build()
+            .unwrap();
+        assert!(
+            !generated.rust.contains("byte_array_from_slice"),
+            "{argument}"
+        );
+        assert!(!generated.rust.contains("bulk::Writer::new"), "{argument}");
+    }
+    let fallible = JniGen::builder()
+        .flat(flat("pub fn rows()->Result<Vec<Vec<i64>>,()>{}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(rows).expand_return(expand_return!(Vec<Vec<i64>>).field_self())),
+        )
+        .build()
+        .unwrap();
+    assert!(!fallible.rust.contains("bulk::Writer::new"));
+}
+
+#[test]
+fn resource_free_callback_folds_omit_cleanup_bookkeeping() {
+    for ty in ["i64", "String", "Row", "Option<Vec<Option<Row>>>"] {
+        let generated = JniGen::builder()
+            .flat(flat(&format!("pub struct Row {{pub id:i64,pub text:String}}pub fn values()->Option<Vec<{ty}>>{{}}")))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Row)).fun(fun!(values).callback_return_only()))
+            .build().unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        for bookkeeping in [
+            "__pb_pending",
+            "__pb_processed",
+            "__pb_discard",
+            "CollectionOwners",
+            "cleanup: Throwable",
+        ] {
+            assert!(!text.contains(bookkeeping), "{ty}: {text}");
+        }
+        assert!(text.contains("current = fold("));
+    }
+}
+
+#[test]
+fn fixed_handle_callback_rows_use_lexical_cleanup_without_a_journal() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Owner=String;pub struct Row {pub first:Option<Owner>,pub second:Owner}pub fn values()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(values).callback_return_only()))
+        .build().unwrap();
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("__pb_pending"));
+    assert!(!text.contains("CollectionOwners"));
+    assert!(text.contains("owner.close()"));
+    assert!(text.contains("__pb_discard(failure, __pb_processed)"));
+    assert!(text.contains("current = fold("));
+}
+
+#[test]
+fn nested_callback_rows_reuse_one_owner_journal() {
+    for bulk in [false, true] {
+        let mut declaration = fun!(values).callback_return_only();
+        if bulk {
+            declaration = declaration
+                .expand_return(expand_return!(Vec<Option<Owner>>).field_self_into().bulk());
+        }
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Option<Vec<Option<Vec<Option<Owner>>>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(declaration))
+            .build()
+            .unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        assert_eq!(
+            text.matches("= test.CollectionOwners()").count(),
+            1,
+            "{text}"
+        );
+        assert!(text.contains("__pb_foldOwners).own("), "{text}");
+        assert!(text.contains("__pb_foldOwners!!.release()"));
+        assert!(text.contains("__pb_foldOwners?.close(failure)"));
+        assert!(!text.contains("__pb_pending"));
+    }
+}
+
+#[test]
+fn collection_output_owners_are_shared_without_row_cleanup_closures() {
+    for bulk in [false, true] {
+        let mut declaration = fun!(values);
+        if bulk {
+            declaration = declaration.expand_return(expand_return!(Owner).field_self_into().bulk());
+        }
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Vec<Option<Vec<Option<Owner>>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(declaration))
+            .build()
+            .unwrap();
+        let text = &generated.kotlin["test/Functions.kt"];
+        assert_eq!(
+            text.matches("= test.CollectionOwners()").count(),
+            1,
+            "{text}"
+        );
+        assert!(text.contains(".own("));
+        assert!(!text.contains("cleanups"));
+        assert!(!text.contains("bulkActions"));
+        assert!(!text.contains("MutableList<("));
+    }
+}
+
+#[test]
+fn resource_free_collection_outputs_have_no_cleanup_bookkeeping() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub struct Row {pub number:i64,pub text:String}pub fn values()->Vec<Option<Row>>{}",
+        ))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(data_class!(Row)).fun(fun!(values)))
+        .build()
+        .unwrap();
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("CollectionOwners"));
+    assert!(!text.contains("cleanups"));
+    assert!(!text.contains("cleanupError"));
+    assert!(text.contains("kotlin.collections.ArrayList("));
+}
+
+#[test]
+fn jni_collection_outputs_transfer_rows_without_native_commit_queues() {
+    for callback in [false, true] {
+        let function = if callback {
+            fun!(values).callback_return_only()
+        } else {
+            fun!(values)
+        };
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub type Owner=String;pub fn values()->Vec<Option<Vec<Owner>>>{}",
+            ))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(package!().class(ptr_class!(Owner)).fun(function))
+            .build()
+            .unwrap();
+        assert!(!generated.rust.contains("_commits"), "{}", generated.rust);
+        assert!(generated.rust.contains("OutputRows::new"));
+        assert!(generated.rust.contains("complete_row"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+    let generated = JniGen::builder()
+        .flat(flat("pub fn values()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(values).callback_return()))
+        .build()
+        .unwrap();
+    assert!(!generated.rust.contains("_commits"));
+    assert!(!generated.rust.contains("OutputRows::new"));
+}
+
+#[test]
+fn cleanup_helpers_share_resolved_shapes_across_functions_callbacks_and_nested_rows() {
+    fn generate(reverse: bool) -> JniGen {
+        let mut functions = vec![
+            fun!(first),
+            fun!(second),
+            fun!(nested),
+            fun!(callback),
+            fun!(projected).expand_return(expand_return!(Row).field(fun!(row_owner))),
+            fun!(swapped),
+            fun!(bulk_first).expand_return(expand_return!(Row).field_self_into().bulk()),
+            fun!(bulk_second).expand_return(expand_return!(Row).field_self_into().bulk()),
+        ];
+        if reverse {
+            functions.reverse();
+        }
+        let mut package = package!()
+            .class(ptr_class!(Owner))
+            .class(ptr_class!(Other))
+            .class(data_class!(Row))
+            .class(data_class!(Swapped));
+        for function in functions {
+            package = package.fun(function);
+        }
+        JniGen::builder()
+            .flat(flat(
+                "
+            pub type Owner=String; pub type Other=String;
+            pub struct Row { pub owner:Owner, pub value:i64, pub other:Other }
+            pub struct Swapped { pub other:Other, pub value:i64, pub owner:Owner }
+            pub fn first()->Vec<Row>{} pub fn second()->Vec<Row>{}
+            pub fn nested()->Vec<Option<Vec<Row>>>{}
+            pub fn callback(callback:impl Fn(Vec<Row>)){}
+            pub fn projected()->Vec<Row>{} pub fn row_owner(row:&Row)->&Owner{}
+            pub fn swapped()->Vec<Swapped>{}
+            pub fn bulk_first()->Vec<Row>{} pub fn bulk_second()->Vec<Row>{}
+        ",
+            ))
+            .set_package_prefix("test")
+            .expand(expand_return!(&Owner).field_self_ref())
+            .set_bulk_collection_outputs(false)
+            .package(package)
+            .build()
+            .unwrap()
+    }
+    fn helpers(generated: &JniGen) -> BTreeMap<String, String> {
+        use quote::ToTokens;
+        syn::parse_file(&generated.rust)
+            .unwrap()
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                let syn::Item::Fn(function) = item else {
+                    return None;
+                };
+                let name = function.sig.ident.to_string();
+                name.starts_with("__pb_cleanup_")
+                    .then(|| (name, function.to_token_stream().to_string()))
+            })
+            .collect()
+    }
+    let generated = generate(false);
+    let definitions = helpers(&generated);
+    // Original Row, swapped handle types, a local single-owner projection and
+    // the enclosing optional nested-array row each have one object helper.
+    assert_eq!(
+        definitions
+            .keys()
+            .filter(|name| name.starts_with("__pb_cleanup_typed_"))
+            .count(),
+        4
+    );
+    assert_eq!(
+        definitions
+            .keys()
+            .filter(|name| name.starts_with("__pb_cleanup_native_"))
+            .count(),
+        1
+    );
+    assert_eq!(definitions, helpers(&generate(true)));
+}
+
+#[test]
+fn input_collections_and_callback_results_do_not_emit_output_cleanup_helpers() {
+    let generated=JniGen::builder()
+        .flat(flat("pub type Owner=String;pub fn consume(values:Vec<Owner>)->i64{}pub fn run(callback:impl Fn()->Vec<Owner>)->i64{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(consume)).fun(fun!(run)))
+        .build().unwrap();
+    assert!(!generated.rust.contains("__pb_cleanup_"));
+}
+
+// A callback element is one boundary argument even when it expands into many
+// Kotlin values or contains its own dynamic collection.
+fn callback_element_is_bulk(model: &Bindings, function: &str) -> bool {
+    let output = model
+        .function(function)
+        .unwrap()
+        .output_conversion()
+        .unwrap();
+    let (_, element, delivery) =
+        sequence::return_sequence(&output.output_outcomes().success).unwrap();
+    assert!(matches!(delivery, JniSequence::Callback));
+    let fields = group::callback_parameters(element).collect::<Vec<_>>();
+    matches!(fields.as_slice(), [wire] if matches!(wire.kind, JniWire::BulkBuffer { .. }))
+}
+
+#[test]
+fn bulk_row_expansions_compose_with_additional_and_only_callback_delivery() {
+    for only in [false, true] {
+        for global in [false, true] {
+            let mut builder = JniGen::builder()
+                .flat(flat(
+                    "pub struct Row {pub n:i64,pub text:String}pub fn rows()->Vec<Row>{}",
+                ))
+                .set_package_prefix("test")
+                .set_bulk_collection_outputs(false);
+            let expansion = expand_return!(Row).field_self_into().bulk();
+            let mut function = if only {
+                fun!(rows).callback_return_only()
+            } else {
+                fun!(rows).callback_return()
+            };
+            if global {
+                builder = builder.expand(expansion);
+            } else {
+                function = function.expand_return(expansion);
+            }
+            let model = builder
+                .package(package!().class(data_class!(Row)).fun(function))
+                .prepare()
+                .unwrap();
+            assert!(callback_element_is_bulk(&model, "rows_fold"));
+            if !only {
+                assert!(bulk_result(&model, "rows"));
+            }
+            let generated = generate(&model).unwrap();
+            assert!(generated.kotlin["test/Functions.kt"].contains("fold: (A, test.Row) -> A"));
+            assert!(generated.kotlin["test/JNINative.kt"].contains("fun run(v0: ByteArray?)"));
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
+}
+
+#[test]
+fn bulk_callback_batches_and_optional_elements_keep_their_scopes() {
+    for (source, expansion, signature) in [
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->Vec<Vec<Row>>{}",
+            expand_return!(Vec<Row>).field_self_into().bulk(),
+            "fold: (A, kotlin.collections.List<test.Row>) -> A",
+        ),
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->Option<Vec<Option<Vec<Row>>>>{}",
+            expand_return!(Vec<Row>).field_self_into().bulk(),
+            "fold: (A, kotlin.collections.List<test.Row>?) -> A",
+        ),
+        (
+            "pub struct Row {pub n:i64}pub fn batches()->&'static [Row]{}",
+            expand_return!(Row).field_self_ref().bulk(),
+            "fold: (A, test.Row) -> A",
+        ),
+    ] {
+        let model = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!().class(data_class!(Row)).fun(
+                    fun!(batches)
+                        .expand_return(expansion)
+                        .callback_return_only(),
+                ),
+            )
+            .prepare()
+            .unwrap();
+        assert!(callback_element_is_bulk(&model, "batches_fold"));
+        let generated = generate(&model).unwrap();
+        assert!(
+            generated.kotlin["test/Functions.kt"].contains(signature),
+            "{}",
+            generated.kotlin["test/Functions.kt"]
+        );
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn local_callback_output_overrides_replace_bulk_defaults_and_order_is_irrelevant() {
+    let source = "pub struct Row {pub n:i64}pub fn packed()->Vec<Row>{}pub fn plain()->Vec<Row>{}";
+    let build = |reverse| {
+        let local = expand_return!(Row).field_self_into();
+        let plain = if reverse {
+            fun!(plain).expand_return(local).callback_return_only()
+        } else {
+            fun!(plain).callback_return_only().expand_return(local)
+        };
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .expand(expand_return!(Row).field_self_into().bulk())
+            .package(
+                package!()
+                    .class(data_class!(Row))
+                    .fun(fun!(packed).callback_return())
+                    .fun(plain),
+            )
+            .prepare()
+            .unwrap()
+    };
+    let first = build(false);
+    assert!(bulk_result(&first, "packed"));
+    assert!(callback_element_is_bulk(&first, "packed_fold"));
+    assert!(!callback_element_is_bulk(&first, "plain_fold"));
+    let first = generate(&first).unwrap();
+    let second = generate(&build(true)).unwrap();
+    assert_eq!(first.rust, second.rust);
+    assert_eq!(first.kotlin, second.kotlin);
+}
+
+#[test]
+fn bulk_callback_elements_work_through_getters_and_consuming_field_expansions() {
+    let model=JniGen::builder()
+        .flat(flat("pub struct Row {pub n:i64,pub text:String}pub struct Batch {pub unused:i64}pub fn rows()->Vec<Row>{}pub fn batch()->Batch{}pub fn items(b:&Batch)->Vec<Row>{}pub fn parts(row:Row)->Row{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Row).field_self_into().bulk())
+        .package(package!().class(data_class!(Row))
+            .fun(fun!(batch).expand_return(expand_return!(Batch).field(fun!(items))).callback_return())
+            .fun(fun!(rows).callback_return_only().expand_return(expand_return!(Row).fields_into(prebindgen_declarations::fields!(parts)).bulk())))
+        .prepare().unwrap();
+    assert!(bulk_result(&model, "batch"));
+    assert!(callback_element_is_bulk(&model, "batch_fold"));
+    assert!(callback_element_is_bulk(&model, "rows_fold"));
+    let generated = generate(&model).unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("fold: (A, Long, String) -> A"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn whole_collection_bulk_defaults_cannot_enclose_callback_delivery() {
+    let error = JniGen::builder()
+        .flat(flat("pub struct Row {pub n:i64}pub fn rows()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Vec<Row>).field_self_into().bulk())
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .fun(fun!(rows).callback_return_only()),
+        )
+        .build()
+        .err()
+        .unwrap();
+    assert!(
+        error.contains("bulk cannot enclose callback delivery"),
+        "{error}"
+    );
+}
+
+#[test]
+fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() {
+    use prebindgen_declarations::{Output, SequenceDelivery};
+    let mut model = JniGen::builder()
+        .flat(flat(
+            "pub type Owner=String;pub fn rows()->Vec<Option<Vec<Owner>>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(rows).callback_return_only()),
+        )
+        .prepare()
+        .unwrap();
+    // Preserve support for direct request-free trees as well as the public
+    // declaration spelling, which normalizes this to Bulk(Optional(...)).
+    let recipe = Output::Sequence {
+        delivery: SequenceDelivery::Callback,
+        mode: None,
+        element: Box::new(Output::Optional(Box::new(
+            Output::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+                element: Box::new(Output::Leaf),
+            }
+            .bulk(),
+        ))),
+    };
+    let conversion =
+        prebindgen_declarations::compile_output(&model, &JniCodec, "rows_fold", &recipe, &())
+            .unwrap();
+    let (_, element, _) = sequence::return_sequence(&conversion.output_outcomes().success).unwrap();
+    let fields = group::callback_parameters(element).collect::<Vec<_>>();
+    // The optional uses a null frame, so presence stays outside its payload
+    // without adding a separate discriminator argument.
+    assert!(
+        matches!(element, prebindgen_flat::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_flat::WireNode::Chain {meta:JniChain::Bulk(_),..}))
+    );
+    assert_eq!(fields.len(), 1);
+    assert_eq!(
+        fields
+            .iter()
+            .filter(|w| matches!(w.kind, JniWire::BulkBuffer { .. }))
+            .count(),
+        1
+    );
+    model.function_mut("rows_fold").unwrap().ret.slot = Some(conversion);
+    let generated = generate(&model).unwrap();
+    assert!(generated.kotlin["test/Functions.kt"]
+        .contains("fold: (A, kotlin.collections.List<test.Owner>?) -> A"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn primitive_callback_rows_omit_local_frames_including_handle_and_enum_wires() {
+    let generated=JniGen::builder()
+        .flat(flat("pub enum Code {Zero,Seven} pub struct Row {pub flag:bool,pub byte:i8,pub unsigned_byte:u8,pub short:i16,pub unsigned_short:u16,pub number:i32,pub unsigned_number:u32,pub long:i64,pub unsigned_long:u64,pub signed_size:isize,pub size:usize,pub float:f32,pub double:f64,pub character:char,pub code:Code}pub fn rows()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(data_class!(Row)).class(enum_class!(Code)).fun(fun!(rows).callback_return_only()))
+        .build().unwrap();
+    assert!(!generated.rust.contains("LocalFrame::new"));
+    assert!(!generated.rust.contains("callback_frame"));
+    assert!(generated.rust.contains("call_method_unchecked"));
+    syn::parse_file(&generated.rust).unwrap();
+    let generated=JniGen::builder()
+        .flat(flat("pub type Owner=String;pub struct Row {pub first:Option<Owner>,pub second:Owner}pub fn rows()->Vec<Row>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(rows).callback_return_only()))
+        .build().unwrap();
+    assert!(!generated.rust.contains("LocalFrame::new"));
+    assert!(generated.rust.contains("call_method_unchecked"));
+    assert!(!generated.rust.contains("callback_frame"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn callback_rows_keep_local_frames_for_every_reference_encoding() {
+    for ty in ["String", "Vec<u8>", "i128", "u128", "Vec<i64>", "Row"] {
+        let generated = JniGen::builder()
+            .flat(flat(&format!(
+                "pub struct Row {{pub n:i64,pub text:Option<String>}}pub fn rows()->Vec<{ty}>{{}}"
+            )))
+            .set_package_prefix("test")
+            .set_bulk_collection_outputs(false)
+            .package(
+                package!()
+                    .class(data_class!(Row))
+                    .fun(fun!(rows).callback_return_only()),
+            )
+            .build()
+            .unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert!(generated.rust.contains("let ret_w0_callback_frame"), "{ty}");
+        assert!(
+            generated.rust.contains("drop(ret_w0_callback_frame)"),
+            "{ty}"
+        );
+    }
+    // A Rust primitive packed into a bulk frame is a ByteArray on this boundary.
+    let generated = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(
+                fun!(rows)
+                    .callback_return_only()
+                    .expand_return(expand_return!(i64).field_self_into().bulk()),
+            ),
+        )
+        .build()
+        .unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(generated.rust.contains("let ret_w0_callback_frame"));
+    assert!(generated.rust.contains("drop(ret_w0_callback_frame)"));
+}
+
+#[test]
+fn callback_capture_rows_share_jvm_shapes_without_boxing() {
+    let generated=JniGen::builder().flat(flat("pub type Owner=String;pub fn signed()->Vec<i64>{}pub fn unsigned()->Vec<u64>{}pub fn owners()->Vec<Owner>{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(signed).callback_return_only()).fun(fun!(unsigned).callback_return_only()).fun(fun!(owners).callback_return_only()))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
+    assert!(native.contains("(@JvmField val c0: Long)"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains("(__pb_fold_row.c0).toULong()"), "{text}");
+    assert!(text.contains("drop_Owner_") && text.contains("__pb_fold_row.c0"));
+    assert!(!text.contains("__pb_rows.add(kotlin.arrayOf"));
+    assert!(!text.contains("__pb_fold_row["));
+    assert!(!text.contains("rawRow"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn callback_capture_rows_use_all_jvm_carriers_and_keep_nested_cleanup() {
+    let generated=JniGen::builder().flat(flat("pub type Owner=String;pub struct Row {pub b:bool,pub byte:i8,pub short:i16,pub number:i32,pub long:i64,pub float:f32,pub double:f64,pub text:Option<String>,pub bytes:Vec<u8>,pub wide:i128,pub owner:Option<Owner>}pub fn rows()->Option<Vec<Row>>{} pub fn bulk()->Vec<Row>{}pub fn nested()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test").set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).class(data_class!(Row)).fun(fun!(rows).callback_return_only()).fun(fun!(nested).callback_return_only()).fun(fun!(bulk).callback_return_only().expand_return(expand_return!(Row).field_self_into().bulk())))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    let records = native
+        .lines()
+        .filter(|line| line.contains("internal class SequenceRow_"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for ty in [
+        "Boolean",
+        "Byte",
+        "Short",
+        "Int",
+        "Long",
+        "Float",
+        "Double",
+        "String?",
+        "ByteArray?",
+        "Array<Any?>?",
+    ] {
+        assert!(records.contains(&format!(": {ty}")), "{ty}: {records}");
+    }
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 4);
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(!text.contains("__pb_fold_row["));
+    assert!(text.contains("__pb_discard(failure, __pb_processed)"));
+    assert!(text.contains("for (__pb_rowIndex in 0 until __pb_rows.size)"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn typed_output_remapping_preserves_nullable_and_longer_cast_types() {
+    let wire = prebindgen_flat::Wire {
+        name: syn::parse_quote!(value),
+        kind: JniWire::scalar(Primitive::I64),
+    };
+    let mut output = KotlinOutput {
+        delivered: vec![
+            "row[0] as Long".into(),
+            "row[0] as Long?".into(),
+            "row[0] as Long ?".into(),
+            "row[0] as LongExtra".into(),
+            "(row[0] as Long).toULong()".into(),
+            "row[0] as Long\nval other = 0".into(),
+        ],
+        ..Default::default()
+    };
+    returns::remap(&mut output, "row", &[&wire], 0, &["column[index]".into()]);
+    assert_eq!(
+        output.delivered,
+        [
+            "column[index]",
+            "column[index] as Long?",
+            "column[index] as Long ?",
+            "column[index] as LongExtra",
+            "(column[index]).toULong()",
+            "column[index]\nval other = 0"
+        ]
+    );
+}
+
+#[test]
+fn ordinary_output_rows_share_capture_classes_and_use_unboxed_constructors() {
+    let generated=JniGen::builder()
+        .flat(flat("pub type Owner=String;pub fn signed()->Vec<i64>{}pub fn unsigned()->Vec<u64>{}pub fn owners()->Vec<Owner>{}pub fn fold()->Vec<i64>{}pub fn callback(cb:impl Fn(Vec<i64>)){}"))
+        .set_package_prefix("test").set_bulk_collection_outputs(false)
+        .package(package!().class(ptr_class!(Owner)).fun(fun!(signed)).fun(fun!(unsigned)).fun(fun!(owners)).fun(fun!(fold).callback_return_only()).fun(fun!(callback)))
+        .build().unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(native.matches("internal class SequenceRow_").count(), 1);
+    assert_eq!(
+        generated.proguard_rules(),
+        "-keep class test.JNINative { *; }\n-keep class test.JNINative$SequenceRow_* { *; }\n-keep class test.JNINative$SequenceSink_* { *; }\n-keep class test.JNINative$SequenceCollector_* { *; }\n-keep interface test.JNINative$SequenceCapacity { *; }\n"
+    );
+    assert_eq!(generated.rust.matches("static __pb_row_type_").count(), 1);
+    assert!(native.contains("::class.java"));
+    assert!(generated.rust.contains(".construct("));
+    assert!(!generated.rust.contains("handle_object"));
+    assert!(!generated.rust.contains("valueOf"));
+    assert!(!generated.rust.contains("LocalFrame::new"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains(".c0).toULong()"));
+    assert!(generated.rust.contains("OutputRows::new_objects"));
+    assert!(generated.rust.contains("get_field_unchecked"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
+    for (longs, ints, typed) in [
+        (127, 0, true),
+        (127, 1, false),
+        (128, 0, false),
+        (126, 2, true),
+    ] {
+        let fields = (0..longs)
+            .map(|i| (format!("n{i}"), Primitive::I64))
+            .chain((0..ints).map(|i| (format!("x{i}"), Primitive::I32)))
+            .map(|(name, primitive)| prebindgen_flat::Wire {
+                name: syn::parse_str(&name).unwrap(),
+                kind: JniWire::scalar(primitive),
+            })
+            .collect::<Vec<_>>();
+        let values = fields
+            .iter()
+            .map(|w| {
+                let name = &w.name;
+                (name.clone(), quote!(#name))
+            })
+            .collect::<Vec<_>>();
+        let element = prebindgen_flat::WireNode::Leaf(fields);
+        let output = sequence::output(
+            syn::parse_quote!(rows),
+            syn::parse_quote!(length),
+            syn::parse_quote!(index),
+            &element,
+            &values,
+        )
+        .unwrap();
+        assert!(
+            matches!(output.metadata, JniChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
+        );
+        assert_eq!(output.store.to_string().contains("construct"), typed);
+        assert_eq!(output.store.to_string().contains("valueOf"), !typed);
+    }
+}
+
+#[test]
+fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration() {
+    let node = prebindgen_flat::WireNode::Chain {
+        controls: vec![prebindgen_flat::Wire {
+            name: syn::parse_quote!(rows),
+            kind: JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        }],
+        child: Box::new(prebindgen_flat::WireNode::Leaf(vec![
+            prebindgen_flat::Wire {
+                name: syn::parse_quote!(value),
+                kind: JniWire::scalar(Primitive::I64),
+            },
+        ])),
+        meta: JniChain::Sequence(JniSequence::Buffered),
+    };
+    let context = KotlinContext {
+        package: "test",
+        classes: &BTreeMap::new(),
+        result: "packet",
+        failure: "failure",
+        cleanup_failure: None,
+        output_prefix: "result_",
+    };
+    let output = kotlin::output_kotlin_scoped(&node, &context, None).unwrap();
+    assert!(output.materialize.contains("as kotlin.Array<*>"));
+    assert!(output.materialize.contains("_row[0] as Long"));
+    assert!(!output.materialize.contains("SequenceRow_"));
+    let generated = JniGen::builder()
+        .flat(flat("pub fn input(values:Vec<i64>)->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(input)))
+        .build()
+        .unwrap();
+    assert!(generated.proguard_rules().is_empty());
+    assert!(!generated.rust.contains("OutputRowType"));
+    assert!(!generated.kotlin["test/JNINative.kt"].contains("init_OutputRows_"));
+}
+
+#[test]
+fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(rows).callback_return_only()))
+        .build()
+        .unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert!(native.contains("interface SequenceCapacity { fun reserve(capacity: Int) }"));
+    assert!(native.contains(": SequenceCapacity { fun run(v0: Long)"));
+    assert!(native.contains("rows.ensureCapacity(capacity)"));
+    assert!(native.contains("override fun run(v0: Long) { rows.add("));
+    assert!(!native.contains("capacity: Int, v0"));
+    let text = &generated.kotlin["test/Functions.kt"];
+    assert!(text.contains("val __pb_rows = __pb_sink.rows"));
+    assert!(!text.contains("ArrayList<"));
+    let row = prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+        name: syn::parse_quote!(value),
+        kind: JniWire::scalar(Primitive::I64),
+    }]);
+    let transport = sequence_callback::transport(
+        syn::parse_quote!(rows),
+        syn::parse_quote!(length),
+        &row,
+        &[(syn::parse_quote!(value), quote!(value))],
+    )
+    .unwrap();
+    assert!(transport.begin.to_string().contains("if length >= 64"));
+    assert!(transport.begin.to_string().contains("reserve"));
+    assert!(!transport.store.to_string().contains("reserve"));
+    assert!(!transport.store.to_string().contains("length"));
+    assert!(transport
+        .begin
+        .to_string()
+        .contains("__PB_SEQUENCE_CAPACITY"));
+    assert!(!transport.begin.to_string().contains(r#""reserve""#));
+    assert_eq!(generated.rust.matches(r#""reserve""#).count(), 1);
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn bulk_only_collections_need_no_collector_keep_rules() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(rows)))
+        .build()
+        .unwrap();
+    assert!(!generated.proguard_rules().contains("SequenceSink_"));
+    assert!(!generated.proguard_rules().contains("SequenceCollector_"));
+    assert!(!generated.proguard_rules().contains("SequenceCapacity"));
+    assert!(!generated.rust.contains("__PB_SEQUENCE_CAPACITY"));
+    assert!(!generated.kotlin["test/JNINative.kt"].contains("SequenceCapacity"));
+}
+
+#[test]
+fn collector_capacity_registration_is_shared_and_follows_the_library_loader() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn rows()->Vec<i64>{}pub fn text()->Vec<String>{}",
+        ))
+        .set_package_prefix("test")
+        .set_jni_native_init("System.loadLibrary(\"example\")")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(text).callback_return_only()),
+        )
+        .build()
+        .unwrap();
+    let native = &generated.kotlin["test/JNINative.kt"];
+    assert_eq!(
+        native
+            .matches("internal interface SequenceCapacity ")
+            .count(),
+        1
+    );
+    assert_eq!(native.matches("init { init_SequenceCapacity_").count(), 1);
+    assert_eq!(
+        generated
+            .rust
+            .matches("static __PB_SEQUENCE_CAPACITY")
+            .count(),
+        1
+    );
+    assert!(
+        native.find("System.loadLibrary").unwrap()
+            < native.find("init { init_SequenceCapacity_").unwrap()
+    );
+    assert!(generated
+        .proguard_rules()
+        .contains("JNINative$SequenceCapacity"));
+}
+
+#[test]
+fn kotlin_identifiers_only_escape_keywords_and_nonidentifier_characters() {
+    for name in ["packetId", "_packet2", "type", "数据", "é", "n١"] {
+        assert_eq!(kotlin_identifier(name), name);
+    }
+    for name in [
+        "when",
+        "value",
+        "field",
+        "get",
+        "set",
+        "suspend",
+        "context",
+        "constructor",
+        "init",
+        "class",
+        "in",
+        "fun",
+        "x\u{301}",
+        "value-name",
+        "2nd",
+        "a²",
+        "Ⅷ",
+    ] {
+        assert_eq!(kotlin_identifier(name), format!("`{name}`"));
+    }
+}
+
+#[test]
+fn required_inputs_are_nonnull_and_options_preserve_nullable_containers() {
+    let source = "pub type Handle=String; pub enum Choice { A,B } pub fn required(h:&Handle,text:&str,bytes:&[u8],wide:i128,choice:Choice,callback:impl Fn()->String)->i64{} pub fn optional(h:Option<&Handle>,text:Option<&str>,bytes:Option<&[u8]>,wide:Option<i128>,choice:Option<Choice>)->i64{} pub fn rows(input:Vec<Handle>)->i64{} pub fn maybe_rows(input:Option<Vec<Handle>>)->i64{}";
+    for bulk in [false, true] {
+        let mut rows = fun!(rows);
+        let mut maybe_rows = fun!(maybe_rows);
+        if bulk {
+            rows = rows.expand_param("input", expand_param!(Vec<Handle>).variant_self().bulk());
+            maybe_rows = maybe_rows.expand_param(
+                "input",
+                expand_param!(Option<Vec<Handle>>).variant_self().bulk(),
+            );
+        }
+        let g = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(enum_class!(Choice))
+                    .fun(fun!(required))
+                    .fun(fun!(optional))
+                    .fun(rows)
+                    .fun(maybe_rows),
+            )
+            .build()
+            .unwrap();
+        let functions = &g.kotlin["test/Functions.kt"];
+        let required = functions
+            .lines()
+            .find(|l| l.starts_with("public fun required("))
+            .unwrap();
+        for ty in [
+            "h: test.Handle,",
+            "text: String,",
+            "bytes: ByteArray,",
+            "wide: java.math.BigInteger,",
+            "choice: test.Choice,",
+            "callback: test.VoidToStringCallback,",
+        ] {
+            assert!(required.contains(ty), "{required}");
+        }
+        let optional = functions
+            .lines()
+            .find(|l| l.starts_with("public fun optional("))
+            .unwrap();
+        for ty in [
+            "h: test.Handle?",
+            "text: String?",
+            "bytes: ByteArray?",
+            "wide: java.math.BigInteger?",
+            "choice: test.Choice?",
+        ] {
+            assert!(optional.contains(ty), "{optional}");
+        }
+        assert!(functions.contains("input: kotlin.collections.List<test.Handle>,"));
+        assert!(functions.contains("input: kotlin.collections.List<test.Handle>?,"));
+        assert!(!functions.contains("List<test.Handle?>"));
+        assert!(g.kotlin["test/VoidToStringCallback.kt"].contains("run(): String\n"));
+    }
+}
+
+#[test]
+fn selector_reference_slots_are_nullable_for_plain_and_bulk_inputs() {
+    let source="pub type Handle=String;pub enum Choice{A,B}pub struct Value{pub text:String}pub fn from_fields(text:String,bytes:Vec<u8>,wide:i128,choice:Choice,h:&Handle)->Value{}pub fn choose(value:Value)->i64{}";
+    for bulk in [false, true] {
+        let expansion = expand_param!(Value)
+            .variant_self()
+            .variant(fun!(from_fields));
+        let expansion = if bulk { expansion.bulk() } else { expansion };
+        let g = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(enum_class!(Choice))
+                    .class(data_class!(Value))
+                    .fun(fun!(choose).expand_param("value", expansion)),
+            )
+            .build()
+            .unwrap();
+        let signature = g.kotlin["test/Functions.kt"]
+            .lines()
+            .find(|l| l.starts_with("public fun choose("))
+            .unwrap();
+        for ty in [
+            "valueVariant0: test.Value?",
+            "valueVariant1Text: String?",
+            "valueVariant1Bytes: ByteArray?",
+            "valueVariant1Wide: java.math.BigInteger?",
+            "valueVariant1Choice: test.Choice?",
+            "valueVariant1H: test.Handle?",
+        ] {
+            assert!(signature.contains(ty), "{signature}");
+        }
+    }
+}
+
+#[test]
+fn kotlin_preflight_is_required_and_uses_retained_handles() {
+    let generated = JniGen::builder()
+        .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(read:&A,write:&mut A,other:&B){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(!generated.rust.contains("__prebindgen_input_aliases"));
+    assert!(kotlin.contains("conflicting input aliases"));
+    assert!(kotlin.contains("__pb_handle0?.raw ?: 0L"));
+    assert!(kotlin.contains("__pb_handle1?.raw ?: 0L"));
+    assert!(!kotlin.contains("read.raw"));
+}
+
+#[test]
+fn incomplete_custom_resource_metadata_is_rejected() {
+    for missing in ["allocation", "mismatch", "access", "deferred"] {
+        let mut model = JniGen::builder()
+            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(first:&mut A,second:&A){}"))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
+            .prepare().unwrap();
+        let first = &mut model.function_mut("call").unwrap().params[0]
+            .ty
+            .slot
+            .as_mut()
+            .unwrap()
+            .rust
+            .resources[0];
+        let expected = match missing {
+            "allocation" => {
+                first.allocation_type = None;
+                "allocation type"
+            }
+            "mismatch" => {
+                first.allocation_type = Some(syn::parse_quote!(B));
+                "matching allocation types and access modes"
+            }
+            "access" => {
+                first.access = Access::Shared;
+                "matching allocation types and access modes"
+            }
+            _ => {
+                first.registered = false;
+                "eagerly prepared"
+            }
+        };
+        let error = generate(&model).err().unwrap();
+        assert!(
+            error.contains("function `call` parameter `first`"),
+            "{error}"
+        );
+        assert!(
+            error.contains("Kotlin handle preflight") && error.contains(expected),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn callback_results_and_arguments_omit_all_native_alias_history() {
+    for bulk in [false, true] {
+        let rows = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let rows = if bulk { rows.bulk() } else { rows };
+        let generated = JniGen::builder()
+            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub struct Row{pub a:A,pub b:B}pub fn call(values:Vec<Row>,cb:impl Fn()->Vec<Row>){}"))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).class(data_class!(Row))
+                .fun(fun!(call).expand_param("values", rows.clone())
+                    .expand_param("cb", callback!(impl Fn() -> Vec<Row>).expand_return(rows))))
+            .build().unwrap();
+        for history in [
+            "__prebindgen_input_aliases",
+            "DynamicInputs",
+            "FixedInputs",
+            "SharedInputs",
+            "conflicting input aliases",
+        ] {
+            assert!(!generated.rust.contains(history), "{history}");
+        }
+        let kotlin = &generated.kotlin["test/Functions.kt"];
+        assert!(kotlin.matches("prepareInputHandles(").count() >= 2);
+        assert!(kotlin.contains("callbackReturnWire"));
+    }
+}
+
+#[test]
+fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
+    let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}pub fn nested(cb:impl Fn()->Vec<Vec<Reply>>){}";
+    for (function, returned, deferred) in [
+        ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
+        (
+            "rows",
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))),
+            true,
+        ),
+        (
+            "nested",
+            Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Record(
+                vec![Input::Leaf; 4],
+            ))))),
+            true,
+        ),
+    ] {
+        let ty = if function == "fixed" {
+            syn::parse_quote!(impl Fn() -> Reply)
+        } else if function == "rows" {
+            syn::parse_quote!(impl Fn() -> Vec<Reply>)
+        } else {
+            syn::parse_quote!(impl Fn() -> Vec<Vec<Reply>>)
+        };
+        let callback = prebindgen_declarations::CallbackDecl::new(ty).expand_return(returned);
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Reply))
+                    .fun(
+                        prebindgen_declarations::FunctionDecl::new(
+                            syn::parse_str(function).unwrap(),
+                        )
+                        .expand_param("cb", callback),
+                    ),
+            )
+            .build()
+            .unwrap();
+        let syntax = syn::parse_file(&generated.rust).unwrap();
+        assert_eq!(
+            generated.rust.contains("CallbackReturnCleanup::new"),
+            function == "fixed"
+        );
+        assert_eq!(
+            generated.rust.contains("callback_return_decoded.is_err()"),
+            deferred && function != "fixed"
+        );
+        assert_eq!(
+            generated.rust.contains("callback_return_owners.check()?"),
+            !deferred
+        );
+        assert_eq!(generated.rust.contains("_ownership_row"), !deferred);
+        assert!(!syntax.items.is_empty());
+    }
+}
+
+#[test]
+fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
+    let returned = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Leaf,
+        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))).bulk(),
+    ])));
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle}pub struct Batch{pub first:Handle,pub packed:Vec<Reply>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(data_class!(Reply)).class(data_class!(Batch))
+            .fun(fun!(mixed).expand_param("cb",callback!(impl Fn()->Vec<Batch>).expand_return(returned))))
+        .build().unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(!generated.rust.contains("callback_return_owners.check()?"));
+    assert!(!generated.rust.contains("_ownership_row"));
+    assert!(generated.rust.contains("callback_return_decoded.is_err()"));
+    assert!(!generated.rust.contains("cached_bytes"));
+}
+
+#[test]
+fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub handle:Handle}pub struct Batch{pub rows:Vec<Option<Vec<Row>>>,pub bytes:Vec<u8>,pub nested_bytes:Vec<Vec<u8>>,pub kinds:Vec<Kind>,pub numbers:Vec<u64>}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(enum_class!(Kind)).class(data_class!(Row)).class(data_class!(Batch)))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Batch.kt"];
+    assert!(kotlin.contains("rows: kotlin.collections.List<kotlin.collections.List<test.Row>?>"));
+    assert!(kotlin.contains("bytes: kotlin.ByteArray"));
+    assert!(kotlin.contains("nested_bytes: kotlin.collections.List<kotlin.ByteArray>"));
+    assert!(kotlin.contains("kinds: kotlin.collections.List<test.Kind>"));
+    assert!(kotlin.contains("numbers: kotlin.collections.List<kotlin.ULong>"));
+    for (source, reason) in [
+        (
+            "pub struct Node{pub children:Vec<Node>}",
+            "recursive data class",
+        ),
+        (
+            "pub struct Node{pub children:Vec<&i64>}",
+            "cannot be references",
+        ),
+        (
+            "pub struct Node{pub children:Vec<Option<Option<i64>>>}",
+            "nested Option",
+        ),
+    ] {
+        let error = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Node)))
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains(reason), "{error}");
+    }
+}
+
+#[test]
+fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
+    let returned = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Selector(vec![Input::Leaf, Input::Leaf]),
+        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
+    ])));
+    let error = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub struct Batch{pub first:Handle,pub packed:Vec<Row>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).class(data_class!(Row)).class(data_class!(Batch))
+            .fun(fun!(mixed).expand_param("cb", callback!(impl Fn()->Vec<Batch>).expand_return(returned))))
+        .build().err().unwrap();
+    assert!(
+        error.contains("data-class input") || error.contains("exactly one"),
+        "{error}"
+    );
 }

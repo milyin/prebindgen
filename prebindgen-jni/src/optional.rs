@@ -1,12 +1,25 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
-    // becomes a Java null at delivery; Some(empty) stays a non-null object.
+    if matches!(w, JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. }) {
+        return Ok(quote!(None));
+    }
+    if matches!(w, JniWire::Native128 { .. }) {
+        return Ok(quote!([0u8; 16]));
+    }
+    // Prepared text/bytes already are JVM references. Null means absent;
+    // an empty buffer is a non-null JVM object, with no Rust Option wrapper.
     if matches!(
         w,
-        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }
     ) {
+        return Ok(if input {
+            quote!(Default::default())
+        } else {
+            quote!(::prebindgen_jni_runtime::jni::objects::JObject::null())
+        });
+    }
+    if matches!(w, JniWire::Rows { .. }) {
         return Ok(if input {
             quote!(Default::default())
         } else {
@@ -41,7 +54,10 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
     if matches!(niche, Some(JniNiche::Null))
         && matches!(
             w,
-            JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+            JniWire::Rows { .. }
+                | JniWire::Text { .. }
+                | JniWire::Bytes { .. }
+                | JniWire::BulkBuffer { .. }
         )
     {
         return "null".into();
@@ -63,7 +79,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
         if c.is_ascii_alphanumeric() || c == '_' {
             word.push(c)
         } else {
-            if word == from {
+            if word == from && !out.trim_end().ends_with('.') && !out.trim_end().ends_with('`') {
                 out.push_str(to)
             } else {
                 out.push_str(&word)
@@ -79,24 +95,46 @@ pub(crate) fn input_kotlin(
     nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
+    active: &str,
 ) -> Result<KotlinInput> {
     let root = &o.presence().to_string();
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
+    // A single optional value is evaluated only in its present branch. Build
+    // that converter as required, then expose T? and validate it once below.
     let mut c = kotlin::input_kotlin(nodes, context)?;
+    let single = c.parameters.len() == 1 && !kotlin::has_optional(nodes);
+    if !single {
+        let present = format!("{root} == 1");
+        let present = if active == "true" {
+            present
+        } else {
+            format!("({active}) && ({present})")
+        };
+        c = kotlin::input_kotlin_when(nodes, context, &present)?;
+    }
+    c.prepare_arguments(kotlin::input_handles(nodes, false))?;
     // A single converted value is idiomatic T?. Multiple views retain an
     // explicit presence argument so Some with nullable components is distinct.
-    let presence = if c.parameters.len() == 1 && !kotlin::has_optional(nodes) {
+    let presence = if single {
         let (name, ty) = c.parameters[0].split_once(": ").unwrap();
         let name = name.to_string();
         let ty = ty.trim_end_matches('?');
         out.parameters.push(format!("{name}: {ty}?"));
+        out.parameter_paths = c.parameter_paths.clone();
         for a in c
             .arguments
             .iter_mut()
+            .chain(c.prepared_arguments.iter_mut())
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
             .chain(c.lock_groups.iter_mut())
+            .chain(
+                c.handle_inputs
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+            )
             .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             *a = a
@@ -105,19 +143,43 @@ pub(crate) fn input_kotlin(
                 .replace(&format!("{name}!!"), &name);
             *a = replace(a, &name, &format!("requireNotNull({name})"));
         }
-        format!("{name} != null")
+        if active == "true" {
+            format!("{name} != null")
+        } else {
+            format!("({active}) && ({name} != null)")
+        }
     } else {
         out.parameters.push(format!("{}: Boolean", root));
         out.parameters.extend(c.parameters.clone());
+        out.parameter_paths
+            .push(prebindgen_declarations::ComponentPath(vec![
+                prebindgen_declarations::ComponentSegment::Named("present".into()),
+            ]));
+        let mut payload_paths = c.parameter_paths.clone();
+        if kotlin::has_optional(nodes) {
+            for path in &mut payload_paths {
+                path.prepend(prebindgen_declarations::ComponentSegment::Named(
+                    "some".into(),
+                ));
+            }
+        }
+        out.parameter_paths.extend(payload_paths);
         root.to_string()
     };
     let tag = format!("(if ({presence}) 1 else 0)");
     for a in c
         .arguments
         .iter_mut()
+        .chain(c.prepared_arguments.iter_mut())
         .chain(c.locks.iter_mut())
         .chain(c.consumed.iter_mut())
         .chain(c.lock_groups.iter_mut())
+        .chain(
+            c.handle_inputs
+                .iter_mut()
+                .flatten()
+                .flat_map(|h| std::iter::once(&mut h.value).chain(h.consumed.iter_mut())),
+        )
         .chain(c.setup.iter_mut().map(|b| &mut b.expression))
     {
         // Every payload expression below runs only in the present branch.
@@ -125,14 +187,15 @@ pub(crate) fn input_kotlin(
         *a = replace(a, root, "1");
     }
     if matches!(o, JniOptional::Flag(_)) {
-        out.arguments.push(tag);
+        out.arguments.push(tag.clone());
+        out.prepared_arguments.push(tag);
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
         let niche = o.niche().filter(|_| inner[j].name == *o.discriminator());
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
-            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }) => {
                 // An explicit presence parameter must not silently become None
                 // when a nullable raw reference is passed for its discriminator.
                 format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
@@ -141,6 +204,30 @@ pub(crate) fn input_kotlin(
         };
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
+    }
+    let offset = usize::from(matches!(o, JniOptional::Flag(_)));
+    for (j, a) in c.prepared_arguments.into_iter().enumerate() {
+        if !matches!(
+            inner[j].kind,
+            JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+        ) {
+            out.prepared_arguments
+                .push(out.arguments[j + offset].clone());
+            continue;
+        }
+        let a = if o
+            .niche()
+            .is_some_and(|_| inner[j].name == *o.discriminator())
+            && matches!(
+                inner[j].kind,
+                JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+            ) {
+            format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
+        } else {
+            a
+        };
+        out.prepared_arguments
+            .push(format!("if ({presence}) {a} else null"));
     }
     out.setup.extend(c.setup.into_iter().map(|mut b| {
         b.expression = format!("if ({presence}) ({}) else ({})", b.expression, b.absent);
@@ -156,6 +243,28 @@ pub(crate) fn input_kotlin(
             .into_iter()
             .map(|s| format!("if ({presence}) {s} else null")),
     );
+    out.handle_inputs = c.handle_inputs.map(|sources| {
+        sources
+            .into_iter()
+            .map(|mut source| {
+                if let Some(index) = &mut source.argument {
+                    *index += offset;
+                }
+                source.consumed = source
+                    .consumed
+                    .map(|s| format!("if ({presence}) {{ {s} }}"));
+                source.value = if source.many {
+                    format!(
+                        "if ({presence}) ({}) else kotlin.collections.emptyList()",
+                        source.value
+                    )
+                } else {
+                    format!("if ({presence}) ({}) else null", source.value)
+                };
+                source
+            })
+            .collect()
+    });
     out.consumed.extend(
         c.consumed
             .into_iter()
@@ -167,6 +276,7 @@ pub(crate) fn output_kotlin(
     nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
+    owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     let wires = kotlin::leaf_wires(nodes);
     let flag = usize::from(matches!(o, JniOptional::Flag(_)));
@@ -185,7 +295,7 @@ pub(crate) fn output_kotlin(
         result: &local,
         ..*context
     };
-    let mut c = kotlin::output_kotlin(nodes, &ctx)?;
+    let mut c = kotlin::output_kotlin_scoped(nodes, &ctx, owners)?;
     kotlin::remap_output(&mut c, &local, context.result, flag, wires.len());
     let mut out = KotlinOutput {
         output_locals: c.output_locals,
@@ -197,7 +307,9 @@ pub(crate) fn output_kotlin(
         out.result_names.push(None);
     }
     out.materialize = format!("            if ({p}) {{\n{}            }}\n", c.materialize);
-    out.cleanup = format!("            if ({p}) {{\n{}            }}\n", c.cleanup);
+    if !c.cleanup.is_empty() {
+        out.cleanup = format!("            if ({p}) {{\n{}            }}\n", c.cleanup);
+    }
     c.result_names.resize(c.result_types.len(), None);
     out.result_names.extend(c.result_names);
     for (v, t) in c.delivered.into_iter().zip(c.result_types) {
@@ -223,7 +335,10 @@ impl JniNiche {
             Self::Null
                 if matches!(
                     wire,
-                    JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+                    JniWire::Rows { .. }
+                        | JniWire::Text { .. }
+                        | JniWire::Bytes { .. }
+                        | JniWire::BulkBuffer { .. }
                 ) =>
             {
                 quote!(!#value.is_null())
@@ -260,4 +375,19 @@ pub(crate) fn remaining(wire: &JniWire, niche: &JniNiche) -> Option<JniNiche> {
     // Stop at the carrier boundary or the next valid payload value. Do not
     // advertise a reserved range's neighbour merely because it fits an integer.
     wire.validate_niche(&next).ok().map(|()| next)
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    #[test]
+    fn optional_replacement_keeps_member_and_property_identifiers() {
+        assert_eq!(
+            super::replace(
+                "pkg.InputValidation.value { value } + row.`value` + value.raw",
+                "value",
+                "checked"
+            ),
+            "pkg.InputValidation.value { checked } + row.`value` + checked.raw"
+        );
+    }
 }

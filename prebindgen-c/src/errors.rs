@@ -1,6 +1,6 @@
 //! Explicit Result error outputs. Message buffers and structured errors are caller-owned.
 use super::*;
-use prebindgen_conversions::OutputFragment;
+use prebindgen_conversions::{OutputFragment, TemplateContext};
 use prebindgen_flat::Conversion;
 
 #[derive(Clone, Debug)]
@@ -31,7 +31,7 @@ impl ErrorBinding {
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &enums::EnumCodec<'_>,
+    codec: &enums::EnumCodec,
     declarations: &prebindgen_declarations::Declarations,
 ) -> Result<()> {
     let mut types = flat
@@ -187,7 +187,7 @@ pub(crate) fn emit(
         for (i, wire) in crate::group::result_packet_fields(&plan.outcomes.success).enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
-            fields.push(quote!(pub #field:#ty));
+            fields.push((field, ty));
             let c_field = if error.fields.len()
                 == crate::group::result_packet_fields(&plan.outcomes.success).len()
             {
@@ -207,11 +207,18 @@ pub(crate) fn emit(
                 let field = format_ident!("v{i}");
                 if !matches!(
                     wire.kind,
-                    CWire::Buffer | CWire::Pointer { .. } | CWire::Rows
+                    CWire::Buffer
+                        | CWire::Pointer { .. }
+                        | CWire::Rows
+                        | CWire::Owned { by_value: true, .. }
                 ) {
                     return (wire, quote!((*error).#field));
                 }
-                let empty = match wire.kind {
+                let empty = match &wire.kind {
+                    CWire::Owned { owner, .. } => {
+                        let ident = owner.ident();
+                        quote!(#ident::empty())
+                    }
                     CWire::Buffer => quote!(__PbBuffer {
                         data: std::ptr::null(),
                         len: 0
@@ -235,7 +242,7 @@ pub(crate) fn emit(
             false,
         ));
         if fields.is_empty() {
-            fields.push(quote!(pub unused:u8));
+            fields.push((syn::parse_quote!(unused), syn::parse_quote!(u8)));
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
@@ -250,9 +257,10 @@ pub(crate) fn emit(
             comments = comments.replace(&format!("output->v{i}"), &format!("error->{field}"));
         }
         header.push_str(&comments);
+        let definition = prebindgen_reprc::Record::new(rust_name.clone(), fields)?.definition();
         tokens.extend(quote! {
-            #[repr(C)] pub struct #rust_name {#(#fields),*}
-            #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+            #definition
+            #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
             unsafe fn #helper(#input:#source_ty,error_output:*mut #rust_name,reported:&mut bool)->Result<(),String>{
                 if error_output.is_null(){return Ok(());}
                 #prepare
@@ -296,15 +304,25 @@ pub(crate) fn result_function(
     let (rust_error, c_error, report_binding) = if let Some(typed) = typed {
         let rust = format_ident!("__PbError_{}", typed.name);
         let report = helper(&typed.name);
+        let mut empty_fields = crate::group::result_packet_fields(&typed.plan()?.outcomes.success)
+            .enumerate()
+            .map(|(i, wire)| {
+                let field = format_ident!("v{i}");
+                let value = context.render(&CCodec.absent_value(&wire.kind, None, false)?)?;
+                Ok(quote!(#field:#value))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if empty_fields.is_empty() {
+            empty_fields.push(quote!(unused:0));
+        }
         (
             quote!(#rust),
             format!("{prefix}_{}", typed.name),
             quote! {
                 let mut delivered=false;
                 if ::prebindgen_runtime::boundary(|| unsafe {#report(<#error_ty as From<String>>::from(message),#error,&mut delivered)}).is_err() && !delivered {
-                // All CWire carriers have a valid zero representation with no
-                // owned allocations. Never expose uninitialized error storage.
-                std::ptr::write(#error,std::mem::zeroed());
+                // Native owners need real empty Rust values, not zero bytes.
+                std::ptr::write(#error,#rust{#(#empty_fields),*});
             }
             },
         )
@@ -334,7 +352,6 @@ pub(crate) fn result_function(
     } else {
         (quote!(bool), "bool".into(), quote!(false), quote!(true))
     };
-    let mut checks = TokenStream::new();
     let mut writes = TokenStream::new();
     let mut display = Vec::new();
     for (i, wire) in outputs.iter().enumerate() {
@@ -347,21 +364,13 @@ pub(crate) fn result_function(
         let ty = wire.rust_type();
         params.push(quote!(#id:*mut #ty));
         cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers, context)));
-        checks.extend(quote!(if #id.is_null(){return Err("null success-output pointer".into());}));
         writes.extend(quote!(std::ptr::write(#id,value.#field);));
         display.push(format!("*{id}"));
     }
     let acknowledgement = if consumes {
-        params.push(quote!(ownership:*mut bool));
-        cparams.push("bool *ownership".into());
-        quote!(if !ownership.is_null(){std::ptr::write(ownership,#accepted);})
-    } else {
-        quote!()
-    };
-    let preflight = if consumes {
-        quote!(if ownership.is_null() {
-            return Err("null ownership-output pointer".into());
-        })
+        params.push(quote!(ownership:*mut usize));
+        cparams.push("size_t *ownership".into());
+        quote!(std::ptr::write(ownership,#accepted.get());)
     } else {
         quote!()
     };
@@ -384,7 +393,7 @@ pub(crate) fn result_function(
         header.push_str("/* Result: true = success; false = failure. Success outputs are unchanged on failure. */\n");
     }
     if consumes {
-        header.push_str("/* ownership is required: false before acceptance; true after active owned inputs transfer, including on failure. */\n");
+        header.push_str("/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */\n");
     }
     header.push_str("/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n");
     header.push_str(&format!("{c_return} {name}({});\n", cparams.join(", ")));
@@ -402,15 +411,15 @@ pub(crate) fn result_function(
         true,
     );
     tokens.extend(quote! {
-        #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."]
-        #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+        #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."]
+        #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
         #[no_mangle]pub unsafe extern "C" fn #name(#(#params),*)->#rust_return {
-            #[allow(unused_mut)]let mut #accepted=false;
+            #[allow(unused_mut)]let #accepted=::core::cell::Cell::new(0usize);
             #[allow(unused_mut)]let mut #reported=false;
             let mut success_committed=false;
             let mut storage=std::mem::MaybeUninit::<#internal>::uninit();
             let #out=storage.as_mut_ptr();
-            let outcome=::prebindgen_runtime::boundary(|| {#preflight #checks #body});
+            let outcome=::prebindgen_runtime::boundary(|| {  #body});
             #acknowledgement
             match outcome {
                 Ok(())=>{let value=storage.assume_init();#writes #success}

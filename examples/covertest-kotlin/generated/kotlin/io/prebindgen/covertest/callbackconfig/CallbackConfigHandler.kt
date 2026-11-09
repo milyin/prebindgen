@@ -1,0 +1,7 @@
+package io.prebindgen.covertest.callbackconfig
+
+public class CallbackConfigHandler internal constructor(raw: Long) : io.prebindgen.covertest.NativeHandle(raw) {
+    override val handleType: Long get() = 1183576537161786568L
+    public fun take(): CallbackConfigHandler = synchronized(this) { check(!isClosed) { "closed or consumed handle" }; val owner = CallbackConfigHandler(raw); markConsumed(); owner }
+    override fun freeNative(raw: Long) { io.prebindgen.covertest.JNINative.drop_CallbackConfigHandler_67dc52e4c6670317(raw) }
+}

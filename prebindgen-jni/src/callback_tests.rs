@@ -58,14 +58,11 @@ fn signature_defaults_and_local_overrides_are_independent() {
     let default = &output.kotlin["example/handlers/Handler.kt"];
     let local = &output.kotlin["example/handlers/Local.kt"];
     assert!(
-        default.contains("Long, `arg1_0`: Long): Boolean"),
+        default.contains("Long, arg1_0: Long): Boolean"),
         "{default}"
     );
-    assert!(
-        local.contains("Boolean, `arg1_0`: Long): Boolean"),
-        "{local}"
-    );
-    assert!(output.kotlin["example/Functions.kt"].contains("example.handlers.Local?"));
+    assert!(local.contains("Boolean, arg1_0: Long): Boolean"), "{local}");
+    assert!(output.kotlin["example/Functions.kt"].contains("example.handlers.Local,"));
     assert!(!output.rust.contains("fn unselected"));
     assert!(output.rust.contains("crate::positive"));
     assert!(output.rust.contains("crate::from_flag"));
@@ -106,13 +103,13 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
         .build()
         .unwrap();
     let number = &output.kotlin["example/handlers/NumberResult.kt"];
-    assert!(number.contains("Long, `arg1_0`: Long): Long"), "{number}");
+    assert!(number.contains("Long, arg1_0: Long): Long"), "{number}");
     let nested = &output.kotlin["example/handlers/Nested.kt"];
     assert!(
-        nested.contains("Boolean, `arg1_0`: Long): Boolean"),
+        nested.contains("Boolean, arg1_0: Long): Boolean"),
         "{nested}"
     );
-    assert!(output.kotlin["example/Functions.kt"].contains("List<example.handlers.Nested?"));
+    assert!(output.kotlin["example/Functions.kt"].contains("List<example.handlers.Nested>"));
     assert!(output.rust.contains("crate::make"));
 }
 
@@ -459,7 +456,7 @@ fn derived_names_and_local_only_overrides_work_with_fold_variants() {
     assert!(output.kotlin["example/Functions.kt"].contains("valuesFold"));
     assert_eq!(
         output.kotlin["example/Functions.kt"]
-            .matches("example.handlers.i64Toi64Callback?")
+            .matches("example.handlers.i64Toi64Callback,")
             .count(),
         2
     );

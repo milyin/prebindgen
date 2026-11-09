@@ -49,11 +49,18 @@ private fun failedConstructorCapture(collection: Boolean): WeakReference<Any> {
     val calls = AtomicInteger()
     val callback = i64Callback { marker.hashCode(); calls.incrementAndGet(); Unit }
     try {
-        if (collection) callbackConstructorList(listOf(callback, null))
+        if (collection) {
+            // Simulate a Java raw list with an invalid element type. Kotlin's
+            // normal cast rejects it before any callback reaches Rust.
+            @Suppress("UNCHECKED_CAST")
+            val malformed = listOf(callback, Any()) as List<i64Callback>
+            callbackConstructorList(malformed)
+        }
         else callbackConstructorChecked(callback, 0x110000)
         error("expected constructor argument rejection")
-    } catch (failure: IllegalArgumentException) {
-        verify(failure.message == if (collection) "null callback" else "invalid Unicode scalar")
+    } catch (failure: RuntimeException) {
+        if (collection) verify(failure is ClassCastException)
+        else verify(failure is IllegalArgumentException && failure.message == "invalid Unicode scalar")
     }
     verify(calls.get() == 0)
     return weak
@@ -108,7 +115,7 @@ private fun checkConstructorCallbacks() {
     callbackConstructorOwnedFire({ handle -> verify(callbackOwnedId(handle) == 67L); owned = handle }, 67)
     verify(checkNotNull(owned).isClosed && callbackOwnedDrops() == drops + 1UL)
     callbackConstructorOwnedFire({ handle -> owned = handle.take() }, 71)
-    verify(callbackOwnedId(owned) == 71L && callbackOwnedDrops() == drops + 1UL)
+    verify(callbackOwnedId(checkNotNull(owned)) == 71L && callbackOwnedDrops() == drops + 1UL)
     owned!!.close()
     callbackConstructorOwnedFire({ handle -> owned = handle; throw IllegalStateException("expected constructor callback failure") }, 73)
     verify(checkNotNull(owned).isClosed && callbackOwnedDrops() == drops + 3UL)
@@ -238,7 +245,7 @@ fun checkSourceCallbacks() {
     verify(callbackOwnedDrops() == initial + 2UL)
 
     callbackOptionalOwned({ value -> verify(value == null) }, false)
-    callbackOptionalOwned({ value -> verify(callbackOwnedId(value) == 56L); escaped = value }, true)
+    callbackOptionalOwned({ value -> verify(callbackOwnedId(checkNotNull(value)) == 56L); escaped = value }, true)
     verify(checkNotNull(escaped).isClosed)
     callbackEnvelope({ record ->
         verify(record.label == "scoped record" && callbackOwnedId(record.handle) == 57L)
@@ -254,16 +261,16 @@ fun checkSourceCallbacks() {
     // Reentrant monitors allow compatible shared reads; callers respect Rust borrows.
     callbackOwnedBorrow(original, { _ -> verify(callbackOwnedId(original) == 55L) })
     val beforeRejected = callbackOwnedDrops()
-    try { callbackPreflight(original, null); error("expected null callback rejection") }
-    catch (_: IllegalArgumentException) { }
+    rejectNullPrecondition { callbackPreflight(original, invalidJavaNull()) }
     verify(!original.isClosed && callbackOwnedDrops() == beforeRejected)
     original.close()
+    verify(callbackOwnedDrops() == beforeRejected + 1uL)
 
     var first: CallbackTransferred? = null
     var second: CallbackTransferred? = null
     val beforeTransfer = callbackTransferredDrops()
     callbackTransferredFire({ a, b -> first = a; second = b }, true)
-    verify(callbackTransferredId(first) == 7L && callbackTransferredId(second) == 8L)
+    verify(callbackTransferredId(checkNotNull(first)) == 7L && callbackTransferredId(checkNotNull(second)) == 8L)
     verify(callbackTransferredDrops() == beforeTransfer)
     first!!.close(); second!!.close()
     verify(callbackTransferredDrops() == beforeTransfer + 2UL)
@@ -272,12 +279,12 @@ fun checkSourceCallbacks() {
         throw IllegalStateException("expected exception after transfer")
     }, false)
     verify(second == null && !checkNotNull(first).isClosed)
-    verify(callbackTransferredId(first) == 7L)
+    verify(callbackTransferredId(checkNotNull(first)) == 7L)
     first!!.close()
     verify(callbackTransferredDrops() == beforeTransfer + 3UL)
     var projected: CallbackProjected? = null
     callbackProjectionFire({ id, value -> verify(id == 9L); projected = value })
-    verify(callbackProjectedId(projected) == 9L)
+    verify(callbackProjectedId(checkNotNull(projected)) == 9L)
     projected!!.close()
 
     callbackAssertionFailure.get()?.let { throw it }

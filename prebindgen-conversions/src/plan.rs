@@ -3,7 +3,7 @@ use prebindgen_flat::WireKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-/// An input conversion split into call-wide validation, acquisition and construction.
+/// An input conversion with preparation, acquisition and construction code.
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
@@ -16,15 +16,18 @@ pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the generator emits its signature.
     pub node: prebindgen_flat::WireNode<W, N, B>,
-    /// Shared call acknowledgement, if this input needs one.
+    /// Shared receipt-channel setup or acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
-    /// Validate and prepare every active leaf before any ownership transfer.
+    /// Validate this value before using it. Compiled recipes also acquire and
+    /// construct validated children here, keeping initialized values under RAII.
     pub validation: TokenStream,
-    /// Infallible acquisition of all owned inputs, before constructors can run.
+    /// Acquire this leaf after its adapter-specific validation. Acquisition must be
+    /// infallible unless each moved resource records its own successful transfer
+    /// through `Resource::records_consumption`. Empty for eagerly built recipes.
     pub acquire: TokenStream,
-    /// Active foreign resources whose identities must be checked across all arguments.
+    /// Active foreign resources used for ownership receipts and foreign preflight.
     pub resources: Vec<Resource>,
-    /// Argument construction after all acquisitions, including source constructor calls.
+    /// Construct this value from acquired inputs, including source constructor calls.
     pub statements: TokenStream,
     /// Prepared value expression assigned to the caller-supplied target after `statements`.
     pub argument: TokenStream,
@@ -47,6 +50,7 @@ pub struct OutputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
+    /// Commit code must be infallible and must not unwind after foreign delivery.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
     pub statements: TokenStream,
@@ -64,23 +68,29 @@ pub enum Access {
     /// Ownership transfer; conflicts with every other active use of the resource.
     Move,
 }
-/// One allocation address, or a runtime-sized set of addresses with the same access mode.
-#[derive(Clone, Debug)]
-pub enum ResourceIdentity {
-    /// Expression evaluating to one allocation address.
-    Single(TokenStream),
-    /// Expression implementing IntoIterator<Item = usize>.
-    Many(TokenStream),
-}
-/// The adapter supplies identity; flat enforces call-wide access conflicts.
+/// Resource metadata for ownership receipts and adapter-specific preflight.
 #[derive(Clone, Debug)]
 pub struct Resource {
-    /// Side-effect-free Rust expression identifying a live resource, such as an address.
-    /// All identities compared within a call must share an equality-compatible domain.
-    pub identity: ResourceIdentity,
+    /// Independent root allocation class represented by this declared type.
+    /// Kotlin preflight matches this type and access mode with generated handle
+    /// inputs. Distinct classes must own independent allocations. C interior
+    /// loans and resources without a known allocation class use None.
+    pub allocation_type: Option<syn::Type>,
+    /// This resource is acquired during input preparation. Its ownership count
+    /// is already included in the generated preparation code.
+    pub registered: bool,
+    /// Acquisition updates `__prebindgen_input_consumed` after each successful
+    /// ownership transfer. The compiler must not also count this resource.
+    /// Use this for acquisition that can fail or unwind between transfers.
+    /// Ignored for borrows.
+    pub records_consumption: bool,
+    /// Number of resources represented by this descriptor when active.
+    /// A side-effect-free Rust expression evaluating to usize; ordinary leaves
+    /// use `1usize`. Already-accounted collection descriptors may use zero.
+    pub count: TokenStream,
     /// Borrow or ownership requirement imposed by this input conversion.
     pub access: Access,
-    /// Side-effect-free Rust boolean expression; false resources do not conflict.
+    /// Side-effect-free Rust boolean expression selecting active resources.
     pub active: TokenStream,
 }
 /// Result-slot glue executed after output preparation and before ownership commit.

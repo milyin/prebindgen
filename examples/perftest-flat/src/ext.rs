@@ -1604,6 +1604,32 @@ pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
     (a.payloads.len() + b.payloads.len() + c.payloads.len()) as i64
 }
 
+/// Exercise a fixed set of nine addresses, including shared aliases and an
+/// optional input, while mutating existing storage without allocating.
+#[prebindgen]
+pub fn storage_accumulate_lengths(
+    target: &mut Storage,
+    a: &Storage,
+    b: &Storage,
+    c: &Storage,
+    d: &Storage,
+    e: &Storage,
+    f: &Storage,
+    g: &Storage,
+    h: Option<&Storage>,
+) -> i64 {
+    let lengths = storage_total_len(a, b, c)
+        + storage_total_len(d, e, f)
+        + storage_len(g)
+        + h.map(storage_len).unwrap_or(0);
+    let first = target
+        .payloads
+        .first_mut()
+        .expect("fixture requires a payload");
+    first.id += lengths;
+    first.id
+}
+
 // Disabled: unsupported by the current binding subset
 // /// All present labels, in storage order (`Vec<String>` **return** — the
 // /// single-leaf string fold).
@@ -2693,6 +2719,145 @@ pub fn projection_pair_views() -> ProjectionPair {
     projection_pair_borrowed()
 }
 
+// Borrowed opaque outputs: copies are deliberate, loans retain the original address.
+static BORROW_PACKET_CLONES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+static BORROW_PACKET_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static BORROW_PACKET_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct BorrowPacketImpl(Vec<u8>);
+impl Clone for BorrowPacketImpl {
+    fn clone(&self) -> Self {
+        use std::sync::atomic::Ordering::SeqCst;
+        BORROW_PACKET_CLONES.fetch_add(1, SeqCst);
+        BORROW_PACKET_BYTES.fetch_add(self.0.len(), SeqCst);
+        Self(self.0.clone())
+    }
+}
+impl Drop for BorrowPacketImpl {
+    fn drop(&mut self) {
+        BORROW_PACKET_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type BorrowPacket = BorrowPacketImpl;
+#[prebindgen]
+pub fn borrow_packet_new(size: usize) -> BorrowPacket {
+    BorrowPacketImpl(vec![7; size])
+}
+#[prebindgen]
+pub fn borrow_packet_len(value: &BorrowPacket) -> usize {
+    value.0.len()
+}
+#[prebindgen]
+pub fn borrow_packet_len_plus_one(value: &BorrowPacket) -> usize {
+    value.0.len() + 1
+}
+#[prebindgen]
+pub fn borrow_packet_ref(value: &BorrowPacket) -> &BorrowPacket {
+    value
+}
+#[prebindgen]
+pub fn borrow_packet_ref_expanded(value: &BorrowPacket) -> &BorrowPacket {
+    value
+}
+#[prebindgen]
+pub fn borrow_packet_optional(value: &BorrowPacket, present: bool) -> Option<&BorrowPacket> {
+    present.then_some(value)
+}
+#[prebindgen]
+pub fn borrow_packet_emit(value: &BorrowPacket, callback: impl Fn(&BorrowPacket), count: usize) {
+    for _ in 0..count {
+        callback(value);
+    }
+}
+#[prebindgen]
+pub fn borrow_packet_emit_copy(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_optional(
+    value: &BorrowPacket,
+    callback: impl Fn(Option<&BorrowPacket>),
+    present: bool,
+) {
+    callback(present.then_some(value));
+}
+#[prebindgen]
+pub fn borrow_packet_emit_expanded(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_expanded_other(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket),
+    count: usize,
+) {
+    borrow_packet_emit(value, callback, count);
+}
+#[prebindgen]
+pub fn borrow_packet_emit_worker(
+    value: &BorrowPacket,
+    callback: impl Fn(&BorrowPacket) + Send + Sync,
+) {
+    std::thread::scope(|scope| {
+        scope.spawn(|| callback(value)).join().unwrap();
+    });
+}
+#[prebindgen]
+pub fn borrow_packet_counter(index: usize) -> usize {
+    use std::sync::atomic::Ordering::SeqCst;
+    match index {
+        0 => BORROW_PACKET_CLONES.load(SeqCst),
+        1 => BORROW_PACKET_BYTES.load(SeqCst),
+        2 => BORROW_PACKET_DROPS.load(SeqCst),
+        _ => panic!("invalid borrow counter"),
+    }
+}
+pub struct BorrowNoCloneImpl(i64);
+#[prebindgen]
+pub type BorrowNoClone = BorrowNoCloneImpl;
+#[prebindgen]
+pub fn borrow_no_clone_new() -> BorrowNoClone {
+    BorrowNoCloneImpl(91)
+}
+#[prebindgen]
+pub fn borrow_no_clone_value(value: &BorrowNoClone) -> i64 {
+    value.0
+}
+#[prebindgen]
+pub fn borrow_no_clone_emit(value: &BorrowNoClone, callback: impl Fn(&BorrowNoClone)) {
+    callback(value);
+}
+#[prebindgen]
+pub enum BorrowMode {
+    Ready,
+    Idle,
+}
+#[prebindgen]
+pub struct BorrowEnumRow {
+    pub packet: BorrowPacket,
+    pub mode: BorrowMode,
+}
+#[prebindgen]
+pub fn borrow_enum_rows() -> &'static [BorrowEnumRow] {
+    static ROWS: std::sync::OnceLock<Vec<BorrowEnumRow>> = std::sync::OnceLock::new();
+    ROWS.get_or_init(|| {
+        vec![BorrowEnumRow {
+            packet: borrow_packet_new(128),
+            mode: BorrowMode::Ready,
+        }]
+    })
+    .as_slice()
+}
+
 // Option boundary fixtures shared by C and JNI.
 #[prebindgen]
 pub fn option_i64(value: Option<i64>) -> Option<i64> {
@@ -3685,4 +3850,261 @@ pub fn collection_result_optional(
         1 => Ok(Some(values)),
         _ => Err(ResultFailureImpl { code: 7 }),
     }
+}
+
+#[prebindgen]
+#[allow(clippy::result_unit_err)] // Exercise an unnamed callback error type.
+pub fn result_unit_error(fail: bool) -> Result<i64, ()> {
+    if fail {
+        Err(())
+    } else {
+        Ok(42)
+    }
+}
+
+#[prebindgen]
+pub fn projection_pair_callback(callback: impl Fn(ProjectionPair) + Send + Sync + 'static) {
+    callback(projection_pair_owned());
+}
+
+// Returned collections used to inject Kotlin-constructor failures after native
+// ownership transfer. Optional fields exercise skipped entries in the owner walk.
+#[prebindgen]
+pub struct OutputCleanupRow {
+    pub id: i64,
+    pub first: Option<OwnedResource>,
+    pub second: Option<OwnedResource>,
+}
+fn output_cleanup_values() -> Vec<OutputCleanupRow> {
+    vec![
+        OutputCleanupRow {
+            id: 0,
+            first: None,
+            second: Some(OwnedResourceImpl { id: 10 }),
+        },
+        OutputCleanupRow {
+            id: 1,
+            first: Some(OwnedResourceImpl { id: 11 }),
+            second: Some(OwnedResourceImpl { id: 12 }),
+        },
+        OutputCleanupRow {
+            id: 2,
+            first: Some(OwnedResourceImpl { id: 13 }),
+            second: None,
+        },
+    ]
+}
+fn output_cleanup_nested_values() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    let mut rows = output_cleanup_values().into_iter();
+    vec![
+        None,
+        Some(vec![]),
+        Some(vec![rows.next().unwrap(), rows.next().unwrap()]),
+        None,
+        Some(vec![rows.next().unwrap()]),
+    ]
+}
+#[prebindgen]
+pub fn output_cleanup_rows() -> Vec<OutputCleanupRow> {
+    output_cleanup_values()
+}
+#[prebindgen]
+pub fn output_cleanup_rows_bulk() -> Vec<OutputCleanupRow> {
+    output_cleanup_values()
+}
+#[prebindgen]
+pub fn output_cleanup_nested() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    output_cleanup_nested_values()
+}
+#[prebindgen]
+pub fn output_cleanup_nested_bulk() -> Vec<Option<Vec<OutputCleanupRow>>> {
+    output_cleanup_nested_values()
+}
+#[prebindgen]
+pub fn output_cleanup_callback(callback: impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)) {
+    callback(output_cleanup_nested_values());
+}
+#[prebindgen]
+pub fn output_cleanup_callback_bulk(callback: impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)) {
+    callback(output_cleanup_nested_values());
+}
+
+#[prebindgen]
+pub struct OutputCleanupSurround {
+    pub before: OwnedResource,
+    pub values: Vec<Option<Vec<OutputCleanupRow>>>,
+    pub after: OwnedResource,
+}
+#[prebindgen]
+pub fn output_cleanup_surround() -> OutputCleanupSurround {
+    OutputCleanupSurround {
+        before: OwnedResourceImpl { id: 90 },
+        values: output_cleanup_nested_values(),
+        after: OwnedResourceImpl { id: 91 },
+    }
+}
+#[prebindgen]
+pub fn output_cleanup_surround_bulk() -> OutputCleanupSurround {
+    output_cleanup_surround()
+}
+
+// Non-Clone owner used to check writable C slice loans without hidden copies.
+pub struct MutableBytesImpl(Vec<u8>);
+static MUTABLE_BYTES_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+impl Drop for MutableBytesImpl {
+    fn drop(&mut self) {
+        MUTABLE_BYTES_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type MutableBytes = MutableBytesImpl;
+#[prebindgen]
+pub fn mutable_bytes_new(size: usize) -> MutableBytes {
+    let mut bytes = Vec::with_capacity(size + 37);
+    bytes.resize(size, 7);
+    MutableBytesImpl(bytes)
+}
+#[prebindgen]
+pub fn mutable_bytes_mut(value: &mut MutableBytes) -> &mut [u8] {
+    value.0.as_mut_slice()
+}
+#[prebindgen]
+pub fn mutable_bytes_optional(value: &mut MutableBytes, present: bool) -> Option<&mut [u8]> {
+    if present {
+        Some(value.0.as_mut_slice())
+    } else {
+        None
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_nested(value: &mut MutableBytes, mode: i32) -> Option<Option<&mut [u8]>> {
+    match mode {
+        0 => None,
+        1 => Some(None),
+        _ => Some(Some(value.0.as_mut_slice())),
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_result(value: &mut MutableBytes, fail: bool) -> Result<&mut [u8], String> {
+    if fail {
+        Err("mutable bytes failure".into())
+    } else {
+        Ok(value.0.as_mut_slice())
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_result_optional(
+    value: &mut MutableBytes,
+    present: bool,
+    fail: bool,
+) -> Result<Option<&mut [u8]>, String> {
+    if fail {
+        Err("mutable bytes failure".into())
+    } else {
+        Ok(mutable_bytes_optional(value, present))
+    }
+}
+#[prebindgen]
+pub fn mutable_bytes_address(value: &MutableBytes) -> usize {
+    value.0.as_ptr() as usize
+}
+#[prebindgen]
+pub fn mutable_bytes_value(value: &MutableBytes, index: usize) -> u8 {
+    value.0[index]
+}
+#[prebindgen]
+pub fn mutable_bytes_capacity(value: &MutableBytes) -> usize {
+    value.0.capacity()
+}
+#[prebindgen]
+pub fn mutable_bytes_drops() -> usize {
+    MUTABLE_BYTES_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn mutable_bytes_vector(size: usize) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(size + 37);
+    bytes.resize(size, 7);
+    bytes
+}
+#[prebindgen]
+pub fn mutable_bytes_vector_expanded(size: usize) -> Vec<u8> {
+    mutable_bytes_vector(size)
+}
+
+// Borrowed numeric outputs retain this owner's original allocations.
+#[prebindgen]
+pub struct NumericLoanOwner {
+    pub values: Vec<i64>,
+    pub fixed: [f64; 3],
+}
+#[prebindgen]
+pub fn numeric_loan_new(size: usize) -> NumericLoanOwner {
+    let mut values = Vec::with_capacity(size + 37);
+    values.extend((0..size).map(|i| i as i64 + 7));
+    NumericLoanOwner {
+        values,
+        fixed: [1.25, -0.0, f64::INFINITY],
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_values(owner: &NumericLoanOwner) -> &[i64] {
+    &owner.values
+}
+#[prebindgen]
+pub fn numeric_loan_fixed(owner: &NumericLoanOwner) -> &[f64; 3] {
+    &owner.fixed
+}
+#[prebindgen]
+pub fn numeric_loan_optional(owner: &NumericLoanOwner, kind: u8) -> Option<&[i64]> {
+    match kind {
+        0 => None,
+        1 => Some(&owner.values[..0]),
+        _ => Some(&owner.values),
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_checked(owner: &NumericLoanOwner, fail: bool) -> Result<&[i64], String> {
+    if fail {
+        Err("no numeric loan".into())
+    } else {
+        Ok(&owner.values)
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_address(owner: &NumericLoanOwner, fixed: bool) -> usize {
+    if fixed {
+        owner.fixed.as_ptr().addr()
+    } else {
+        owner.values.as_ptr().addr()
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_capacity(owner: &NumericLoanOwner) -> usize {
+    owner.values.capacity()
+}
+#[prebindgen]
+pub fn numeric_loan_copy(owner: &NumericLoanOwner) -> &[i64] {
+    numeric_loan_values(owner)
+}
+#[prebindgen]
+pub fn numeric_loan_owned(size: usize) -> NumericLoanOwner {
+    numeric_loan_new(size)
+}
+#[prebindgen]
+pub fn numeric_loan_vector(size: usize) -> Vec<i64> {
+    numeric_loan_new(size).values
+}
+#[prebindgen]
+pub fn numeric_loan_emit(owner: &NumericLoanOwner, callback: impl Fn(&[i64]), times: usize) {
+    for _ in 0..times {
+        callback(&owner.values)
+    }
+}
+#[prebindgen]
+pub fn numeric_loan_static_bytes() -> &'static [u8] {
+    b"original bytes"
+}
+#[prebindgen]
+pub fn numeric_loan_static_text() -> &'static str {
+    "original text"
 }

@@ -6,14 +6,16 @@ use quote::{quote, ToTokens};
 /// Optional rendering support for stored [`crate::InputPlan`] and
 /// [`crate::OutputPlan`] templates. Custom conversions need not implement this.
 pub trait TemplateContext {
-    /// Resolve the template's explicit parameter markers.
+    /// Resolve the template's explicit parameter markers. Composition may invoke
+    /// this repeatedly; already-rendered Rust must remain unchanged.
     fn render(&self, code: &TokenStream) -> Result<TokenStream>;
 }
 
 impl TemplateContext for () {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        render_template(code, &|name| {
-            Err(format!("unknown emission parameter `{name}`"))
+        render_template(code, &|name| match name {
+            "input_consumed" => Ok(quote!(&::core::cell::Cell::new(0usize))),
+            _ => Err(format!("unknown emission parameter `{name}`")),
         })
     }
 }

@@ -6,6 +6,393 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        // These coverage fixtures intentionally construct temporary owned buffers
+        // for borrowed String/Vec parameters; ordinary shared inputs never do so.
+        .expand(expand_param!(&String).reconstruct())
+        .expand(expand_param!(&Vec<u8>).reconstruct())
+        .expand(expand_param!(&Vec<i64>).reconstruct())
+        .function(
+            fun!(shared_input_move)
+                .expand_param("value", expand_param!(&OwnedResource).reconstruct()),
+        )
+        .function(fun!(shared_input_checked))
+        .function(fun!(shared_input_echo))
+        .panic()
+        .function(fun!(shared_input_fixed))
+        .function(fun!(shared_input_optional))
+        .panic()
+        .function(
+            fun!(shared_input_copy).expand_param("values", expand_param!(&[i64]).reconstruct()),
+        )
+        .panic()
+        .function(fun!(shared_input_vector))
+        .panic()
+        .function(fun!(shared_input_optional_vector))
+        .panic()
+        .function(fun!(shared_input_string))
+        .panic()
+        .function(fun!(shared_input_bytes))
+        .panic()
+        .function(fun!(shared_input_text))
+        .panic()
+        .function(fun!(shared_input_qualified_bytes))
+        .panic()
+        .function(fun!(shared_input_rows).expand_param(
+            "rows",
+            expand_param!(SharedInputRow).variant(fun!(shared_input_row_new)),
+        ))
+        .panic()
+        .opaque_ptr("numeric_loan_owner", pq!(NumericLoanOwner))
+        .function(fun!(numeric_loan_new))
+        .panic()
+        .function(fun!(numeric_loan_values))
+        .panic()
+        .function(fun!(numeric_loan_fixed))
+        .panic()
+        .function(fun!(numeric_loan_optional))
+        .panic()
+        .function(fun!(numeric_loan_checked))
+        .function(fun!(numeric_loan_address))
+        .panic()
+        .function(fun!(numeric_loan_capacity))
+        .panic()
+        .function(fun!(numeric_loan_copy).expand_return(expand_return!(&[i64]).field_self_ref()))
+        .panic()
+        .function(
+            fun!(numeric_loan_owned).expand_return(
+                expand_return!(NumericLoanOwner)
+                    .field_self_into()
+                    .field(fun!(numeric_loan_values)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(numeric_loan_vector).expand_return(expand_return!(Vec<i64>).field_self_into()),
+        )
+        .function(fun!(numeric_loan_emit))
+        .panic()
+        .function(fun!(numeric_loan_static_bytes))
+        .function(fun!(numeric_loan_static_text))
+        .opaque_ptr("mutable_bytes", pq!(MutableBytes))
+        .function(fun!(mutable_bytes_new))
+        .panic()
+        .function(fun!(mutable_bytes_mut))
+        .panic()
+        .function(fun!(mutable_bytes_optional))
+        .panic()
+        .function(fun!(mutable_bytes_nested))
+        .panic()
+        .function(fun!(mutable_bytes_result))
+        .function(fun!(mutable_bytes_result_optional))
+        .function(fun!(mutable_bytes_address))
+        .panic()
+        .function(fun!(mutable_bytes_value))
+        .panic()
+        .function(fun!(mutable_bytes_capacity))
+        .panic()
+        .function(fun!(mutable_bytes_drops))
+        .panic()
+        .function(fun!(mutable_bytes_vector))
+        .opaque_ptr("borrow_packet", pq!(BorrowPacket))
+        .opaque_ptr("borrow_no_clone", pq!(BorrowNoClone))
+        .function(fun!(borrow_packet_new))
+        .panic()
+        .function(fun!(borrow_packet_len))
+        .panic()
+        .function(fun!(borrow_packet_ref))
+        .panic()
+        .function(fun!(borrow_packet_optional))
+        .panic()
+        .function(fun!(borrow_packet_emit))
+        .panic()
+        .function(
+            fun!(borrow_packet_emit_copy).expand_param(
+                "callback",
+                prebindgen_declarations::callback!(impl Fn(&BorrowPacket))
+                    .expand_param(0, expand_return!(BorrowPacket).field_self_ref()),
+            ),
+        )
+        .panic()
+        .function(fun!(borrow_packet_emit_expanded).expand_param(
+            "callback",
+            prebindgen_declarations::callback!(impl Fn(&BorrowPacket)).expand_param(
+                0,
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len)),
+            ),
+        ))
+        .panic()
+        .function(fun!(borrow_packet_emit_expanded_other).expand_param(
+            "callback",
+            prebindgen_declarations::callback!(impl Fn(&BorrowPacket)).expand_param(
+                0,
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len_plus_one)),
+            ),
+        ))
+        .panic()
+        .function(fun!(borrow_packet_emit_optional))
+        .panic()
+        .function(fun!(borrow_packet_emit_worker))
+        .panic()
+        .function(fun!(borrow_packet_counter))
+        .panic()
+        .function(fun!(borrow_no_clone_new))
+        .panic()
+        .function(fun!(borrow_no_clone_value))
+        .panic()
+        .function(fun!(borrow_no_clone_emit))
+        .panic()
+        .opaque_ptr("c_output_resource", pq!(CallbackRowResource))
+        .expand(
+            expand_return!(CallbackRow)
+                .field(fun!(c_output_first))
+                .field(fun!(c_output_label))
+                .field(fun!(c_output_second)),
+        )
+        .function(fun!(c_output_rows).output(c_output_rows()))
+        .function(fun!(c_output_nested).output(c_output_nested_rows()))
+        .function(
+            fun!(c_output_pair).output(prebindgen_declarations::Output::OwnedFields(vec![
+                c_output_rows(),
+                c_output_rows(),
+            ])),
+        )
+        .output(prebindgen_declarations::Output::for_type(
+            pq!(Vec<CallbackRow>),
+            c_output_rows(),
+        ))
+        .output(prebindgen_declarations::Output::for_type(
+            pq!(Vec<Vec<CallbackRow>>),
+            c_output_nested_rows(),
+        ))
+        .function(fun!(c_output_callback))
+        .panic()
+        .function(fun!(callback_row_resource_live))
+        .panic()
+        .function(fun!(callback_row_resource_id))
+        .panic()
+        .function(fun!(collection_input_plain))
+        .panic()
+        .function(fun!(collection_input_custom).expand_param(
+            "values",
+            expand_param!(i64).variant(fun!(collection_input_value)),
+        ))
+        .panic()
+        .function(fun!(collection_input_slice))
+        .panic()
+        .function(fun!(collection_input_array))
+        .panic()
+        .function(fun!(collection_input_optional_array))
+        .panic()
+        .function(fun!(collection_input_optional))
+        .panic()
+        .function(
+            fun!(buffer_views_text).expand_return(
+                expand_return!(String)
+                    .field_self()
+                    .field(fun!(buffer_views_text_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_bytes).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self()
+                    .field(fun!(buffer_views_bytes_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_optional_text).expand_return(
+                expand_return!(Option<String>)
+                    .field_self()
+                    .field(fun!(buffer_views_optional_text_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_optional_bytes).expand_return(
+                expand_return!(Option<Vec<u8>>)
+                    .field_self()
+                    .field(fun!(buffer_views_optional_bytes_len)),
+            ),
+        )
+        .panic()
+        .function(fun!(buffer_views_address))
+        .opaque_ptr("getter_owner", pq!(GetterOwner))
+        .opaque_ptr("getter_child", pq!(GetterChild))
+        .opaque_ptr("getter_leaf", pq!(GetterLeaf))
+        // This fixture intentionally requests independently owned leaf copies.
+        .expand(expand_return!(GetterLeaf).field_self_ref())
+        .function(fun!(owner_view_shared).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(
+            fun!(owner_view_reordered).expand_return(
+                expand_return!(GetterOwner)
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field_self_into(),
+            ),
+        )
+        .panic()
+        .function(fun!(owner_view_mutable).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child_mut",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_optional).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_optional",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_optional_mut).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_optional_mut",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_maybe).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_from_temporary).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(
+            fun!(owner_view_checked).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field(fun!(owner_view_check)),
+            ),
+        )
+        .function(
+            fun!(owner_view_rollback).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field(fun!(owner_view_late)),
+            ),
+        )
+        .expand(
+            expand_return!(GetterChild)
+                .field(fun!(getter_child_number))
+                .field(fun!(getter_child_name)),
+        )
+        .function(
+            fun!(getter_owner_new).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .field(fun!(getter_owner_child))
+                    .field(fun!(getter_owner_leaf)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(getter_owner_read).expand_return(
+                expand_return!(GetterChild)
+                    .field(fun!(getter_child_number))
+                    .field(fun!(getter_child_name)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(getter_owner_optional).expand_return(
+                expand_return!(GetterChild)
+                    .field(fun!(getter_child_number))
+                    .field(fun!(getter_child_name)),
+            ),
+        )
+        .panic()
+        .function(fun!(getter_owner_id))
+        .panic()
+        .function(fun!(getter_owner_child))
+        .panic()
+        .function(fun!(getter_owner_optional_pointer))
+        .panic()
+        .function(fun!(getter_owner_child_matches))
+        .panic()
+        .function(fun!(getter_owner_child_mut))
+        .panic()
+        .function(fun!(getter_owner_optional_mut))
+        .panic()
+        .function(fun!(getter_owner_try_child_mut))
+        .function(fun!(getter_owner_try_optional_mut))
+        .function(fun!(getter_child_set_number))
+        .panic()
+        .function(fun!(getter_owner_try_child))
+        .function(fun!(getter_owner_try_optional_child))
+        .function(fun!(getter_static_child))
+        .panic()
+        .function(fun!(getter_child_number))
+        .panic()
+        .function(fun!(getter_child_name))
+        .panic()
+        .function(fun!(getter_leaf_id))
+        .panic()
+        .function(fun!(getter_counts))
+        .panic()
+        .function(
+            fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner).view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_leaf",
+                    prebindgen_declarations::Output::combine([
+                        prebindgen_declarations::Output::Projected(
+                            prebindgen_declarations::Projection::borrowed(),
+                        ),
+                        prebindgen_declarations::Output::Projected(
+                            prebindgen_declarations::Projection::borrowed(),
+                        ),
+                    ]),
+                ),
+            )),
+        )
+        .panic()
+        .function(
+            fun!(getter_fields_new).expand_return(
+                expand_return!(GetterOwner).field_self_into().fields(
+                    fields!(getter_owner_details)
+                        .field("text", expand_return!(String).field_self_ref()),
+                ),
+            ),
+        )
+        .panic()
         .opaque_ptr("panic_output", pq!(CPanicOutput))
         .function(
             fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),
@@ -114,6 +501,48 @@ fn main() {
             ),
         )
         .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .expand(expand_param!(FixedCleanupRecord).variant(fun!(fixed_cleanup_new)))
+        .expand(expand_param!(CleanupGroup).variant(fun!(cleanup_group_new)))
+        .function(fun!(cleanup_group_call))
+        .function(fun!(cleanup_optional_call))
+        .function(fun!(fixed_cleanup_call))
+        .expand(expand_param!(BufferInputRow).variant(fun!(buffer_row_new)))
+        .function(fun!(buffer_rows_sum))
+        .function(fun!(buffer_rows_optional))
+        .function(
+            fun!(buffer_rows_borrowed)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_borrow))),
+        )
+        .function(fun!(buffer_rows_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_temporary)),
+        ))
+        .function(fun!(buffer_rows_views).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_views)),
+        ))
+        .function(fun!(buffer_rows_optional_temporaries).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(buffer_row_optional_temporaries)),
+        ))
+        .function(
+            fun!(buffer_rows_alternatives).expand_param(
+                "rows",
+                expand_param!(i64)
+                    .variant(fun!(buffer_row_optional_views))
+                    .variant(fun!(buffer_row_borrow)),
+            ),
+        )
+        .function(
+            fun!(buffer_rows_enum)
+                .expand_param("rows", expand_param!(i64).variant(fun!(buffer_row_enum))),
+        )
+        .function(fun!(buffer_row_reset_counts))
+        .panic()
+        .function(fun!(buffer_row_constructor_calls))
+        .panic()
+        .function(fun!(buffer_row_function_calls))
+        .panic()
         .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error("result_error", pq!(CResultError))
         .error("panic_error", pq!(CPanicError))
@@ -151,14 +580,28 @@ fn main() {
         .panic()
         .function(fun!(collection_nested_handles).callback_return())
         .panic()
-        .function(fun!(collection_numbers).expand_return(
-            expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
-        ))
+        .function(
+            fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(
+                fields!(collection_numbers_view).field_override(
+                    "values",
+                    prebindgen_declarations::Output::Sequence {
+                        element: Box::new(prebindgen_declarations::Output::auto()),
+                        mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+                        delivery: prebindgen_declarations::SequenceDelivery::Value,
+                    },
+                ),
+            )),
+        )
         .panic()
-        .function(fun!(collection_resource_ids).expand_param(
-            "values",
-            expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
-        ))
+        .function(
+            fun!(collection_resource_ids).input(
+                "values",
+                prebindgen_declarations::Input::Sequence(Box::new(
+                    prebindgen_declarations::Input::call("collection_resource_clone"),
+                ))
+                .reconstruct(),
+            ),
+        )
         .panic()
         .function(fun!(collection_i64).callback_return())
         .panic()
@@ -182,13 +625,23 @@ fn main() {
         .panic()
         .function(fun!(collection_probe))
         .panic()
-        .function(fun!(collection_borrow).callback_return())
+        .function(
+            fun!(collection_borrow)
+                .expand_return(expand_return!(&[i64]).field_self_ref())
+                .callback_return(),
+        )
         .panic()
         .function(fun!(collection_slice).callback_return())
         .panic()
         .function(fun!(collection_resource_new))
         .panic()
         .function(fun!(collection_handles).callback_return())
+        .opaque_ptr("alias_handler", pq!(AliasHandler))
+        .expand(expand_param!(AliasPair).variant(fun!(alias_pair_new)))
+        .function(fun!(alias_handler_new))
+        .panic()
+        .function(fun!(alias_handler_call))
+        .function(fun!(alias_callback_rows))
         .function(fun!(collection_alias))
         .panic()
         .function(fun!(collection_result).callback_return())
@@ -220,7 +673,10 @@ fn main() {
             fun!(collection_late_drop)
                 .expand_return(expand_return!(CPanicOutput).field(fun!(collection_late_values))),
         )
-        .function(fun!(storage_put_slice))
+        .function(
+            fun!(storage_put_slice)
+                .expand_param("payloads", expand_param!(&[Payload]).reconstruct()),
+        )
         .panic()
         .function(fun!(storage_get_vec).callback_return())
         .panic()
@@ -422,7 +878,12 @@ fn main() {
         )
         .expand(
             expand_return!(Report)
-                .fields(fields!(report_to_struct))
+                .view(prebindgen_declarations::Output::getter(
+                    "report_to_struct",
+                    prebindgen_declarations::Output::OwnedFields(
+                        vec![prebindgen_declarations::Output::auto(); 3],
+                    ),
+                ))
                 .field_self(),
         )
         .function(fun!(blob_value_new))
@@ -462,6 +923,8 @@ fn main() {
         .panic()
         .function(fun!(summary_total_raw))
         .panic()
+        .function(fun!(summary_total))
+        .panic()
         .function(fun!(stamp_new))
         .panic()
         .function(fun!(unsigned_round_trip))
@@ -495,6 +958,7 @@ fn main() {
         fun!(storage_len),
         fun!(storage_contains),
         fun!(storage_total_len),
+        fun!(storage_accumulate_lengths),
         fun!(storage_put_by_take),
         fun!(summary_merge),
         fun!(primitive_i8),
@@ -573,8 +1037,284 @@ fn main() {
     ] {
         cbindgen = cbindgen.function(f).panic();
     }
+    for function in [
+        fun!(shared_input_i8),
+        fun!(shared_input_i16),
+        fun!(shared_input_i32),
+        fun!(shared_input_i64),
+        fun!(shared_input_isize),
+        fun!(shared_input_u16),
+        fun!(shared_input_u32),
+        fun!(shared_input_u64),
+        fun!(shared_input_usize),
+        fun!(shared_input_f32),
+        fun!(shared_input_f64),
+    ] {
+        cbindgen = cbindgen.function(function).panic();
+    }
+    // These fixtures exercise explicit element conversion and visitor delivery.
+    // Ordinary Vec outputs use inline native ownership instead.
+    for ty in [
+        pq!(Vec<i64>),
+        pq!(Vec<usize>),
+        pq!(Vec<String>),
+        pq!(Vec<Vec<u8>>),
+        pq!(Vec<Vec<i64>>),
+        pq!(Vec<Option<i64>>),
+        pq!(Vec<SparseCode>),
+        pq!(Vec<char>),
+        pq!(Vec<CollectionItem>),
+        pq!(Vec<OwnedResource>),
+        pq!(Vec<Vec<OwnedResource>>),
+        pq!(Vec<SequenceScalars>),
+        pq!(Vec<u128>),
+        pq!(Vec<Payload>),
+        pq!(Vec<CallbackReturnResource>),
+    ] {
+        cbindgen = cbindgen.output(prebindgen_declarations::Output::for_type(
+            ty,
+            prebindgen_declarations::Output::Sequence {
+                element: Box::new(prebindgen_declarations::Output::auto()),
+                mode: None,
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+            },
+        ));
+    }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let generation = cbindgen.build().expect("build supported declarations");
+    let packet_layout = prebindgen_c::OpaqueLayout::auto::<perftest_flat::InlinePacket>();
+    let owners = prebindgen_c::Cbindgen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .prefix("owner")
+        .opaque_owned_struct(
+            "bytes",
+            pq!(Vec<u8>),
+            prebindgen_c::OpaqueLayout::auto::<Vec<u8>>(),
+        )
+        .opaque_owned_struct(
+            "text",
+            pq!(String),
+            prebindgen_c::OpaqueLayout::auto::<String>(),
+        )
+        .opaque_owned_struct(
+            "numbers",
+            pq!(Vec<i64>),
+            prebindgen_c::OpaqueLayout::auto::<Vec<i64>>(),
+        )
+        .opaque_owned_struct_with_empty(
+            "packet",
+            pq!(InlinePacket),
+            packet_layout,
+            fun!(inline_packet_empty),
+        )
+        .opaque_ptr("child", pq!(InlineChild))
+        .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
+        .error_mapper(pq!(String), fun!(inline_packet_error));
+    let mut owners = owners
+        .function(fun!(shared_input_vector))
+        .panic()
+        .function(fun!(shared_input_string))
+        .panic()
+        .function(fun!(shared_input_bytes))
+        .panic()
+        .opaque_ptr("resource", pq!(OwnedResource))
+        .function(fun!(collection_resource_new))
+        .panic()
+        .function(fun!(owned_resource_id))
+        .panic()
+        .function(fun!(owned_resource_drops))
+        .panic()
+        .function(fun!(inline_inputs_reset))
+        .panic()
+        .function(fun!(inline_inputs_empty_calls))
+        .panic()
+        .function(fun!(inline_inputs_constructor_calls))
+        .panic()
+        .function(fun!(inline_inputs_calls))
+        .panic()
+        .function(
+            fun!(inline_inputs_mixed)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
+        )
+        .function(
+            fun!(inline_inputs_pair)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_pair))),
+        )
+        .function(
+            fun!(inline_inputs_optional)
+                .expand_param("rows", expand_param!(i64).variant(fun!(inline_input_mixed))),
+        )
+        .function(fun!(inline_inputs_borrow).expand_param(
+            "rows",
+            expand_param!(usize).variant(fun!(inline_input_borrowed)),
+        ))
+        .function(fun!(inline_inputs_packets))
+        .function(fun!(inline_inputs_bytes))
+        .function(fun!(inline_inputs_texts))
+        .expand(expand_param!(InlineCallbackRow).variant(fun!(inline_callback_row_new)))
+        .function(fun!(inline_callback_rows))
+        .function(fun!(inline_callback_optional))
+        .function(fun!(inline_packet_bytes_address))
+        .panic()
+        .function(fun!(inline_packet_text_address))
+        .panic()
+        .enum_type("input_tag", pq!(InputTag))
+        .function(
+            fun!(enum_inputs_inline)
+                .expand_param("rows", expand_param!(i64).variant(fun!(enum_input_inline))),
+        )
+        .function(fun!(enum_inputs_reset))
+        .panic()
+        .function(fun!(enum_inputs_constructors))
+        .panic()
+        .expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)))
+        .expand(expand_param!(InlineMixed).variant(fun!(inline_mixed_new)));
+    for f in [
+        fun!(inline_bytes),
+        fun!(inline_text),
+        fun!(inline_numbers),
+        fun!(inline_text_new),
+        fun!(inline_numbers_new),
+        fun!(inline_bytes_capacity),
+        fun!(inline_text_capacity),
+        fun!(inline_numbers_capacity),
+        fun!(inline_bytes_take),
+        fun!(inline_text_take),
+        fun!(inline_numbers_take),
+        fun!(inline_bytes_alias),
+        fun!(inline_packet_new),
+        fun!(inline_packet_len),
+        fun!(inline_packet_ref),
+        fun!(inline_child_id),
+        fun!(inline_packet_take),
+        fun!(inline_packet_drops),
+        fun!(inline_packet_optional),
+        fun!(inline_packet_callback),
+        fun!(inline_bytes_callback),
+        fun!(inline_return_catch),
+        fun!(inline_rows_catch),
+        fun!(inline_mixed_rows_sum),
+        fun!(inline_boxed_numbers_new),
+        fun!(inline_boxed_numbers_len),
+        fun!(inline_boxed_numbers_take),
+        fun!(inline_packets_take),
+    ] {
+        owners = owners.function(f).panic();
+    }
+    owners = owners
+        .function(
+            fun!(mutable_bytes_vector_expanded).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(prebindgen_c::Cbindgen::owned_view_mut("bytes")),
+            ),
+        )
+        .function(
+            fun!(inline_packet_result).expand_return(
+                expand_return!(InlinePacket)
+                    .field_self_into()
+                    .field(fun!(inline_packet_panic)),
+            ),
+        )
+        .function(
+            fun!(inline_bytes_new).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(prebindgen_c::Cbindgen::owned_view("bytes"))
+                    .field(prebindgen_c::Cbindgen::owned_len("bytes")),
+            ),
+        );
+    owners = owners
+        .function(
+            fun!(inline_bytes_mutable).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(fun!(inline_bytes_clear)),
+            ),
+        )
+        .panic();
+    owners = owners.function(fun!(inline_packets_rows).output(
+        prebindgen_declarations::Output::combine([
+            prebindgen_declarations::Output::getter(
+                "inline_packets_getter",
+                prebindgen_declarations::Output::Sequence {
+                    element: Box::new(prebindgen_declarations::Output::auto()),
+                    mode: None,
+                    delivery: prebindgen_declarations::SequenceDelivery::Value,
+                },
+            ),
+            prebindgen_declarations::Output::getter(
+                "inline_packets_late",
+                prebindgen_declarations::Output::auto(),
+            ),
+        ]),
+    ));
+    let mut owners = owners;
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        owners = owners.opaque_layouts_file(path);
+    }
+    println!("cargo:rerun-if-env-changed=PREBINDGEN_OPAQUE_LAYOUTS");
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        println!(
+            "cargo:rerun-if-changed={}",
+            std::path::Path::new(&path).display()
+        );
+    }
+    let owners = owners.build().expect("native inline owner bindings");
+    owners.write_rust(out.join("owners.rs")).unwrap();
+    owners.write_header(out.join("owners.h")).unwrap();
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        cbindgen = cbindgen.opaque_layouts_file(path);
+    }
+    let generation = enum_inputs(cbindgen)
+        .build()
+        .expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
+}
+
+fn enum_inputs(generator: prebindgen_c::Cbindgen) -> prebindgen_c::Cbindgen {
+    generator
+        .enum_type("input_tag", pq!(InputTag))
+        .function(
+            fun!(enum_inputs_take)
+                .expand_param("rows", expand_param!(i64).variant(fun!(enum_input_owned))),
+        )
+        .function(fun!(enum_inputs_borrow).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(enum_input_borrowed)),
+        ))
+        .function(fun!(enum_inputs_optional).expand_param(
+            "rows",
+            expand_param!(i64).variant(fun!(enum_input_optional)),
+        ))
+        .function(
+            fun!(enum_inputs_alternatives).expand_param(
+                "rows",
+                expand_param!(i64)
+                    .variant(fun!(enum_input_owned))
+                    .variant(fun!(enum_input_borrowed)),
+            ),
+        )
+        .function(fun!(enum_inputs_reset))
+        .panic()
+        .function(fun!(enum_inputs_constructors))
+        .panic()
+        .function(fun!(enum_inputs_calls))
+        .panic()
+}
+
+fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {
+    prebindgen_declarations::Output::Sequence {
+        element: Box::new(prebindgen_declarations::Output::auto()),
+        mode: None,
+        delivery: prebindgen_declarations::SequenceDelivery::Value,
+    }
+}
+fn c_output_nested_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest>
+{
+    prebindgen_declarations::Output::Sequence {
+        element: Box::new(c_output_rows()),
+        mode: None,
+        delivery: prebindgen_declarations::SequenceDelivery::Value,
+    }
 }

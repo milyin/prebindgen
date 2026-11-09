@@ -13,6 +13,61 @@ pub enum CSequence {
     Callback,
 }
 
+pub(crate) fn decode_buffer(value: Value, wire: &syn::Ident) -> TokenStream {
+    let read = prebindgen_conversions::template_parameter("read_buffer");
+    match value {
+        Value::Text => {
+            quote!(unsafe {std::str::from_utf8_unchecked(#read(#wire))})
+        }
+        Value::Bytes => quote!(unsafe {#read(#wire)}),
+        Value::Scalar(_) => unreachable!("a buffer has text or byte contents"),
+    }
+}
+
+/// Prepare C row leaves once, independently of the enum-aware declaration codec.
+pub(crate) fn prepare_input_leaf(
+    plan: &mut InputPlan<CWire>,
+    ty: &syn::Type,
+    wire: &syn::Ident,
+    var: &syn::Ident,
+    active: &prebindgen_declarations::Condition,
+) -> Result<()> {
+    if let WireNode::Leaf(wires) = &plan.node {
+        if let [Wire {
+            kind:
+                CWire::Owned {
+                    owner,
+                    by_value: false,
+                    ..
+                },
+            ..
+        }] = wires.as_slice()
+        {
+            *plan = owned::input(
+                owner.clone(),
+                ty,
+                wire.clone(),
+                var.clone(),
+                active,
+                false,
+                true,
+            );
+        }
+    }
+    // A row can contain several moves and a panicking empty-owner factory.
+    // Acknowledge each successful leaf acquisition in wire order.
+    for resource in &mut plan.resources {
+        if !resource.registered && !resource.records_consumption && resource.access == Access::Move
+        {
+            let condition = &resource.active;
+            let count = &resource.count;
+            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count)); }));
+            resource.records_consumption = true;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
@@ -20,14 +75,13 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
+    let data = format_ident!("{wire}_data");
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
-        bind.extend(
-            quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};),
-        );
+        bind.extend(quote!(let #name=unsafe {(*#data.add(#index)).#member};));
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
@@ -36,10 +90,9 @@ pub(crate) fn input(
             kind: CWire::Rows,
         }],
         metadata: CChain::Sequence(CSequence::Buffered),
-        open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
+        open: quote!(let #length=#wire.len;let #data=#wire.data as *const #row;),
         bind,
-        validation_values: values.clone(),
-        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
+        validation_values: values,
         release: quote!(),
     })
 }
@@ -50,6 +103,20 @@ pub(crate) fn output(
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
+    let release_name = format_ident!("{wire}_release_row");
+    let owned_fields = crate::group::row_fields(element)
+        .enumerate()
+        .map(|(i, wire)| {
+            let field = format_ident!("v{i}");
+            (wire, quote!(row.#field))
+        })
+        .collect::<Vec<_>>();
+    let cleanup = release_fields(
+        element,
+        &owned_fields,
+        &|wire| prebindgen_conversions::template_parameter(&format!("row_{}", wire.name)),
+        true,
+    );
     let fields = crate::group::row_values(element, values)?
         .into_iter()
         .enumerate()
@@ -62,18 +129,28 @@ pub(crate) fn output(
             name: wire.clone(),
             kind: CWire::Rows,
         }],
-        commit_each: false,
+        commit_each: true,
         fallible: false,
         metadata: CChain::Sequence(CSequence::Buffered),
-        begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
+        begin: quote! {
+            unsafe fn #release_name(row: &#row) { #cleanup }
+            let mut #wire = unsafe { ::prebindgen_runtime::OutputRows::<#row>::new(#length, #release_name) };
+        },
         enter: quote!(),
-        store: quote!(#wire.push(#row {#(#fields),*});),
-        finish: quote!(let #wire=#wire.into_boxed_slice();),
+        store: {
+            let commit = prebindgen_conversions::template_parameter("commit_element");
+            quote! {
+                unsafe { #wire.write_next(#row {#(#fields),*}); }
+                #commit
+                unsafe { #wire.commit_row(); }
+            }
+        },
+        finish: quote!(),
         values: vec![(
             wire.clone(),
             quote!(__PbRows {data:if #wire.is_empty(){::core::ptr::null()}else{#wire.as_ptr().cast()},len:#wire.len()}),
         )],
-        commit: quote!(let _=Box::into_raw(#wire);),
+        commit: quote!(#wire.commit();),
     })
 }
 #[allow(clippy::type_complexity)] // Pair each sequence carrier with its element tree.
@@ -158,13 +235,13 @@ pub(crate) fn emit_schemas(
         }
         let fields = crate::group::row_fields(element)
             .enumerate()
-            .map(|(i, w)| {
-                let name = format_ident!("v{i}");
-                let ty = w.rust_type();
-                quote!(pub #name:#ty)
-            })
-            .collect::<Vec<_>>();
-        tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
+            .map(|(i, w)| (format_ident!("v{i}"), w.rust_type()));
+        let record = prebindgen_reprc::Record::new(row.clone(), fields)?;
+        let mut definition = record.definition();
+        definition
+            .attrs
+            .push(syn::parse_quote!(#[derive(Clone,Copy)]));
+        tokens.extend(quote!(#definition));
         header.push_str("typedef struct {\n");
         for (i, w) in crate::group::row_fields(element).enumerate() {
             header.push_str(&format!(
@@ -175,6 +252,9 @@ pub(crate) fn emit_schemas(
         header.push_str(&format!(
             "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
         ));
+        if !is_output {
+            header.push_str("/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */\n");
+        }
         if is_output {
             header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));
             tokens.extend(quote! {
@@ -193,13 +273,32 @@ pub(crate) fn release(
     context: &CContext,
     catch_panics: bool,
 ) -> TokenStream {
+    release_fields(
+        layout,
+        fields,
+        &|wire| {
+            let row = &context.row_types[&wire.name.to_string()];
+            quote!(#row)
+        },
+        catch_panics,
+    )
+}
+
+// The same schema destruction is used before delivery (row-type placeholders)
+// and after delivery (resolved wrapper context), including nested collections.
+fn release_fields(
+    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    fields: &[(&Wire, TokenStream)],
+    row_type: &impl Fn(&Wire) -> TokenStream,
+    catch_panics: bool,
+) -> TokenStream {
     let mut schemas = Vec::new();
     self::schemas(layout, &mut schemas);
     let mut code = TokenStream::new();
     for (wire, value) in fields {
         match &wire.kind {
             CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
-            CWire::Pointer { pointer, .. } => {
+            CWire::Pointer { pointer, .. } if pointer.access == Access::Move => {
                 let ty = &pointer.ty;
                 let drop = quote!(drop(Box::from_raw((#value) as *mut #ty)););
                 let drop = if catch_panics {
@@ -207,11 +306,16 @@ pub(crate) fn release(
                 } else { drop };
                 code.extend(quote! { if !(#value).is_null() { #drop } });
             }
+            CWire::Owned {access:Access::Move,by_value:true,..} => {
+                let drop=quote!(drop((#value).into_rust()););
+                let drop=if catch_panics {quote!(let _=::prebindgen_runtime::boundary(||{#drop Ok(())});)} else {drop};
+                code.extend(drop);
+            }
             CWire::Rows => {
-                let row=&context.row_types[&wire.name.to_string()];
+                let row=row_type(wire);
                 let element=schemas.iter().find(|(carrier,_,_)|carrier.name==wire.name).unwrap().1;
                 let fields=crate::group::row_fields(element).enumerate().map(|(i,wire)|{let field=format_ident!("v{i}");(wire,quote!(row.#field))}).collect::<Vec<_>>();
-                let child=release(element,&fields,context,catch_panics);
+                let child=release_fields(element,&fields,row_type,catch_panics);
                 code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
             }
             _=>{}
@@ -248,7 +352,7 @@ pub(crate) fn callback_output(
         metadata: CChain::Sequence(CSequence::Callback),
         begin: quote!(),
         enter: quote!(),
-        store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
+        store: quote!(#(#prepare)* #commit unsafe { __pb_callback.unwrap_unchecked()(__pb_callback_context, #(#names),*); }),
         finish: quote!(),
         values: vec![(wire.clone(), quote!(#length))],
         commit: quote!(),

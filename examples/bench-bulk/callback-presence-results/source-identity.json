@@ -1,0 +1,64 @@
+{
+  "measured_baseline": "2c8c1e8098ce36c5adc605d80e7b73473328fa6f",
+  "umbrella_base": "d983606b7286e81af4cc8337c628e77739f43ec7",
+  "product_trees": [
+    {
+      "package": "prebindgen",
+      "measured_baseline_tree": "f23bd8396d7ca90967aecb77953fbb119a1b374e",
+      "umbrella_base_tree": "f23bd8396d7ca90967aecb77953fbb119a1b374e"
+    },
+    {
+      "package": "prebindgen-conversions",
+      "measured_baseline_tree": "edeba3d060b54c7c26c79f930e073a5b6d8085d6",
+      "umbrella_base_tree": "edeba3d060b54c7c26c79f930e073a5b6d8085d6"
+    },
+    {
+      "package": "prebindgen-declarations",
+      "measured_baseline_tree": "d7ea985ba6224e1ceecc1b0577c90d18028bfcbf",
+      "umbrella_base_tree": "d7ea985ba6224e1ceecc1b0577c90d18028bfcbf"
+    },
+    {
+      "package": "prebindgen-flat",
+      "measured_baseline_tree": "6c55d037f741055f2d95501314e325e4bb0f62bc",
+      "umbrella_base_tree": "6c55d037f741055f2d95501314e325e4bb0f62bc"
+    },
+    {
+      "package": "prebindgen-jni",
+      "measured_baseline_tree": "2d069a586cd32f3fb9cd2173c48183485e0a0be8",
+      "umbrella_base_tree": "2d069a586cd32f3fb9cd2173c48183485e0a0be8"
+    },
+    {
+      "package": "prebindgen-jni-runtime",
+      "measured_baseline_tree": "ff746b85a2809a8b6486e3a9465df9ec4cc81397",
+      "umbrella_base_tree": "ff746b85a2809a8b6486e3a9465df9ec4cc81397"
+    },
+    {
+      "package": "prebindgen-proc-macro",
+      "measured_baseline_tree": "09c291a5825d29e84fdf55a8745e2059be32ce9e",
+      "umbrella_base_tree": "09c291a5825d29e84fdf55a8745e2059be32ce9e"
+    },
+    {
+      "package": "prebindgen-reprc",
+      "measured_baseline_tree": "65a0ac6c2aa5a6bed20538f46f38c07e457f6d6c",
+      "umbrella_base_tree": "65a0ac6c2aa5a6bed20538f46f38c07e457f6d6c"
+    },
+    {
+      "package": "prebindgen-runtime",
+      "measured_baseline_tree": "c4607ec5ca27a0606b34d22a97eaf6ad72191198",
+      "umbrella_base_tree": "c4607ec5ca27a0606b34d22a97eaf6ad72191198"
+    }
+  ],
+  "measured_after": "7f30f90fda7b5a3230f6b41dea48123d045ff7b1",
+  "unchanged_fixture": true,
+  "after_product_trees": {
+    "prebindgen": "f23bd8396d7ca90967aecb77953fbb119a1b374e",
+    "prebindgen-conversions": "edeba3d060b54c7c26c79f930e073a5b6d8085d6",
+    "prebindgen-declarations": "d7ea985ba6224e1ceecc1b0577c90d18028bfcbf",
+    "prebindgen-flat": "6c55d037f741055f2d95501314e325e4bb0f62bc",
+    "prebindgen-jni": "4fa854144d3d86ef449572c6091396e082cab29a",
+    "prebindgen-jni-runtime": "ff746b85a2809a8b6486e3a9465df9ec4cc81397",
+    "prebindgen-proc-macro": "09c291a5825d29e84fdf55a8745e2059be32ce9e",
+    "prebindgen-reprc": "65a0ac6c2aa5a6bed20538f46f38c07e457f6d6c",
+    "prebindgen-runtime": "c4607ec5ca27a0606b34d22a97eaf6ad72191198"
+  }
+}

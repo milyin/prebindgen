@@ -1,0 +1,8 @@
+{
+  "classes": 3534,
+  "class_map_sha256": "0fca162698ddfd480b12286d9f4b6416161ce5929f6d27552eb68e7165018178",
+  "all_class_bytes_identical": true,
+  "driver_sha256": "9dda45e208f54446407f15c0d15fcc3cd1ac1bbab8addbfa8069b6172ea62932",
+  "driver_source": "examples/bench-bulk/jni-output-results/Driver.kt",
+  "driver_source_sha256": "14e192bf5dd1ca576e0cfa33fb675371b5eb56e63859f8c8fb779f6e37f7d82a"
+}

@@ -122,13 +122,16 @@ impl PointerLenAbi {
 struct CodecImpl {
     bad_sequence: bool,
     reverse_values: bool,
-    unknown_prepared_read: bool,
+    unknown_validation_read: bool,
+    row_only_leaf: bool,
+    shared_scalar_resource: bool,
 }
 impl Codec for CodecImpl {
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
+
     fn group_metadata(&self) -> Metadata {
         Metadata::Components
     }
@@ -216,7 +219,28 @@ impl Codec for CodecImpl {
         v: syn::Ident,
         active: &Condition,
     ) -> Result<CodecInput<Self>> {
-        value::input(ty, w.clone(), v, &active.rust(), quote!(#w), ty.clone())
+        let mut input = value::input(
+            ty,
+            w.clone(),
+            v.clone(),
+            &active.rust(),
+            quote!(#w),
+            ty.clone(),
+        )?;
+        if self.row_only_leaf {
+            input.statements = quote!(let #v: #ty = #w;);
+        }
+        if self.shared_scalar_resource {
+            input.resources.push(prebindgen_conversions::Resource {
+                allocation_type: None,
+                registered: false,
+                records_consumption: false,
+                count: quote!(1usize),
+                access: prebindgen_conversions::Access::Shared,
+                active: active.rust(),
+            });
+        }
+        Ok(input)
     }
     fn output_leaf(
         &self,
@@ -257,14 +281,13 @@ impl Codec for CodecImpl {
             metadata: PacketChain::Sequence,
             open: quote!(if #length>0 && #wire.is_null(){return Err("null sequence".into());}),
             bind: quote!(let #field=unsafe{*#wire.add(#index)};),
-            validation_values: vec![(field.clone(), quote!(#field))],
-            prepared_values: vec![(
-                if self.unknown_prepared_read {
+            validation_values: vec![(
+                if self.unknown_validation_read {
                     syn::parse_quote!(unknown)
                 } else {
                     field.clone()
                 },
-                Some(quote!(#field)),
+                quote!(#field),
             )],
             release: quote!(),
         })
@@ -340,10 +363,12 @@ impl Codec for CodecImpl {
 #[test]
 fn optional_sequences_with_two_outer_values_compile_and_execute() {
     for reverse in [false, true] {
-        pointer_length_round_trip(reverse);
+        for row_only in [false, true] {
+            pointer_length_round_trip(reverse, row_only);
+        }
     }
 }
-fn pointer_length_round_trip(reverse: bool) {
+fn pointer_length_round_trip(reverse: bool, row_only: bool) {
     use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
@@ -352,17 +377,17 @@ fn pointer_length_round_trip(reverse: bool) {
     )
     .unwrap();
     let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-    defaults
-        .fill(
-            &mut flat,
-            &CodecImpl {
-                reverse_values: reverse,
-                ..Default::default()
-            },
-            &fun!(echo),
-            &(),
-        )
-        .unwrap();
+    let filled = defaults.fill(
+        &mut flat,
+        &CodecImpl {
+            reverse_values: reverse,
+            row_only_leaf: row_only,
+            ..Default::default()
+        },
+        &fun!(echo),
+        &(),
+    );
+    filled.unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(
         prebindgen_flat::wire_definitions(std::iter::once(
@@ -453,7 +478,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
     assert!(error.contains("missing output binding"), "{error}");
     assert!(flat.function("output").unwrap().ret.slot.is_none());
     let bad = CodecImpl {
-        unknown_prepared_read: true,
+        unknown_validation_read: true,
         ..Default::default()
     };
     let error = bind_input(
@@ -465,6 +490,76 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         &(),
     )
     .unwrap_err();
-    assert!(error.contains("prepared input names differ"), "{error}");
+    assert!(
+        error.contains("unknown collection validation binding"),
+        "{error}"
+    );
     assert!(flat.function("input").unwrap().params[0].ty.slot.is_none());
+}
+
+#[test]
+fn rows_lend_temporary_values_and_construct_once() {
+    let source=syn::parse_file("pub struct Row{pub value:i32}pub fn row(value:&i32)->Row{}pub fn consume(values:Vec<Row>)->i32{}").unwrap();
+    let flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
+        source.items.into_iter().map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let codec = CodecImpl {
+        shared_scalar_resource: true,
+        ..Default::default()
+    };
+    let recipe = Input::Sequence(Box::new(Input::constructor(
+        "row",
+        [Input::Temporary(Box::new(Input::Leaf))],
+    )));
+    let plan = compile_input(&flat, &codec, "consume", "values", &recipe, &()).unwrap();
+    let checked = plan.validation.clone();
+    let acquire = plan.acquire;
+    let statements = plan.statements;
+    let argument = plan.argument;
+    let parameters = PointerLenAbi::parameters(&plan.node)
+        .map(|w| {
+            let name = &w.name;
+            let ty = w.rust_type();
+            quote!(#name:#ty)
+        })
+        .collect::<Vec<_>>();
+    let program = quote! {
+        use std::sync::atomic::{AtomicUsize,Ordering};
+        static CONSTRUCTED:AtomicUsize=AtomicUsize::new(0);
+        struct Row{value:i32}
+        fn row(value:&i32)->Row {
+            CONSTRUCTED.fetch_add(1,Ordering::SeqCst);Row{value:*value}
+        }
+        fn consume(values:Vec<Row>)->i32{values.iter().map(|r|r.value).sum()}
+        fn bridge(#(#parameters),*)->Result<i32,String>{
+            let __prebindgen_input_consumed=std::cell::Cell::new(0usize);
+            #checked #acquire #statements
+            let values=#argument;
+            assert_eq!(__prebindgen_input_consumed.get(),0);
+            Ok(consume(values))
+        }
+        fn main(){for values in [vec![],vec![1,2,3]] {
+            CONSTRUCTED.store(0,Ordering::SeqCst);
+            assert_eq!(bridge(values.as_ptr(),values.len()).unwrap(),values.iter().sum());
+            assert_eq!(CONSTRUCTED.load(Ordering::SeqCst),values.len());
+        }}
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("temporary.rs");
+    let exe = directory.path().join("temporary");
+    std::fs::write(&file, program.to_string()).unwrap();
+    let built = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&file)
+        .arg("-o")
+        .arg(&exe)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(std::process::Command::new(exe).status().unwrap().success());
 }

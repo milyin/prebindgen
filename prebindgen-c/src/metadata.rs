@@ -18,11 +18,18 @@ impl prebindgen_flat::Schema for CSchema {
 pub struct CModule {
     /// Prefix of generated symbols and declarations.
     pub prefix: String,
+    /// Generated source accessors callable by expansion recipes.
+    pub helpers: Vec<syn::ItemFn>,
+    pub(crate) target: Option<(String, u32, TokenStream)>,
+    pub(crate) opaque_layouts: std::collections::BTreeMap<String, crate::layouts::StorageLayout>,
 }
 impl Default for CModule {
     fn default() -> Self {
         Self {
             prefix: "pb".into(),
+            helpers: Vec::new(),
+            opaque_layouts: Default::default(),
+            target: None,
         }
     }
 }
@@ -40,6 +47,8 @@ pub struct CFunction {
 pub struct CType {
     /// Unprefixed opaque C typedef name, when this type has a handle representation.
     pub pointer: Option<String>,
+    /// Inline owning representation, when configured or selected for Vec/String outputs.
+    pub owned: Option<Rc<COwned>>,
     pub(crate) pointer_order: usize,
     pub(crate) error_order: usize,
     /// Checked fieldless-enum declaration shared by all occurrences.

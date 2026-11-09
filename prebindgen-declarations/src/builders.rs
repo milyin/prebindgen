@@ -8,6 +8,8 @@ pub struct ExpandParamDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
     input: Input<InputRequest>,
+    bulk: bool,
+    reconstruct: bool,
 }
 impl ExpandParamDecl {
     /// Start an input declaration; add at least one alternative before use.
@@ -15,7 +17,22 @@ impl ExpandParamDecl {
         Self {
             ty,
             input: Input::Selector(vec![]),
+            bulk: false,
+            reconstruct: false,
         }
+    }
+    /// Group this expansion into a C-representation bulk carrier.
+    /// The adapter chooses storage; constructor and local conversion rules are retained.
+    pub fn bulk(mut self) -> Self {
+        self.bulk = true;
+        self
+    }
+    /// Explicitly construct an owned temporary and borrow it for the source call.
+    /// With no alternatives, use the owned value's default input conversion.
+    /// Alternatives describe the owned referent, not the reference itself.
+    pub fn reconstruct(mut self) -> Self {
+        self.reconstruct = true;
+        self
     }
     /// Append a constructor reference; its arguments use their type defaults.
     pub fn variant(mut self, function: impl Into<FunctionDecl>) -> Self {
@@ -30,7 +47,17 @@ impl ExpandParamDecl {
 }
 impl From<ExpandParamDecl> for Input<InputRequest> {
     fn from(decl: ExpandParamDecl) -> Self {
-        Input::for_type(decl.ty, decl.input)
+        let mut input = decl.input;
+        if decl.reconstruct {
+            if matches!(&input, Input::Selector(arms) if arms.is_empty()) {
+                input = Input::auto();
+            }
+            input = Input::Temporary(Box::new(input));
+        }
+        if decl.bulk {
+            input = Input::Bulk(Box::new(input));
+        }
+        Input::for_type(decl.ty, input)
     }
 }
 
@@ -40,6 +67,7 @@ pub struct ExpandReturnDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
     output: Output<OutputRequest>,
+    bulk: bool,
 }
 impl ExpandReturnDecl {
     /// Start an output declaration; add views before registering a type default.
@@ -47,9 +75,22 @@ impl ExpandReturnDecl {
         Self {
             ty,
             output: Output::Combine(vec![]),
+            bulk: false,
         }
     }
+    /// Group this expansion into a C-representation bulk carrier.
+    /// Getter, ownership and local conversion rules are retained. Ordinary
+    /// collections combine these expansions into one frame. Callback delivery
+    /// keeps the expansion within each callback element instead: bulk `Row`
+    /// produces one frame per row of `Vec<Row>`, while bulk `Vec<Row>` produces
+    /// one frame per inner collection of `Vec<Vec<Row>>`.
+    pub fn bulk(mut self) -> Self {
+        self.bulk = true;
+        self
+    }
     /// Append a getter view. An explicit `.name()` labels the delivered view.
+    /// Shared results are observed before another view moves the owner. An
+    /// owning opaque copy requires an explicit projection or cloning accessor.
     pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();
@@ -87,7 +128,8 @@ impl ExpandReturnDecl {
         self.output = self.output.field_self();
         self
     }
-    /// Append an explicit borrowed projection.
+    /// Append an explicit shared projection. Owning opaque representations clone
+    /// the value; record/collection projections permit copying borrowed leaves.
     pub fn field_self_ref(self) -> Self {
         self.project_self(Projection::borrowed())
     }
@@ -103,7 +145,14 @@ impl ExpandReturnDecl {
 }
 impl From<ExpandReturnDecl> for Output<OutputRequest> {
     fn from(decl: ExpandReturnDecl) -> Self {
-        Output::for_type(decl.ty, decl.output)
+        Output::for_type(
+            decl.ty,
+            if decl.bulk {
+                Output::Bulk(Box::new(decl.output))
+            } else {
+                decl.output
+            },
+        )
     }
 }
 

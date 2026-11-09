@@ -1,10 +1,26 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::{Access, InputPlan, OutputPlan, TemplateContext};
+use crate::{Access, InputPlan, OutputPlan, Resource, TemplateContext};
 use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
+
+fn include_resources<C: TemplateContext>(
+    context: &C,
+    resources: &[Resource],
+    output: &mut Vec<Resource>,
+) -> Result<()> {
+    for resource in resources {
+        let mut resource = resource.clone();
+        resource.active = context.render(&resource.active)?;
+        if !resource.registered {
+            resource.count = context.render(&resource.count)?;
+        }
+        output.push(resource);
+    }
+    Ok(())
+}
 
 /// Slot requests understood by the stored input plans.
 pub enum InputFragment<'a, C> {
@@ -36,13 +52,12 @@ pub enum InputFragment<'a, C> {
         /// Bindings used to render prepared templates.
         context: &'a C,
     },
-    /// Check addresses against `seen: Vec<(usize, bool)>`, then record them.
-    /// The boolean means exclusive access (including ownership transfer).
-    CheckAliases {
-        /// Bindings used to render prepared templates.
+    /// Describe this parameter's resources for ownership acknowledgement.
+    Resources {
+        /// Bindings used to render active conditions.
         context: &'a C,
-        /// Caller-owned collection of previously checked allocation accesses.
-        seen: &'a syn::Ident,
+        /// Resource metadata accumulated for all call parameters.
+        resources: &'a mut Vec<Resource>,
     },
 }
 /// Slot requests understood by stored output plans.
@@ -122,31 +137,9 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
                 }
                 None => quote!(()),
             },
-            InputFragment::CheckAliases { context, seen } => {
-                let mut checks = TokenStream::new();
-                for resource in &self.resources {
-                    let active = context.render(&resource.active)?;
-                    let exclusive = resource.access != Access::Shared;
-                    let identities = match &resource.identity {
-                        crate::ResourceIdentity::Single(code) => {
-                            let code = context.render(code)?;
-                            quote!(::core::iter::once((#code) as usize))
-                        }
-                        crate::ResourceIdentity::Many(code) => context.render(code)?,
-                    };
-                    checks.extend(quote! {
-                        if #active { for identity in #identities { #seen.push((identity, #exclusive)); } }
-                    });
-                }
-                if !self.resources.is_empty() {
-                    checks.extend(quote! {
-                        #seen.sort_unstable_by_key(|entry| entry.0);
-                        if #seen.windows(2).any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)) {
-                            return Err("conflicting input aliases".into());
-                        }
-                    });
-                }
-                quote!({ #checks })
+            InputFragment::Resources { context, resources } => {
+                include_resources(context, &self.resources, resources)?;
+                quote!(())
             }
         })
     }
@@ -193,10 +186,10 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
 /// Compose the opt-in staged protocol as a fallible expression.
 /// `result_type` is the wrapper result type inside `Result<_, String>`.
 ///
-/// Generators choosing this helper use address alias checks and one shared
-/// acknowledgement. Other generators can compose their own request protocols.
+/// Generators choosing this helper share an ownership acknowledgement channel.
+/// Other generators can compose their own request protocols.
 /// This is deliberately outside Flat: none of these phases are required by its traits.
-pub fn emit_call<I, O, C: 'static, M>(
+pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
     function: &Function<I, O, M>,
     context: &C,
     source: &syn::Ident,
@@ -288,25 +281,53 @@ where
         }
         syn::Ident::new(&name, proc_macro2::Span::call_site())
     };
-    let seen = fresh("__prebindgen_resources".into());
     let args: Vec<_> = (0..inputs.len())
         .map(|i| fresh(format!("__prebindgen_argument_{i}")))
         .collect();
-    let checks = inputs
-        .iter()
-        .map(|input| {
-            input.code_fragment_slot(
-                InputFragment::CheckAliases {
-                    context,
-                    seen: &seen,
-                },
-                &unit,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let delivered = plug(&deliver, quote!({ let _: () = #commit; Ok(#result) }))?;
+    let mut resources = Vec::new();
+    for input in &inputs {
+        input.code_fragment_slot(
+            InputFragment::Resources {
+                context,
+                resources: &mut resources,
+            },
+            &unit,
+        )?;
+    }
+    let eager = resources.iter().any(|r| r.registered);
+    // Eager construction can consume later parameters before deferred acquisition.
+    // A single consumed-prefix receipt cannot describe that ordering on failure.
+    if eager && resources.iter().any(|r| !r.registered) {
+        return Err(
+            "cannot mix deferred resource conversions with eagerly constructed inputs".into(),
+        );
+    }
+
+    let early_receipt = eager
+        || ((acknowledge.is_some() || resources.iter().any(|r| r.records_consumption))
+            && resources.iter().any(|r| r.access == Access::Move));
+    let setup = if early_receipt {
+        let counter = context_counter(context)?;
+        quote!(let __prebindgen_input_consumed=#counter;)
+    } else {
+        TokenStream::new()
+    };
+    let legacy_count = if !eager && early_receipt {
+        let counts = resources
+            .iter()
+            .filter(|r| !r.registered && r.access == Access::Move && !r.records_consumption)
+            .map(|r| {
+                let active = &r.active;
+                let count = &r.count;
+                quote!(if #active {#count} else {0usize})
+            });
+        quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get() #(+ (#counts))*);)
+    } else {
+        TokenStream::new()
+    };
+    let delivered = plug(&deliver, quote!({let _: () = #commit; Ok(#result)}))?;
     let mut body = plug(&prepare, delivered)?;
-    body = scope(quote!(let #source = #path(#(#args),*);), body)?;
+    body = scope(quote!(let #source=#path(#(#args),*);), body)?;
     for (input, target) in inputs.iter().zip(&args).rev() {
         body = input.code_fragment_slot(
             InputFragment::Construct {
@@ -317,25 +338,25 @@ where
             &expected,
         )?;
     }
-    for scope in acquire.iter().rev() {
-        body = plug(scope, body)?;
+    for fragment in acquire.iter().rev() {
+        body = plug(fragment, body)?;
     }
-    body = if let Some(ack) = acknowledge {
-        scope(quote!(let _: () = #ack;), body)?
-    } else {
-        body
-    };
-    body = scope(
-        quote!(
-            let mut #seen: Vec<(usize, bool)> = Vec::new();
-            #(let _: () = #checks;)*
-        ),
-        body,
-    )?;
-    for scope in validation.iter().rev() {
-        body = plug(scope, body)?;
+    body = scope(legacy_count, body)?;
+    if !eager {
+        if let Some(ack) = &acknowledge {
+            body = scope(quote!(let _: () = #ack;), body)?;
+        }
     }
-    Ok(body)
+    for fragment in validation.iter().rev() {
+        body = plug(fragment, body)?;
+    }
+    if eager {
+        if let Some(ack) = acknowledge {
+            body = scope(quote!(let _: () = #ack;), body)?;
+        }
+    }
+    body = scope(setup, body)?;
+    context.render(&body)
 }
 fn plug(scope: &TokenStream, next: TokenStream) -> Result<TokenStream> {
     let code = crate::render_template(scope, &|name| {
@@ -395,4 +416,8 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputCon
     fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
         &self.outcomes
     }
+}
+
+fn context_counter(context: &impl TemplateContext) -> Result<TokenStream> {
+    context.render(&crate::template_parameter("input_consumed"))
 }

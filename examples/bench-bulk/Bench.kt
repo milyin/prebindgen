@@ -1,0 +1,394 @@
+import com.sun.management.ThreadMXBean
+import java.lang.management.ManagementFactory
+
+private const val BASE = 1000000L
+private const val MASK = 1023
+@Volatile private var observed = 0L
+private fun interface Operation { fun run(index: Int): Long }
+private data class Case(val name: String, val size: Int, val constant: Long, val coefficient: Long,
+                        val operation: Operation, val callback: Boolean = false) {
+    fun expected(iterations: Int): Long {
+        val chunks = iterations / (MASK + 1)
+        val tail = (iterations % (MASK + 1)).toLong()
+        val indices = chunks.toLong() * MASK * (MASK + 1) / 2 + tail * (tail - 1) / 2
+        return constant * iterations + coefficient * indices
+    }
+}
+private data class Sample(val nanos: Long, val allocated: Long)
+private fun rowsTotal(size: Int) = size * (8 * BASE + 28) + 4L * size * (size - 1)
+
+private fun checksumPlain(rows: List<bench.plain.Row>): Long {
+    var sum = 0L
+    for (r in rows) sum += r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
+    return sum
+}
+private fun rowPlain(x: Long) = bench.plain.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7)
+private fun wideRowPlain(x: Long) = bench.plain.WideRow(
+    x, x+1, x+2, x+3, x+4, x+5, x+6, x+7, x+8, x+9, x+10, x+11, x+12, x+13, x+14, x+15, x+16, x+17, x+18, x+19, x+20, x+21, x+22, x+23, x+24, x+25, x+26, x+27, x+28, x+29, x+30, x+31)
+private fun checksumPlain(r: bench.plain.Row) = 1 * r.a + 2 * r.b + 3 * r.c + 4 * r.d + 5 * r.e + 6 * r.f + 7 * r.g + 8 * r.h
+private fun checksumPlain(r: bench.plain.WideRow) =
+    1 * r.f0 + 2 * r.f1 + 3 * r.f2 + 4 * r.f3 + 5 * r.f4 + 6 * r.f5 + 7 * r.f6 + 8 * r.f7 + 9 * r.f8 + 10 * r.f9 + 11 * r.f10 + 12 * r.f11 + 13 * r.f12 + 14 * r.f13 + 15 * r.f14 + 16 * r.f15 + 17 * r.f16 + 18 * r.f17 + 19 * r.f18 + 20 * r.f19 + 21 * r.f20 + 22 * r.f21 + 23 * r.f22 + 24 * r.f23 + 25 * r.f24 + 26 * r.f25 + 27 * r.f26 + 28 * r.f27 + 29 * r.f28 + 30 * r.f29 + 31 * r.f30 + 32 * r.f31
+private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArray): Pair<List<Case>, AutoCloseable> {
+    val handler = bench.plain.handlerNew(bench.plain.RowsCallback { rows ->
+        callbacks[0]++; checksumPlain(rows)
+    })
+    val rowReturn = bench.plain.rowReturnHandlerNew(bench.plain.RowReturnCallback { seed ->
+        callbacks[0]++; rowPlain(seed)
+    })
+    val wideReturn = bench.plain.wideRowReturnHandlerNew(bench.plain.WideRowReturnCallback { seed ->
+        callbacks[0]++; wideRowPlain(seed)
+    })
+    val wide = wideRowPlain(BASE)
+    val one = bench.plain.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
+    val cycleCleanup = mutableListOf<AutoCloseable>()
+    val inputHandles = mutableListOf<bench.plain.InputHandle>()
+    val singleHandle = bench.plain.inputHandleNew(BASE)
+    inputHandles.add(singleHandle)
+    val referenceText = "x".repeat(64)
+    val referenceBytes = ByteArray(64)
+    val cases = mutableListOf(
+        Case("control", 1, BASE + 1, 1, Operation { i -> bench.plain.control(BASE + (i and MASK)) }),
+        Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.plain.scalar(BASE + (i and MASK)) }),
+        Case("handle_input", 1, BASE, 0, Operation { _ -> bench.plain.inputHandleValue(singleHandle) }),
+        Case("selected_handle_input", 1, BASE, 0, Operation { _ -> bench.plain.selectedHandle(1, 0L, singleHandle) }),
+        Case("inactive_handle_input", 1, BASE, 0, Operation { _ -> bench.plain.selectedHandle(0, BASE, singleHandle) }),
+        Case("buffer_input", 1, 128, 0, Operation { _ -> bench.plain.bufferSizes(referenceText, referenceBytes) }),
+        Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.plain.rowSum(one) }),
+        Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumPlain(bench.plain.rowMake(BASE + (i and MASK))) }),
+        Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.plain.wideRowSum(wide) }),
+        Case("wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> checksumPlain(bench.plain.wideRowMake(BASE + (i and MASK))) }),
+        Case("callback_record_return", 1, 36 * BASE + 168, 36, Operation { i -> bench.plain.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
+        Case("callback_wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> bench.plain.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
+    )
+    for (size in sizes) {
+        val numbers = List(size) { BASE + it }
+        val rows = List(size) { i -> val x = BASE + i; bench.plain.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7) }
+        cases.add(Case("numbers_input", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.plain.numbersSum(numbers) }))
+        cases.add(Case("records_input", size, rowsTotal(size), 0,
+            Operation { _ -> bench.plain.rowsSum(rows) }))
+        cases.add(Case("records_output", size, rowsTotal(size), 8L * size,
+            Operation { i -> checksumPlain(bench.plain.rowsMake(size.toLong(), BASE + (i and MASK))) }))
+        val reduced = longArrayOf(0)
+        val fold: (Unit, bench.plain.Row) -> Unit = { _, r -> reduced[0] += r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h }
+        cases.add(Case("records_reduce", size, rowsTotal(size), 8L * size,
+            Operation { i ->
+                reduced[0] = 0
+                bench.plain.rowsForReduceFold(size.toLong(), BASE + (i and MASK), Unit, fold = fold)
+                reduced[0]
+            }))
+        cases.add(Case("records_roundtrip", size, rowsTotal(size), 0,
+            Operation { _ -> checksumPlain(bench.plain.rowsEcho(rows)) }))
+        cases.add(Case("callback_records", size, rowsTotal(size), 8L * size,
+            Operation { i -> bench.plain.fire(handler, size.toLong(), BASE + (i and MASK)) }, true))
+    }
+    for (size in sizes) {
+        val handles = List(size) { bench.plain.inputHandleNew(BASE + it) }
+        inputHandles.addAll(handles)
+        val rows = handles.mapIndexed { i,h -> bench.plain.HandleRecord(h, i.toLong()) }
+        cases.add(Case("handles_input",size,size * BASE + size.toLong() * (size - 1) / 2,0,
+            Operation { _ -> bench.plain.handleValuesSum(handles) }))
+        cases.add(Case("handle_records_input",size,size * BASE + size.toLong() * (size - 1),0,
+            Operation { _ -> bench.plain.handleRecordsSum(rows) }))
+    }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.plain.inputHandleNew(BASE + it) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.close() } })
+        cases.add(Case("owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.plain.ownedHandlesEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.plain.inputHandleValue(cycle[0][0])+cycle[0].size
+            }))
+    }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE + it), it.toLong()) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.handle.close() } })
+        cases.add(Case("owned_handle_records_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.plain.ownedHandleRecordsEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.plain.inputHandleValue(cycle[0][0].handle)+cycle[0].size
+            }))
+        val nested = arrayOf(listOf(emptyList<bench.plain.InputHandle>(),List(size) { bench.plain.inputHandleNew(BASE + it) },emptyList()))
+        cycleCleanup.add(AutoCloseable { nested[0].forEach { row -> row.forEach { it.close() } } })
+        cases.add(Case("nested_owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                nested[0]=bench.plain.nestedOwnedHandlesEcho(nested[0])
+                if (nested[0][1].isEmpty()) 0L else bench.plain.inputHandleValue(nested[0][1][0])+nested[0][1].size
+            }))
+    }
+    for (size in sizes) {
+        val callbackRows=arrayOf(List(size) {bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE+it),it.toLong())})
+        val callback=bench.plain.OwnedRecordsCallback {callbacks[0]++;callbackRows[0]}
+        cycleCleanup.add(AutoCloseable {callbackRows[0].forEach {it.handle.close()}})
+        cases.add(Case("callback_owned_records",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->callbackRows[0]=bench.plain.callbackOwnedRecords(callback);if(size==0)0L else bench.plain.inputHandleValue(callbackRows[0][0].handle)+size},true))
+        val buffers=arrayOf(List(size) {bench.plain.BufferRecord(bench.plain.inputHandleNew(BASE+it),"x".repeat(64),ByteArray(64))})
+        cycleCleanup.add(AutoCloseable {buffers[0].forEach {it.handle.close()}})
+        cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->buffers[0]=bench.plain.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.plain.inputHandleValue(buffers[0][0].handle)+size}))
+    }
+    for(size in sizes) {
+        val many=arrayOf(List(size) {listOf(bench.plain.inputHandleNew(BASE+it))})
+        cycleCleanup.add(AutoCloseable {many[0].forEach {group->group.forEach {it.close()}}})
+        cases.add(Case("nested_many_owned_handles_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->many[0]=bench.plain.nestedOwnedHandlesEcho(many[0]);if(size==0)0L else bench.plain.inputHandleValue(many[0][0][0])+size}))
+        for(small in listOf(false,true)) {
+            val nested=arrayOf(if(small)List(size) {listOf(bench.plain.inputHandleNew(BASE+it))}
+                               else listOf(emptyList(),List(size) {bench.plain.inputHandleNew(BASE+it)},emptyList()))
+            val callback=bench.plain.OwnedNestedCallback {callbacks[0]++;nested[0]}
+            cycleCleanup.add(AutoCloseable {nested[0].forEach {group->group.forEach {it.close()}}})
+            cases.add(Case(if(small)"callback_many_nested_owned_handles" else "callback_nested_owned_handles",size,if(size==0)0L else BASE+size,0,
+                Operation {_ ->nested[0]=bench.plain.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.plain.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
+        }
+    }
+    for (size in sizes) for (small in listOf(false, true)) for (mixed in listOf(false, true)) {
+        fun batch(count: Int) = bench.plain.HandleBatch(bench.plain.inputHandleNew(BASE),
+            List(count) { bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE + it), it.toLong()) })
+        val cycle = arrayOf(if (small) List(size) { batch(1) } else listOf(batch(size)))
+        val callback = bench.plain.OwnedBatchesCallback { callbacks[0]++; cycle[0] }
+        val packedCallback = bench.plain.OwnedMixedBatchesCallback { callbacks[0]++; cycle[0] }
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        val name = (if (mixed) "callback_mixed_batches" else "callback_batches") + (if (small) "_many" else "_large")
+        cases.add(Case(name, size, if (size == 0) 0L else 2 * BASE + size, 0,
+            Operation { _ ->
+                cycle[0] = if (mixed) bench.plain.callbackMixedBatchesOwnedHandles(packedCallback) else bench.plain.callbackBatchesOwnedHandles(callback)
+                if (size == 0) 0L else bench.plain.inputHandleValue(cycle[0][0].guard) + bench.plain.inputHandleValue(cycle[0][0].rows[0].handle) + size
+            }, true))
+    }
+    var callbackRecord = bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE),1L)
+    val recordCallback = bench.plain.OwnedRecordCallback { callbacks[0]++; callbackRecord }
+    cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
+    cases.add(Case("callback_owned_record",1,BASE+1,0,Operation { _ ->
+        callbackRecord=bench.plain.callbackOwnedRecord(recordCallback)
+        bench.plain.inputHandleValue(callbackRecord.handle)+callbackRecord.tag
+    },true))
+    for (size in payloads) {
+        val packet = bench.plain.Packet(one, ByteArray(size) { (it and 255).toByte() })
+        val full = size / 256
+        val tail = (size % 256).toLong()
+        val expected = rowsTotal(1) + full.toLong() * 32640 + tail * (tail - 1) / 2
+        cases.add(Case("packet_input", size, expected, 0, Operation { _ -> bench.plain.packetSum(packet) }))
+    }
+    return cases to AutoCloseable {
+        cycleCleanup.forEach { it.close() }
+        inputHandles.forEach { it.close() }
+        try { handler.close() } finally {
+            try { rowReturn.close() } finally { wideReturn.close() }
+        }
+    }
+}
+
+private fun checksumBulk(rows: List<bench.bulk.Row>): Long {
+    var sum = 0L
+    for (r in rows) sum += r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
+    return sum
+}
+private fun rowBulk(x: Long) = bench.bulk.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7)
+private fun wideRowBulk(x: Long) = bench.bulk.WideRow(
+    x, x+1, x+2, x+3, x+4, x+5, x+6, x+7, x+8, x+9, x+10, x+11, x+12, x+13, x+14, x+15, x+16, x+17, x+18, x+19, x+20, x+21, x+22, x+23, x+24, x+25, x+26, x+27, x+28, x+29, x+30, x+31)
+private fun checksumBulk(r: bench.bulk.Row) = 1 * r.a + 2 * r.b + 3 * r.c + 4 * r.d + 5 * r.e + 6 * r.f + 7 * r.g + 8 * r.h
+private fun checksumBulk(r: bench.bulk.WideRow) =
+    1 * r.f0 + 2 * r.f1 + 3 * r.f2 + 4 * r.f3 + 5 * r.f4 + 6 * r.f5 + 7 * r.f6 + 8 * r.f7 + 9 * r.f8 + 10 * r.f9 + 11 * r.f10 + 12 * r.f11 + 13 * r.f12 + 14 * r.f13 + 15 * r.f14 + 16 * r.f15 + 17 * r.f16 + 18 * r.f17 + 19 * r.f18 + 20 * r.f19 + 21 * r.f20 + 22 * r.f21 + 23 * r.f22 + 24 * r.f23 + 25 * r.f24 + 26 * r.f25 + 27 * r.f26 + 28 * r.f27 + 29 * r.f28 + 30 * r.f29 + 31 * r.f30 + 32 * r.f31
+private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArray): Pair<List<Case>, AutoCloseable> {
+    val handler = bench.bulk.handlerNew(bench.bulk.RowsCallback { rows ->
+        callbacks[0]++; checksumBulk(rows)
+    })
+    val rowReturn = bench.bulk.rowReturnHandlerNew(bench.bulk.RowReturnCallback { seed ->
+        callbacks[0]++; rowBulk(seed)
+    })
+    val wideReturn = bench.bulk.wideRowReturnHandlerNew(bench.bulk.WideRowReturnCallback { seed ->
+        callbacks[0]++; wideRowBulk(seed)
+    })
+    val wide = wideRowBulk(BASE)
+    val one = bench.bulk.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
+    val cycleCleanup = mutableListOf<AutoCloseable>()
+    val inputHandles = mutableListOf<bench.bulk.InputHandle>()
+    val singleHandle = bench.bulk.inputHandleNew(BASE)
+    inputHandles.add(singleHandle)
+    val referenceText = "x".repeat(64)
+    val referenceBytes = ByteArray(64)
+    val cases = mutableListOf(
+        Case("control", 1, BASE + 1, 1, Operation { i -> bench.bulk.control(BASE + (i and MASK)) }),
+        Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.bulk.scalar(BASE + (i and MASK)) }),
+        Case("handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.inputHandleValue(singleHandle) }),
+        Case("selected_handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.selectedHandle(1, 0L, singleHandle) }),
+        Case("inactive_handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.selectedHandle(0, BASE, singleHandle) }),
+        Case("buffer_input", 1, 128, 0, Operation { _ -> bench.bulk.bufferSizes(referenceText, referenceBytes) }),
+        Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.bulk.rowSum(one) }),
+        Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumBulk(bench.bulk.rowMake(BASE + (i and MASK))) }),
+        Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.bulk.wideRowSum(wide) }),
+        Case("wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> checksumBulk(bench.bulk.wideRowMake(BASE + (i and MASK))) }),
+        Case("callback_record_return", 1, 36 * BASE + 168, 36, Operation { i -> bench.bulk.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
+        Case("callback_wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> bench.bulk.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
+    )
+    for (size in sizes) {
+        val numbers = List(size) { BASE + it }
+        val rows = List(size) { i -> val x = BASE + i; bench.bulk.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7) }
+        cases.add(Case("numbers_input", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.bulk.numbersSum(numbers) }))
+        cases.add(Case("records_input", size, rowsTotal(size), 0,
+            Operation { _ -> bench.bulk.rowsSum(rows) }))
+        cases.add(Case("records_output", size, rowsTotal(size), 8L * size,
+            Operation { i -> checksumBulk(bench.bulk.rowsMake(size.toLong(), BASE + (i and MASK))) }))
+        val reduced = longArrayOf(0)
+        cases.add(Case("records_reduce", size, rowsTotal(size), 8L * size,
+            Operation { i ->
+                reduced[0] = 0
+                for (r in bench.bulk.rowsForReduce(size.toLong(), BASE + (i and MASK)))
+                    reduced[0] += r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
+                reduced[0]
+            }))
+        cases.add(Case("records_roundtrip", size, rowsTotal(size), 0,
+            Operation { _ -> checksumBulk(bench.bulk.rowsEcho(rows)) }))
+        cases.add(Case("callback_records", size, rowsTotal(size), 8L * size,
+            Operation { i -> bench.bulk.fire(handler, size.toLong(), BASE + (i and MASK)) }, true))
+    }
+    for (size in sizes) {
+        val handles = List(size) { bench.bulk.inputHandleNew(BASE + it) }
+        inputHandles.addAll(handles)
+        val rows = handles.mapIndexed { i,h -> bench.bulk.HandleRecord(h, i.toLong()) }
+        cases.add(Case("handles_input",size,size * BASE + size.toLong() * (size - 1) / 2,0,
+            Operation { _ -> bench.bulk.handleValuesSum(handles) }))
+        cases.add(Case("handle_records_input",size,size * BASE + size.toLong() * (size - 1),0,
+            Operation { _ -> bench.bulk.handleRecordsSum(rows) }))
+    }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.bulk.inputHandleNew(BASE + it) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.close() } })
+        cases.add(Case("owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.bulk.ownedHandlesEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.bulk.inputHandleValue(cycle[0][0])+cycle[0].size
+            }))
+    }
+    for (size in sizes) {
+        val cycle = arrayOf(List(size) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE + it), it.toLong()) })
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { it.handle.close() } })
+        cases.add(Case("owned_handle_records_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                cycle[0]=bench.bulk.ownedHandleRecordsEcho(cycle[0])
+                if (cycle[0].isEmpty()) 0L else bench.bulk.inputHandleValue(cycle[0][0].handle)+cycle[0].size
+            }))
+        val nested = arrayOf(listOf(emptyList<bench.bulk.InputHandle>(),List(size) { bench.bulk.inputHandleNew(BASE + it) },emptyList()))
+        cycleCleanup.add(AutoCloseable { nested[0].forEach { row -> row.forEach { it.close() } } })
+        cases.add(Case("nested_owned_handles_roundtrip",size,if (size == 0) 0L else BASE+size,0,
+            Operation { _ ->
+                nested[0]=bench.bulk.nestedOwnedHandlesEcho(nested[0])
+                if (nested[0][1].isEmpty()) 0L else bench.bulk.inputHandleValue(nested[0][1][0])+nested[0][1].size
+            }))
+    }
+    for (size in sizes) {
+        val callbackRows=arrayOf(List(size) {bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE+it),it.toLong())})
+        val callback=bench.bulk.OwnedRecordsCallback {callbacks[0]++;callbackRows[0]}
+        cycleCleanup.add(AutoCloseable {callbackRows[0].forEach {it.handle.close()}})
+        cases.add(Case("callback_owned_records",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->callbackRows[0]=bench.bulk.callbackOwnedRecords(callback);if(size==0)0L else bench.bulk.inputHandleValue(callbackRows[0][0].handle)+size},true))
+        val buffers=arrayOf(List(size) {bench.bulk.BufferRecord(bench.bulk.inputHandleNew(BASE+it),"x".repeat(64),ByteArray(64))})
+        cycleCleanup.add(AutoCloseable {buffers[0].forEach {it.handle.close()}})
+        cases.add(Case("owned_buffer_records_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->buffers[0]=bench.bulk.ownedBufferRecordsEcho(buffers[0]);check(buffers[0].all {it.text.length==64 && it.bytes.size==64});if(size==0)0L else bench.bulk.inputHandleValue(buffers[0][0].handle)+size}))
+    }
+    for(size in sizes) {
+        val many=arrayOf(List(size) {listOf(bench.bulk.inputHandleNew(BASE+it))})
+        cycleCleanup.add(AutoCloseable {many[0].forEach {group->group.forEach {it.close()}}})
+        cases.add(Case("nested_many_owned_handles_roundtrip",size,if(size==0)0L else BASE+size,0,
+            Operation {_ ->many[0]=bench.bulk.nestedOwnedHandlesEcho(many[0]);if(size==0)0L else bench.bulk.inputHandleValue(many[0][0][0])+size}))
+        for(small in listOf(false,true)) {
+            val nested=arrayOf(if(small)List(size) {listOf(bench.bulk.inputHandleNew(BASE+it))}
+                               else listOf(emptyList(),List(size) {bench.bulk.inputHandleNew(BASE+it)},emptyList()))
+            val callback=bench.bulk.OwnedNestedCallback {callbacks[0]++;nested[0]}
+            cycleCleanup.add(AutoCloseable {nested[0].forEach {group->group.forEach {it.close()}}})
+            cases.add(Case(if(small)"callback_many_nested_owned_handles" else "callback_nested_owned_handles",size,if(size==0)0L else BASE+size,0,
+                Operation {_ ->nested[0]=bench.bulk.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.bulk.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
+        }
+    }
+    for (size in sizes) for (small in listOf(false, true)) for (mixed in listOf(false, true)) {
+        fun batch(count: Int) = bench.bulk.HandleBatch(bench.bulk.inputHandleNew(BASE),
+            List(count) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE + it), it.toLong()) })
+        val cycle = arrayOf(if (small) List(size) { batch(1) } else listOf(batch(size)))
+        val callback = bench.bulk.OwnedBatchesCallback { callbacks[0]++; cycle[0] }
+        val packedCallback = bench.bulk.OwnedMixedBatchesCallback { callbacks[0]++; cycle[0] }
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        val name = (if (mixed) "callback_mixed_batches" else "callback_batches") + (if (small) "_many" else "_large")
+        cases.add(Case(name, size, if (size == 0) 0L else 2 * BASE + size, 0,
+            Operation { _ ->
+                cycle[0] = if (mixed) bench.bulk.callbackMixedBatchesOwnedHandles(packedCallback) else bench.bulk.callbackBatchesOwnedHandles(callback)
+                if (size == 0) 0L else bench.bulk.inputHandleValue(cycle[0][0].guard) + bench.bulk.inputHandleValue(cycle[0][0].rows[0].handle) + size
+            }, true))
+    }
+    var callbackRecord = bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE),1L)
+    val recordCallback = bench.bulk.OwnedRecordCallback { callbacks[0]++; callbackRecord }
+    cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
+    cases.add(Case("callback_owned_record",1,BASE+1,0,Operation { _ ->
+        callbackRecord=bench.bulk.callbackOwnedRecord(recordCallback)
+        bench.bulk.inputHandleValue(callbackRecord.handle)+callbackRecord.tag
+    },true))
+    for (size in payloads) {
+        val packet = bench.bulk.Packet(one, ByteArray(size) { (it and 255).toByte() })
+        val full = size / 256
+        val tail = (size % 256).toLong()
+        val expected = rowsTotal(1) + full.toLong() * 32640 + tail * (tail - 1) / 2
+        cases.add(Case("packet_input", size, expected, 0, Operation { _ -> bench.bulk.packetSum(packet) }))
+    }
+    return cases to AutoCloseable {
+        cycleCleanup.forEach { it.close() }
+        inputHandles.forEach { it.close() }
+        try { handler.close() } finally {
+            try { rowReturn.close() } finally { wideReturn.close() }
+        }
+    }
+}
+
+fun main(args: Array<String>) {
+    val mode = args[0]
+    require(mode == "plain" || mode == "bulk")
+    val sizes = args[1].split(',').map { it.toInt() }
+    val warmup = args[2].toInt()
+    val batches = args[3].toInt()
+    val targetNanos = args[4].toLong() * 1000000
+    val trial = args[5].toInt()
+    val payloads = args[6].split(',').map { it.toInt() }
+    require(sizes.all { it >= 0 } && warmup > 0 && batches > 0 && targetNanos > 0)
+    val bean = ManagementFactory.getThreadMXBean() as ThreadMXBean
+    check(bean.isThreadAllocatedMemorySupported)
+    bean.isThreadAllocatedMemoryEnabled = true
+    val thread = Thread.currentThread().id
+    val callbacks = longArrayOf(0)
+    val (allCases, handler) = if (mode == "plain") casesPlain(sizes, payloads, callbacks) else casesBulk(sizes, payloads, callbacks)
+    val selectedNames = args[7].split(',').toSet()
+    val selectedCases = allCases.filter { it.name in selectedNames }
+    require(selectedCases.isNotEmpty() && selectedCases.map { it.name }.toSet() == selectedNames)
+    val ordered = if (trial % 2 == 0) selectedCases else selectedCases.reversed()
+    val shift = (trial / 2) % ordered.size
+    val cases = ordered.drop(shift) + ordered.take(shift)
+    fun sample(case: Case, iterations: Int): Sample {
+        val beforeCallbacks = callbacks[0]
+        val beforeBytes = bean.getThreadAllocatedBytes(thread)
+        val start = System.nanoTime()
+        var sum = 0L
+        var i = 0
+        while (i < iterations) { sum += case.operation.run(i); i++ }
+        val elapsed = System.nanoTime() - start
+        val allocated = bean.getThreadAllocatedBytes(thread) - beforeBytes
+        observed = observed xor sum
+        check(sum == case.expected(iterations)) { "${case.name}/${case.size}: incorrect checksum $sum" }
+        check(callbacks[0] - beforeCallbacks == if (case.callback) iterations.toLong() else 0L)
+        return Sample(elapsed, allocated)
+    }
+    try {
+        repeat(2) { for (case in cases) sample(case, 256) }
+        for (case in cases) {
+            var iterations = (10000 / (case.size + 1)).coerceIn(16, 10000)
+            fun calibrate(nanos: Long): Int = (iterations * (targetNanos.toDouble() / nanos).coerceIn(0.25, 8.0)).toInt().coerceIn(16, 5000000)
+            repeat(3) { iterations = calibrate(sample(case, iterations).nanos) }
+            var last = 1L
+            repeat(warmup) { last = sample(case, iterations).nanos }
+            iterations = calibrate(last)
+            repeat(batches) { batch ->
+                val s = sample(case, iterations)
+                println("BULK_BENCH,$mode,${case.name},${case.size},$batch,$iterations,${s.nanos},${s.allocated}")
+            }
+        }
+        println("SINK,$observed")
+    } finally { handler.close() }
+}

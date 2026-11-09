@@ -130,12 +130,343 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
+fn bulk_replay_input_with(
+    redundant_bulk: bool,
+    bulk_rows: bool,
+) -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+    use prebindgen_declarations::Input;
+    let borrowed = |function: &str| {
+        Input::Optional(Box::new(Input::Constructor {
+            function: function.into(),
+            args: vec![Input::Leaf],
+        }))
+    };
+    let buffer = |function: &str| {
+        let input = borrowed(function);
+        if bulk_rows {
+            input
+        } else {
+            input.bulk()
+        }
+    };
+    let input = Input::Sequence(Box::new(Input::Record(vec![
+        Input::Leaf,
+        if redundant_bulk || !bulk_rows {
+            borrowed("bulk_replay_text").bulk()
+        } else {
+            borrowed("bulk_replay_text")
+        },
+        buffer("bulk_replay_bytes"),
+        borrowed("bulk_replay_kind"),
+        Input::Leaf,
+    ])));
+    if bulk_rows {
+        input.bulk()
+    } else {
+        input
+    }
+}
+
+fn bulk_replay_input() -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+    bulk_replay_input_with(false, true)
+}
+
 fn main() {
+    use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
+    let ordinary_rows = |element| Output::Sequence {
+        delivery: SequenceDelivery::Value,
+        mode: None,
+        element: Box::new(element),
+    };
+    let row = || Output::Request(OutputRequest::Auto);
+    let getter_views = || {
+        expand_return!(GetterOwner)
+            .field(fun!(getter_owner_child))
+            .field(fun!(getter_owner_optional))
+            .field(fun!(getter_owner_container))
+            .field(fun!(getter_owner_rows))
+            .field(fun!(getter_owner_leaf))
+    };
+    let wide_buffer_views = (0..48).fold(expand_return!(JniBufferRow), |views, _| {
+        views.field(fun!(jni_buffer_row_text))
+    });
+    let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
+    let type_rows = || Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+    let type_nested = || Input::Sequence(Box::new(type_rows()));
     let binding = JniGen::builder()
+        .package(package!("typeinputs")
+            .class(ptr_class!(TypeInputA)).class(ptr_class!(TypeInputB))
+            .class(ptr_class!(TypeInputControl).gc_managed())
+            .class(data_class!(TypeInputRow)).class(data_class!(TypeInputHolder))
+            .fun(fun!(type_input_a_new)).fun(fun!(type_input_a_read))
+            .fun(fun!(type_input_b_new)).fun(fun!(type_input_b_read))
+            .fun(fun!(type_input_control_new)).fun(fun!(type_input_live)).fun(fun!(type_input_conversions))
+            .fun(fun!(type_input_fixed)).fun(fun!(type_input_fixed_mut))
+            .fun(fun!(type_input_shared_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_read)).bulk()))
+            .fun(fun!(type_input_mut_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_mut)).bulk()))
+            .fun(fun!(type_input_mixed)
+                .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
+            .fun(fun!(type_input_row).expand_param("value",Input::Record(vec![Input::Leaf;2])))
+            .fun(fun!(type_input_holder).expand_param("value",Input::Record(vec![Input::Optional(Box::new(Input::Record(vec![Input::Leaf;2])))])))
+            .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
+            .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
+            .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
+            .fun(fun!(type_input_callback).expand_param("callback",callback!(impl Fn()->Vec<TypeInputRow>).name("TypeInputCallback").expand_return(type_rows().bulk())))
+            .fun(fun!(type_input_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<TypeInputRow>>).name("TypeInputNestedCallback").expand_return(type_nested().bulk())))
+            .fun(fun!(type_input_optional).expand_param("values",expand_param!(Option<Vec<TypeInputA>>).variant_self().bulk()))
+            .fun(fun!(type_input_array).expand_param("values",expand_param!([TypeInputA;2]).variant_self().bulk())))
+        .expand(expand_return!(&CallbackOwned).field_self_ref())
+        .expand(expand_return!(&BorrowPacket).field_self_ref())
+        .package(package!("borrowcopies")
+            .class(ptr_class!(BorrowPacket)).class(ptr_class!(BorrowNoClone))
+            .class(enum_class!(BorrowMode)).class(data_class!(BorrowEnumRow))
+            .fun(fun!(borrow_enum_rows).expand_return(expand_return!(BorrowEnumRow).field_self_ref().bulk()))
+            .class(callback!(impl Fn(&BorrowPacket)).name("BorrowPacketCopy")
+                .expand_param(0,expand_return!(BorrowPacket).field_self_ref()))
+            .fun(fun!(borrow_packet_new)).fun(fun!(borrow_packet_len))
+            .fun(fun!(borrow_packet_ref)).fun(fun!(borrow_packet_optional))
+            .fun(fun!(borrow_packet_ref_expanded).expand_return(
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len))))
+            .fun(fun!(borrow_packet_emit)).fun(fun!(borrow_packet_emit_copy))
+            .fun(fun!(borrow_packet_emit_optional).expand_param("callback",
+                callback!(impl Fn(Option<&BorrowPacket>)).name("OptionalBorrowCopy")
+                    .expand_param(0,expand_return!(BorrowPacket).field_self_ref())))
+            .fun(fun!(borrow_packet_emit_expanded).expand_param("callback",
+                callback!(impl Fn(&BorrowPacket)).name("BorrowPacketLength")
+                    .expand_param(0,expand_return!(BorrowPacket).field(fun!(borrow_packet_len)))))
+            .fun(fun!(borrow_packet_emit_worker))
+            .fun(fun!(borrow_packet_counter))
+            .fun(fun!(borrow_no_clone_new)).fun(fun!(borrow_no_clone_value))
+            .fun(fun!(borrow_no_clone_emit).expand_param("callback",
+                callback!(impl Fn(&BorrowNoClone)).name("NoCloneNumber")
+                    .expand_param(0,expand_return!(BorrowNoClone).field(fun!(borrow_no_clone_value))))))
+        .package(package!("collectioninputs")
+            .fun(fun!(collection_input_plain))
+            .fun(fun!(collection_input_bulk).expand_param("values", expand_param!(Vec<i64>).variant_self().bulk()))
+            .fun(fun!(collection_input_custom).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value))))
+            .fun(fun!(collection_input_custom_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value)).bulk()))
+            .fun(fun!(collection_input_narrow).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value))))
+            .fun(fun!(collection_input_narrow_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value)).bulk()))
+            .fun(fun!(collection_input_constructions))
+            .fun(fun!(collection_input_slice))
+            .fun(fun!(collection_input_array))
+            .fun(fun!(collection_input_optional_array))
+            .fun(fun!(collection_input_optional_array_bulk).expand_param("values", expand_param!(Option<[i64; 4]>).variant_self().bulk()))
+            .fun(fun!(collection_input_optional).expand_param("values", expand_param!(Option<Vec<i64>>).variant_self().bulk())))
+        .package(package!("defaults")
+            .class(data_class!(DefaultBulkRow))
+            .fun(fun!(default_bulk_echo))
+            .fun(fun!(default_bulk_array).callback_return())
+            .fun(fun!(default_bulk_optional).callback_return())
+            .fun(fun!(default_bulk_nested))
+            .fun(fun!(default_bulk_borrowed))
+            .fun(fun!(default_bulk_numbers))
+            .fun(fun!(default_bulk_units))
+            .fun(fun!(default_bulk_texts))
+            .fun(fun!(default_bulk_optional_texts).expand_return(expand_return!(String).field_self_ref()))
+            .fun(fun!(default_bulk_buffers))
+            .fun(fun!(default_bulk_plain).expand_return(expand_return!(Vec<DefaultBulkRow>).field_self()))
+            .fun(fun!(default_bulk_callback))
+            .fun(fun!(default_bulk_callback_mixed).expand_param("callback",
+                callback!(impl Fn(Vec<Vec<i64>>,Vec<Vec<i64>>)).name("DefaultBulkMixedCallback")
+                    .expand_param(0,expand_return!(Vec<Vec<i64>>).field_self()))))
+        .expand(expand_param!(BulkPrimitives).variant_self().bulk())
+        .expand(expand_return!(BulkPrimitives).field_self_into().bulk())
+        .expand(expand_param!(BulkNative).variant_self().bulk())
+        .expand(expand_return!(BulkNative).field_self_into().bulk())
+        .expand(expand_param!(BulkExpanded).variant(fun!(bulk_expanded_from)).bulk())
+        .expand(expand_return!(BulkExpanded).field(fun!(bulk_expanded_number)).field(fun!(bulk_expanded_text)).bulk())
+        .expand(expand_return!(BulkFailure).field(fun!(bulk_failure_code)).bulk())
+        .expand(expand_param!(BulkPoint).variant_self().bulk())
+        .expand(expand_return!(BulkPoint).field_self_into().bulk())
+        .package(package!("bulk")
+            .class(data_class!(BulkPoint)).class(data_class!(BulkEnvelope)).class(data_class!(BulkPrimitives)).class(enum_class!(BulkKind))
+            .class(data_class!(BulkNative)).class(data_class!(BulkExpanded))
+            .class(ptr_class!(BulkHandle))
+            .class(data_class!(BulkHandleText)).class(data_class!(BulkPairText))
+            .class(data_class!(BulkReplayRow))
+            .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
+            .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",bulk_replay_input_with(true, true)))
+            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",Input::Sequence(Box::new(bulk_replay_input_with(true,true))).bulk()))
+            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(Input::Sequence(Box::new(bulk_replay_input_with(true,true))).bulk())))
+            .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
+            .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
+            .fun(fun!(bulk_nested_handles_input).expand_param("values",Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk()))
+            .fun(fun!(bulk_cleanup_nested_callback).expand_param("callback",
+                callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static).name("BulkCleanupNestedCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk())))
+            .fun(fun!(bulk_cleanup_pair_callback).expand_param("callback",
+                callback!(impl Fn()->BulkPairText).name("BulkCleanupPairCallback")
+                    .expand_return(Input::Record(vec![Input::Constructor {function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]).bulk())))
+            .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
+            .fun(fun!(bulk_patch_rows).expand_param("row",Input::Constructor{function:"bulk_patch_row_new".into(),args:vec![
+                Input::Optional(Box::new(Input::Leaf)),
+                Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))))),
+                Input::Leaf,
+            ]}.bulk()))
+            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk())))
+            .fun(fun!(bulk_nested_envelope).expand_param("values",Input::Sequence(Box::new(Input::Constructor{function:"bulk_input_envelope_new".into(),args:vec![Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Leaf)))).bulk()]}))))
+            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Constructor{function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]))).bulk())))
+            .fun(fun!(bulk_handle_texts).expand_param("values",Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()))
+            .fun(fun!(bulk_collection_lock_groups).expand_param("probe",callback!(impl Fn()->bool).name("CollectionLocksProbe")))
+            .fun(fun!(bulk_handle_nested).expand_param("values",Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Leaf)).bulk()))))
+            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk())))
+            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",Input::Optional(Box::new(Input::Constructor {function:"bulk_borrow_pair_new".into(),args:vec![Input::Leaf;2]})).bulk()))
+            .fun(fun!(bulk_select).expand_param("value",expand_param!(i64).variant(fun!(bulk_scalar)).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_kinds).expand_param("value",expand_param!(BulkKind).variant_self().bulk()).expand_return(expand_return!(BulkKind).field_self().bulk()))
+            .fun(fun!(bulk_units).expand_param("value",expand_param!(Vec<()>).variant_self().bulk()).expand_return(expand_return!(Vec<()>).field_self_into().bulk()))
+            .fun(fun!(bulk_flags).expand_param("value",expand_param!(bool).variant_self().bulk()).expand_return(expand_return!(bool).field_self().bulk()))
+            .fun(fun!(bulk_envelope)).fun(fun!(bulk_primitives))
+            .fun(fun!(bulk_optional_wide).expand_param("value",expand_param!(i128).variant_self().bulk()).expand_return(expand_return!(i128).field_self().bulk()))
+            .fun(fun!(bulk_optional_callback).expand_param("value",callback!(impl Fn()->Option<Vec<BulkHandle>>).name("BulkOptionalCallback").expand_return(expand_param!(BulkHandle).variant_self().bulk())))
+            .fun(fun!(bulk_native)).fun(fun!(bulk_expanded)).fun(fun!(bulk_expanded_rows).expand_param("values",expand_param!(BulkExpanded).variant_self().bulk()).expand_return(expand_return!(BulkExpanded).field_self_into().bulk())).fun(fun!(bulk_result))
+            .fun(fun!(bulk_handle_new)).fun(fun!(bulk_handle_value)).fun(fun!(bulk_drops))
+            .fun(fun!(bulk_late).expand_return(expand_return!(BulkLate).field(fun!(bulk_late_handle)).bulk()))
+            .fun(fun!(bulk_handle_views).expand_return(expand_return!(BulkHandle).field_self_into().field(fun!(bulk_handle_value)).bulk()))
+            .fun(fun!(bulk_handles).expand_param("values",expand_param!(BulkHandle).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_borrow).expand_param("value",expand_param!(&BulkHandle).variant_self().bulk()))
+            .fun(fun!(bulk_checked).expand_param("value",expand_param!(BulkHandle).variant_self().bulk()).expand_param("number",expand_param!(u8).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_wide).expand_param("values",expand_param!(i128).variant_self().bulk()).expand_return(expand_return!(i128).field_self().bulk()))
+            .fun(fun!(bulk_unsigned_wide).expand_param("values",expand_param!(u128).variant_self().bulk()).expand_return(expand_return!(u128).field_self().bulk()))
+            .fun(fun!(bulk_callback_worker).expand_param("value",callback!(impl Fn(Vec<i64>)->Vec<i64>+Send+'static).name("BulkWorkerCallback").expand_param(0,expand_return!(i64).field_self().bulk()).expand_return(expand_param!(i64).variant_self().bulk())).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_callback).expand_param("value",callback!(impl Fn(Vec<i64>)->Vec<i64>).name("BulkNumbersCallback").expand_param(0,expand_return!(i64).field_self().bulk()).expand_return(expand_param!(i64).variant_self().bulk())).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_handle_callback).expand_param("value",callback!(impl Fn(Vec<BulkHandle>)->Vec<BulkHandle>).name("BulkHandlesCallback").expand_param(0,expand_return!(BulkHandle).field_self_into().bulk()).expand_return(expand_param!(BulkHandle).variant_self().bulk())).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_point)).fun(fun!(bulk_points)).fun(fun!(bulk_point_array)).fun(fun!(bulk_slice))
+            .fun(fun!(bulk_point_plain).expand_param("value",expand_param!(BulkPoint).variant_self()).expand_return(expand_return!(BulkPoint).field_self_into()))
+            .fun(fun!(bulk_optional_handles).expand_param("value",expand_param!(BulkHandle).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_array).expand_param("value",expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_array_borrow).expand_param("value",expand_param!(i64).variant_self().bulk()))
+            .fun(fun!(bulk_scalar).expand_param("value", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_numbers).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_nested).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_text).expand_param("value", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_strings).expand_param("values", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_optional).expand_param("value", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_bytes).expand_param("value", expand_param!(Vec<u8>).variant_self().bulk()).expand_return(expand_return!(Vec<u8>).field_self_into().bulk())))
+        .expand(expand_return!(ReturnFailure).field(fun!(return_failure_code)))
+        .package(package!("returns")
+            .class(data_class!(ReturnArgA)).class(data_class!(ReturnArgB)).class(data_class!(ReturnArgOuter))
+            .class(data_class!(ReturnWideA)).class(data_class!(ReturnWideB)).class(data_class!(ReturnWideError))
+            .fun(fun!(return_limited)).fun(fun!(return_wide_error))
+            .fun(fun!(return_ownership).expand_return(expand_return!(ReturnOwner)
+                .field(fun!(return_owner_value)).field(fun!(return_owner_resource))))
+            .fun(fun!(return_single_ownership).expand_return(expand_return!(ReturnOwner).field(fun!(return_owner_resource))))
+            .fun(fun!(return_domain)).fun(fun!(return_pair).expand_return(expand_return!(ReturnPair).field(fun!(return_pair_first)).field(fun!(return_pair_second))))
+            .fun(fun!(return_wide).expand_return(wide_return)))
+        .package(package!("nullability")
+            .class(ptr_class!(NullabilityHandle)).class(enum_class!(NullabilityChoice)).class(data_class!(NullabilityValue))
+            .fun(fun!(nullability_handle_new)).fun(fun!(nullability_handle_read)).fun(fun!(nullability_handle_optional))
+            .fun(fun!(nullability_text)).fun(fun!(nullability_text_optional))
+            .fun(fun!(nullability_bytes)).fun(fun!(nullability_bytes_optional))
+            .fun(fun!(nullability_wide)).fun(fun!(nullability_wide_optional))
+            .fun(fun!(nullability_value_sum).expand_param("value", expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_new))))
+            .fun(fun!(nullability_value_bulk).expand_param("value", expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_new)).bulk()))
+            .fun(fun!(nullability_value_optional).expand_param("value", expand_param!(NullabilityValue).variant(fun!(nullability_value_new))))
+            .fun(fun!(nullability_values)).fun(fun!(nullability_values_optional)).fun(fun!(nullability_handles_optional))
+            .fun(fun!(nullability_text_callback)).fun(fun!(nullability_optional_text_callback))
+            .fun(fun!(nullability_callback_choose).expand_param("value",expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_from_callback)))))
+        .expand(expand_param!(ParameterPoint).variant(fun!(parameter_point)))
+        .package(package!("paramnames")
+            .class(data_class!(ParameterPoint)).class(data_class!(WireNamedFields))
+            .fun(fun!(parameter_sum)).fun(fun!(parameter_optional))
+            .fun(fun!(parameter_bulk_sum).expand_param("point", expand_param!(ParameterPoint).variant(fun!(parameter_point)).bulk()))
+            .fun(fun!(parameter_sum_object).expand_param("point", expand_param!(ParameterPoint).variant_self()))
+            .fun(fun!(parameter_variants).expand_param("point", expand_param!(ParameterPoint).variant_self().variant(fun!(parameter_point))))
+            .fun(fun!(parameter_collisions)).fun(fun!(parameter_escaped_names))
+            .fun(fun!(parameter_record)).fun(fun!(parameter_records)))
+        .package(package!("gc")
+            .class(ptr_class!(GcResource).gc_managed())
+            .class(ptr_class!(PlainResource))
+            .fun(fun!(gc_resource_new)).fun(fun!(gc_resource_value))
+            .fun(fun!(gc_resource_consume)).fun(fun!(gc_resource_fail))
+            .fun(fun!(gc_resource_pair)).fun(fun!(gc_resource_drops))
+            .fun(fun!(gc_resource_three)).fun(fun!(gc_resource_consume_rows))
+            .fun(fun!(gc_resource_read_rows).expand_param("values",
+                expand_param!(GcReadNumber).variant(fun!(gc_read_number))))
+            .fun(fun!(gc_resource_emit)).fun(fun!(gc_resource_hold))
+            .fun(fun!(gc_resource_return))
+            .fun(fun!(gc_resource_emit_owned).expand_param("callback",
+                callback!(impl Fn(GcResource)).name("GcOwnedCallback")
+                    .expand_param(0, expand_return!(GcResource).field_self_into())))
+            .fun(fun!(gc_resource_rows).callback_return())
+            .fun(fun!(plain_resource_new)).fun(fun!(plain_resource_value)))
+        .package(package!("runtimecosts")
+            .fun(fun!(buffer_views_optional_text).expand_return(expand_return!(Option<String>).field_self().field(fun!(buffer_views_optional_text_len))))
+            .fun(fun!(buffer_views_optional_bytes).expand_return(expand_return!(Option<Vec<u8>>).field_self().field(fun!(buffer_views_optional_bytes_len))))
+            .fun(fun!(buffer_views_text).expand_return(expand_return!(String).field_self().field(fun!(buffer_views_text_len))))
+            .fun(fun!(buffer_views_bytes).expand_return(expand_return!(Vec<u8>).field_self().field(fun!(buffer_views_bytes_len)))))
+        .package(package!("buffers")
+            .class(data_class!(JniBufferRow)).class(data_class!(JniBufferResourceRow))
+            .fun(fun!(jni_buffer_resource)).fun(fun!(jni_buffer_domain_failure)).fun(fun!(jni_buffer_resource_rows).expand_return(expand_return!(Vec<JniBufferResourceRow>).field_self()))
+            .fun(fun!(jni_buffer_text)).fun(fun!(jni_buffer_string))
+            .fun(fun!(jni_buffer_bytes)).fun(fun!(jni_buffer_vec))
+            .fun(fun!(jni_buffer_optional_text)).fun(fun!(jni_buffer_optional_bytes))
+            .fun(fun!(jni_buffer_owned_optional))
+            .fun(fun!(jni_buffer_owned).expand_return(expand_return!(JniBufferRow)
+                .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))
+            .fun(fun!(jni_buffer_rows))
+            .fun(fun!(jni_buffer_wide).expand_return(wide_buffer_views))
+            .fun(fun!(jni_buffer_callback)).fun(fun!(jni_buffer_failure)).fun(fun!(jni_buffer_worker))
+            .fun(fun!(jni_buffer_owned_callback).expand_param("callback",
+                callback!(impl Fn(Option<JniBufferRow>)).name("OwnedBufferViews")
+                    .expand_param(0, expand_return!(JniBufferRow)
+                        .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))))
+        .expand(expand_return!(&GetterLeaf).field_self_ref())
+        .expand(expand_return!(GetterChild)
+            .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
+        .package(package!("getters")
+            .class(ptr_class!(GetterOwner)).class(ptr_class!(GetterLeaf))
+            .class(data_class!(GetterDetails))
+            .fun(fun!(getter_owner_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into()
+                .field(fun!(getter_owner_child)).field(fun!(getter_owner_optional))
+                .field(fun!(getter_owner_container)).field(fun!(getter_owner_rows))
+                .field(fun!(getter_owner_leaf))))
+            .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
+                .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
+            .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
+            .fun(fun!(getter_static_leaf).expand_return(expand_return!(GetterLeaf).field_self_ref()))
+            .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
+                .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
+            .fun(fun!(getter_counts))
+            .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
+                .view(prebindgen_declarations::Output::getter("getter_owner_leaf",
+                    prebindgen_declarations::Output::combine([
+                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed()),
+                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())])))))
+            .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into().fields(fields!(getter_owner_details))))
+            .fun(fun!(getter_callback).expand_param("callback",
+                callback!(impl Fn(&GetterOwner)).name("GetterObserver")
+                    .expand_param(0, getter_views()))))
         .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
         .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
         .expand(expand_return!(CallbackBoundaryPanic).field(fun!(callback_boundary_view)))
         .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
+        .package(package!("nativeoutputs")
+            .fun(fun!(jni_output_optional)
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(Output::Optional(Box::new(ordinary_rows(row()))))))
+            .fun(fun!(jni_output_mixed))
+            .fun(fun!(jni_output_mixed_frames).callback_return_only()
+                .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
+            .fun(fun!(jni_output_fold_drop).callback_return_only())
+            .fun(fun!(c_output_rows).name("jniOutputRows")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(row())))
+            .fun(fun!(c_output_nested).name("jniOutputNested")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(ordinary_rows(ordinary_rows(row()))))
+            .fun(fun!(c_output_pair).name("jniOutputPair")
+                .expand_return(expand_return!(CallbackRow).field_self_ref())
+                .output(Output::OwnedFields(vec![ordinary_rows(row()); 2])))
+            .fun(fun!(jni_output_fold).name("jniOutput")
+                .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
         .package(package!("callbackboundaries")
             .class(ptr_class!(CallbackBoundaryHandler))
             .fun(fun!(callback_boundary_register)).fun(fun!(callback_boundary_fire))
@@ -177,13 +508,66 @@ fn main() {
             .fun(fun!(callback_config_ordinary)))
         .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
         .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
+        // Clone-failure coverage explicitly opts these row fields into copying.
+        .expand(expand_return!(CallbackRow).field_self_ref())
         .expand(expand_return!(CallbackTransferred).field_self_into())
         .expand(expand_return!(Vec<CallbackTransferredRow>).field_self_into())
-        .expand(expand_return!(CallbackUniqueRow).field_self_into())
         .expand(expand_return!(Vec<CallbackObservedRow>).field_self_ref())
         .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
         .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
         .package(package!("callbackreturns")
+            .class(data_class!(CallbackWireRow))
+            .class(data_class!(CallbackFixedResult))
+            .class(data_class!(CallbackNestedBatch))
+            .class(data_class!(CallbackOptionalBatch))
+            .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+                        Input::Sequence(Box::new(callback_result_row_input())).bulk(), Input::Leaf]))))))
+            .class(data_class!(CallbackScalarBatch))
+            .fun(fun!(callback_mixed_scalars).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
+                        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()]))))))
+            .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
+            .fun(fun!(callback_mixed_batch).expand_param("callback",
+                callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
+                    .expand_return(callback_mixed_batch_input(true, false))))
+            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", Input::Sequence(Box::new(callback_mixed_batch_input(false, true)))))
+            .fun(fun!(callback_mixed_batches).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackNestedBatch>).name("MixedBatchesCallback")
+                    .expand_return(Input::Sequence(Box::new(callback_mixed_batch_input(true, true))))))
+            .fun(fun!(callback_nested_batch_echo).expand_param("batch",Input::Record(vec![
+                Input::Leaf, Input::Leaf, callback_nested_rows_input(), Input::Leaf,
+                Input::Sequence(Box::new(callback_result_row_input())), Input::Leaf])))
+            .fun(fun!(callback_nested_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
+                    .expand_return(callback_nested_rows_input())))
+            .fun(fun!(callback_nested_batch).expand_param("callback",
+                callback!(impl Fn() -> CallbackNestedBatch).name("NestedBatchCallback")
+                    .expand_return(Input::Record(vec![Input::Leaf,
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),
+                        callback_nested_rows_input(),
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),
+                        Input::Sequence(Box::new(callback_result_row_input())),Input::Leaf]))))
+            .fun(fun!(callback_fixed_result).expand_param("callback",
+                callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
+                    .expand_return(Input::Record(vec![Input::Leaf,Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))
+            .fun(fun!(callback_fixed_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("FixedResultsCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
+            .fun(fun!(callback_fixed_optional_results).expand_param("callback",
+                callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>).name("OptionalFixedResultsCallback")
+                    .expand_return(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;4]))))))))
+            .fun(fun!(callback_fixed_borrowed_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("BorrowedFixedResultsCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
+            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))))))
+            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::Input::Record(vec![prebindgen_jni::Input::Leaf; 2]))))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
             .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
             .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
@@ -197,6 +581,16 @@ fn main() {
             .fun(fun!(callback_return_handler_many).expand_param("handlers",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap))))
             .fun(fun!(callback_return_char_catch)).fun(fun!(callback_return_owned_vector_catch)).fun(fun!(callback_return_unit))
             .fun(fun!(callback_return_handler_value).expand_param("handler",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)))))
+        .package(package!("typedrows")
+            .class(data_class!(RowLeaf)).class(data_class!(Row2)).class(data_class!(Row4))
+            .class(data_class!(Row8)).class(data_class!(Row16)).class(data_class!(Row32)).class(data_class!(Row64))
+            .class(data_class!(Row127)).class(data_class!(WideRow))
+            .fun(fun!(typed_rows_worker).expand_param("callback", callback!(impl Fn(Vec<CallbackRow>) + Send + Sync + 'static)
+                .name("OrdinaryCallbackRowVecCallback").expand_param(0, expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(typed_rows_limit).expand_return(expand_return!(Vec<Row127>).field_self_into()))
+            .fun(fun!(typed_rows_wide).expand_return(expand_return!(Vec<WideRow>).field_self_into()))
+            .fun(fun!(typed_rows_mixed).expand_return(expand_return!(Vec<Vec<WideRow>>).field_self_into())))
+        // Malformed-row probes below deliberately exercise ordinary array transport.
         .package(package!("callbacks")
             .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
             .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
@@ -212,6 +606,13 @@ fn main() {
             .class(data_class!(CallbackNestedRow)).class(data_class!(CallbackTransferredRow))
             .fun(fun!(callback_row_resource_id)).fun(fun!(callback_row_resource_live)).fun(fun!(callback_row_resource_drops))
             .fun(fun!(callback_row_resource_hold))
+            // Raw ordinary-array probes are separate from default scoped callback tests.
+            .fun(fun!(callback_rows_owned_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(callback_rows_optional_probe).expand_param("callback",callback!(impl Fn(Option<Vec<Option<CallbackRow>>>)).name("OrdinaryOptionalOptionalCallbackRowVecCallback").expand_param(0,expand_return!(Option<Vec<Option<CallbackRow>>>).field_self())))
+            .fun(fun!(callback_rows_nested_probe).expand_param("callback",callback!(impl Fn(Vec<Vec<Option<CallbackNestedRow>>>)).name("OrdinaryOptionalCallbackNestedRowVecVecCallback").expand_param(0,expand_return!(Vec<Vec<Option<CallbackNestedRow>>>).field_self())))
+            .fun(fun!(callback_rows_pair_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>, Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(callback_rows_transferred_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>)).name("OrdinaryCallbackTransferredRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self())))
+            .fun(fun!(callback_rows_transferred_pair_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>)).name("OrdinaryCallbackTransferredRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self())))
             .fun(fun!(callback_rows_owned)).fun(fun!(callback_rows_borrowed))
             .fun(fun!(callback_rows_optional)).fun(fun!(callback_rows_nested))
             .fun(fun!(callback_rows_pair)).fun(fun!(callback_row_handles))
@@ -246,11 +647,39 @@ fn main() {
             .fun(fun!(callback_scalars)).fun(fun!(callback_texts))
             .fun(fun!(callback_optional_owned)).fun(fun!(callback_envelope)).fun(fun!(callback_primitives))
             .fun(fun!(callback_enums)))
+        .package(package!("cleanup")
+            .class(data_class!(OutputCleanupRow))
+            .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
+            .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
+            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::Output::OwnedFields(vec![prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto); 2])))
+            .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
+            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::OwnedFields(vec![
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Sequence {delivery: prebindgen_declarations::SequenceDelivery::Value,mode:None,element:Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto))},
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            ])))
+            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::Output::OwnedFields(vec![
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            ])))
+            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) })))
+            .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
+            // Compile a mixed prepared tree directly: declaration defaults
+            // deliberately lift inner bulk modifiers to the enclosing sequence.
+            let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
+            let recipe=sequence(prebindgen_declarations::Output::Combine(vec![prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed))))]),None);
+            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec,"jni_output_mixed",&recipe,&())?;
+            flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
-            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
+            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
             // Observe a clone so the builder still installs its own codec.
             // Collections.kt exercises the separately generated JNI boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
@@ -298,16 +727,16 @@ fn main() {
             .fun(fun!(collection_optional_items).callback_return())
             .fun(fun!(collection_enum).callback_return())
             .fun(fun!(collection_probe))
-            .fun(fun!(collection_borrow).callback_return())
+            .fun(fun!(collection_borrow).callback_return().expand_return(expand_return!(i64).field_self_ref().bulk()))
             .fun(fun!(collection_slice).callback_return())
             .fun(fun!(collection_resource_new))
             .fun(fun!(collection_handles).callback_return())
             .fun(fun!(collection_alias))
             .fun(fun!(collection_result).callback_return())
             .fun(fun!(collection_fail))
-            .fun(fun!(collection_result_optional).callback_return())
+            .fun(fun!(collection_result_optional).callback_return().expand_return(expand_return!(OwnedResource).field_self_into().bulk()))
             .fun(fun!(sequence_late_drop).callback_return_only().expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))))
-            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into))))
+            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)).bulk()))
             .fun(fun!(sequence_parts).callback_return_only().expand_return(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
 
             .fun(fun!(storage_put_slice).expand_param("payloads",expand_param!(Payload).variant_self()))
@@ -318,6 +747,7 @@ fn main() {
             .fun(fun!(c_result_resource_error))
             .fun(fun!(c_result_rich_error))
             .fun(fun!(result_scalar))
+            .fun(fun!(result_unit_error))
             .fun(fun!(result_unit))
             .fun(fun!(result_optional))
             .fun(fun!(result_text))
@@ -358,7 +788,8 @@ fn main() {
             .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(data_class!(OptionalFields))
             .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
-            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref))
+            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref)
+                .expand_return(expand_return!(ProjectionHandle).field_self_ref()))
             .class(data_class!(OptionalResource))
             .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
             .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
@@ -366,7 +797,7 @@ fn main() {
             .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
             .fun(fun!(optional_fields_echo))
             .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
-            .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
+            .fun(fun!(optional_resource_new)))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.
 .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
@@ -1264,7 +1695,7 @@ fn main() {
                 // The owned Summary expansion does not apply to &Summary.
                 .fun(fun!(archive_new))
                 .fun(fun!(archive_store))
-                .fun(fun!(archive_latest))
+                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self_ref()))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
@@ -1343,7 +1774,7 @@ fn main() {
         .package(
             package!()
                 .fun(fun!(string_new))
-                .fun(fun!(string_len))
+                .fun(fun!(string_len).expand_param("s",expand_param!(&String).reconstruct()))
                 .fun(fun!(i64_ref_double))
                 // Explicit identity declarations give text and bytes, like the defaults.
                 .fun(
@@ -1389,19 +1820,17 @@ fn main() {
         .package(package!()
             .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
             .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
-            .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
+            .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len)).fun(fun!(storage_accumulate_lengths))
             .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
             .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
-        .expand(expand_return!(ProjectionPair).field_self_ref())
         .package(package!("resources")
             .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
-            .fun(fun!(projection_pair_borrowed))
-            .fun(fun!(projection_pair_owned).expand_return(expand_return!(ProjectionPair).field_self_into()))
+            .fun(fun!(projection_pair_borrowed).expand_return(expand_return!(ProjectionPair).field_self_ref()))
+            .fun(fun!(projection_pair_owned)).fun(fun!(projection_pair_callback))
             .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
                 prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
             .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
             .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
-        .expand(expand_return!(ResourceBundle).field_self_into())
         .package(package!("resources")
             .class(data_class!(ResourceBundle))
             .class(data_class!(ResourcePair))
@@ -1443,7 +1872,7 @@ fn main() {
             .fun(fun!(blob_value_selected).expand_param("value",
                 expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
             .fun(fun!(blob_value_views).expand_return(
-                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
+                expand_return!(BlobValue).field_self_ref().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
@@ -1498,7 +1927,99 @@ fn main() {
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let jni = binding.build().expect("build supported declarations");
+    let mut jni = binding.build().expect("build supported declarations");
+    // Test-only constructor fault injection: handwritten OutputCleanupRow has
+    // the exact generated fields plus an init hook that can throw or take a
+    // handle. All Rust/JNI and collection-decoder code remains generated.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
+        .is_some());
+    // A handwritten read-only getter changes its result on a second read. This
+    // exercises input snapshots without changing the declared record surface.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputRow.kt")
+        .is_some());
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputHolder.kt")
+        .is_some());
+    // Class/function placement survives moving the native runtime to another root.
+    let relocated = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .set_package_prefix("com.prebindgen.paramnames")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .configure(|flat| {
+            flat.metadata.package = "org.prebindgen.paramnames".into();
+            Ok(())
+        })
+        .package(
+            package!()
+                .class(data_class!(ParameterPoint))
+                .fun(fun!(parameter_external)),
+        )
+        .build()
+        .unwrap();
+    jni.rust.push_str(&format!(
+        "\nmod relocated_parameter_names {{ {} }}\n",
+        relocated.rust
+    ));
+    for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    for native_check in [
+        "__prebindgen_input_aliases",
+        "DynamicInputs",
+        "FixedInputs",
+        "SharedInputs",
+    ] {
+        assert!(
+            !jni.rust.contains(native_check),
+            "JNI must not emit native alias validation: {native_check}"
+        );
+    }
     jni.write_rust("bindings.rs").unwrap();
-    jni.write_kotlin(&out.join("kotlin")).unwrap();
+    std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();
+    let kotlin = out.join("kotlin");
+    if kotlin.exists() {
+        std::fs::remove_dir_all(&kotlin).unwrap();
+    }
+    jni.write_kotlin(&kotlin).unwrap();
+}
+
+fn callback_result_row_input() -> Input<prebindgen_jni::InputRequest> {
+    Input::Record(vec![
+        Input::Leaf,
+        Input::Leaf,
+        Input::constructor("callback_fixed_marker", [Input::Leaf]),
+        Input::Leaf,
+    ])
+}
+fn callback_nested_rows_input() -> Input<prebindgen_jni::InputRequest> {
+    Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
+        Box::new(callback_result_row_input()),
+    )))))
+}
+
+fn callback_mixed_batch_input(
+    borrowed: bool,
+    bulk_tail: bool,
+) -> Input<prebindgen_jni::InputRequest> {
+    Input::Record(vec![
+        Input::Leaf,
+        if borrowed {
+            Input::constructor("callback_return_resource_copy", [Input::Leaf])
+        } else {
+            Input::Leaf
+        },
+        callback_nested_rows_input().bulk(),
+        Input::constructor("callback_fixed_marker", [Input::Leaf]),
+        if bulk_tail {
+            Input::Sequence(Box::new(callback_result_row_input())).bulk()
+        } else {
+            Input::Sequence(Box::new(callback_result_row_input()))
+        },
+        Input::Leaf,
+    ])
 }

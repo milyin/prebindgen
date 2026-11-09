@@ -35,7 +35,7 @@ fun checkSequenceDelivery() {
     check(ownedResourceId(moved.single()) == 20L)
     moved.single().close()
     var bindingCalls = 0
-    check(collectionHandlesFold(listOf(null), 65, 0, 0, onBindingError = JniErrorHandler { bindingCalls++; -1 }, onError = fail) { _, _ -> error("fold after binding error") } == -1)
+    check(collectionHandlesFold(listOf(invalidJavaNull()), 65, 0, 0, onBindingError = JniErrorHandler { bindingCalls++; -1 }, onError = fail) { _, _ -> error("fold after binding error") } == -1)
     check(bindingCalls == 1)
     val storage = io.prebindgen.covertest.storage.storageNew()
     storagePutSlice(storage, listOf(Payload(1, 2, 3.0, true)))
@@ -94,6 +94,12 @@ fun checkSequenceDelivery() {
     check(ownedResourceDrops() == start + 12uL)
     check(sequenceLateDropFold(0, onBindingError = JniErrorHandler { -1 }, onError = fail) { _, _ -> error("fold after late native panic") } == -1)
     check(ownedResourceDrops() == start + 14uL)
+    val beforeCloseThenThrow = ownedResourceDrops()
+    try {
+        sequencePartsFold(0, Unit, onError = fail) { _, _, _, resource -> resource.close(); throw original }
+        error("folder did not throw")
+    } catch (caught: IllegalStateException) { check(caught === original) }
+    check(ownedResourceDrops() == beforeCloseThenThrow + 3uL)
     val nestedStart = ownedResourceDrops()
     val nestedInputs = listOf(listOf(collectionResourceNew(91), collectionResourceNew(92)), listOf(collectionResourceNew(93)))
     var nestedEscaped: List<io.prebindgen.covertest.resources.OwnedResource>? = null
@@ -104,6 +110,12 @@ fun checkSequenceDelivery() {
     check(nestedInputs.flatten().all { it.isClosed })
     check(checkNotNull(nestedEscaped).all { it.isClosed })
     check(ownedResourceDrops() == nestedStart + 3uL)
+    var emptyCalls = 0
+    check(collectionResultOptionalFold(emptyList(), 0, 11L, onError = fail) { a, _ -> emptyCalls++; a } == null)
+    check(collectionResultOptionalFold(emptyList(), 1, 11L, onError = fail) { a, _ -> emptyCalls++; a } == 11L)
+    check(emptyCalls == 0)
+    check(collectionResultOptional(emptyList(), 0, onError = fail) == null)
+    check(collectionResultOptional(emptyList(), 1, onError = fail)?.isEmpty() == true)
     for (mode in 0..2) {
         val inputs = listOf(collectionResourceNew(101), collectionResourceNew(102))
         val result = collectionResultOptionalFold(inputs, mode, 0L, onError = ResultFailureHandler { code -> check(inputs.all { it.isClosed }); -code }) { a, resource ->
@@ -117,32 +129,75 @@ fun checkSequenceDelivery() {
     }
     check(ownedResourceDrops() == nestedStart + 9uL)
 
-    // A failing raw collector is a pending JVM exception: native ownership never
-    // commits and the original exception must survive JNI's binding-error fallback.
+    // Each accepted raw row belongs to the collector. A later failure leaves
+    // earlier rows with it; native code reclaims the rejected row and unread input.
+    // The original exception must survive JNI's binding-error fallback.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
     val nativeParts = native.declaredMethods.single { method ->
-        val p = method.parameterTypes
+        val p = method.parameterTypes.dropLast(1)
         p.size == 3 && p[0] == Int::class.javaPrimitiveType && p[1].simpleName.startsWith("SequenceSink") && p[2] == BooleanArray::class.java
     }.also { it.isAccessible = true }
     val sinkType = nativeParts.parameterTypes[1]
     var collectorCalls = 0
-    val sink = java.lang.reflect.Proxy.newProxyInstance(sinkType.classLoader, arrayOf(sinkType)) { _, method, _ ->
+    var acceptedRaw = 0L
+    val sink = java.lang.reflect.Proxy.newProxyInstance(sinkType.classLoader, arrayOf(sinkType)) { _, method, values ->
         check(method.name == "run")
         if (++collectorCalls == 2) throw original
+        acceptedRaw = values!![2] as Long
         null
     }
     val beforeCollector = ownedResourceDrops()
     val outputAccepted = BooleanArray(1)
-    try { nativeParts.invoke(null, 0, sink, outputAccepted); error("collector did not throw") }
+    try { nativeParts.invokePacket( 0, sink, outputAccepted); error("collector did not throw") }
     catch (caught: java.lang.reflect.InvocationTargetException) { check(caught.cause === original) }
-    check(!outputAccepted[0] && collectorCalls == 2 && ownedResourceDrops() == beforeCollector + 3uL)
+    check(outputAccepted[0] && collectorCalls == 2 && ownedResourceDrops() == beforeCollector + 2uL)
+    io.prebindgen.covertest.resources.OwnedResource(acceptedRaw).close()
+    check(ownedResourceDrops() == beforeCollector + 3uL)
     collectorCalls = 0
-    val invalidAck = nativeParts.invoke(null, 0, sink, BooleanArray(0)) as Array<*>
+    val invalidAck = nativeParts.invokePacket(0, sink, BooleanArray(0))
     check(invalidAck[0] == "invalid sequence output acknowledgement" && collectorCalls == 0)
     check(ownedResourceDrops() == beforeCollector + 3uL)
     val nullSinkAck = BooleanArray(1)
-    val nullSink = nativeParts.invoke(null, 0, null, nullSinkAck) as Array<*>
+    val nullSink = nativeParts.invokePacket(0, null, nullSinkAck)
     check(nullSink[0] == "null sequence callback" && !nullSinkAck[0])
     check(ownedResourceDrops() == beforeCollector + 3uL)
+    // A raw proxy explicitly handles the once-per-collection capacity hint;
+    // the run signature still contains only the primitive row field.
+    val nativeI64 = native.declaredMethods.single { method ->
+        val p = method.parameterTypes.dropLast(1)
+        p.size == 3 && p[1].simpleName.startsWith("SequenceSink_collection_i64_fold_")
+    }.also { it.isAccessible = true }
+    val i64SinkType = nativeI64.parameterTypes[1]
+    check(nativeI64.returnType == Int::class.javaPrimitiveType)
+    var reserved = 0
+    var received = 0
+    var sum = 0L
+    val i64Sink = java.lang.reflect.Proxy.newProxyInstance(i64SinkType.classLoader, arrayOf(i64SinkType)) { _, method, values ->
+        when (method.name) {
+            "reserve" -> { check(received == 0 && values!!.single() == 65); reserved++ }
+            "run" -> { check(reserved == 1); received++; sum += values!!.single() as Long }
+            else -> error("unexpected collector method ${method.name}")
+        }
+        null
+    }
+    val i64Ack = BooleanArray(1)
+    val rawRows = Array<Any?>(65) { arrayOf<Any?>(1000000L + it) }
+    val i64Result = nativeI64.invokePacket(rawRows, i64Sink, i64Ack)
+    check(i64Result[0] == null && i64Result[1] == 0)
+    check(i64Ack[0] && reserved == 1 && received == 65 && sum == 65002080L)
+    val nativeOptional = native.declaredMethods.single { method ->
+        method.parameterTypes.any { it.simpleName.startsWith("SequenceSink_collection_optional_fold_") }
+    }.also { it.isAccessible = true }
+    check(nativeOptional.returnType == Int::class.javaPrimitiveType)
+    val optionalSinkType = nativeOptional.parameterTypes[1]
+    val optionalSink = java.lang.reflect.Proxy.newProxyInstance(optionalSinkType.classLoader, arrayOf(optionalSinkType)) { _, _, _ ->
+        error("no rows expected for None or Some(empty)")
+    }
+    val absentAck = BooleanArray(1)
+    val absent = nativeOptional.invokePacket(null, optionalSink, absentAck)
+    check(absent[0] == null && absent[1] == -1 && !absentAck[0])
+    val emptyAck = BooleanArray(1)
+    val empty = nativeOptional.invokePacket(emptyArray<Any?>(), optionalSink, emptyAck)
+    check(empty[0] == null && empty[1] == 0 && emptyAck[0])
     check(collectionI64Fold(List(20000) { it.toLong() }, 0L) { a, v -> a + v } == 199990000L)
 }
