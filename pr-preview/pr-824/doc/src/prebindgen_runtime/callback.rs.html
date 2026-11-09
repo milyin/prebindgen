@@ -87,7 +87,7 @@
 <a href=#87 id=87 data-nosnippet>87</a>
 <a href=#88 id=88 data-nosnippet>88</a><span class="doccomment">/// Defers a callback result's rollback scan until decoding fails or unwinds.
 <a href=#89 id=89 data-nosnippet>89</a>///
-<a href=#90 id=90 data-nosnippet>90</a>/// Generated C adapters retain stable foreign rows until this guard is dropped.
+<a href=#90 id=90 data-nosnippet>90</a>/// Generated adapters retain stable native addresses or rows until this guard is dropped.
 <a href=#91 id=91 data-nosnippet>91</a>/// The cleanup closure may allocate on failure, but is never run after commit.
 <a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">pub struct </span>CallbackReturnCleanup&lt;F: FnOnce() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;&gt; {
 <a href=#93 id=93 data-nosnippet>93</a>    cleanup: <span class="prelude-ty">Option</span>&lt;F&gt;,
