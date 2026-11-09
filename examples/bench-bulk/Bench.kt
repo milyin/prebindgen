@@ -141,6 +141,20 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
                 Operation {_ ->nested[0]=bench.plain.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.plain.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
         }
     }
+    for (size in sizes) for (small in listOf(false, true)) for (mixed in listOf(false, true)) {
+        fun batch(count: Int) = bench.plain.HandleBatch(bench.plain.inputHandleNew(BASE),
+            List(count) { bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE + it), it.toLong()) })
+        val cycle = arrayOf(if (small) List(size) { batch(1) } else listOf(batch(size)))
+        val callback = bench.plain.OwnedBatchesCallback { callbacks[0]++; cycle[0] }
+        val packedCallback = bench.plain.OwnedMixedBatchesCallback { callbacks[0]++; cycle[0] }
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        val name = (if (mixed) "callback_mixed_batches" else "callback_batches") + (if (small) "_many" else "_large")
+        cases.add(Case(name, size, if (size == 0) 0L else 2 * BASE + size, 0,
+            Operation { _ ->
+                cycle[0] = if (mixed) bench.plain.callbackMixedBatchesOwnedHandles(packedCallback) else bench.plain.callbackBatchesOwnedHandles(callback)
+                if (size == 0) 0L else bench.plain.inputHandleValue(cycle[0][0].guard) + bench.plain.inputHandleValue(cycle[0][0].rows[0].handle) + size
+            }, true))
+    }
     var callbackRecord = bench.plain.HandleRecord(bench.plain.inputHandleNew(BASE),1L)
     val recordCallback = bench.plain.OwnedRecordCallback { callbacks[0]++; callbackRecord }
     cycleCleanup.add(AutoCloseable { callbackRecord.handle.close() })
@@ -287,6 +301,20 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
             cases.add(Case(if(small)"callback_many_nested_owned_handles" else "callback_nested_owned_handles",size,if(size==0)0L else BASE+size,0,
                 Operation {_ ->nested[0]=bench.bulk.callbackNestedOwnedHandles(callback);if(size==0)0L else bench.bulk.inputHandleValue(nested[0][if(small)0 else 1][0])+size},true))
         }
+    }
+    for (size in sizes) for (small in listOf(false, true)) for (mixed in listOf(false, true)) {
+        fun batch(count: Int) = bench.bulk.HandleBatch(bench.bulk.inputHandleNew(BASE),
+            List(count) { bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE + it), it.toLong()) })
+        val cycle = arrayOf(if (small) List(size) { batch(1) } else listOf(batch(size)))
+        val callback = bench.bulk.OwnedBatchesCallback { callbacks[0]++; cycle[0] }
+        val packedCallback = bench.bulk.OwnedMixedBatchesCallback { callbacks[0]++; cycle[0] }
+        cycleCleanup.add(AutoCloseable { cycle[0].forEach { b -> b.guard.close(); b.rows.forEach { it.handle.close() } } })
+        val name = (if (mixed) "callback_mixed_batches" else "callback_batches") + (if (small) "_many" else "_large")
+        cases.add(Case(name, size, if (size == 0) 0L else 2 * BASE + size, 0,
+            Operation { _ ->
+                cycle[0] = if (mixed) bench.bulk.callbackMixedBatchesOwnedHandles(packedCallback) else bench.bulk.callbackBatchesOwnedHandles(callback)
+                if (size == 0) 0L else bench.bulk.inputHandleValue(cycle[0][0].guard) + bench.bulk.inputHandleValue(cycle[0][0].rows[0].handle) + size
+            }, true))
     }
     var callbackRecord = bench.bulk.HandleRecord(bench.bulk.inputHandleNew(BASE),1L)
     val recordCallback = bench.bulk.OwnedRecordCallback { callbacks[0]++; callbackRecord }

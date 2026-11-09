@@ -5,8 +5,9 @@ type ReceivedAllocation = (*mut (), unsafe fn(*mut ()), bool);
 
 /// Reclaims owned callback-result allocations if another returned value is invalid.
 ///
-/// Generated adapters use this only for composite results containing handles.
-/// Unit, scalar and single-handle results do not allocate this collection.
+/// Generated adapters use this for result trees with multiple potential owners,
+/// including collection results. Failure-only scans leave successful decoding
+/// without this storage; unit, scalar and single-handle results also avoid it.
 #[derive(Default)]
 pub struct CallbackReturnAllocations<'a> {
     consumed: Option<&'a core::cell::Cell<usize>>,

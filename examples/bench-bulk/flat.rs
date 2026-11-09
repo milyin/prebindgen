@@ -299,3 +299,10 @@ pub fn callback_owned_record(callback:impl Fn()->HandleRecord)->HandleRecord {ca
 
 #[prebindgen]
 pub fn callback_nested_owned_handles(callback: impl Fn() -> Vec<Vec<InputHandle>>) -> Vec<Vec<InputHandle>> { callback() }
+
+#[prebindgen]
+pub struct HandleBatch { pub guard: InputHandle, pub rows: Vec<HandleRecord> }
+#[prebindgen]
+pub fn callback_batches_owned_handles(callback: impl Fn() -> Vec<HandleBatch>) -> Vec<HandleBatch> { callback() }
+#[prebindgen]
+pub fn callback_mixed_batches_owned_handles(callback: impl Fn() -> Vec<HandleBatch>) -> Vec<HandleBatch> { callback() }

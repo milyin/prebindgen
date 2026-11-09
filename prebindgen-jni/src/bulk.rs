@@ -153,9 +153,14 @@ pub(crate) fn input(
     child.acquire = resolve(&child.acquire, "bulk_reader", &quote!(#reader))?;
     child.statements = resolve(&child.statements, "bulk_reader", &quote!(#reader))?;
     let read = parameter(&format!("bulk_read_{wire}"));
+    let env = parameter("environment");
+    // Keep the wire operands explicit so enclosing row composition can rebind
+    // them to the successfully decoded fields rather than their Result locals.
+    let read = quote!((#read)(&mut #env, &#wire, #length));
     let condition = active.rust();
     let truncated = active.and(quote!(#bytes.len()<::core::mem::size_of::<#ty>()));
     child.validation = quote! {
+        #[allow(clippy::redundant_closure_call)]
         let #bytes=if #condition {#read?}else{::core::default::Default::default()};
         let #reader=&::prebindgen_jni_runtime::bulk::Reader::new(&#bytes);
         if #truncated{return Err("truncated bulk root record".into());}
@@ -1152,14 +1157,32 @@ fn schema(node: &JniNode) -> Result<String> {
         }
     })
 }
-pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<TokenStream> {
-    let mut code = TokenStream::new();
+// Only bulk roots in this native scope can be cached before decoding. An
+// ordinary sequence introduces per-row bindings, including its bulk buffers.
+fn callback_roots(node: &JniNode) -> Vec<&JniNode> {
     match node {
         WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            ..
+        } => vec![node],
+        WireNode::Chain {
+            meta: JniChain::Sequence(_),
+            ..
+        } => vec![],
+        WireNode::Chain { child, .. } => callback_roots(child),
+        WireNode::Branch { children, .. } => children.iter().flat_map(callback_roots).collect(),
+        _ => vec![],
+    }
+}
+pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<TokenStream> {
+    let mut code = TokenStream::new();
+    for root in callback_roots(node) {
+        if let WireNode::Chain {
             meta: JniChain::Bulk(layout),
             controls,
             ..
-        } => {
+        } = root
+        {
             let wire = &controls[0].name;
             let length = &controls[1].name;
             let cache = format_ident!("{wire}_cached_bytes");
@@ -1167,24 +1190,32 @@ pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<Tok
             let env = &context.environment;
             code.extend(quote!(let #cache=if #active {::prebindgen_jni_runtime::bulk::input(&mut #env,&#wire,#length)?}else{Vec::new()};));
         }
-        WireNode::Chain { child, .. } => code.extend(callback_cache(child, context)?),
-        WireNode::Branch { children, .. } => {
-            for child in children {
-                code.extend(callback_cache(child, context)?);
-            }
-        }
-        _ => {}
     }
     Ok(code)
 }
-pub(crate) fn cached_reads(code: &TokenStream) -> Result<TokenStream> {
-    prebindgen_conversions::render_template(code, &|name| {
-        Ok(if let Some(wire) = name.strip_prefix("bulk_read_") {
-            let cache = format_ident!("{wire}_cached_bytes");
-            quote!(Ok::<_,String>(#cache.as_slice()))
-        } else {
-            parameter(name)
+pub(crate) fn cached_reads(code: &TokenStream, node: &JniNode) -> Result<TokenStream> {
+    let roots = callback_roots(node)
+        .into_iter()
+        .filter_map(|root| {
+            if let WireNode::Chain { controls, .. } = root {
+                Some(controls[0].name.to_string())
+            } else {
+                None
+            }
         })
+        .collect::<std::collections::BTreeSet<_>>();
+    prebindgen_conversions::render_template(code, &|name| {
+        Ok(
+            if let Some(wire) = name
+                .strip_prefix("bulk_read_")
+                .filter(|wire| roots.contains(*wire))
+            {
+                let cache = format_ident!("{wire}_cached_bytes");
+                quote!(|_, _, _| Ok::<_,String>(#cache.as_slice()))
+            } else {
+                parameter(name)
+            },
+        )
     })
 }
 // Read independent owned fields separately on failure: a malformed nested
@@ -1217,6 +1248,26 @@ pub(crate) fn cleanup_cached(
         #scan
     });
     resolve(&code, "bulk_reader", &quote!(#reader))
+}
+
+// The ordinary-row cleanup walker has read this occurrence's JVM buffer after
+// decoding failed. Reuse the native scanner rather than introducing another
+// ownership traversal for packed children.
+pub(crate) fn cleanup_buffer(
+    layout: &BulkRecord,
+    child: &JniNode,
+    bytes: &syn::Ident,
+) -> Result<TokenStream> {
+    let scan = cleanup_native(child, child, layout, quote!(0usize))?;
+    let reader = format_ident!("{bytes}_reader");
+    resolve(
+        &quote! {
+            let #reader=::prebindgen_jni_runtime::bulk::Reader::new(&#bytes);
+            #scan
+        },
+        "bulk_reader",
+        &quote!(#reader),
+    )
 }
 
 fn cleanup_native(
@@ -1317,58 +1368,4 @@ fn cleanup_native(
             .into_iter()
             .collect(),
     })
-}
-
-pub(crate) fn scan_bulk(
-    layout: &BulkRecord,
-    controls: &[Wire<JniWire>],
-    child: &JniNode,
-    context: &JniContext,
-) -> Result<TokenStream> {
-    let scan = crate::callback::receive_return_owners(child, context, false)?;
-    if scan.is_empty() {
-        return Ok(scan);
-    }
-    let wire = &controls[0].name;
-    let cache = format_ident!("{wire}_cached_bytes");
-    let reader = format_ident!("{wire}_owner_reader");
-    let active = layout.active.rust();
-    let mut reads = TokenStream::new();
-    for (i, w) in crate::group::row_fields(child).enumerate() {
-        let name = &w.name;
-        if matches!(w.kind, JniWire::NativeBuffer { .. }) {
-            continue;
-        }
-        let read = native_read(w, layout, i, quote!(0usize))?;
-        reads.extend(quote!(let #name=#read;));
-    }
-    let code = quote!(if #active {let #reader=::prebindgen_jni_runtime::bulk::Reader::new(&#cache);#reads #scan});
-    resolve(&code, "bulk_reader", &quote!(#reader))
-}
-pub(crate) fn scan_rows(
-    controls: &[Wire<JniWire>],
-    child: &JniNode,
-    context: &JniContext,
-) -> Result<TokenStream> {
-    let scan = crate::callback::receive_return_owners(child, context, false)?;
-    if scan.is_empty() {
-        return Ok(scan);
-    }
-    let layout = record(child)?;
-    let ty = &layout.name;
-    let reader = parameter("bulk_reader");
-    let wire = &controls[0].name;
-    let base = format_ident!("{wire}_ownership_base");
-    let mut reads = TokenStream::new();
-    for (i, w) in crate::group::row_fields(child).enumerate() {
-        if matches!(w.kind, JniWire::NativeBuffer { .. }) {
-            continue;
-        }
-        let name = &w.name;
-        let read = native_read(w, &layout, i, quote!(#base))?;
-        reads.extend(quote!(let #name=#read;));
-    }
-    Ok(
-        quote!(if let Some(range)=#wire {let (start,count)=#reader.rows(Some(range),::core::mem::size_of::<#ty>())?;for index in 0..count {let #base=start+index*::core::mem::size_of::<#ty>();#reads #scan}}),
-    )
 }

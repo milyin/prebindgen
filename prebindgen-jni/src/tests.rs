@@ -4161,7 +4161,7 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 }
 
 #[test]
-fn ordinary_callback_with_a_packed_child_retains_its_cleanup_path() {
+fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
     let returned = Input::Sequence(Box::new(Input::Record(vec![
         Input::Leaf,
         Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))).bulk(),
@@ -4173,9 +4173,10 @@ fn ordinary_callback_with_a_packed_child_retains_its_cleanup_path() {
             .fun(fun!(mixed).expand_param("cb",callback!(impl Fn()->Vec<Batch>).expand_return(returned))))
         .build().unwrap();
     syn::parse_file(&generated.rust).unwrap();
-    assert!(generated.rust.contains("callback_return_owners.check()?"));
-    assert!(generated.rust.contains("_ownership_row"));
-    assert!(!generated.rust.contains("callback_return_decoded.is_err()"));
+    assert!(!generated.rust.contains("callback_return_owners.check()?"));
+    assert!(!generated.rust.contains("_ownership_row"));
+    assert!(generated.rust.contains("callback_return_decoded.is_err()"));
+    assert!(!generated.rust.contains("cached_bytes"));
 }
 
 #[test]
