@@ -4101,20 +4101,29 @@ fn callback_results_and_arguments_omit_all_native_alias_history() {
 }
 
 #[test]
-fn fixed_callback_results_defer_ownership_tracking_but_jvm_rows_keep_their_scan() {
-    let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}";
+fn callback_results_defer_ownership_tracking_for_fixed_fields_and_flat_rows() {
+    let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}pub fn nested(cb:impl Fn()->Vec<Vec<Reply>>){}";
     for (function, returned, deferred) in [
         ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
         (
             "rows",
             Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))),
+            true,
+        ),
+        (
+            "nested",
+            Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Record(
+                vec![Input::Leaf; 4],
+            ))))),
             false,
         ),
     ] {
         let ty = if function == "fixed" {
             syn::parse_quote!(impl Fn() -> Reply)
-        } else {
+        } else if function == "rows" {
             syn::parse_quote!(impl Fn() -> Vec<Reply>)
+        } else {
+            syn::parse_quote!(impl Fn() -> Vec<Vec<Reply>>)
         };
         let callback = prebindgen_declarations::CallbackDecl::new(ty).expand_return(returned);
         let generated = JniGen::builder()
@@ -4136,7 +4145,11 @@ fn fixed_callback_results_defer_ownership_tracking_but_jvm_rows_keep_their_scan(
         let syntax = syn::parse_file(&generated.rust).unwrap();
         assert_eq!(
             generated.rust.contains("CallbackReturnCleanup::new"),
-            deferred
+            function == "fixed"
+        );
+        assert_eq!(
+            generated.rust.contains("callback_return_decoded.is_err()"),
+            function == "rows"
         );
         assert_eq!(
             generated.rust.contains("callback_return_owners.check()?"),

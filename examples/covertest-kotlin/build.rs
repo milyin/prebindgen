@@ -522,6 +522,18 @@ fn main() {
                 callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
                     .expand_return(Input::Record(vec![Input::Leaf,Input::Leaf,
                         Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))
+            .fun(fun!(callback_fixed_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("FixedResultsCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
+            .fun(fun!(callback_fixed_optional_results).expand_param("callback",
+                callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>).name("OptionalFixedResultsCallback")
+                    .expand_return(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;4]))))))))
+            .fun(fun!(callback_fixed_borrowed_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("BorrowedFixedResultsCallback")
+                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),Input::Leaf,
+                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
             .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))))))
             .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::Input::Record(vec![prebindgen_jni::Input::Leaf; 2]))))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
