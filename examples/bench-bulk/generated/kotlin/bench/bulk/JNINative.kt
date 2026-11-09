@@ -7,6 +7,8 @@ internal object JNINative {
     @JvmStatic external fun drop_RowReturnHandler_0972ff7cb1556afa(id: Long)
     @JvmStatic external fun drop_WideRowReturnHandler_ed750f04931eb9ca(id: Long)
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_callback_batches_owned_handles_33b783abb5780e95(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_callback_mixed_batches_owned_handles_2c0ba11b9a082cc3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_input_handle_value_ae1ea4e2f311cdb7(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_buffer_sizes_09330eed51da0791(p0_w1: String?, p1_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
