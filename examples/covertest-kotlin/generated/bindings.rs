@@ -51807,6 +51807,403 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
 /**# Safety
 The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1fixed_1result_17b9617992129d1cc<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    p1_w1: u8,
+    p2_w1: u8,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "()[Ljava/lang/Object;",
+                "io.prebindgen.covertest.FixedResultCallback",
+            )?;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_callback_value_built = if true {
+                Some({
+                    #[allow(unused_mut, clippy::collapsible_if)]
+                    let p0_callback_value = move || {
+                        p0_callback_retained
+                            .with_env_result(
+                                21i32,
+                                |callback_environment| {
+                                    let mut callback_environment = callback_environment;
+                                    {
+                                        let arguments = [];
+                                        {
+                                            let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                            let __prebindgen_input_consumed = &__pb_input_consumed;
+                                            let callback_result = unsafe {
+                                                p0_callback_retained
+                                                    .invoke_return(
+                                                        callback_environment,
+                                                        ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                        &arguments,
+                                                    )
+                                            }?;
+                                            let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                                callback_result.l().map_err(|e| e.to_string())?,
+                                            );
+                                            let callback_return_w1_f0 = ::prebindgen_jni_runtime::row_i64(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                0usize,
+                                            )?;
+                                            let callback_return_w1_f1_some = ::prebindgen_jni_runtime::row_i64(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                1usize,
+                                            )?;
+                                            let callback_return_w1_f3 = ::prebindgen_jni_runtime::row_i64(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                3usize,
+                                            )?;
+                                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                                            {
+                                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                                    __prebindgen_input_consumed,
+                                                );
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            callback_return_w1_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::CallbackReturnResource,
+                                                                >,
+                                                        );
+                                                }
+                                                if (callback_return_w1_f1_some as usize) != 0 {
+                                                    unsafe {
+                                                        callback_return_owners
+                                                            .receive(
+                                                                callback_return_w1_f1_some
+                                                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                        perftest_flat::CallbackReturnResource,
+                                                                    >,
+                                                            );
+                                                    }
+                                                }
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            callback_return_w1_f3
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::CallbackReturnResource,
+                                                                >,
+                                                        );
+                                                }
+                                                Ok(())
+                                            });
+                                            let callback_return_w3 = ::prebindgen_jni_runtime::row_i32(
+                                                &mut callback_environment,
+                                                &(callback_result_rows),
+                                                2usize,
+                                            )?;
+                                            {
+                                                let callback_return_decoded = ({
+                                                    let callback_return_w1_f0_pointer = if true {
+                                                        callback_return_w1_f0
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                perftest_flat::CallbackReturnResource,
+                                                            >
+                                                    } else {
+                                                        ::core::ptr::null_mut()
+                                                    };
+                                                    if true {
+                                                        ::prebindgen_runtime::validate_pointer(
+                                                            callback_return_w1_f0_pointer,
+                                                        )?;
+                                                    }
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f0_built = if true {
+                                                        let callback_return_w0_f0 = if true {
+                                                            Some(unsafe {
+                                                                Box::from_raw(callback_return_w1_f0_pointer)
+                                                            })
+                                                        } else {
+                                                            None
+                                                        };
+                                                        if true {
+                                                            __prebindgen_input_consumed
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
+                                                        }
+                                                        Some({
+                                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
+                                                                .expect("active allocation")
+                                                                .value;
+                                                            callback_return_w0_f0
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w1_f1_present: i32 = i32::from(
+                                                        (callback_return_w1_f1_some as usize) != 0,
+                                                    );
+                                                    let callback_return_w1_f1_some_pointer = if callback_return_w1_f1_present
+                                                        == 1i32
+                                                    {
+                                                        callback_return_w1_f1_some
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                perftest_flat::CallbackReturnResource,
+                                                            >
+                                                    } else {
+                                                        ::core::ptr::null_mut()
+                                                    };
+                                                    if callback_return_w1_f1_present == 1i32 {
+                                                        ::prebindgen_runtime::validate_pointer(
+                                                            callback_return_w1_f1_some_pointer,
+                                                        )?;
+                                                    }
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f1_some_built = if callback_return_w1_f1_present
+                                                        == 1i32
+                                                    {
+                                                        let callback_return_w0_f1_some = if callback_return_w1_f1_present
+                                                            == 1i32
+                                                        {
+                                                            Some(unsafe {
+                                                                Box::from_raw(callback_return_w1_f1_some_pointer)
+                                                            })
+                                                        } else {
+                                                            None
+                                                        };
+                                                        if callback_return_w1_f1_present == 1i32 {
+                                                            __prebindgen_input_consumed
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
+                                                        }
+                                                        Some({
+                                                            let callback_return_w0_f1_some: perftest_flat::CallbackReturnResource = callback_return_w0_f1_some
+                                                                .expect("active allocation")
+                                                                .value;
+                                                            callback_return_w0_f1_some
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f1_built = if true {
+                                                        Some({
+                                                            let callback_return_w0_f1 = if callback_return_w1_f1_present
+                                                                == 1i32
+                                                            {
+                                                                Some(
+                                                                    callback_return_w0_f1_some_built.expect("active input"),
+                                                                )
+                                                            } else {
+                                                                None
+                                                            };
+                                                            callback_return_w0_f1
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w2 = if true {
+                                                        Some(
+                                                            u32::try_from(callback_return_w3)
+                                                                .ok()
+                                                                .and_then(char::from_u32)
+                                                                .ok_or("invalid Unicode scalar")?,
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w2_built = if true {
+                                                        Some({
+                                                            let callback_return_w2: char = ::core::convert::Into::into(
+                                                                callback_return_w2.expect("active value"),
+                                                            );
+                                                            callback_return_w2
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f2_built = if true {
+                                                        Some({
+                                                            let callback_return_w0_f2: char = perftest_flat::callback_fixed_marker(
+                                                                callback_return_w2_built.expect("active input"),
+                                                            );
+                                                            callback_return_w0_f2
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w1_f3_pointer = if true {
+                                                        callback_return_w1_f3
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                perftest_flat::CallbackReturnResource,
+                                                            >
+                                                    } else {
+                                                        ::core::ptr::null_mut()
+                                                    };
+                                                    if true {
+                                                        ::prebindgen_runtime::validate_pointer(
+                                                            callback_return_w1_f3_pointer,
+                                                        )?;
+                                                    }
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f3_built = if true {
+                                                        let callback_return_w0_f3 = if true {
+                                                            Some(unsafe {
+                                                                Box::from_raw(callback_return_w1_f3_pointer)
+                                                            })
+                                                        } else {
+                                                            None
+                                                        };
+                                                        if true {
+                                                            __prebindgen_input_consumed
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
+                                                        }
+                                                        Some({
+                                                            let callback_return_w0_f3: perftest_flat::CallbackReturnResource = callback_return_w0_f3
+                                                                .expect("active allocation")
+                                                                .value;
+                                                            callback_return_w0_f3
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_built = if true {
+                                                        Some({
+                                                            let callback_return_w0: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
+                                                                first: callback_return_w0_f0_built.expect("active input"),
+                                                                optional: callback_return_w0_f1_built
+                                                                    .expect("active input"),
+                                                                character: callback_return_w0_f2_built
+                                                                    .expect("active input"),
+                                                                last: callback_return_w0_f3_built.expect("active input"),
+                                                            };
+                                                            callback_return_w0
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_value = callback_return_w0_built
+                                                        .expect("active input");
+                                                    Ok::<_, String>(callback_return_value)
+                                                })?;
+                                                callback_return_cleanup.commit();
+                                                Ok::<_, String>(callback_return_decoded)
+                                            }
+                                        }
+                                    }
+                                },
+                            )
+                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
+                    };
+                    p0_callback_value
+                })
+            } else {
+                None
+            };
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: bool = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: bool = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let source_value = perftest_flat::callback_fixed_result(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callback_1return_1wire_1rows_1catch_1001b9a48fe8c7967<
     'local,
 >(
@@ -52150,98 +52547,105 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 &(callback_result_rows),
                                                 0usize,
                                             )?;
-                                            let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
-                                                __prebindgen_input_consumed,
-                                            );
-                                            unsafe {
-                                                callback_return_owners
-                                                    .receive(
-                                                        callback_return_w1_f0
-                                                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                                                perftest_flat::CallbackReturnResource,
-                                                            >,
-                                                    );
-                                            }
-                                            callback_return_owners.check()?;
+                                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                                            {
+                                                let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                                    __prebindgen_input_consumed,
+                                                );
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            callback_return_w1_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::CallbackReturnResource,
+                                                                >,
+                                                        );
+                                                }
+                                                Ok(())
+                                            });
                                             let callback_return_w1_f1 = ::prebindgen_jni_runtime::row_i32(
                                                 &mut callback_environment,
                                                 &(callback_result_rows),
                                                 1usize,
                                             )?;
                                             {
-                                                let callback_return_w1_f0_pointer = if true {
-                                                    callback_return_w1_f0
-                                                        as *mut ::prebindgen_jni_runtime::Allocation<
-                                                            perftest_flat::CallbackReturnResource,
-                                                        >
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                if true {
-                                                    ::prebindgen_runtime::validate_pointer(
-                                                        callback_return_w1_f0_pointer,
-                                                    )?;
-                                                }
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w0_f0_built = if true {
-                                                    let callback_return_w0_f0 = if true {
-                                                        Some(unsafe {
-                                                            Box::from_raw(callback_return_w1_f0_pointer)
+                                                let callback_return_decoded = ({
+                                                    let callback_return_w1_f0_pointer = if true {
+                                                        callback_return_w1_f0
+                                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                perftest_flat::CallbackReturnResource,
+                                                            >
+                                                    } else {
+                                                        ::core::ptr::null_mut()
+                                                    };
+                                                    if true {
+                                                        ::prebindgen_runtime::validate_pointer(
+                                                            callback_return_w1_f0_pointer,
+                                                        )?;
+                                                    }
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f0_built = if true {
+                                                        let callback_return_w0_f0 = if true {
+                                                            Some(unsafe {
+                                                                Box::from_raw(callback_return_w1_f0_pointer)
+                                                            })
+                                                        } else {
+                                                            None
+                                                        };
+                                                        if true {
+                                                            __prebindgen_input_consumed
+                                                                .set(__prebindgen_input_consumed.get() + (1usize));
+                                                        }
+                                                        Some({
+                                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
+                                                                .expect("active allocation")
+                                                                .value;
+                                                            callback_return_w0_f0
                                                         })
                                                     } else {
                                                         None
                                                     };
-                                                    if true {
-                                                        __prebindgen_input_consumed
-                                                            .set(__prebindgen_input_consumed.get() + (1usize));
-                                                    }
-                                                    Some({
-                                                        let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
-                                                            .expect("active allocation")
-                                                            .value;
-                                                        callback_return_w0_f0
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w0_f1 = if true {
-                                                    Some(
-                                                        u32::try_from(callback_return_w1_f1)
-                                                            .ok()
-                                                            .and_then(char::from_u32)
-                                                            .ok_or("invalid Unicode scalar")?,
-                                                    )
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w0_f1_built = if true {
-                                                    Some({
-                                                        let callback_return_w0_f1: char = ::core::convert::Into::into(
-                                                            callback_return_w0_f1.expect("active value"),
-                                                        );
-                                                        callback_return_w0_f1
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                                let callback_return_w0_built = if true {
-                                                    Some({
-                                                        let callback_return_w0: perftest_flat::CallbackWireRow = perftest_flat::CallbackWireRow {
-                                                            resource: callback_return_w0_f0_built
-                                                                .expect("active input"),
-                                                            character: callback_return_w0_f1_built
-                                                                .expect("active input"),
-                                                        };
-                                                        callback_return_w0
-                                                    })
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_value = callback_return_w0_built
-                                                    .expect("active input");
-                                                Ok::<_, String>(callback_return_value)
+                                                    let callback_return_w0_f1 = if true {
+                                                        Some(
+                                                            u32::try_from(callback_return_w1_f1)
+                                                                .ok()
+                                                                .and_then(char::from_u32)
+                                                                .ok_or("invalid Unicode scalar")?,
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_f1_built = if true {
+                                                        Some({
+                                                            let callback_return_w0_f1: char = ::core::convert::Into::into(
+                                                                callback_return_w0_f1.expect("active value"),
+                                                            );
+                                                            callback_return_w0_f1
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
+                                                    let callback_return_w0_built = if true {
+                                                        Some({
+                                                            let callback_return_w0: perftest_flat::CallbackWireRow = perftest_flat::CallbackWireRow {
+                                                                resource: callback_return_w0_f0_built
+                                                                    .expect("active input"),
+                                                                character: callback_return_w0_f1_built
+                                                                    .expect("active input"),
+                                                            };
+                                                            callback_return_w0
+                                                        })
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_value = callback_return_w0_built
+                                                        .expect("active input");
+                                                    Ok::<_, String>(callback_return_value)
+                                                })?;
+                                                callback_return_cleanup.commit();
+                                                Ok::<_, String>(callback_return_decoded)
                                             }
                                         }
                                     }
@@ -115386,6 +115790,10 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CallbackEnvelope > () != 0,
     "flat object `CallbackEnvelope` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CallbackFixedResult > () != 0,
+    "flat object `CallbackFixedResult` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CallbackJob > () != 0,

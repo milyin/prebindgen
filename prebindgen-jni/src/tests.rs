@@ -4099,3 +4099,50 @@ fn callback_results_and_arguments_omit_all_native_alias_history() {
         assert!(kotlin.contains("callbackReturnWire"));
     }
 }
+
+#[test]
+fn fixed_callback_results_defer_ownership_tracking_but_jvm_rows_keep_their_scan() {
+    let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}";
+    for (function, returned, deferred) in [
+        ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
+        (
+            "rows",
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))),
+            false,
+        ),
+    ] {
+        let ty = if function == "fixed" {
+            syn::parse_quote!(impl Fn() -> Reply)
+        } else {
+            syn::parse_quote!(impl Fn() -> Vec<Reply>)
+        };
+        let callback = prebindgen_declarations::CallbackDecl::new(ty).expand_return(returned);
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .class(data_class!(Reply))
+                    .fun(
+                        prebindgen_declarations::FunctionDecl::new(
+                            syn::parse_str(function).unwrap(),
+                        )
+                        .expand_param("cb", callback),
+                    ),
+            )
+            .build()
+            .unwrap();
+        let syntax = syn::parse_file(&generated.rust).unwrap();
+        assert_eq!(
+            generated.rust.contains("CallbackReturnCleanup::new"),
+            deferred
+        );
+        assert_eq!(
+            generated.rust.contains("callback_return_owners.check()?"),
+            !deferred
+        );
+        assert_eq!(generated.rust.contains("_ownership_row"), !deferred);
+        assert!(!syntax.items.is_empty());
+    }
+}

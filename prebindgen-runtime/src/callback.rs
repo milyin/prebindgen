@@ -87,7 +87,7 @@ impl Drop for CallbackReturnAllocations<'_> {
 
 /// Defers a callback result's rollback scan until decoding fails or unwinds.
 ///
-/// Generated C adapters retain stable foreign rows until this guard is dropped.
+/// Generated adapters retain stable native addresses or rows until this guard is dropped.
 /// The cleanup closure may allocate on failure, but is never run after commit.
 pub struct CallbackReturnCleanup<F: FnOnce() -> Result<()>> {
     cleanup: Option<F>,

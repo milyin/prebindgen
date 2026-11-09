@@ -119,5 +119,51 @@ fun checkCallbackReturns() {
     var unit = 0L
     callbackReturnUnit({ unit = it })
     check(unit == 21L)
+    checkFixedCallbackResults()
     println("callback returns PASS: scalars, records, collections, owned handles, errors and retained native workers")
+}
+
+private fun checkFixedCallbackResults() {
+    for (worker in listOf(false, true)) for (present in listOf(false, true)) {
+        // A later character conversion or source constructor can fail after the
+        // first owners move. The final, unread owner must also be reclaimed.
+        for (bad in listOf('c'.code, 0xd800, 'p'.code)) {
+            var calls = 0
+            val transferred = mutableListOf<CallbackReturnResource>()
+            val result = callbackFixedResult(FixedResultCallback {
+                check(callbackReturnResourceLive() == 0UL)
+                val first = callbackReturnResourceNew(10)
+                val optional = if (present) callbackReturnResourceNew(20) else null
+                val last = callbackReturnResourceNew(30)
+                transferred.add(first); optional?.let { transferred.add(it) }; transferred.add(last)
+                CallbackFixedResult(first, optional, if (calls++ == 0) bad else 'c'.code, last)
+            }, bad != 'c'.code, worker)
+            check(result == if (present) 60L else 40L)
+            check(calls == if (bad == 'c'.code) 1 else 2)
+            check(transferred.all { it.isClosed } && callbackReturnResourceLive() == 0UL)
+        }
+    }
+
+    // Malformed scalar fields and pointer encodings must still reclaim valid owners.
+    val method = JNINative::class.java.declaredMethods.single {
+        it.name.startsWith("call_callback_fixed_result_")
+    }.also { it.isAccessible = true }
+    for (worker in listOf(false, true)) for (present in listOf(false, true)) for (invalidPointer in listOf(false, true)) {
+        var calls = 0
+        val raw = RawReturnedFields {
+            check(callbackReturnResourceLive() == 0UL)
+            val first = callbackReturnResourceNew(10)
+            val optional = if (present) callbackReturnResourceNew(20) else null
+            val fail = calls++ == 0
+            val last = if (fail && invalidPointer) null else callbackReturnResourceNew(30)
+            val fields = arrayOf<Any?>(first.raw, optional?.raw ?: 0L,
+                if (fail && !invalidPointer) "wrong boxed class" else 'c'.code, last?.raw ?: 1L)
+            first.markConsumed(); optional?.markConsumed(); last?.markConsumed()
+            fields
+        }
+        val result = method.invokePacket(raw, true, worker)
+        check(result[0] == null && result[1] == if (present) 60L else 40L)
+        check(calls == 2 && callbackReturnResourceLive() == 0UL)
+    }
+    println("fixed callback results PASS: optional/multiple owners, partial moves, unread-owner cleanup, malformed fields, retries and workers")
 }
