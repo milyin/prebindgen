@@ -3859,6 +3859,25 @@ mod abort_policy_tests {
         }
     }
     #[test]
+    fn trusted_handles_rows_and_callback_results_emit_no_validation_support() {
+        let generated = Cbindgen::new(model("pub struct H{pub n:i64} pub enum Tag{A,B} pub fn round(first:H,second:&H,third:&mut H,rows:Vec<H>,tag:Tag,callback:impl Fn()->Vec<H>)->H{}"))
+            .opaque_ptr("handle",syn::parse_quote!(H))
+            .enum_type("tag",syn::parse_quote!(Tag))
+            .function(fun!(round)).build().unwrap();
+        for forbidden in [
+            "validate_pointer",
+            "validate_slice",
+            "input_aliases",
+            "CallbackReturnAllocations",
+            "null callback",
+            "invalid enum discriminant",
+        ] {
+            assert!(!generated.rust.contains(forbidden), "{forbidden}");
+        }
+        assert!(generated.header.contains("Trusted C ABI"));
+        assert!(generated.rust.contains("CallbackReturnCleanup"));
+    }
+    #[test]
     fn constructor_alternatives_retain_their_own_validation_policy() {
         let source="pub struct Number {pub value:i64} pub fn new(value:i64)->Number{} pub fn other(value:i64)->Number{} pub fn consume(value:Number){}";
         let bind = || {
