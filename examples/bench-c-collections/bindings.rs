@@ -87,28 +87,6 @@ fn main() {
         .panic()
         .function(fun!(resource_value))
         .panic()
-        .function(
-            fun!(history_flat)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_write))),
-        )
-        .panic()
-        .function(
-            fun!(history_nested)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_write))),
-        )
-        .panic()
-        .function(
-            fun!(history_shared)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_read))),
-        )
-        .panic()
-        .function(
-            fun!(history_readonly)
-                .expand_param("values", expand_param!(u64).variant(fun!(history_read))),
-        )
-        .panic()
-        .function(fun!(history_callback))
-        .panic()
         .function(fun!(make_handles).output(rows(Output::auto())))
         .panic()
         .function(fun!(make_records).output(rows(Output::auto())))
