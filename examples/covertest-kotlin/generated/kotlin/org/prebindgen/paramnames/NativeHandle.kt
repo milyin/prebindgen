@@ -53,10 +53,7 @@ internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R 
         2 -> return withHandleLocks(handles[0], handles[1], body)
         3 -> return withHandleLocks(handles[0], handles[1], handles[2], body)
     }
-    val ordered = handles.sortedWith(handleOrder)
-    fun acquire(index: Int): R = if (index == ordered.size) body()
-        else synchronized(ordered[index]) { acquire(index + 1) }
-    return acquire(0)
+    return withOrderedHandleLocks(handles.sortedWith(handleOrder), body)
 }
 
 // Owning wrappers for different live allocations have different addresses.
@@ -104,8 +101,19 @@ internal fun prepareMixedInputHandles(shared: List<NativeHandle>, exclusive: Lis
 }
 
 internal fun <R> withOrderedHandleLocks(ordered: List<NativeHandle>, body: () -> R): R {
-    fun acquire(index: Int): R = if (index == ordered.size) body()
-        else synchronized(ordered[index]) { acquire(index + 1) }
+    // Amortize one call frame over four monitors, retaining their order and
+    // structured unwinding. The tail needs at most three one-monitor frames.
+    val end = ordered.size - ordered.size % 4
+    fun tail(index: Int): R = if (index == ordered.size) body()
+        else synchronized(ordered[index]) { tail(index + 1) }
+    fun acquire(index: Int): R = if (index == end) tail(index)
+        else synchronized(ordered[index]) {
+            synchronized(ordered[index + 1]) {
+                synchronized(ordered[index + 2]) {
+                    synchronized(ordered[index + 3]) { acquire(index + 4) }
+                }
+            }
+        }
     return acquire(0)
 }
 internal fun <R> withInputHandleLocks(handles: List<NativeHandle>, exclusive: Boolean, body: () -> R): R {

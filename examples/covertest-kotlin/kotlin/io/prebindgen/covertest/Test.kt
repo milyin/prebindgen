@@ -12,7 +12,8 @@ private fun expectInvalid(action: () -> Unit) {
 }
 
 // Exercises the active subset of the migrated source and build declarations.
-fun main() {
+fun main(args: Array<String>) {
+    if (args.contentEquals(arrayOf("handle-lock-stack"))) { checkHandleLockStack(); return }
     checkRowMetadata()
     checkTypeInputs()
     checkParameterNames()
