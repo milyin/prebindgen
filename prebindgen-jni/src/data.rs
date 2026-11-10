@@ -379,7 +379,11 @@ impl DataCodec<'_> {
             .filter(|c| c.data))
     }
 }
-pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> Result<String> {
+pub(crate) fn render_record<I: KotlinInputConversion>(
+    flat: &Flat<JniSchema<I>>,
+    class: &Class,
+    ty: &syn::Type,
+) -> Result<String> {
     let record = flat.record(ty)?;
     let fields = record
         .fields

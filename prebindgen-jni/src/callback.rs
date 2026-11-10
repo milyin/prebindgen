@@ -292,10 +292,6 @@ impl JniCallback {
         var: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<JniWire>> {
-        if let Some(value) = &self.return_value {
-            crate::handles::require_preflight(&value.input)
-                .map_err(|error| format!("callback `{}` return value: {error}", self.name))?;
-        }
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
             prebindgen_flat::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
@@ -312,6 +308,18 @@ impl JniCallback {
             is_domain_error: false,
             output_committed: quote!(),
         };
+        if let Some(value) = &self.return_value {
+            let mut resources = Vec::new();
+            value.input.code_fragment_slot(
+                InputFragment::Resources {
+                    context: &context,
+                    resources: &mut resources,
+                },
+                &syn::parse_quote!(()),
+            )?;
+            crate::handles::require_preflight(&value.input, &resources)
+                .map_err(|error| format!("callback `{}` return value: {error}", self.name))?;
+        }
         let mut descriptor = String::from("(");
         let mut encode = TokenStream::new();
         let mut commits = TokenStream::new();
@@ -875,8 +883,8 @@ fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Resu
     })?;
     context.render(&code)
 }
-pub(crate) fn files(
-    flat: &Bindings,
+pub(crate) fn files<I: KotlinInputConversion>(
+    flat: &Flat<JniSchema<I>>,
     classes: &BTreeMap<String, KotlinClass>,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {

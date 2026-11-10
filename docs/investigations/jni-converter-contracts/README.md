@@ -5,6 +5,11 @@ Investigation and proposed design for the first checkbox in
 `5afe625b0`, whose source tree matches #808 at `58d6f368c`.
 This document and its probe do not change the generators or their runtime code.
 
+An [input-only prototype](input-stage.md) is now available above this baseline.
+Its `independent-input` probe feature compiles using `Flat<JniSchema<IndependentInput>>`;
+the `independent-output` feature still intentionally fails. The failures below
+describe the investigation baseline.
+
 ## The problem
 
 Flat, the prepared source model, stores a converter for each function parameter

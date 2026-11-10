@@ -1,4 +1,4 @@
-//! Passing controls and deliberately failing JNI entry-point probes.
+//! Passing input controls and a deliberately failing output entry-point probe.
 use prebindgen_conversions::{InputFragment, OutputFragment};
 use prebindgen_declarations::{Codec, Condition};
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, Schema};
@@ -78,9 +78,7 @@ impl<I, O> Schema for IndependentSchema<I, O> {
 }
 
 #[cfg(feature = "independent-input")]
-fn independent_input(
-    flat: &prebindgen_flat::Flat<IndependentSchema<IndependentInput, JniOutput>>,
-) -> Result<JniGen> {
+fn independent_input(flat: &prebindgen_flat::Flat<JniSchema<IndependentInput>>) -> Result<JniGen> {
     prebindgen_jni::generate(flat)
 }
 
@@ -92,6 +90,9 @@ fn independent_output(
 }
 
 fn main() -> Result<()> {
+    #[cfg(feature = "independent-input")]
+    let _ = independent_input
+        as fn(&prebindgen_flat::Flat<JniSchema<IndependentInput>>) -> Result<JniGen>;
     fn input_contract<T: InputConversion + KotlinInputConversion>() {}
     fn output_contract<T: OutputConversion + KotlinOutputConversion>() {}
     input_contract::<IndependentInput>();

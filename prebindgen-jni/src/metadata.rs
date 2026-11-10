@@ -5,7 +5,9 @@ use std::rc::Rc;
 
 /// Prepared boundary roots, including typed error converters and declarations
 /// whose callback interfaces are emitted without a direct exported occurrence.
-pub(crate) fn nodes(flat: &Bindings) -> Vec<(bool, &kotlin::JniNode)> {
+pub(crate) fn nodes<I: KotlinInputConversion>(
+    flat: &Flat<JniSchema<I>>,
+) -> Vec<(bool, &kotlin::JniNode)> {
     let mut nodes = Vec::new();
     for function in flat.functions.values() {
         for param in &function.params {
@@ -33,9 +35,11 @@ pub(crate) fn nodes(flat: &Bindings) -> Vec<(bool, &kotlin::JniNode)> {
 }
 
 /// Metadata schema for a Kotlin/JNI binding model.
-pub struct JniSchema;
-impl prebindgen_flat::Schema for JniSchema {
-    type Input = JniInput;
+/// `I` selects parameter converters while outputs and declaration metadata keep
+/// the standard JNI representation. No schema value is needed to construct Flat.
+pub struct JniSchema<I = JniInput>(std::marker::PhantomData<fn() -> I>);
+impl<I> prebindgen_flat::Schema for JniSchema<I> {
+    type Input = I;
     type Output = JniOutput;
     type Module = JniModule;
     type Function = Option<JniFunction>;
@@ -56,7 +60,7 @@ pub struct JniModule {
     pub bulk_collection_outputs: bool,
 }
 /// Export and placement decisions belonging to one function.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct JniFunction {
     /// Fully qualified destination package.
     pub package: String,

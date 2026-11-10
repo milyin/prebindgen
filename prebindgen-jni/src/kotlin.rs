@@ -204,8 +204,10 @@ impl KotlinOutput {
 }
 
 /// Input conversion with opaque Kotlin-side emission.
+/// Also implements the native input contract so both sides describe the same
+/// wire tree. `kotlin` is called once per bound parameter during generation.
 pub trait KotlinInputConversion:
-    for<'a> Conversion<
+    for<'a> InputConversion<
     Wire = JniWire,
     Chain = JniChain,
     Branch = JniBranch,

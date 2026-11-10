@@ -117,7 +117,10 @@ pub(crate) fn column_groups(node: &JniNode) -> Result<String> {
 }
 /// Every native resource must be represented by prepared Kotlin handle wires.
 /// Custom conversions without this information cannot use the generated JNI API.
-pub(crate) fn require_preflight(input: &JniInput) -> Result<()> {
+pub(crate) fn require_preflight<I: KotlinInputConversion>(
+    input: &I,
+    resources: &[prebindgen_conversions::Resource],
+) -> Result<()> {
     fn prepared(node: &JniNode) -> bool {
         match node {
             WireNode::Chain {
@@ -138,7 +141,7 @@ pub(crate) fn require_preflight(input: &JniInput) -> Result<()> {
     }
     let mut native = BTreeMap::new();
     let mut kotlin = BTreeMap::new();
-    for resource in &input.rust.resources {
+    for resource in resources {
         let Some(ty) = &resource.allocation_type else {
             return Err(
                 "Kotlin handle preflight requires the allocation type of every native resource"
@@ -239,8 +242,8 @@ pub(crate) struct HandleLocks {
     prefix: String,
 }
 impl HandleLocks {
-    pub(crate) fn new<'a>(
-        inputs: impl IntoIterator<Item = (&'a JniInput, &'a mut KotlinInput)>,
+    pub(crate) fn new<'a, I: KotlinInputConversion + 'a>(
+        inputs: impl IntoIterator<Item = (&'a I, &'a mut KotlinInput)>,
         context: &KotlinContext<'_>,
     ) -> Result<Self> {
         let mut out = Self {
