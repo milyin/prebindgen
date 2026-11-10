@@ -96,7 +96,7 @@ annotated source crate
 
 A **slot** is the place on a parameter or result that stores its prepared
 converter. Two parameters of the same source type can have different converters.
-`Schema` chooses the Rust types of those stored converters and their metadata;
+The `Schema` trait chooses the Rust types of those stored converters and their metadata;
 it is not a runtime packet layout.
 
 A **recipe** describes a conversion: use a leaf, call a constructor, expand
@@ -128,9 +128,9 @@ the enum is not interpreted on every native call.
 
 | Current request / plan storage | Meaning in generated Rust today |
 | --- | --- |
-| `Validate` / `validation` | Check or decode wire values. For declaration-compiled inputs, also take owners, run constructors and construct the argument. |
-| `Acquire` / `acquire` | Take owners still deferred by a low-level converter. Often empty for declaration-compiled inputs. |
-| `Construct` / `statements` and `argument` | Bind the final Rust argument. A low-level converter may create the reference or move the owned value here; a compiled converter often retrieves a value built earlier. |
+| `Validate` / `validation` | Check or decode wire values. For ordinary declaration-compiled inputs, also take owners, run constructors and construct the argument. |
+| `Acquire` / `acquire` | Take owners still deferred by a low-level converter. Empty after ordinary declaration compilation; grouped rows use specialized composition. |
+| `Construct` / `statements` and `argument` | Bind the final Rust argument. A low-level converter may create the reference or move the owned value here; an ordinary compiled converter retrieves a value built earlier. |
 | `Acknowledge` / `acknowledgement` | Make the shared ownership-reporting channel ready. JNI checks its receipt array before permitting transfers. This operation does not itself mean that every input was consumed. |
 | `Resources` / `resources` | Describe relevant native allocation classes/access modes and provide today's consumption-accounting metadata to the generator. |
 
@@ -208,8 +208,9 @@ produces one Rust object.
 
 For incoming owners `[A, B, C]`, a count of two means **A and B** transferred.
 A count alone cannot mean **B and C**. C recoverable `Result` wrappers write the
-count through their ownership output. Kotlin receives an encoded count and
-marks the corresponding handle objects consumed after the native call.
+count through their ownership output. On native failure, Kotlin decodes the count and marks the corresponding prefix
+of handle objects consumed. After native success, Kotlin marks all active owning
+inputs consumed; its success path does not use the numeric count as a limit.
 Callback-result decoders also use a consumed prefix to distinguish Rust-owned
 values from unread callback-owned values that still need reclamation. Receipt
 order is independent of the type/address sorting used to acquire Kotlin locks;
@@ -221,6 +222,13 @@ If the early conversion takes B and a constructor then panics, A has not yet
 transferred. A count of one would wrongly describe A. This is a hypothetical
 execution if the current rejection were removed unconditionally; the generator
 currently prevents it.
+
+There is a second defect if the guard is simply removed: with any compiled
+resource present, the assembler disables its deferred-input aggregate count.
+A low-level move can therefore go entirely unreported. Even a successful call
+would give C an incorrect count; on failure Kotlin can invalidate the wrong
+owners, and callback cleanup depends on exact accounting as well. Fix both
+count coverage and order.
 
 The guard exists for a real reason, but it rejects too much. A deferred shared
 borrow contributes no incoming owner to that count. The same guard also rejects
@@ -241,16 +249,20 @@ assembler to insert the increment.
 
 This spreads responsibility across the leaf helper, declaration compiler,
 collection compiler, C row specialization and call assembler. The JNI preflight
-verifier also reads `registered` for a different purpose. An author must know
+verifier also reads `registered` to require prepared resources. In callback-result
+decoding, that gate also prevents admitting a move whose transfer has not been
+counted before cleanup examines the unread suffix. An author must know
 which layer will eventually account for a move, not merely how to decode and
 construct the requested argument.
 
 The proposed rework gives each responsibility one place:
 
-- Input converters implement defined preparation, acquisition and construction
-  operations, composed to completion in parameter order.
+- Input converters expose one scoped `Convert` operation, which completes each
+  argument in parameter order. Code buffers for preparation/acquisition/construction
+  can remain inside the built-in plan implementation.
 - The code taking a foreign owner records that successful transfer.
-- Resource metadata describes foreign access requirements for preflight.
+- Resource metadata describes foreign access requirements, including whether a
+  move is possible and therefore a local counter/ownership receipt is required.
 - The assembler coordinates calls and receipt readiness without inferring
   execution timing from resource metadata.
 

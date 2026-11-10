@@ -14,7 +14,8 @@ cargo run --manifest-path docs/investigations/input-acquisition/probe/Cargo.toml
 ```
 
 The standalone [probe](probe/src/main.rs) has its own Cargo manifest outside the
-production workspace. It performs these steps:
+production workspace, so the workspace CI does not build it. The commands above
+and its explicit Clippy check are separate investigation verification. It performs these steps:
 
 1. Parse a Rust source API into `Flat<CSchema>`.
 2. Declare the opaque `Item` representation and the exported function through
@@ -22,7 +23,7 @@ production workspace. It performs these steps:
 3. Optionally replace selected parameter slots with `CCodec::raw().input_leaf`.
    Call the normal `finish_input` and `validate_input` hooks on those leaves.
 4. Invoke `prebindgen_c::generate` and verify success or the expected rejection.
-   Parse each successful generated Rust source file with `syn`.
+   Parse the generated Rust source for each successful case with `syn`.
 
 This exercises the actual public generation path. It does **not** compile or
 execute the emitted C/Rust boundary, measure performance, or demonstrate the
@@ -76,6 +77,10 @@ the assembler generally nests all validation, then all acquisition, then all
 construction fragments around the source call. It selects receipt readiness and
 automatic consumption counting using the resource flags.
 
+The C inline-owner by-value leaf is another warning against interpreting
+`registered` as a complete schedule: it marks itself registered/accounted while
+its acquisition code is still in the `acquire` buffer until composition.
+
 An existing [assembler test](../../../prebindgen-conversions/src/generation_tests.rs#L787)
 checks rejection of mixed owning resource metadata. An existing
 [execution-order test](../../../prebindgen-conversions/src/generation_tests.rs#L60)
@@ -94,7 +99,7 @@ remains the authoritative source/binding model.
 | [`prebindgen-conversions/src/staged.rs`](../../../prebindgen-conversions/src/staged.rs) | Requests, template rendering, execution scheduling, readiness placement, automatic prefix counts and mixed-mode rejection. |
 | [`prebindgen-conversions/src/boxed.rs`](../../../prebindgen-conversions/src/boxed.rs) | Shared boxed-pointer leaf; its move acquisition currently relies on parent/assembler counting. |
 | [`prebindgen-declarations/src/lib.rs`](../../../prebindgen-declarations/src/lib.rs) | Compiles complete arguments into early code and marks resources registered. |
-| [`prebindgen-declarations/src/sequence.rs`](../../../prebindgen-declarations/src/sequence.rs) | Builds rows directly; adds counts for leaves not already counted and propagates metadata for repeated element schemas. |
+| [`prebindgen-declarations/src/sequence.rs`](../../../prebindgen-declarations/src/sequence.rs) | Builds rows directly; currently emits `validation`, then an automatic count, then `acquire`. Replace that pre-acquisition count with reporting at each actual take; preserve grouped decoding. |
 | [`prebindgen-c/src/sequence.rs`](../../../prebindgen-c/src/sequence.rs) | Specializes grouped row leaves and appends per-leaf counting where needed. |
 | [`prebindgen-c/src/owned.rs`](../../../prebindgen-c/src/owned.rs) | Inline-owner acquisition, empty replacement, and already tracked by-value transfers. |
 | [`prebindgen-c/src/callback.rs`](../../../prebindgen-c/src/callback.rs) | Incoming callback-context acquisition and callback-return decoding/cleanup. |
@@ -103,6 +108,9 @@ remains the authoritative source/binding model.
 | [`prebindgen-jni/src/lib.rs`](../../../prebindgen-jni/src/lib.rs) | Receipt-array readiness and output, shared assembler invocation, Kotlin consumed-handle updates. |
 | [`prebindgen-jni/src/kotlin.rs`](../../../prebindgen-jni/src/kotlin.rs) | Forwards the staged protocol and implements callback-return fragment/cached-read behavior. |
 | [`prebindgen-jni/src/callback.rs`](../../../prebindgen-jni/src/callback.rs) | Directly composes callback-result phases; protects or rescans unread owners on failure. |
+| [`prebindgen-jni/src/bulk.rs`](../../../prebindgen-jni/src/bulk.rs) | Bulk carrier code and callback cached-read preparation; preserve single decoding under `Convert`. |
+| [`prebindgen-jni/src/callback_rows.rs`](../../../prebindgen-jni/src/callback_rows.rs) | Failure-only scans of unread ordinary/bulk callback owners; uses the consumed prefix. |
+| [`prebindgen-conversions/src/generation_tests.rs`](../../../prebindgen-conversions/src/generation_tests.rs) | Current phase-order and mixed-mode tests; migrate to the new schedule and expanded failure matrix. |
 | [`prebindgen-runtime/src/callback.rs`](../../../prebindgen-runtime/src/callback.rs) | Uses the consumed prefix to avoid reclaiming values already acquired by Rust. |
 
 `registered` is read by the assembler, declaration composition, collection
@@ -110,6 +118,21 @@ composition, C row specialization and JNI preflight. `records_consumption` is
 read by the counting paths. `count` and `active` are rendered/used by those same
 automatic counting paths. The proposed metadata reduction depends on migrating
 all of these users, not only the mixed-mode conditional.
+
+## Ownership traversal and lock grouping are separate
+
+For ordinary values, `kotlin.rs` builds `KotlinInput.consumed` in input-wire
+order. The writer in `lib.rs` joins those statements in parameter order and
+limits their visitor by the decoded prefix on failure. For carriers,
+`NativeInputCarrier.consume` in
+[`native_handle.kt`](../../../prebindgen-jni/src/native_handle.kt) walks its
+ordered `owners` list. The bulk writer appends owners to that list while packing
+in [`bulk.kt`](../../../prebindgen-jni/src/bulk.kt).
+
+`HandleLocks` in `handles.rs` explicitly keeps those consumption walks separate
+from its allocation-type/access grouping and lock order. Preserve these actual
+adapter traversals as the authority. The proposed two-type interleaving test
+checks Rust takes, Kotlin invalidation and callback cleanup against them.
 
 ## Scope of the evidence
 
