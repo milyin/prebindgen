@@ -94,7 +94,8 @@ fn main() -> Result<()> {
     let _ = independent_input
         as fn(&prebindgen_flat::Flat<JniSchema<IndependentInput>>) -> Result<JniGen>;
     #[cfg(feature = "independent-output")]
-    let _ = independent_output as fn(&prebindgen_flat::Flat<JniSchema<JniInput, IndependentOutput>>) -> Result<JniGen>;
+    let _ = independent_output
+        as fn(&prebindgen_flat::Flat<JniSchema<JniInput, IndependentOutput>>) -> Result<JniGen>;
     fn input_contract<T: InputConversion + KotlinInputConversion>() {}
     fn output_contract<T: OutputConversion + KotlinOutputConversion>() {}
     input_contract::<IndependentInput>();
@@ -116,13 +117,15 @@ fn main() -> Result<()> {
         .set_package_prefix("probe")
         .configure(|flat| {
             let ty = flat.function("echo")?.params[0].ty.ty.clone();
-            let mut plan = prebindgen_jni::JniCodec.input_leaf(
-                flat,
-                &ty,
-                &(),
-                syn::parse_quote!(custom_wire),
-                syn::parse_quote!(custom_value),
-                &Condition::default(),
+            let mut plan = prebindgen_jni::JniCodec::raw().input_leaf(
+                prebindgen_declarations::InputLeaf::new(
+                    flat,
+                    &ty,
+                    &(),
+                    syn::parse_quote!(custom_wire),
+                    syn::parse_quote!(custom_value),
+                    &Condition::default(),
+                ),
             )?;
             plan.statements
                 .extend(quote!(let __pb_contract_probe_marker = ();));

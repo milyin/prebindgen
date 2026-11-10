@@ -401,7 +401,14 @@ pub(crate) fn input_leaf(
                 },
             )
         }
-        _ => JniCodec.input_leaf(flat, ty, &(), w, v, active),
+        _ => JniCodec::raw().input_leaf(prebindgen_declarations::InputLeaf::new(
+            flat,
+            ty,
+            &(),
+            w,
+            v,
+            active,
+        )),
     }
 }
 pub(crate) fn output_leaf(
@@ -454,7 +461,18 @@ pub(crate) fn output_leaf(
             },
         );
     }
-    JniCodec.output_leaf(flat, ty, &(), w, value, borrowed)
+    JniCodec::raw().output_leaf(prebindgen_declarations::OutputLeaf::new(
+        flat,
+        ty,
+        &(),
+        w,
+        value,
+        if borrowed {
+            prebindgen_declarations::ValueAccess::Shared
+        } else {
+            prebindgen_declarations::ValueAccess::Owned
+        },
+    ))
 }
 fn kt_layout(record: &BulkRecord, context: &KotlinContext<'_>) -> String {
     format!(

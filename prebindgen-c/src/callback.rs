@@ -129,7 +129,7 @@ pub(crate) fn input(
             .join(","),
         type_key(&signature.return_type)
     );
-    let codec = enums::EnumCodec::default();
+    let codec = CCodec::declared();
     let mut arguments = Vec::new();
     for (index, source) in signature.arguments.into_iter().enumerate() {
         if has_mutable_reference(&source) {
@@ -158,9 +158,7 @@ pub(crate) fn input(
         }
         arguments.push(Argument { ty: source, output });
     }
-    let return_codec = enums::EnumCodec {
-        callback_return: true,
-    };
+    let return_codec = CCodec::declared();
     let returned = if unit {
         None
     } else {

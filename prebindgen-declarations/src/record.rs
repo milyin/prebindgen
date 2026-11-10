@@ -25,7 +25,7 @@ pub fn record_input<C: Codec>(
         node: WireNode::Branch {
             controls: vec![],
             children: vec![],
-            meta: codec.fields_group(),
+            meta: codec.group(GroupKind::Fields)?,
         },
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
@@ -47,7 +47,7 @@ pub fn record_input<C: Codec>(
         out.statements.extend(child.statements);
         child.node = prebindgen_flat::WireNode::Branch {
             controls: vec![],
-            meta: codec.field_group(name.clone()),
+            meta: codec.group(GroupKind::Field(&(name.clone())))?,
             children: vec![std::mem::take(&mut child.node)],
         };
         let WireNode::Branch {
@@ -98,7 +98,7 @@ pub fn record_output<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.fields_group(),
+                meta: codec.group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -116,7 +116,7 @@ pub fn record_output<C: Codec>(
         );
         child.outcomes.success = prebindgen_flat::WireNode::Branch {
             controls: vec![],
-            meta: codec.field_group(name),
+            meta: codec.group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;
@@ -156,7 +156,7 @@ pub fn record_output_owned<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.fields_group(),
+                meta: codec.group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -174,7 +174,7 @@ pub fn record_output_owned<C: Codec>(
         );
         child.outcomes.success = prebindgen_flat::WireNode::Branch {
             controls: vec![],
-            meta: codec.field_group(name),
+            meta: codec.group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;

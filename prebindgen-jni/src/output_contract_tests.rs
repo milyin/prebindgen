@@ -195,7 +195,7 @@ fn local_error_override_rejects_an_incompatible_wire_description() {
     let mut flat = prepared();
     let output = prebindgen_declarations::compile_output_value(
         &Bindings::parse([]).unwrap(),
-        &JniCodec,
+        &JniCodec::raw(),
         &syn::parse_quote!(String),
         &Output::Leaf,
         &(),
@@ -401,7 +401,7 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
     catalogue.metadata.bulk_collection_outputs = true;
     let output = prebindgen_declarations::compile_output_value(
         &catalogue,
-        &JniCodec,
+        &JniCodec::raw(),
         &syn::parse_quote!(Vec<i32>),
         &Output::Sequence {
             delivery: prebindgen_declarations::SequenceDelivery::Value,
@@ -440,18 +440,18 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
 fn explicit_plan_delivery_edits_are_preserved_with_fixed_policy() {
     use prebindgen_declarations::Codec;
     let mut flat = prepared();
-    let mut plan = JniCodec
-        .output_leaf(
+    let mut plan = JniCodec::raw()
+        .output_leaf(prebindgen_declarations::OutputLeaf::new(
             &flat,
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(custom_wire),
             prebindgen_conversions::source_result_expr(),
-            false,
-        )
+            prebindgen_declarations::ValueAccess::Owned,
+        ))
         .unwrap();
-    plan.outcomes.binding_failure = JniCodec.binding_failure_layout(&()).unwrap();
-    JniCodec.finish_output(&mut plan, &()).unwrap();
+    plan.outcomes.binding_failure = JniCodec::raw().binding_failure_layout(&()).unwrap();
+    JniCodec::raw().finish_output(&mut plan, &()).unwrap();
     plan.delivery
         .statements
         .extend(quote!(let __pb_plan_delivery_hook=();));

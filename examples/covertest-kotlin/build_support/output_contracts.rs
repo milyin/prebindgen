@@ -184,7 +184,7 @@ pub fn generate() -> Result<JniGen> {
     // A local error override must not change plain_result's Long error handler.
     let error_output = prebindgen_declarations::compile_output_value(
         &Bindings::parse([])?,
-        &prebindgen_jni::JniCodec,
+        &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
         &prebindgen_declarations::Output::Leaf,
         &(),
@@ -210,7 +210,7 @@ pub fn generate() -> Result<JniGen> {
     callback.set_interface_name("DurationCallback")?;
     let native_output = prebindgen_declarations::compile_output_value(
         &Bindings::parse([])?,
-        &prebindgen_jni::JniCodec,
+        &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
         &prebindgen_declarations::Output::Leaf,
         &(),
@@ -219,14 +219,15 @@ pub fn generate() -> Result<JniGen> {
     // Prepare an ordinary scalar input through the public codec, then give it
     // the independent Kotlin projection needed by the callback return.
     use prebindgen_declarations::Codec;
-    let input = prebindgen_jni::JniCodec.input_leaf(
-        &flat,
-        &syn::parse_quote!(i64),
-        &(),
-        syn::parse_quote!(callback_duration_wire),
-        syn::parse_quote!(callback_duration_value),
-        &prebindgen_declarations::Condition::default(),
-    )?;
+    let input =
+        prebindgen_jni::JniCodec::raw().input_leaf(prebindgen_declarations::InputLeaf::new(
+            &flat,
+            &syn::parse_quote!(i64),
+            &(),
+            syn::parse_quote!(callback_duration_wire),
+            syn::parse_quote!(callback_duration_value),
+            &prebindgen_declarations::Condition::default(),
+        ))?;
     callback.set_return_converter(DurationInput(JniInput::from(input)))?;
     flat.function_mut("duration_callback")?.params[0].ty.slot = Some(callback.into_input(
         syn::parse_quote!(custom_callback),

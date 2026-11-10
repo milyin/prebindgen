@@ -64,7 +64,7 @@ pub fn generate() -> Result<JniGen> {
     // Output conversion remains the standard implementation in this stage.
     let output = prebindgen_declarations::compile_output_value(
         &Bindings::parse([])?,
-        &prebindgen_jni::JniCodec,
+        &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
         &prebindgen_declarations::Output::Leaf,
         &(),

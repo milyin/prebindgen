@@ -173,7 +173,7 @@ pub(crate) fn input(
                 "callback return values must be owned; borrowed returns are unsupported".into(),
             );
         }
-        let codec = data::DataCodec::default();
+        let codec = JniCodec::declared(None);
         let input = prebindgen_declarations::compile_callback_return(
             flat,
             &codec,
@@ -237,7 +237,7 @@ pub(crate) fn input(
             && !explicit_outputs.contains(&type_key(subject_type(exposed_type)));
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
-            &data::DataCodec::default(),
+            &JniCodec::declared(None),
             &ty,
             recipe,
             i,
@@ -1106,15 +1106,15 @@ mod preflight_tests {
             .package(package!().class(ptr_class!(Handle)).fun(fun!(consume)))
             .prepare()
             .unwrap();
-        let mut plan = JniCodec
-            .input_leaf(
+        let mut plan = JniCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &model,
                 &syn::parse_quote!(Handle),
                 &(),
                 syn::parse_quote!(bad_wire),
                 syn::parse_quote!(bad_value),
                 &prebindgen_declarations::Condition::default(),
-            )
+            ))
             .unwrap();
         plan.resources[0].allocation_type = None;
         let input = JniInput::from(plan);
