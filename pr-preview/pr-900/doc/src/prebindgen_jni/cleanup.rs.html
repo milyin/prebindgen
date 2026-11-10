@@ -358,57 +358,59 @@
 <a href=#358 id=358 data-nosnippet>358</a>    }
 <a href=#359 id=359 data-nosnippet>359</a>}
 <a href=#360 id=360 data-nosnippet>360</a>
-<a href=#361 id=361 data-nosnippet>361</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>emit&lt;I: KotlinInputConversion&gt;(flat: <span class="kw-2">&amp;</span>Flat&lt;JniSchema&lt;I&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
-<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">for </span>(input, node) <span class="kw">in </span>metadata::nodes(flat) {
-<a href=#364 id=364 data-nosnippet>364</a>        helpers.visit(node, input)<span class="question-mark">?</span>;
-<a href=#365 id=365 data-nosnippet>365</a>    }
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="prelude-val">Ok</span>(helpers.definitions.into_values().collect())
-<a href=#367 id=367 data-nosnippet>367</a>}
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a><span class="attr">#[cfg(test)]
-<a href=#370 id=370 data-nosnippet>370</a></span><span class="kw">mod </span>tests {
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#372 id=372 data-nosnippet>372</a>
-<a href=#373 id=373 data-nosnippet>373</a>    <span class="kw">fn </span>owner(name: <span class="kw-2">&amp;</span>str) -&gt; JniNode {
-<a href=#374 id=374 data-nosnippet>374</a>        WireNode::Leaf(<span class="macro">vec!</span>[prebindgen_flat::Wire {
-<a href=#375 id=375 data-nosnippet>375</a>            name: syn::parse_str(name).unwrap(),
-<a href=#376 id=376 data-nosnippet>376</a>            kind: JniWire::handle(
-<a href=#377 id=377 data-nosnippet>377</a>                BoxedWire {
-<a href=#378 id=378 data-nosnippet>378</a>                    ty: <span class="macro">syn::parse_quote!</span>(String),
-<a href=#379 id=379 data-nosnippet>379</a>                    access: Access::Move,
-<a href=#380 id=380 data-nosnippet>380</a>                },
-<a href=#381 id=381 data-nosnippet>381</a>                <span class="string">"true"</span>,
-<a href=#382 id=382 data-nosnippet>382</a>            ),
-<a href=#383 id=383 data-nosnippet>383</a>        }])
-<a href=#384 id=384 data-nosnippet>384</a>    }
-<a href=#385 id=385 data-nosnippet>385</a>
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="attr">#[test]
-<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">fn </span>helper_identity_ignores_occurrence_names_and_separates_access_modes() {
-<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
-<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">let </span><span class="kw-2">mut </span>names = BTreeSet::new();
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">for </span>carrier <span class="kw">in </span>[Carrier::Objects, Carrier::Native, Carrier::NativeJni] {
-<a href=#391 id=391 data-nosnippet>391</a>            <span class="kw">let </span>first = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"first"</span>), carrier).unwrap();
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="kw">let </span>second = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"second"</span>), carrier).unwrap();
-<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">let </span>one = helpers.intern(<span class="kw-2">&amp;</span>first).unwrap();
-<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">let </span>two = helpers.intern(<span class="kw-2">&amp;</span>second).unwrap();
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="macro">assert_eq!</span>(one, two);
-<a href=#396 id=396 data-nosnippet>396</a>            names.insert(one.to_string());
-<a href=#397 id=397 data-nosnippet>397</a>        }
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="macro">assert_eq!</span>(names.len(), <span class="number">3</span>);
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="macro">assert_eq!</span>(helpers.definitions.len(), <span class="number">3</span>);
-<a href=#400 id=400 data-nosnippet>400</a>    }
-<a href=#401 id=401 data-nosnippet>401</a>
-<a href=#402 id=402 data-nosnippet>402</a>    <span class="attr">#[test]
-<a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">fn </span>helper_names_reject_collisions_instead_of_reusing_wrong_cleanup() {
-<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">let </span>row = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"value"</span>), Carrier::Objects).unwrap();
-<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>name = row.name().unwrap();
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
-<a href=#407 id=407 data-nosnippet>407</a>        helpers
-<a href=#408 id=408 data-nosnippet>408</a>            .names
-<a href=#409 id=409 data-nosnippet>409</a>            .reserve(<span class="kw-2">&amp;</span>name.to_string(), <span class="string">"unrelated"</span>, <span class="kw-2">&amp;</span>[<span class="string">"other shape"</span>])
-<a href=#410 id=410 data-nosnippet>410</a>            .unwrap();
-<a href=#411 id=411 data-nosnippet>411</a>        <span class="macro">assert!</span>(helpers.intern(<span class="kw-2">&amp;</span>row).unwrap_err().contains(<span class="string">"hash collision"</span>));
-<a href=#412 id=412 data-nosnippet>412</a>    }
-<a href=#413 id=413 data-nosnippet>413</a>}
+<a href=#361 id=361 data-nosnippet>361</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>emit&lt;I: KotlinInputConversion, O: KotlinOutputConversion&gt;(
+<a href=#362 id=362 data-nosnippet>362</a>    flat: <span class="kw-2">&amp;</span>Flat&lt;JniSchema&lt;I, O&gt;&gt;,
+<a href=#363 id=363 data-nosnippet>363</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#364 id=364 data-nosnippet>364</a>    <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="kw">for </span>(input, node) <span class="kw">in </span>metadata::nodes(flat) {
+<a href=#366 id=366 data-nosnippet>366</a>        helpers.visit(node, input)<span class="question-mark">?</span>;
+<a href=#367 id=367 data-nosnippet>367</a>    }
+<a href=#368 id=368 data-nosnippet>368</a>    <span class="prelude-val">Ok</span>(helpers.definitions.into_values().collect())
+<a href=#369 id=369 data-nosnippet>369</a>}
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a><span class="attr">#[cfg(test)]
+<a href=#372 id=372 data-nosnippet>372</a></span><span class="kw">mod </span>tests {
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="kw">fn </span>owner(name: <span class="kw-2">&amp;</span>str) -&gt; JniNode {
+<a href=#376 id=376 data-nosnippet>376</a>        WireNode::Leaf(<span class="macro">vec!</span>[prebindgen_flat::Wire {
+<a href=#377 id=377 data-nosnippet>377</a>            name: syn::parse_str(name).unwrap(),
+<a href=#378 id=378 data-nosnippet>378</a>            kind: JniWire::handle(
+<a href=#379 id=379 data-nosnippet>379</a>                BoxedWire {
+<a href=#380 id=380 data-nosnippet>380</a>                    ty: <span class="macro">syn::parse_quote!</span>(String),
+<a href=#381 id=381 data-nosnippet>381</a>                    access: Access::Move,
+<a href=#382 id=382 data-nosnippet>382</a>                },
+<a href=#383 id=383 data-nosnippet>383</a>                <span class="string">"true"</span>,
+<a href=#384 id=384 data-nosnippet>384</a>            ),
+<a href=#385 id=385 data-nosnippet>385</a>        }])
+<a href=#386 id=386 data-nosnippet>386</a>    }
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="attr">#[test]
+<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">fn </span>helper_identity_ignores_occurrence_names_and_separates_access_modes() {
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span><span class="kw-2">mut </span>names = BTreeSet::new();
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">for </span>carrier <span class="kw">in </span>[Carrier::Objects, Carrier::Native, Carrier::NativeJni] {
+<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">let </span>first = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"first"</span>), carrier).unwrap();
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">let </span>second = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"second"</span>), carrier).unwrap();
+<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">let </span>one = helpers.intern(<span class="kw-2">&amp;</span>first).unwrap();
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="kw">let </span>two = helpers.intern(<span class="kw-2">&amp;</span>second).unwrap();
+<a href=#397 id=397 data-nosnippet>397</a>            <span class="macro">assert_eq!</span>(one, two);
+<a href=#398 id=398 data-nosnippet>398</a>            names.insert(one.to_string());
+<a href=#399 id=399 data-nosnippet>399</a>        }
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="macro">assert_eq!</span>(names.len(), <span class="number">3</span>);
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="macro">assert_eq!</span>(helpers.definitions.len(), <span class="number">3</span>);
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="attr">#[test]
+<a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">fn </span>helper_names_reject_collisions_instead_of_reusing_wrong_cleanup() {
+<a href=#406 id=406 data-nosnippet>406</a>        <span class="kw">let </span>row = Row::new(<span class="kw-2">&amp;</span>owner(<span class="string">"value"</span>), Carrier::Objects).unwrap();
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span>name = row.name().unwrap();
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">let </span><span class="kw-2">mut </span>helpers = Helpers::default();
+<a href=#409 id=409 data-nosnippet>409</a>        helpers
+<a href=#410 id=410 data-nosnippet>410</a>            .names
+<a href=#411 id=411 data-nosnippet>411</a>            .reserve(<span class="kw-2">&amp;</span>name.to_string(), <span class="string">"unrelated"</span>, <span class="kw-2">&amp;</span>[<span class="string">"other shape"</span>])
+<a href=#412 id=412 data-nosnippet>412</a>            .unwrap();
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="macro">assert!</span>(helpers.intern(<span class="kw-2">&amp;</span>row).unwrap_err().contains(<span class="string">"hash collision"</span>));
+<a href=#414 id=414 data-nosnippet>414</a>    }
+<a href=#415 id=415 data-nosnippet>415</a>}
 </code></pre></div></section></main></body></html>

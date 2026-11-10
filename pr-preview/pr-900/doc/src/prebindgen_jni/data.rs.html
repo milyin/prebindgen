@@ -379,8 +379,8 @@
 <a href=#379 id=379 data-nosnippet>379</a>            .filter(|c| c.data))
 <a href=#380 id=380 data-nosnippet>380</a>    }
 <a href=#381 id=381 data-nosnippet>381</a>}
-<a href=#382 id=382 data-nosnippet>382</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_record&lt;I: KotlinInputConversion&gt;(
-<a href=#383 id=383 data-nosnippet>383</a>    flat: <span class="kw-2">&amp;</span>Flat&lt;JniSchema&lt;I&gt;&gt;,
+<a href=#382 id=382 data-nosnippet>382</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_record&lt;I: KotlinInputConversion, O: KotlinOutputConversion&gt;(
+<a href=#383 id=383 data-nosnippet>383</a>    flat: <span class="kw-2">&amp;</span>Flat&lt;JniSchema&lt;I, O&gt;&gt;,
 <a href=#384 id=384 data-nosnippet>384</a>    class: <span class="kw-2">&amp;</span>Class,
 <a href=#385 id=385 data-nosnippet>385</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#386 id=386 data-nosnippet>386</a>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
