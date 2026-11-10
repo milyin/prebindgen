@@ -103,9 +103,12 @@ remains the authoritative source/binding model.
 | [`prebindgen-c/src/sequence.rs`](../../../prebindgen-c/src/sequence.rs) | Specializes grouped row leaves and appends per-leaf counting where needed. |
 | [`prebindgen-c/src/owned.rs`](../../../prebindgen-c/src/owned.rs) | Inline-owner acquisition, empty replacement, and already tracked by-value transfers. |
 | [`prebindgen-c/src/callback.rs`](../../../prebindgen-c/src/callback.rs) | Incoming callback-context acquisition and callback-return decoding/cleanup. |
-| [`prebindgen-c/src/errors.rs`](../../../prebindgen-c/src/errors.rs) | Writes a consuming Result call's ownership count on return. |
+| [`prebindgen-c/src/lib.rs`](../../../prebindgen-c/src/lib.rs) | Creates the local counter for non-Result wrappers and invokes the assembler; supplies its name in `CContext`. |
+| [`prebindgen-c/src/errors.rs`](../../../prebindgen-c/src/errors.rs) | Creates the recoverable Result wrapper's local counter and writes its ownership count on return. |
+| [`prebindgen-c/src/emission.rs`](../../../prebindgen-c/src/emission.rs) | `CContext` renders `input_consumed` as a reference to the wrapper-local counter. |
 | [`prebindgen-jni/src/handles.rs`](../../../prebindgen-jni/src/handles.rs) | Native resource/Kotlin handle coverage; currently rejects unregistered resources in `require_preflight`. |
-| [`prebindgen-jni/src/lib.rs`](../../../prebindgen-jni/src/lib.rs) | Receipt-array readiness and output, shared assembler invocation, Kotlin consumed-handle updates. |
+| [`prebindgen-jni/src/lib.rs`](../../../prebindgen-jni/src/lib.rs) | Creates the ordinary JNI counter, receipt-array readiness and output, assembler invocation and Kotlin consumed-handle updates. |
+| [`prebindgen-jni/src/emission.rs`](../../../prebindgen-jni/src/emission.rs) | Renders `input_consumed` to that invocation's local cell. |
 | [`prebindgen-jni/src/kotlin.rs`](../../../prebindgen-jni/src/kotlin.rs) | Forwards the staged protocol and implements callback-return fragment/cached-read behavior. |
 | [`prebindgen-jni/src/callback.rs`](../../../prebindgen-jni/src/callback.rs) | Directly composes callback-result phases; protects or rescans unread owners on failure. |
 | [`prebindgen-jni/src/bulk.rs`](../../../prebindgen-jni/src/bulk.rs) | Bulk carrier code and callback cached-read preparation; preserve single decoding under `Convert`. |
@@ -118,6 +121,19 @@ composition, C row specialization and JNI preflight. `records_consumption` is
 read by the counting paths. `count` and `active` are rendered/used by those same
 automatic counting paths. The proposed metadata reduction depends on migrating
 all of these users, not only the mixed-mode conditional.
+
+The independent-converter fixtures also use this protocol: migrate
+[`input_contracts.rs`](../../../examples/covertest-kotlin/build_support/input_contracts.rs),
+[`output_contracts.rs`](../../../examples/covertest-kotlin/build_support/output_contracts.rs)
+and the existing
+[JNI contract probe](../jni-converter-contracts/probe/src/main.rs).
+
+The JNI runtime audit finds no direct critical-array access in the adapter or
+runtime. [`text` and `bytes`](../../../prebindgen-jni-runtime/src/lib.rs#L26)
+produce owned `String`/`Vec<u8>` values; string access ends inside the helper.
+[Bulk input](../../../prebindgen-jni-runtime/src/bulk.rs#L319) reads a byte-array
+region into Rust-owned storage. Those lifetimes can span later JNI calls.
+This observation concerns the current built-ins, not arbitrary custom fragments.
 
 ## Ownership traversal and lock grouping are separate
 

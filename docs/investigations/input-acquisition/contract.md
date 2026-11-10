@@ -127,6 +127,26 @@ This is generated local arithmetic, not a runtime helper call or JNI call.
 The helper standardizes how boxed, inline-owner, callback and custom acquisitions
 report transfers without depending on a private generated identifier.
 
+Rendering has an explicit owner. The shared assembler renders the **entire
+composed body**, including independent converters' `Convert` expressions,
+through `context.render` before returning emitted code. Preserve that existing
+final rendering step. Callback-result decoders likewise render the whole
+composed invocation/conversion/cleanup expression. The helper's placeholder
+therefore does not depend on using `InputPlan`. A custom driver of this staged
+protocol must perform the same final rendering; unresolved parameters are a
+generation error.
+
+For JNI, also check the native/Kotlin ownership declarations **per parameter**:
+a native `Move` resource must agree with the presence of Kotlin consumption
+emission, and a parameter without native moves must not claim consumption.
+Keep the existing native-resource/handle-source type, access and carrier
+coverage checks. For the whole call, possible moves, receipt-readiness emission
+and the Kotlin receipt-array/consumption path must agree. Reject a mismatch
+during generation. A second correctly consuming parameter must not mask an
+incomplete first parameter. This structural check cannot prove the contents of
+arbitrary emitted Kotlin strings; their correct owner traversal remains part
+of the converter contract.
+
 The counter and its delivery have different responsibilities:
 
 | Boundary | Local counter | Delivery |
@@ -182,7 +202,7 @@ and its report. Grouping updates is permissible only when all grouped takes
 and intervening operations are proven infallible and cannot expose a partial
 state to an observer. Treat the existing constructors, inline-owner replacement
 factories and destructors as possible unwind points. Measure batching choices;
-do not infer safety from a helper being called `Acquire`.
+do not infer safety from the old helper's `Acquire` phase label.
 
 The [source inventory](evidence.md#source-inventory) identifies Kotlin's
 `KotlinInput.consumed` statements and the carriers' ordered owner lists, as well
@@ -219,6 +239,16 @@ This describes native access requirements, including repeated element schemas;
 it is not a list of every runtime handle address. The existing wire tree and
 Kotlin projection supply the actual handle sources and repetition.
 
+Removing `Resource::active` removes a duplicate accounting expression, not the
+conversion's activity condition. The declaration compiler retains `Condition`
+and passes it as `InputLeaf.active`; optional/selector operations derive those
+conditions from their wire controls. Each helper places acquisition and its
+`record_input_transfer` update inside that existing active branch. An inactive
+arm executes neither. Repeated rows use the existing loop; its actual successful
+takes determine cardinality rather than `Resource::count`. Custom converters
+must express the equivalent gating in `Convert`. Callback cleanup and Kotlin
+consumption keep their wire/projection conditions in agreement with native takes.
+
 Kotlin's `require_preflight` must be updated in the same migration. Its
 `registered` gate currently does important additional work for callback results:
 their decoder invokes conversion fragments directly, without the assembler's
@@ -233,7 +263,20 @@ accounting guarantee with the universal per-take reporting contract. The flag
 alone is not a proof of live handles or correct aliasing. Keep the real requirements: native resource allocation types and
 access modes match the Kotlin handle wires, retained handle sources cover them,
 carriers have their required preparation, and locks/preflight precede native use.
-Prove the timing-flag removal against those checks. No native alias validator is
+Prove the timing-flag removal against those checks. The source audit found no built-in critical-array region spanning a conversion
+continuation: normal byte/string decoders return Rust-owned values, and bulk
+input reads into Rust-owned storage. See the runtime locations in the inventory.
+Thus no built-in rejection is currently identified by the critical-region
+constraint. Custom staged converters still need a compatibility audit.
+
+A last-parameter critical region is not automatically safe: the complete
+continuation includes the source function, callbacks, output conversion and
+delivery. A representation retaining such a region needs an explicit proof or
+supported declaration that all of that continuation is JNI-free. This proposal
+does not infer that guarantee merely from the absence of a callback parameter,
+or introduce a copy to avoid the restriction.
+
+No native alias validator is
 added. C continues to rely on its caller's pointer and aliasing obligations.
 
 ## Collections and callback results
@@ -316,8 +359,15 @@ must already have a truthful receipt; retain rejection for any unproved case.
 
 The implementation should satisfy these independently reviewable conditions:
 
-- The six probe cases generate successfully under the new contract, with actual
-  execution coverage for the mixed borrow/move cases and all-borrow cases.
+- Port the six probe configurations to regression tests using the new API;
+  remove assertions/printing of deleted resource flags. Each configuration must
+  generate and execute. For the borrow/move signature assert exactly one transfer,
+  exactly one Rust destruction of the moved item, and continued validity of the
+  independent borrowed owner. Shared-only and borrow/scalar cases report no
+  transfers. Also assert that the counter is established before the first take
+  and that per-parameter execution order matches the new contract. This replaces
+  the historical probe's rejection expectations; compiling a ported probe alone
+  is insufficient.
 - Two independently allocated owned inputs compose in either old converter style.
   Inject failure before acquisition, between takes, during construction and after
   source entry. The receipt identifies the transferred prefix exactly.
@@ -336,6 +386,10 @@ The implementation should satisfy these independently reviewable conditions:
   `-Xcheck:jni`; temporary access regions end at the required point. A known
   representation requiring incompatible critical-region lifetimes is rejected
   rather than silently copied.
+- Per-parameter JNI mismatches (native moves without Kotlin consumption, and
+  Kotlin consumption without native moves) fail generation, including when
+  another parameter is correctly consuming. Matching optional/selector paths
+  count only active takes.
 - Kotlin preflight and locks still cover all declared native resources. C remains
   free of native alias checks. Required-input nullability and typed error delivery
   retain their existing behavior.
