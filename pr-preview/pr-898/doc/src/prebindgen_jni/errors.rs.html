@@ -82,7 +82,7 @@
 <a href=#82 id=82 data-nosnippet>82</a><span class="doccomment">/// Prepare each error once on its type and attach each function's selected binding.
 <a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>prepare(
 <a href=#84 id=84 data-nosnippet>84</a>    flat: <span class="kw-2">&amp;mut </span>Bindings,
-<a href=#85 id=85 data-nosnippet>85</a>    codec: <span class="kw-2">&amp;</span>data::DataCodec&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#85 id=85 data-nosnippet>85</a>    codec: <span class="kw-2">&amp;</span>JniCodec&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#86 id=86 data-nosnippet>86</a>    declarations: <span class="kw-2">&amp;</span>prebindgen_declarations::Declarations,
 <a href=#87 id=87 data-nosnippet>87</a>    functions: <span class="kw-2">&amp;</span>[FunctionDecl],
 <a href=#88 id=88 data-nosnippet>88</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

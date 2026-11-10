@@ -173,7 +173,7 @@
 <a href=#173 id=173 data-nosnippet>173</a>                <span class="string">"callback return values must be owned; borrowed returns are unsupported"</span>.into(),
 <a href=#174 id=174 data-nosnippet>174</a>            );
 <a href=#175 id=175 data-nosnippet>175</a>        }
-<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">let </span>codec = data::DataCodec::default();
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">let </span>codec = JniCodec::declared(<span class="prelude-val">None</span>);
 <a href=#177 id=177 data-nosnippet>177</a>        <span class="kw">let </span>input = prebindgen_declarations::compile_callback_return(
 <a href=#178 id=178 data-nosnippet>178</a>            flat,
 <a href=#179 id=179 data-nosnippet>179</a>            <span class="kw-2">&amp;</span>codec,
@@ -237,7 +237,7 @@
 <a href=#237 id=237 data-nosnippet>237</a>            &amp;&amp; !explicit_outputs.contains(<span class="kw-2">&amp;</span>type_key(subject_type(exposed_type)));
 <a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>output = prebindgen_declarations::compile_callback_argument(
 <a href=#239 id=239 data-nosnippet>239</a>            flat,
-<a href=#240 id=240 data-nosnippet>240</a>            <span class="kw-2">&amp;</span>data::DataCodec::default(),
+<a href=#240 id=240 data-nosnippet>240</a>            <span class="kw-2">&amp;</span>JniCodec::declared(<span class="prelude-val">None</span>),
 <a href=#241 id=241 data-nosnippet>241</a>            <span class="kw-2">&amp;</span>ty,
 <a href=#242 id=242 data-nosnippet>242</a>            recipe,
 <a href=#243 id=243 data-nosnippet>243</a>            i,
@@ -1106,15 +1106,15 @@
 <a href=#1106 id=1106 data-nosnippet>1106</a>            .package(<span class="macro">package!</span>().class(<span class="macro">ptr_class!</span>(Handle)).fun(<span class="macro">fun!</span>(consume)))
 <a href=#1107 id=1107 data-nosnippet>1107</a>            .prepare()
 <a href=#1108 id=1108 data-nosnippet>1108</a>            .unwrap();
-<a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = JniCodec
-<a href=#1110 id=1110 data-nosnippet>1110</a>            .input_leaf(
+<a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = JniCodec::raw()
+<a href=#1110 id=1110 data-nosnippet>1110</a>            .input_leaf(prebindgen_declarations::InputLeaf::new(
 <a href=#1111 id=1111 data-nosnippet>1111</a>                <span class="kw-2">&amp;</span>model,
 <a href=#1112 id=1112 data-nosnippet>1112</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(Handle),
 <a href=#1113 id=1113 data-nosnippet>1113</a>                <span class="kw-2">&amp;</span>(),
 <a href=#1114 id=1114 data-nosnippet>1114</a>                <span class="macro">syn::parse_quote!</span>(bad_wire),
 <a href=#1115 id=1115 data-nosnippet>1115</a>                <span class="macro">syn::parse_quote!</span>(bad_value),
 <a href=#1116 id=1116 data-nosnippet>1116</a>                <span class="kw-2">&amp;</span>prebindgen_declarations::Condition::default(),
-<a href=#1117 id=1117 data-nosnippet>1117</a>            )
+<a href=#1117 id=1117 data-nosnippet>1117</a>            ))
 <a href=#1118 id=1118 data-nosnippet>1118</a>            .unwrap();
 <a href=#1119 id=1119 data-nosnippet>1119</a>        plan.resources[<span class="number">0</span>].allocation_type = <span class="prelude-val">None</span>;
 <a href=#1120 id=1120 data-nosnippet>1120</a>        <span class="kw">let </span>input = JniInput::from(plan);
