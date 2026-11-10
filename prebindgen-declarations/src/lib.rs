@@ -503,7 +503,7 @@ impl<P> Output<P> {
     ///
     /// `parts` holds one recipe per view of the value; their wires appear in this
     /// order. Binding rejects an empty list or more than one consuming part. The
-    /// framework uses [`Codec::consumes`] to order observations before a move,
+    /// framework uses [`Codec::output_consumes`] to order observations before a move,
     /// unless [`Codec::output_owner`] first retains the final output allocation.
     pub fn combine(parts: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Combine(parts.into_iter().collect())
