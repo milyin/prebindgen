@@ -4036,13 +4036,19 @@ fn incomplete_custom_resource_metadata_is_rejected() {
             .set_package_prefix("test")
             .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
             .prepare().unwrap();
-        let first = &mut model.function_mut("call").unwrap().params[0]
-            .ty
-            .slot
-            .as_mut()
-            .unwrap()
-            .rust
-            .resources[0];
+        let ty = model.function("call").unwrap().params[0].ty.ty.clone();
+        let mut plan = JniCodec
+            .input_leaf(
+                &model,
+                &ty,
+                &(),
+                syn::parse_quote!(bad_wire),
+                syn::parse_quote!(bad_value),
+                &prebindgen_declarations::Condition::default(),
+            )
+            .unwrap();
+        plan.resources[0].registered = true;
+        let first = &mut plan.resources[0];
         let expected = match missing {
             "allocation" => {
                 first.allocation_type = None;
@@ -4061,6 +4067,7 @@ fn incomplete_custom_resource_metadata_is_rejected() {
                 "eagerly prepared"
             }
         };
+        model.function_mut("call").unwrap().params[0].ty.slot = Some(plan.into());
         let error = generate(&model).err().unwrap();
         assert!(
             error.contains("function `call` parameter `first`"),

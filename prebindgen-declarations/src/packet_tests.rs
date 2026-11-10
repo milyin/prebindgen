@@ -353,6 +353,7 @@ impl Codec for CodecImpl {
         let data = values[1].1;
         let len = values[2].1;
         plan.delivery = prebindgen_conversions::Delivery {
+            policy: ::prebindgen_conversions::DeliveryPolicy::Fixed,
             statements: quote!(let delivered=Returned{present:#flag,data:#data,len:#len};),
             result: quote!(delivered),
         };

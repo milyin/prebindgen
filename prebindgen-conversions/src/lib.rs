@@ -13,7 +13,7 @@ pub mod boxed;
 pub mod value;
 
 mod emission;
-pub use emission::{render_template, template_parameter, TemplateContext};
+pub use emission::{render_output, render_template, template_parameter, TemplateContext};
 
 mod plan;
 pub use plan::*;

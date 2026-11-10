@@ -969,3 +969,89 @@ mod structural_validation_tests {
             .contains("control wires"));
     }
 }
+
+/// Physical/error decoding shape, ignoring wire names and Kotlin presentation
+/// groups. Nested carriers and optional encodings must agree as well as the
+/// top-level JVM signature, because the latter cannot describe rows in a buffer.
+pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
+    fn wires(wires: &[Wire<JniWire>], out: &mut Vec<String>) {
+        for wire in wires {
+            let detail = match &wire.kind {
+                JniWire::Scalar { primitive, .. } | JniWire::Native128 { primitive, .. } => {
+                    format!("{primitive:?}")
+                }
+                JniWire::Handle { handle, .. } => {
+                    format!("{}:{:?}", type_key(&handle.ty), handle.access)
+                }
+                JniWire::Enum { enum_type, .. } => type_key(&enum_type.mapping.ty),
+                JniWire::NativeBuffer { text } => text.to_string(),
+                JniWire::Callback { callback } => callback.fqn(),
+                _ => String::new(),
+            };
+            out.push(format!(
+                "{:?}:{}:{detail}",
+                std::mem::discriminant(&wire.kind),
+                type_key(&wire.kind.rust_type())
+            ));
+        }
+    }
+    fn visit(node: &kotlin::JniNode, out: &mut Vec<String>) {
+        match node {
+            WireNode::Leaf(fields) => wires(fields, out),
+            WireNode::Branch {
+                meta: JniBranch::Group(_),
+                controls,
+                children,
+            } => {
+                wires(controls, out);
+                for child in children {
+                    visit(child, out);
+                }
+            }
+            WireNode::Branch {
+                controls, children, ..
+            } => {
+                out.push("alternatives[".into());
+                wires(controls, out);
+                for child in children {
+                    out.push("arm[".into());
+                    visit(child, out);
+                    out.push("]".into());
+                }
+                out.push("]".into());
+            }
+            WireNode::Chain {
+                meta,
+                controls,
+                child,
+            } => {
+                let label = match meta {
+                    JniChain::Optional(JniOptional::Flag(_)) => "optional:flag".into(),
+                    JniChain::Optional(JniOptional::Niche { reservation, .. }) => {
+                        let index =
+                            prebindgen_flat::wire_definitions(std::iter::once(child.as_ref()))
+                                .position(|wire| wire.name == reservation.discriminator);
+                        format!("optional:niche:{:?}:{index:?}", reservation.niche)
+                    }
+                    JniChain::Sequence(delivery) => format!("sequence:{delivery:?}"),
+                    JniChain::Bulk(record) => format!(
+                        "bulk:{:?}",
+                        record
+                            .definition
+                            .fields()
+                            .map(|(_, ty)| type_key(ty))
+                            .collect::<Vec<_>>()
+                    ),
+                };
+                out.push(label);
+                out.push("[".into());
+                wires(controls, out);
+                visit(child, out);
+                out.push("]".into());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    visit(node, &mut out);
+    out
+}

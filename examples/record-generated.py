@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FILES = {
     "example-cbindgen": ("bindings.rs", "bindings.h"),
     "perftest-c": ("bindings.rs", "bindings.h", "owners.rs", "owners.h"),
-    "covertest-kotlin": ("bindings.rs", "kotlin", "output-rows.pro"),
+    "covertest-kotlin": ("bindings.rs", "input-contracts.rs", "output-contracts.rs", "kotlin", "output-rows.pro"),
     "perftest-kotlin": ("bindings.rs", "kotlin"),
     "emitcheck": ("bindings.rs",),
 }

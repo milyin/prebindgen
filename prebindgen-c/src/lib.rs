@@ -161,6 +161,7 @@ impl Codec for CCodec {
         let result_type = prebindgen_conversions::template_parameter("output_type");
         let out = prebindgen_conversions::template_parameter("output_pointer");
         plan.delivery = prebindgen_conversions::Delivery {
+            policy: ::prebindgen_conversions::DeliveryPolicy::Fixed,
             statements: quote!(let result = #result_type { #(#values),* }; std::ptr::write(#out, result);),
             result: quote!(()),
         };

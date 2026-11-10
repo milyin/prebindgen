@@ -21,7 +21,7 @@ impl TemplateContext for () {
 }
 
 /// Resolve the call's source binding before generator-specific template parameters.
-pub(crate) fn render_output(
+pub fn render_output(
     context: &impl TemplateContext,
     code: &TokenStream,
     source: &syn::Ident,

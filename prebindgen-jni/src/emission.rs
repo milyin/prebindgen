@@ -7,6 +7,10 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct JniContext {
+    /// Explicit function-return transport. Source callback argument scopes use Packet.
+    pub return_delivery: crate::JniReturnDelivery,
+    /// Delivery prepared once for the active result converter, if adapter-selected.
+    pub prepared_delivery: Option<prebindgen_conversions::Delivery>,
     /// Mutable JNI environment parameter.
     pub environment: syn::Ident,
     /// Long-array parameter recording completed input transfers.
@@ -47,5 +51,57 @@ impl TemplateContext for JniContext {
             }
             _ => Err(format!("unknown emission parameter `{name}`")),
         })
+    }
+}
+
+impl JniContext {
+    /// Use the shared callback boundary's prepared bulk carriers in native input
+    /// validation. The code uses the standard bulk-read template markers and
+    /// the same wire tree as the callback's input converter.
+    pub fn cached_callback_validation(
+        &self,
+        validation: &TokenStream,
+        node: &prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+    ) -> Result<TokenStream> {
+        crate::bulk::cached_reads(validation, node)
+    }
+    /// Prepare native result delivery from the successful wire expressions.
+    /// This is the same operation used by built-in output plans. Values may
+    /// refer to source_result_expr; the output fragment resolves that binding.
+    pub fn output_delivery(
+        &self,
+        outcomes: &prebindgen_flat::Outcomes<
+            prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        >,
+        values: &[(syn::Ident, TokenStream)],
+    ) -> Result<prebindgen_conversions::Delivery> {
+        let node = &outcomes.success;
+        match self.return_delivery {
+            crate::JniReturnDelivery::Packet => crate::returns::packet_delivery(node, values),
+            crate::JniReturnDelivery::Capture => crate::returns::callback_delivery(
+                node,
+                values,
+                self.return_sink
+                    .as_ref()
+                    .ok_or("capture delivery requires a return sink")?,
+                self.is_domain_error,
+            ),
+            crate::JniReturnDelivery::Direct => {
+                if self.is_domain_error {
+                    return Err("domain errors require capture or packet delivery".into());
+                }
+                if crate::group::result_packet_fields(node).len() > 1 {
+                    return Err("direct delivery requires at most one wire".into());
+                }
+                crate::returns::delivery(
+                    node,
+                    values,
+                    self.return_sink
+                        .as_ref()
+                        .ok_or("direct delivery requires an error capture")?,
+                    false,
+                )
+            }
+        }
     }
 }
