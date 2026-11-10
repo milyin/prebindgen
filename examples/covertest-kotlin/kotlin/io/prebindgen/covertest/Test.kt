@@ -15,6 +15,7 @@ private fun expectInvalid(action: () -> Unit) {
 fun main(args: Array<String>) {
     if (args.contentEquals(arrayOf("handle-lock-stack"))) { checkHandleLockStack(); return }
     checkInputContracts()
+    checkOutputContracts()
     checkRowMetadata()
     checkTypeInputs()
     checkParameterNames()

@@ -3,7 +3,9 @@
 This implements the input portion of the [investigation](README.md). Built-in
 and independent parameter converters use the existing JNI emitter. Outputs,
 retained callback converters and configured error converters keep their existing
-implementation. The first checkbox in #898 therefore remains partially open.
+implementation. This document describes that intermediate commit; the
+[complete stage](complete-stage.md) extends the contracts to outputs, callback
+converters and local typed-error conversion.
 
 ## What can now be evaluated
 

@@ -29,6 +29,44 @@ impl ErrorBinding {
     }
 }
 
+/// Bind a prepared function's typed domain-error output converter.
+/// The result slot must declare matching error wires. The helper and Kotlin
+/// handler are local to the source function, so overloads and other functions
+/// sharing the same Rust error type retain independent conversion policies.
+pub fn bind_error_output<I, O>(
+    flat: &mut Flat<JniSchema<I, O>>,
+    function: &str,
+    output: impl KotlinOutputConversion + 'static,
+) -> Result<()> {
+    let function = flat.function_mut(function)?;
+    let identity = format!(
+        "{}::{}",
+        names::path_identity(&function.path),
+        function.name
+    );
+    let hash = prebindgen_reprc::schema_id(&identity);
+    let label = function.name.to_string();
+    let label = label.trim_start_matches("r#");
+    let metadata = function
+        .metadata
+        .as_mut()
+        .ok_or("function has no export metadata")?;
+    let previous = metadata
+        .error
+        .as_ref()
+        .ok_or("function has no prepared domain-error converter")?;
+    let mut error = (**previous).clone();
+    error.helper = format_ident!("__pb_jni_error_{label}_local_{hash:016x}");
+    let package = error
+        .handler
+        .rsplit_once('.')
+        .ok_or("domain-error handler has no package")?
+        .0;
+    error.handler = format!("{package}.LocalErrorHandler_{label}_{hash:016x}");
+    error.output = JniOutput::new(output);
+    metadata.error = Some(std::rc::Rc::new(error));
+    Ok(())
+}
 fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result<syn::Ident> {
     let mode = if mapped { "mapped" } else { "typed" };
     Ok(format_ident!(
@@ -172,6 +210,8 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         let ty = &error.ty;
         let source = format_ident!("source");
         let context = JniContext {
+            return_delivery: crate::JniReturnDelivery::Packet,
+            prepared_delivery: None,
             environment: format_ident!("env"),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),
@@ -180,6 +220,9 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
             output_committed: quote!(*reported = Some(result.as_raw());),
         };
         let body_for = |context: &JniContext| -> Result<TokenStream> {
+            let mut prepared_context = context.clone();
+            returns::prepare(&error.output, &mut prepared_context)?;
+            let context = &prepared_context;
             let commit = error.output.code_fragment_slot(
                 OutputFragment::Commit {
                     context,
@@ -206,11 +249,13 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         };
         let body = body_for(&context)?;
         let callback_context = JniContext {
+            return_delivery: JniReturnDelivery::Capture,
+            prepared_delivery: None,
             return_sink: Some(format_ident!("__pb_return")),
             output_committed: quote!(*reported = Some(std::ptr::null_mut());),
             ..context
         };
-        let callback_body = if error.output.native_return().is_some() {
+        let callback_body = if returns::select(&error.output).is_some() {
             body_for(&callback_context)?
         } else {
             quote!(Err("custom error output requires packet delivery".into()))

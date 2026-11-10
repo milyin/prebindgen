@@ -358,7 +358,9 @@ impl Helpers {
     }
 }
 
-pub(crate) fn emit<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<TokenStream> {
+pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
+) -> Result<TokenStream> {
     let mut helpers = Helpers::default();
     for (input, node) in metadata::nodes(flat) {
         helpers.visit(node, input)?;

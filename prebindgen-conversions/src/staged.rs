@@ -112,9 +112,20 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
         mode: InputFragment<'_, C>,
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
+        self.emit_with_validation(mode, &self.validation)
+    }
+}
+impl<W: WireKind, C: TemplateContext + 'static, N, B> InputPlan<W, C, N, B> {
+    /// Emit the same input phases with caller-prepared validation code.
+    /// Used when a callback return shares already-read native buffer carriers.
+    pub fn emit_with_validation(
+        &self,
+        mode: InputFragment<'_, C>,
+        validation: &TokenStream,
+    ) -> Result<TokenStream> {
         expression(match mode {
             InputFragment::Validate { context, next } => {
-                let code = context.render(&self.validation)?;
+                let code = context.render(validation)?;
                 scope(code, next)?
             }
             InputFragment::Acquire { context, next } => {
@@ -155,6 +166,17 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
         mode: OutputFragment<'_, C>,
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
+        self.emit_with_delivery(mode, &self.delivery)
+    }
+}
+impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
+    /// Emit the output phases with an explicitly selected delivery protocol.
+    /// Preparation and ownership commit still use this plan's original storage.
+    pub fn emit_with_delivery(
+        &self,
+        mode: OutputFragment<'_, C>,
+        delivery: &crate::Delivery,
+    ) -> Result<TokenStream> {
         expression(match mode {
             OutputFragment::Prepare {
                 context,
@@ -169,8 +191,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
                 source,
                 next,
             } => {
-                let code =
-                    crate::emission::render_output(context, &self.delivery.statements, source)?;
+                let code = crate::emission::render_output(context, &delivery.statements, source)?;
                 scope(code, next)?
             }
             OutputFragment::Commit { context, source } => {
@@ -178,7 +199,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
                 quote!({ #code })
             }
             OutputFragment::Result { context, source } => {
-                crate::emission::render_output(context, &self.delivery.result, source)?
+                crate::emission::render_output(context, &delivery.result, source)?
             }
         })
     }
