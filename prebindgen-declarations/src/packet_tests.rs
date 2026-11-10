@@ -132,36 +132,6 @@ impl Codec for CodecImpl {
     type Chain = PacketChain;
     type Branch = Metadata;
 
-    fn group_metadata(&self) -> Metadata {
-        Metadata::Components
-    }
-    fn optional_niche(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<NicheReservation<Self::Niche>> {
-        select_optional_niche(self, PointerLenAbi::values(payload))
-    }
-    fn optional_presence(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: &NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        optional_presence(self, PointerLenAbi::values(payload), reservation)
-    }
-    fn absent_output_values(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        absent_output_values(self, PointerLenAbi::values(payload), reservation)
-    }
-    fn retire_niches(
-        &self,
-        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<()> {
-        retire_optional_niches(self, PointerLenAbi::values_mut(payload), reservation)
-    }
     fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
         PointerLenAbi::validate(&plan.node)
     }
@@ -171,54 +141,32 @@ impl Codec for CodecImpl {
         Ok(())
     }
 
-    type Niche = ();
     type Context = ();
     type Extra = ();
 
-    fn optional_metadata(
-        &self,
-        _: syn::Ident,
-        _: syn::Ident,
-        _: Option<()>,
-        _controls: &[Wire<Type>],
-    ) -> Result<PacketChain> {
-        Ok(PacketChain::Optional)
+    fn selector(&self, _: &()) -> Result<Type> {
+        Ok(syn::parse_quote!(i32))
     }
-    fn alternatives_metadata(&self, _selector: &Wire<Type>) -> Result<Metadata> {
-        Ok(Metadata::Alternatives)
-    }
-    fn field_group(&self, _: syn::Ident) -> Metadata {
-        Metadata::Field
-    }
-    fn fields_group(&self) -> Metadata {
-        Metadata::Fields
-    }
-    fn selector(&self, _: &()) -> Type {
-        syn::parse_quote!(i32)
-    }
-    fn niche(&self, _: &Type) -> Option<()> {
-        None
-    }
-    fn set_niche(&self, _: &mut Type, _: Option<()>) {}
-    fn absent_value(&self, ty: &Type, _: Option<&()>, _: bool) -> Result<TokenStream> {
-        Ok(if matches!(ty, Type::Ptr(_)) {
-            quote!(::core::ptr::null())
-        } else {
-            quote!(Default::default())
-        })
-    }
-    fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool {
-        false
-    }
-    fn input_leaf(
+
+    fn output_consumes(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
+        _: &Type,
         _: &(),
-        w: syn::Ident,
-        v: syn::Ident,
-        active: &Condition,
-    ) -> Result<CodecInput<Self>> {
+    ) -> bool {
+        false
+    }
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+        let InputLeaf {
+            flat: _flat,
+            ty,
+            extra: _,
+            wire: w,
+            target: v,
+            active,
+            ..
+        } = request;
+
         let mut input = value::input(
             ty,
             w.clone(),
@@ -242,26 +190,32 @@ impl Codec for CodecImpl {
         }
         Ok(input)
     }
-    fn output_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        _: &(),
-        w: syn::Ident,
-        v: TokenStream,
-        borrowed: bool,
-    ) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+        let OutputLeaf {
+            flat: _flat,
+            ty,
+            extra: _,
+            wire: w,
+            value: v,
+            access,
+            ..
+        } = request;
+        let borrowed = access.is_shared();
+
         value::output(ty, w, v, borrowed, |v| v, ty.clone())
     }
     fn sequence_input(
         &self,
-        _: &(),
-        wire: syn::Ident,
-        length: syn::Ident,
-        index: syn::Ident,
-        element: &prebindgen_flat::WireNode<Type, PacketChain, Metadata>,
-        _: &Condition,
+        request: SequenceInputRequest<'_, Self>,
     ) -> Result<SequenceInput<Type, PacketChain>> {
+        let SequenceInputRequest {
+            wire,
+            length,
+            index,
+            element,
+            ..
+        } = request;
+
         let field = PointerLenAbi::row_fields(element)
             .next()
             .unwrap()
@@ -294,14 +248,16 @@ impl Codec for CodecImpl {
     }
     fn sequence_output(
         &self,
-        _: &(),
-        wire: syn::Ident,
-        length: syn::Ident,
-        _: syn::Ident,
-        element: &prebindgen_flat::WireNode<Type, PacketChain, Metadata>,
-        values: &[(syn::Ident, TokenStream)],
-        _delivery: crate::SequenceDelivery,
+        request: SequenceOutputRequest<'_, Self>,
     ) -> Result<SequenceOutput<Type, PacketChain>> {
+        let SequenceOutputRequest {
+            wire,
+            length,
+            element,
+            values,
+            ..
+        } = request;
+
         assert_eq!(
             PointerLenAbi::row_fields(element).len(),
             values.len(),
@@ -358,6 +314,78 @@ impl Codec for CodecImpl {
             result: quote!(delivered),
         };
         Ok(())
+    }
+
+    fn group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+        Ok(match kind {
+            GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
+            GroupKind::Fields => Metadata::Fields,
+            GroupKind::Field(_) => Metadata::Field,
+        })
+    }
+    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+        let prepared = prepare_optional_payload(
+            PointerLenAbi::values_mut(request.payload),
+            request.direction,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        let metadata = PacketChain::Optional;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<Metadata> {
+        for arm in request.arms {
+            retire_optional_niches(
+                PointerLenAbi::values_mut(arm),
+                None,
+                |w, n| self.remaining_niche(w, n),
+                |w, n| {
+                    self.set_niche(w, n);
+                    Ok(())
+                },
+            )?;
+        }
+        Ok(Metadata::Alternatives)
+    }
+}
+
+impl CodecImpl {
+    fn niche(&self, _: &Type) -> Option<()> {
+        None
+    }
+    fn set_niche(&self, _: &mut Type, _: Option<()>) {}
+    fn absent_value(&self, ty: &Type, _: Option<&()>, _: bool) -> Result<TokenStream> {
+        Ok(if matches!(ty, Type::Ptr(_)) {
+            quote!(::core::ptr::null())
+        } else {
+            quote!(Default::default())
+        })
+    }
+    fn is_present(&self, _: &Type, _: &(), _: TokenStream) -> Result<TokenStream> {
+        unreachable!()
+    }
+    fn remaining_niche(&self, _: &Type, _: &()) -> Option<()> {
+        None
     }
 }
 

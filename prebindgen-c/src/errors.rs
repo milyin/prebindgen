@@ -31,7 +31,7 @@ impl ErrorBinding {
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &enums::EnumCodec,
+    codec: &CCodec,
     declarations: &prebindgen_declarations::Declarations,
 ) -> Result<()> {
     let mut types = flat
@@ -308,7 +308,7 @@ pub(crate) fn result_function(
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
-                let value = context.render(&CCodec.absent_value(&wire.kind, None, false)?)?;
+                let value = context.render(&wire::absent_output_value(&wire.kind, None)?)?;
                 Ok(quote!(#field:#value))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -342,7 +342,7 @@ pub(crate) fn result_function(
         let wire = outputs[*i];
         let ty = wire.rust_type();
         let field = format_ident!("v{i}");
-        let failure = CCodec.absent_value(&wire.kind, Some(niche), false)?;
+        let failure = wire::absent_output_value(&wire.kind, Some(niche))?;
         (
             quote!(#ty),
             c_ty(wire, prefix, pointers, context),

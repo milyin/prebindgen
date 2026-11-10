@@ -82,7 +82,7 @@ fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result
 /// Prepare each error once on its type and attach each function's selected binding.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &data::DataCodec<'_>,
+    codec: &JniCodec<'_>,
     declarations: &prebindgen_declarations::Declarations,
     functions: &[FunctionDecl],
 ) -> Result<()> {

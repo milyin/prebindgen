@@ -259,6 +259,61 @@ impl WireKind for CWire {
     }
 }
 
+// Inactive values shared by optional encoding and native error delivery.
+pub(crate) fn absent_output_value(wire: &CWire, niche: Option<&CNiche>) -> Result<TokenStream> {
+    if let Some(niche) = niche {
+        wire.validate_niche(niche)?;
+    }
+    let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
+    let wide = prebindgen_conversions::template_parameter("wide_integer_type");
+    Ok(match wire {
+        CWire::Callback { callback } => callback.absent_value(),
+        CWire::Pointer { pointer, .. } if pointer.access == Access::Shared => {
+            quote!(std::ptr::null())
+        }
+        CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
+        CWire::View | CWire::Buffer => {
+            quote!(#buffer_type {data:std::ptr::null(),len:0})
+        }
+        CWire::SliceView { element } => {
+            let ty = borrowed::ident(*element);
+            quote!(#ty {data: ::core::ptr::null(), len: 0})
+        }
+        CWire::MutableView => quote!(__PbBufferMut {
+            data: std::ptr::null_mut(),
+            len: 0
+        }),
+        CWire::Owned {
+            owner,
+            by_value: true,
+            ..
+        } => {
+            let t = owner.ident();
+            quote!(#t::empty())
+        }
+        CWire::Owned {
+            access: Access::Shared,
+            ..
+        } => quote!(::core::ptr::null()),
+        CWire::Owned { .. } => quote!(::core::ptr::null_mut()),
+        CWire::Rows => quote!(__PbRows {
+            data: std::ptr::null(),
+            len: 0
+        }),
+        CWire::Scalar {
+            primitive: Primitive::I128 | Primitive::U128,
+            ..
+        } => quote!(#wide {hi:0,lo:0}),
+        CWire::Scalar {
+            primitive: Primitive::F32 | Primitive::F64,
+            ..
+        } => quote!(0.0),
+        CWire::Scalar { .. } | CWire::Enum { .. } => niche
+            .map(|n| n.integer_value())
+            .unwrap_or_else(|| quote!(0)),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

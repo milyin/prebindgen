@@ -377,29 +377,62 @@ pub(crate) fn callback_parameters(
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
-pub(crate) fn optional_niche(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
-) -> Option<prebindgen_declarations::NicheReservation<CNiche>> {
-    prebindgen_declarations::select_optional_niche(&CCodec, values(node))
-}
-pub(crate) fn optional_presence(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
-    reservation: &prebindgen_declarations::NicheReservation<CNiche>,
-) -> Result<TokenStream> {
-    prebindgen_declarations::optional_presence(&CCodec, values(node), reservation)
-}
-pub(crate) fn absent_output_values(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
-    reservation: Option<&prebindgen_declarations::NicheReservation<CNiche>>,
-) -> Result<Vec<(syn::Ident, TokenStream)>> {
-    prebindgen_declarations::absent_output_values(&CCodec, values(node), reservation)
+pub(crate) fn prepare_optional(request: Optional<'_, CCodec>) -> Result<OptionalEncoding<CCodec>> {
+    let prepared = prebindgen_declarations::prepare_optional_payload(
+        values_mut(request.payload),
+        request.direction,
+        CWire::available_niche,
+        CWire::set_niche,
+        |wire, niche, value| {
+            wire.validate_niche(niche)?;
+            Ok(niche.present(value))
+        },
+        CWire::remaining_niche,
+        wire::absent_output_value,
+    )?;
+    let discriminator = prepared
+        .reservation
+        .as_ref()
+        .map_or_else(|| request.presence.clone(), |r| r.discriminator.clone());
+    let (presence, controls) = if prepared.reservation.is_some() {
+        (
+            Presence::Niche {
+                input_test: prepared.input_test,
+            },
+            Vec::new(),
+        )
+    } else {
+        let flag = Wire {
+            name: request.presence.clone(),
+            kind: CWire::scalar(Primitive::I32),
+        };
+        (Presence::Flag(flag.clone()), vec![flag])
+    };
+    let metadata = COptional::from_parts(
+        request.presence,
+        discriminator,
+        prepared.reservation.map(|r| r.niche),
+        &controls,
+    )
+    .map(CChain::Optional)?;
+    Ok(OptionalEncoding {
+        presence,
+        metadata,
+        absent_values: prepared.absent_values,
+    })
 }
 pub(crate) fn retire_niches(
-    node: &mut WireNode<CWire, crate::CChain, crate::CBranch>,
+    node: &mut WireNode<CWire, CChain, CBranch>,
     reservation: Option<&prebindgen_declarations::NicheReservation<CNiche>>,
 ) -> Result<()> {
-    prebindgen_declarations::retire_optional_niches(&CCodec, values_mut(node), reservation)
+    prebindgen_declarations::retire_optional_niches(
+        values_mut(node),
+        reservation,
+        CWire::remaining_niche,
+        CWire::set_niche,
+    )
 }
+
 pub(crate) fn record_fields(
     node: &WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
@@ -718,41 +751,41 @@ mod tests {
     }
     #[test]
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
-        let mut input = CCodec
-            .input_leaf(
+        let mut input = CCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
                 syn::parse_quote!(value),
                 &prebindgen_declarations::Condition::default(),
-            )
+            ))
             .unwrap();
         input.node = prebindgen_flat::WireNode::Branch {
             controls: vec![],
             meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut input.node)],
         };
-        assert!(CCodec
+        assert!(CCodec::raw()
             .finish_input(&mut input, &())
             .unwrap_err()
             .contains("direct child"));
-        let mut output = CCodec
-            .output_leaf(
+        let mut output = CCodec::raw()
+            .output_leaf(prebindgen_declarations::OutputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
                 quote!(value),
-                false,
-            )
+                prebindgen_declarations::ValueAccess::Owned,
+            ))
             .unwrap();
         output.outcomes.success = prebindgen_flat::WireNode::Branch {
             controls: vec![],
             meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut output.outcomes.success)],
         };
-        assert!(CCodec
+        assert!(CCodec::raw()
             .finish_output(&mut output, &())
             .unwrap_err()
             .contains("direct child"));
@@ -769,39 +802,39 @@ mod tests {
                 next_integer_niche: Some(65),
             },
         ] {
-            let mut plan = CCodec
-                .input_leaf(
+            let mut plan = CCodec::raw()
+                .input_leaf(prebindgen_declarations::InputLeaf::new(
                     &Bindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
                     syn::parse_quote!(value),
                     &prebindgen_declarations::Condition::default(),
-                )
+                ))
                 .unwrap();
             crate::group::values_mut(&mut plan.node)
                 .next()
                 .unwrap()
                 .kind = wire.clone();
-            assert!(CCodec
+            assert!(CCodec::raw()
                 .finish_input(&mut plan, &())
                 .unwrap_err()
                 .contains("incompatible"));
-            let mut output = CCodec
-                .output_leaf(
+            let mut output = CCodec::raw()
+                .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &Bindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
                     quote!(value),
-                    false,
-                )
+                    prebindgen_declarations::ValueAccess::Owned,
+                ))
                 .unwrap();
             crate::group::values_mut(&mut output.outcomes.success)
                 .next()
                 .unwrap()
                 .kind = wire;
-            assert!(CCodec
+            assert!(CCodec::raw()
                 .finish_output(&mut output, &())
                 .unwrap_err()
                 .contains("incompatible"));
@@ -880,15 +913,15 @@ mod abi_tests {
         let source = syn::parse_file("pub fn f(value:i32){}").unwrap();
         let mut flat: Bindings =
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let mut input = CCodec
-            .input_leaf(
+        let mut input = CCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),
                 syn::parse_quote!(value),
                 &prebindgen_declarations::Condition::default(),
-            )
+            ))
             .unwrap();
         input.node = sequence;
         flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.clone());

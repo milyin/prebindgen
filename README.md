@@ -330,7 +330,7 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
-supported; fixed-size array fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+supported; fixed-size array fields remain unsupported. The low-level `JniCodec::raw()` ignores data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -521,6 +521,15 @@ default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
 construction inputs, never stored in Flat. Nested recipes use the enclosing
 occurrence's extra data.
 
+A codec needs four operations: `input_leaf(InputLeaf)`, `output_leaf(OutputLeaf)`,
+`output_consumes`, and `group(GroupKind)`. Optional features reject unsupported
+requests by default. [The operation guide](docs/declaration-codec.md) describes
+the requests and migration from the former hooks. C and JNI each implement the
+trait once: `CCodec::raw()` / `JniCodec::raw()` preserve manual low-level
+conversion policy; `CCodec::declared()` / `JniCodec::declared(callback_outputs)`
+also apply language declarations already stored in Flat. Both `Default`
+implementations select raw policy. The high-level builders select declared policy.
+
 `prebindgen-conversions` owns reusable leaf implementations: `value`, `boxed`,
 `boxed::Storage` and `boxed::BoxedWire`. It depends on flat and does not depend
 on declarations. Adapters use its builders during preparation and its metadata
@@ -629,7 +638,7 @@ All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.
 
-`Codec::Input` and `Codec::Output` select the final slot implementations. After
+`Codec::Schema` selects the final input/output slot implementations and declaration metadata. After
 composition and finalization, preparation converts its plans into these types;
 JNI keeps the logical specification and selected native plan in
 `JniInput`/`JniOutput`; Rust and Kotlin emission share the native plan.
@@ -1826,9 +1835,11 @@ not yet supported. Spell both generic arguments explicitly using `Result`,
 
 Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
 The declaration compiler validates any selected mapper and unwraps the result
-before preparing the success conversion. `Codec::result_error_value` receives
-the owned error and an optional mapper expression; its default requires a mapper
-and delegates to `Codec::result_error`. C can preserve declared error fields;
+before preparing the success conversion. `Codec::source_error` receives
+the owned error and an optional mapper expression and returns a `SourceErrorPlan`
+containing both the error payload tree and its propagation expression. Its default
+requires an explicit mapper and delegates to `Codec::mapped_error` for routing.
+C can preserve declared error fields;
 JNI preserves typed outputs or explicitly mapped messages for its domain callback. No Result-specific wire type, niche, or group metadata is introduced.
 
 ## Fieldless enums
@@ -1932,13 +1943,18 @@ cannot supply another niche, because an absent payload fills them with defaults.
 C headers document the exact discriminator argument or result field for each
 optional value, including enclosing optional values.
 
-Adapters define `Codec::Niche: Clone`; the shared compiler never interprets its
-representation. `niche` selects an excluded representation, `is_present` emits a
-total, side-effect-free presence predicate, and `absent_value` emits its absent
-value. `remaining_niche` reports the next unused representation after consuming
-one niche, or `None` when exhausted. The shared compiler suppresses niches on
-other payload wires and on inactive selector arms. Both input and output
-composition use this protocol.
+Adapters implement one `Codec::optional` operation. It receives the mutable
+payload tree, presence binding and conversion direction, then returns
+`OptionalEncoding`: adapter metadata, a separate flag or niche presence test,
+and inactive output expressions. A niche is an adapter-private concept rather
+than a required associated type. The shared compiler validates flag names,
+input/output test direction and inactive expression bindings.
+
+`prepare_optional_payload` is an opt-in helper for adapters that reserve excluded
+representations. The adapter supplies native-scope wires and operations to read,
+reserve and retire their offers, test presence and prepare absent values. It can
+use arbitrary domain metadata. `Codec::alternatives` retires inactive offers in
+its arms after the compiler prefixes the selector and arm source paths.
 
 Each logical `Wire<W>` defines one typed value. `WireNode<W, C, B>` arranges
 those definitions into leaves, parents with one child and parents with ordered
@@ -1994,12 +2010,13 @@ context supplied by the adapter.
 
 Metadata types `C` and `B` describe chain and branch parents. Each adapter
 chooses their semantic variants. `W` describes each individual value. Use `()` for metadata a generator does not need. The shared compiler
-creates metadata through codec hooks and does not interpret it. `group_metadata`
-describes ordered conversion components; `field_group` and `fields_group` retain
-source field information. Constructor arguments and output combinations retain
-their group with one component; constructors without arguments retain an empty
-group. `optional_metadata` and `alternatives_metadata` borrow supporting wires
-for validation; the compiler moves those wires into `controls`. Sequence hooks
+creates metadata through codec operations and does not interpret it.
+`group(GroupKind)` describes values, fields, one named field or a named output
+view; unsupported kinds return an error. Constructor arguments and output
+combinations retain their group with one component; constructors without
+arguments retain an empty group. `optional` and `alternatives` prepare metadata
+and update the payload's encoding state; the tree owns its supporting controls.
+Sequence operations
 return `SequenceInput<W, C>` or `SequenceOutput<W, C>`, with separate `controls`
 and metadata fields. Metadata must not retain wire descriptors.
 
@@ -2035,17 +2052,15 @@ including supported optional wrapping. Parameters, error channels and nested
 rows use buffered sequences. JNI's native callback fills an internal sink; user
 folds run after native return and handle-lock release.
 
-Optional and alternative metadata hooks return `Result`; errors leave installed
-conversions unchanged. Other adapters can use several controls, such as separate pointer and
-length values, and choose their own metadata types and policies.
+Optional and alternative operations return `Result`; errors leave installed
+conversions unchanged. Other adapters can use several controls, such as separate
+pointer and length values, and choose their own metadata types and policies.
 
-For an option, the compiler chooses the discriminator and absent representation
-before calling the hook. The hook receives the normalized presence binding used
-by the prepared payload conditions; it can be a computed local rather than a
-physical wire. The leaf's `W` records the niche still available to an enclosing
-option. After C reserves `0x110000` for `None` in `Option<char>`, that leaf can
-offer `0x110001` to the next option. `Codec::set_niche` updates this state;
-`Codec::niche` reads it. `None` means no niche remains.
+The optional operation receives the normalized presence binding used by payload
+conditions; it can be a computed local rather than a physical wire. The leaf's
+`W` records the niche still available to an enclosing option. After C reserves
+`0x110000` for `None` in `Option<char>`, that leaf can offer `0x110001` to the
+next option. The adapter updates this state while preparing the optional payload.
 
 Record helpers check source field names while constructing input and
 borrowed or owned output conversions. Native-plan finalization checks physical
@@ -2149,12 +2164,14 @@ Adapter API migration for the logical schema:
 - Stored plans expose `InputPlan::node` and `OutputPlan::outcomes`.
   `OutputPlan::values` and sequence-hook reads remain keyed by binding name.
   `match_output_fields` matches expressions to selected destination fields.
-- Codecs implement option niche reservation/presence, absent-output preparation,
-  niche retirement, path prefixing and conversion validation as needed.
+- Codecs implement complete `optional` and `alternatives` operations as needed.
+  Niche helpers take native-scope wires and adapter-supplied wire operations;
+  `Codec::Niche` and the separate mandatory niche/metadata hooks are removed.
 - `SequenceInput<W, C>`/`SequenceOutput<W, C>` return controls separately from metadata. Callback variant
   eligibility and sequence callback signatures belong to the adapters.
 - `staged::emit_call` receives the generated function's parameter names for
   reserving locals; it never derives a parameter list from the logical tree.
-- Codecs describe source errors through `source_error_layout` and binding
-  failures through `binding_failure_layout`. C/JNI output signatures, typed
-  error handlers and ownership rules are retained.
+- Codecs prepare source errors through `source_error`, which returns both layout
+  and propagation, and binding failures through `binding_failure_layout`.
+  `mapped_error` retains the convenience for explicitly mapped String errors.
+  C/JNI output signatures, typed error handlers and ownership rules are retained.

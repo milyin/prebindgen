@@ -385,51 +385,57 @@ mod tests {
     fn low_level_borrowed_buffers_never_implicitly_clone() {
         let flat = model("");
         for ty in [syn::parse_quote!(String), syn::parse_quote!(Vec<u8>)] {
-            let error = CCodec
-                .output_leaf(
+            let error = CCodec::raw()
+                .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &flat,
                     &ty,
                     &(),
                     syn::parse_quote!(wire),
                     quote!(value),
-                    true,
-                )
+                    prebindgen_declarations::ValueAccess::Shared,
+                ))
                 .err()
                 .unwrap();
             assert!(error.contains("explicit owning copy"));
-            let copied = CCodec
+            let copied = CCodec::raw()
                 .output_projected(
-                    &flat,
-                    &ty,
-                    &(),
-                    syn::parse_quote!(wire),
-                    quote!(value),
+                    prebindgen_declarations::OutputLeaf::new(
+                        &flat,
+                        &ty,
+                        &(),
+                        syn::parse_quote!(wire),
+                        quote!(value),
+                        prebindgen_declarations::ValueAccess::Shared,
+                    ),
                     &prebindgen_declarations::Projection::borrowed(),
                 )
                 .unwrap();
             assert!(copied.statements.to_string().contains("Clone :: clone"));
         }
         for ty in [syn::parse_quote!(&str), syn::parse_quote!(&[u8])] {
-            let view = CCodec
-                .output_leaf(
+            let view = CCodec::raw()
+                .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &flat,
                     &ty,
                     &(),
                     syn::parse_quote!(wire),
                     quote!(value),
-                    false,
-                )
+                    prebindgen_declarations::ValueAccess::Owned,
+                ))
                 .unwrap();
             assert!(
                 matches!(view.outcomes.success,prebindgen_flat::WireNode::Leaf(ref w) if matches!(w[0].kind,CWire::View))
             );
-            let copied = CCodec
+            let copied = CCodec::raw()
                 .output_projected(
-                    &flat,
-                    &ty,
-                    &(),
-                    syn::parse_quote!(wire),
-                    quote!(value),
+                    prebindgen_declarations::OutputLeaf::new(
+                        &flat,
+                        &ty,
+                        &(),
+                        syn::parse_quote!(wire),
+                        quote!(value),
+                        prebindgen_declarations::ValueAccess::Shared,
+                    ),
                     &prebindgen_declarations::Projection::borrowed(),
                 )
                 .unwrap();
@@ -776,15 +782,15 @@ mod tests {
         .err()
         .unwrap();
         assert!(error.contains("'static lifetime"), "{error}");
-        assert!(CCodec
-            .input_leaf(
+        assert!(CCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &flat,
                 &syn::parse_quote!(&'static str),
                 &(),
                 syn::parse_quote!(wire),
                 syn::parse_quote!(value),
                 &Default::default()
-            )
+            ))
             .err()
             .unwrap()
             .contains("'static reference lifetime"));

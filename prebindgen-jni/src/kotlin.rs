@@ -1090,15 +1090,15 @@ mod tests {
             output_prefix: "wrapped_",
         };
         // This condition is arbitrary Kotlin code, not a declaration selector path.
-        let mut plan = JniCodec
-            .input_leaf(
+        let mut plan = JniCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(incoming),
                 syn::parse_quote!(value),
                 &prebindgen_declarations::Condition::default(),
-            )
+            ))
             .unwrap();
         let JniWire::Handle { condition, .. } =
             &mut prebindgen_flat::wire_definitions_mut(std::iter::once(&mut plan.node))
@@ -1109,7 +1109,7 @@ mod tests {
             panic!()
         };
         *condition = "isEnabled() && count > 3".into();
-        JniCodec.finish_input(&mut plan, &()).unwrap();
+        JniCodec::raw().finish_input(&mut plan, &()).unwrap();
         let input = JniInput::from(plan);
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
@@ -1141,15 +1141,15 @@ mod tests {
             ["if (isEnabled() && count > 3) __pb_consume(incoming)"]
         );
 
-        let plan = JniCodec
-            .output_leaf(
+        let plan = JniCodec::raw()
+            .output_leaf(prebindgen_declarations::OutputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(wire),
                 quote!(returned),
-                false,
-            )
+                prebindgen_declarations::ValueAccess::Owned,
+            ))
             .unwrap();
         let output = JniOutput::from(plan).kotlin(&context).unwrap();
         assert_eq!(output.delivered, ["requireNotNull(wrapped_0)"]);

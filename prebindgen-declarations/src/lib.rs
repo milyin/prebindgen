@@ -24,7 +24,8 @@ pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
 pub use optional::{
     absent_output_values, optional_input, optional_output, optional_presence,
-    retire_optional_niches, select_optional_niche, NicheReservation,
+    prepare_optional_payload, retire_optional_niches, select_optional_niche, NicheReservation,
+    PreparedOptionalPayload,
 };
 pub use prebindgen_flat::{option_inner, result_parts, sequence_parts, SequenceView};
 mod sequence;
@@ -528,7 +529,7 @@ impl Output {
                 child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
             Self::Leaf => {
-                !borrowed && output_referent(ty).is_none() && codec.consumes(flat, ty, extra)
+                !borrowed && output_referent(ty).is_none() && codec.output_consumes(flat, ty, extra)
             }
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
@@ -545,818 +546,11 @@ impl Output {
     }
 }
 
-/// Language-specific leaf conversions. Recursive composition stays in this declaration compiler.
-///
-/// A leaf is a source type the adapter converts itself: a value copied across
-/// the boundary or an object kept in Rust. `prebindgen-conversions` provides helpers
-/// for both representations. The
-/// adapter chooses by type; a recipe only says where the leaves are.
-///
-/// Input leaves must validate without consuming in `validation`, then
-/// acquire ownership without failure or source calls in `acquire`. Each acquired
-/// value needs an ordinary Rust owner so later failures drop it. `statements`
-/// can construct arguments from those owners. Every input wire must retain
-/// the supplied activation condition. Output leaves keep ownership in Rust
-/// locals until their infallible `commit` runs at the selected protocol's
-/// transfer point. Buffered delivery commits after all foreign delivery succeeds;
-/// an explicit visitor protocol can transfer each prepared element at callback entry.
-///
-/// Source-aware hooks receive the authoritative Flat model. Read configured type,
-/// field, function and module metadata there instead of retaining parallel indexes
-/// in the codec or passing copies through `Extra`. Pure wire-composition hooks need
-/// no model access. Unresolved recipes remain temporary preparation inputs.
-///
-/// # Implementing a codec
-///
-/// This minimal codec uses Rust values as its carriers. It illustrates converter
-/// construction without a foreign ABI or object storage. A language adapter
-/// additionally writes wrappers and chooses native and destination-language
-/// carrier types for its wire kinds.
-///
-/// ```
-/// use prebindgen_flat::{Result, Wire, validate_bindings};
-/// use prebindgen_conversions::{value};
-/// use prebindgen_declarations::{
-///     Codec, CodecInput, CodecOutput, Declarations,
-///     Bindings, fun, expand_param, expand_return, bind_input, Input,
-/// };
-/// use proc_macro2::TokenStream;
-/// use quote::quote;
-/// use syn::{Ident, Type};
-///
-/// use prebindgen_declarations::Condition;
-/// fn carrier(kind: value::Value) -> Type {
-///     match kind {
-///         value::Value::Scalar(p) => p.rust_type(),
-///         value::Value::Text => syn::parse_quote!(String),
-///         value::Value::Bytes => syn::parse_quote!(Vec<u8>),
-///     }
-/// }
-/// struct RustCarriers;
-/// impl Codec for RustCarriers {
-///     type Schema = prebindgen_conversions::PlanSchema<Type>;
-///     type Niche = ();
-///     type Chain = ();
-///     type Branch = ();
-///     fn group_metadata(&self) {}
-///     type Extra = ();
-///     type Context = ();
-///     type Wire = Type; // The Rust carrier type is the complete wire description.
-///
-///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: &[Wire<Type>]) -> Result<()> {Ok(())}
-///     fn alternatives_metadata(&self, _: &Wire<Type>) -> Result<()> {Ok(())}
-///     fn field_group(&self, _: Ident) {}
-///     fn fields_group(&self) {}
-///     fn optional_niche(&self, _: &prebindgen_flat::WireNode<Self::Wire>) -> Option<prebindgen_declarations::NicheReservation<()>> {None}
-///     fn retire_niches(&self, _: &mut prebindgen_flat::WireNode<Self::Wire>, _: Option<&prebindgen_declarations::NicheReservation<()>>) -> Result<()> {Ok(())}
-///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
-///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
-///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
-///     fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool { false }
-///     fn input_leaf(
-///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
-///     ) -> Result<CodecInput<Self>> {
-///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
-///         let decode = quote!(#wire.clone());
-///         value::input(ty, wire, var, &active.rust(), decode, carrier(kind))
-///     }
-///     fn output_leaf(
-///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
-///     ) -> Result<CodecOutput<Self>> {
-///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
-///         value::output(ty, wire, v, borrowed, |v| v, carrier(kind))
-///     }
-/// }
-///
-/// let source = syn::parse_file(r#"
-///     pub fn from_i32(value: i32) -> i64 { value as i64 }
-///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
-///     pub fn echo(value: i64) -> i64 { value }
-/// "#)?;
-/// let mut flat = Bindings::<Type>::parse(
-///     source.items.into_iter().map(|item| (item, Default::default())),
-/// )?;
-/// let defaults = Declarations::new(&flat,
-///     vec![expand_param!(i64).variant("from_i32").into()],
-///     vec![expand_return!(i64).field("to_i32").field_self().into()],
-///     vec![],
-/// )?;
-/// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
-/// let function = flat.function("echo")?;
-/// // Input: one constructor argument. Output: two projected values.
-/// assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(&function.params[0].ty.slot.as_ref().unwrap().node)).count(), 1);
-/// assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(&function.ret.slot.as_ref().unwrap().outcomes.success)).count(), 2);
-/// // Replace just this parameter's converter; later default filling preserves it.
-/// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
-/// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
-/// validate_bindings(&flat)?;
-/// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
-/// assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(&input.node)).count(), 1);
-/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind), "i64");
-/// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-#[allow(clippy::type_complexity)] // Explicit, independently typed metadata for each parent variant.
-pub trait Codec {
-    /// Whether foreign tags and array lengths need runtime validation.
-    /// Trusted raw-pointer adapters may require valid representations from callers.
-    fn validates_inputs(&self) -> bool {
-        true
-    }
+mod codec;
+pub use codec::{prepare_mapped_source_error, Codec};
+mod operations;
+pub use operations::*;
 
-    /// Fixed schema selecting final converters and declaration metadata before parsing.
-    type Schema: Schema<
-        Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
-        Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
-    >;
-    /// Compile a leaf used inside a bulk record, before choosing its outer transport.
-    #[allow(clippy::too_many_arguments)]
-    fn input_bulk_leaf(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _var: syn::Ident,
-        _active: &Condition,
-    ) -> Result<CodecInput<Self>> {
-        Err("bulk inputs are unsupported by this codec".into())
-    }
-    /// Convert a bulk leaf inside a sequence row. Row-local temporaries stay
-    /// alive through construction. The default uses ordinary bulk leaf conversion.
-    #[allow(clippy::too_many_arguments)]
-    fn input_bulk_row_leaf(
-        &self,
-        flat: &Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &Condition,
-    ) -> Result<CodecInput<Self>> {
-        self.input_bulk_leaf(flat, ty, extra, wire, var, active)
-    }
-    /// Prepare a native leaf for a bulk output without per-field foreign allocations.
-    #[allow(clippy::too_many_arguments)]
-    fn output_bulk_leaf(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _value: TokenStream,
-        _borrowed: bool,
-    ) -> Result<CodecOutput<Self>> {
-        Err("bulk outputs are unsupported by this codec".into())
-    }
-    /// Prepare an explicitly projected leaf inside bulk output storage.
-    #[allow(clippy::too_many_arguments)]
-    fn output_bulk_projected(
-        &self,
-        flat: &Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        value: TokenStream,
-        projection: &Projection,
-    ) -> Result<CodecOutput<Self>> {
-        if !projection.fields.is_empty() {
-            return Err("bulk leaf projection has field overrides".into());
-        }
-        self.output_bulk_leaf(
-            flat,
-            ty,
-            extra,
-            wire,
-            value,
-            projection.mode == ProjectionMode::Borrowed,
-        )
-    }
-    /// Group a compiled native expansion into its physical bulk input carrier.
-    fn bulk_input(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _child: CodecInput<Self>,
-        _active: &Condition,
-    ) -> Result<CodecInput<Self>> {
-        Err("bulk inputs are unsupported by this codec".into())
-    }
-    /// Group a compiled native expansion into its physical bulk output carrier.
-    fn bulk_output(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _child: CodecOutput<Self>,
-    ) -> Result<CodecOutput<Self>> {
-        Err("bulk outputs are unsupported by this codec".into())
-    }
-    /// Read collection rows from native bulk storage.
-    #[allow(clippy::too_many_arguments)]
-    fn sequence_input_bulk(
-        &self,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _length: syn::Ident,
-        _index: syn::Ident,
-        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _active: &Condition,
-    ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
-        Err("bulk collections are unsupported by this codec".into())
-    }
-    /// Store collection rows in native bulk storage.
-    #[allow(clippy::too_many_arguments)]
-    fn sequence_output_bulk(
-        &self,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _length: syn::Ident,
-        _index: syn::Ident,
-        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _values: &[(syn::Ident, TokenStream)],
-        _delivery: SequenceDelivery,
-    ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
-        Err("bulk collections are unsupported by this codec".into())
-    }
-    /// Compile a callback whose two conversion directions are already resolved.
-    fn callback_input(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _callback: &CallbackInput,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _var: syn::Ident,
-        _active: &Condition,
-    ) -> Result<CodecInput<Self>> {
-        Err("configured callbacks are unsupported by this codec".into())
-    }
-    /// Source-aware input normalization, called only during tree preparation.
-    /// Return an explicit operation tree for a language-specific representation.
-    fn expand_input(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _tree: &Input<InputRequest>,
-        _extra: &Self::Extra,
-    ) -> Result<Option<Input<InputRequest>>> {
-        Ok(None)
-    }
-    /// Source-aware output normalization, called before conversion compilation.
-    fn expand_output(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _tree: &Output<OutputRequest>,
-        _extra: &Self::Extra,
-    ) -> Result<Option<Output<OutputRequest>>> {
-        Ok(None)
-    }
-    /// Select bulk for automatically materialized output sequences.
-    /// Explicit ordinary rows and per-row callbacks bypass this default.
-    fn default_output_sequence_is_bulk(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _extra: &Self::Extra,
-    ) -> bool {
-        false
-    }
-    /// Keep a collection occurrence in one native input leaf instead of
-    /// decomposing it into element rows. Explicit `Input::Sequence` overrides
-    /// this preference; input defaults and whole-collection identities use it.
-    fn input_collection_is_leaf(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-    ) -> bool {
-        false
-    }
-    /// Keep a collection occurrence in one native output leaf. Explicit
-    /// `Output::Sequence` and element-targeted expansions still produce rows.
-    fn output_collection_is_leaf(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-    ) -> bool {
-        false
-    }
-    /// Annotate an already compiled foreign-record input; structural expansion is complete.
-    fn input_record_metadata(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _ty: &Type,
-        _wire: &syn::Ident,
-        _active: &Condition,
-        _plan: &mut CodecInput<Self>,
-        _extra: &Self::Extra,
-    ) -> Result<()> {
-        Err("foreign record inputs are unsupported by this codec".into())
-    }
-    /// Annotate an already compiled foreign-record output with its selected representation.
-    fn output_record_metadata(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _ty: &Type,
-        _wire: &syn::Ident,
-        _plan: &mut CodecOutput<Self>,
-        _extra: &Self::Extra,
-    ) -> Result<()> {
-        Err("foreign record outputs are unsupported by this codec".into())
-    }
-    /// Adapter-owned description of an absent wire representation. Use `()` if unused.
-    /// The shared compiler never interprets this metadata.
-    type Niche: Clone;
-    /// Adapter metadata for parents with exactly one child description.
-    type Chain: Clone;
-    /// Adapter metadata for parents with an ordered list of child descriptions.
-    type Branch: Clone;
-    /// Describe an ordered set of conversion components. Constructors, output
-    /// accessors and combinations retain this group with one component. Constructors
-    /// retain an empty group when there are no arguments. Source
-    /// record fields instead use [`Codec::fields_group`].
-    fn group_metadata(&self) -> Self::Branch;
-    /// Preserve an explicitly named output view in the prepared wire tree.
-    fn named_output_group(&self, _name: &str) -> Result<Self::Branch> {
-        Err("named output views are unsupported by this codec".into())
-    }
-    /// Describe an optional value in the adapter's own metadata format.
-    /// `presence` is the normalized 0/1 binding used by payload conditions.
-    /// `discriminator` names a descendant wire; `niche` is its reserved absent
-    /// representation, or `None` when a separate flag is an inline control wire.
-    /// With a flag, `presence` and `discriminator` name that same wire. The
-    /// supplied controls stay in the tree. Borrow them to validate the encoding;
-    /// metadata must not retain wire descriptors. Return an error when they cannot form the
-    /// adapter's flag or niche representation; failed preparation preserves existing slots.
-    fn optional_metadata(
-        &self,
-        presence: syn::Ident,
-        discriminator: syn::Ident,
-        niche: Option<Self::Niche>,
-        controls: &[Wire<Self::Wire>],
-    ) -> Result<Self::Chain>;
-    /// Record the supplied selector for mutually exclusive input alternatives,
-    /// preserving its niche state in the tree. Metadata must not retain the wire.
-    /// Reject an unsupported tag representation.
-    fn alternatives_metadata(&self, selector: &Wire<Self::Wire>) -> Result<Self::Branch>;
-    /// Describe one named source field, whose subtree may contain any number of wires.
-    fn field_group(&self, name: syn::Ident) -> Self::Branch;
-    /// Describe a record or unit value's ordered collection of field subtrees.
-    /// The shared helpers check field-name uniqueness before calling this hook.
-    fn fields_group(&self) -> Self::Branch;
-
-    /// Input data borrowed while building one occurrence's conversion; use `()` if unused.
-    /// The same value is passed through nested conversions. It is not stored in Flat;
-    /// hooks retain only the data needed for emission in their code and wires.
-    type Extra;
-    /// Context supplied by the language generator when emitting stored templates.
-    type Context: prebindgen_conversions::TemplateContext + 'static;
-    /// Complete description of one wire, including its type and adapter metadata.
-    /// Grouping belongs to parent nodes; no wire kind contains child wires.
-    type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
-    /// Describe an `i32` selector tag or optional presence flag.
-    ///
-    /// Selector arm indices start at zero; optional flags use 0 and 1. A codec
-    /// may advertise excluded negative values as niches for enclosing options.
-    /// A newly added flag retains its own niches; inactive payload wires do not.
-    /// `extra` is the occurrence data of the conversion that contains the selector.
-    fn selector(&self, extra: &Self::Extra) -> Self::Wire;
-    /// Whether a leaf output consumes the current source value.
-    ///
-    /// This must agree with [`Self::output_leaf`]. It governs move ordering and
-    /// double-consumption rejection in [`Output::Combine`], not input ownership.
-    /// A non-consuming leaf receives a shared reference with `borrowed` set.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` — owned source type of the value being delivered.
-    /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`].
-    fn consumes(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-    ) -> bool;
-    /// Prepare a leaf input of source type `ty` using occurrence data `extra`.
-    ///
-    /// All fallible checks belong in [`InputPlan::validation`]; do not
-    /// consume values there. Return a generation error when this type or access
-    /// mode is unsupported.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` — the source parameter type at this position, as written: `T`,
-    ///   `&T` or `&mut T`.
-    /// * `extra` — occurrence data of the conversion, as passed to [`bind_input`]
-    ///   or [`Declarations::fill`].
-    /// * `wire` — fresh identifier for the boundary parameter this leaf adds.
-    ///   A leaf that needs more wires or locals derives their names from it.
-    /// * `var` — fresh identifier for the Rust local that holds the converted value.
-    ///   [`InputPlan::argument`] normally refers to it.
-    /// * `active` — the selector arms under which this leaf is used. Copy it to every
-    ///   returned wire and resource, and guard validation and acquisition with it.
-    fn input_leaf(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &Condition,
-    ) -> Result<CodecInput<Self>>;
-    /// Borrow an input collection directly before preparing its element conversions.
-    /// Called only for reference sequence occurrences. The resolved `element`
-    /// recipe must be compatible with the borrowed storage. Return None to retain
-    /// ordinary sequence marshalling, or reject unsupported borrowing explicitly.
-    #[allow(clippy::too_many_arguments)]
-    fn input_borrowed_sequence(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _var: syn::Ident,
-        _element: &Input,
-        _active: &Condition,
-    ) -> Result<Option<CodecInput<Self>>> {
-        Ok(None)
-    }
-    /// Convert a leaf inside a collection row. Validation, acquisition and
-    /// construction complete before the transport releases its per-row state.
-    /// The default uses ordinary leaf conversion.
-    fn input_row_leaf(
-        &self,
-        flat: &Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &Condition,
-    ) -> Result<CodecInput<Self>> {
-        self.input_leaf(flat, ty, extra, wire, var, active)
-    }
-    /// Convert a leaf with explicit ownership, independently of its usual policy.
-    ///
-    /// The compiler supplies either an owned value or a shared reference according
-    /// to `projection.mode`. The default supports leaves without field overrides.
-    fn output_projected(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        value: TokenStream,
-        projection: &Projection,
-    ) -> Result<CodecOutput<Self>> {
-        if !projection.fields.is_empty() {
-            return Err("this output converter does not support field projection overrides".into());
-        }
-        let mut payload = ty;
-        while let Some(inner) = option_inner(payload) {
-            payload = inner;
-        }
-        if projection.mode == ProjectionMode::Owned && matches!(payload, Type::Reference(_)) {
-            return Err("owned projection cannot consume a reference payload".into());
-        }
-        self.output_leaf(
-            flat,
-            ty,
-            extra,
-            wire,
-            value,
-            projection.mode == ProjectionMode::Borrowed,
-        )
-    }
-    /// Choose array input transport for one prepared element layout.
-    /// `wire` is the unique binding stem for this occurrence, not a requirement
-    /// to use a single parameter. The returned controls own the outer wire definitions.
-    /// Chain metadata describes their interpretation. `open` must
-    /// make `length` available as a parameter or local; `bind` runs for each
-    /// `index`. Raw reads may defer errors until the active conversion.
-    ///
-    /// Choose additional names fresh against the element and outer boundary
-    /// values. The shared helper reserves `{wire}_element_built` for its row result.
-    fn sequence_input(
-        &self,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _length: syn::Ident,
-        _index: syn::Ident,
-        _element: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _active: &Condition,
-    ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
-        Err("collections are unsupported by this codec".into())
-    }
-    /// Implement the selected sequence delivery; stage elements without publishing owners.
-    /// `begin` sees `length`; `enter` and `store` see each `index`.
-    /// `wire` is a unique binding stem; metadata and `values` describe every
-    /// outer value by binding name. Choose any additional names fresh
-    /// against element and boundary values. `{wire}_source` and `{wire}_commits`
-    /// are reserved for shared preparation locals.
-    #[allow(clippy::too_many_arguments)] // Explicit occurrence bindings and delivery policy.
-    fn sequence_output(
-        &self,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _length: syn::Ident,
-        _index: syn::Ident,
-        _element: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _values: &[(syn::Ident, TokenStream)],
-        _delivery: SequenceDelivery,
-    ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
-        Err("collections are unsupported by this codec".into())
-    }
-    /// Route the owned source error value. `message`, when present, is an
-    /// explicitly declared mapper expression returning String. Return a String
-    /// expression for the active fallible boundary; an adapter may first deliver
-    /// a structured error or throw an exception. The default requires a mapper
-    /// and delegates to `result_error`.
-    fn result_error_value(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        _value: TokenStream,
-        message: Option<TokenStream>,
-        extra: &Self::Extra,
-    ) -> Result<TokenStream> {
-        self.result_error(
-            flat,
-            ty,
-            message.ok_or_else(|| {
-                format!(
-                    "Result error `{}` requires an explicit error_mapper or on_error mapper",
-                    type_key(ty)
-                )
-            })?,
-            extra,
-        )
-    }
-    /// Logical payload of the source Err(E) channel. A mapped error explicitly
-    /// uses String; raw typed errors must provide their own declared projection.
-    fn source_error_layout(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        mapped: bool,
-        extra: &Self::Extra,
-    ) -> Result<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>> {
-        if !mapped {
-            return Err(format!(
-                "missing logical error projection for `{}`",
-                type_key(ty)
-            ));
-        }
-        let plan = self.output_leaf(
-            flat,
-            &syn::parse_quote!(String),
-            extra,
-            format_ident!("source_error_message"),
-            quote!(source_error_message),
-            false,
-        )?;
-        Ok(plan.outcomes.success)
-    }
-    /// Logical binding-failure payload, independently of how the adapter delivers
-    /// it. None means this codec declares no binding-failure channel.
-    fn binding_failure_layout(
-        &self,
-        _extra: &Self::Extra,
-    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
-        Ok(None)
-    }
-    /// Report a mapped String in the adapter-specific error channel.
-    /// The returned expression must produce String. The compiler returns Err
-    /// before preparing success outputs. The default rejects unsupported routing.
-    fn result_error(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _ty: &Type,
-        _message: TokenStream,
-        _extra: &Self::Extra,
-    ) -> Result<TokenStream> {
-        Err("Result error routing is unsupported by this codec".into())
-    }
-    /// Select an excluded representation of this optional payload. The adapter
-    /// chooses candidates in its value domain, including tree-owned controls.
-    fn optional_niche(
-        &self,
-        _payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<NicheReservation<Self::Niche>>;
-    /// Test presence using the reserved representation without decoding a payload.
-    fn optional_presence(
-        &self,
-        _payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _reservation: &NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        Err("optional niche presence is unsupported".into())
-    }
-    /// Inert expressions for every named output of an absent payload.
-    fn absent_output_values(
-        &self,
-        _payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        Err("optional outputs are unsupported".into())
-    }
-    /// Remove niche offers from inactive values. Retain only the reservation's
-    /// donor with its remaining domain, when one was selected.
-    fn retire_niches(
-        &self,
-        _payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<()>;
-    /// Validate a prepared input before installing it or embedding it in a sequence.
-    /// The default accepts every structural shape. Adapters interpret their own
-    /// metadata and enforce semantic rules, such as requiring nonempty alternatives.
-    fn validate_input(&self, _plan: &CodecInput<Self>) -> Result<()> {
-        Ok(())
-    }
-    /// Validate named success expressions against the adapter's output representation.
-    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
-        prebindgen_conversions::validate_value_bindings(&plan.values)
-    }
-    /// Prepend a semantic source path to one prepared occurrence. Override when
-    /// node controls carry paths, or element definitions have a separate
-    /// path context. Codecs without source-path metadata need no implementation.
-    fn prefix_layout(
-        &self,
-        _layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _segment: ComponentSegment,
-    ) {
-    }
-    /// The unused representation currently available on this wire.
-    /// Initialize it when creating the wire and return the state last written by
-    /// `set_niche`. Never offer a representation already used by an inner option
-    /// or accepted as a present leaf payload. It may describe one value or a set.
-    fn niche(&self, _wire: &Self::Wire) -> Option<Self::Niche> {
-        None
-    }
-    /// Update the unused representation stored in a wire's own description.
-    /// Optional encoding helpers call this after reserving or disabling a niche.
-    /// Codecs must preserve this update in their wire description. A codec with
-    /// no niches can implement this as a no-op and always return `None` from `niche`.
-    fn set_niche(&self, _wire: &mut Self::Wire, _niche: Option<Self::Niche>) {}
-    /// Recognize presence without decoding the payload. Called on original inner metadata.
-    /// The expression must be total and side-effect-free for every initialized wire
-    /// value, including inactive placeholders; it must not dereference raw pointers.
-    /// It returns false for every representation reserved by this niche.
-    fn is_present(
-        &self,
-        _wire: &Self::Wire,
-        _niche: &Self::Niche,
-        _value: TokenStream,
-    ) -> Result<TokenStream> {
-        Err("niche presence testing is unsupported by this codec".into())
-    }
-    /// Remaining excluded representation after reserving `niche` for one optional layer.
-    /// The compiler stores the result in the wire through `set_niche`. Returning
-    /// `None` exhausts this domain; enclosing options then use another wire or a flag.
-    fn remaining_niche(&self, _wire: &Self::Wire, _niche: &Self::Niche) -> Option<Self::Niche> {
-        None
-    }
-    /// Inert wire expression used for an absent payload, optionally using a niche.
-    fn absent_value(
-        &self,
-        _wire: &Self::Wire,
-        _niche: Option<&Self::Niche>,
-        _input: bool,
-    ) -> Result<TokenStream> {
-        Err("optional values are unsupported by this codec".into())
-    }
-    /// Complete a composed parameter plan before it is stored in a slot.
-    /// Called once per bound parameter, including records and selectors. The
-    /// tree is complete when this hook runs. Edits to it or its metadata are
-    /// immediately visible to adapter operations; no secondary layout needs refreshing.
-    /// The compiler validates the tree before installing the finished slot.
-    fn finish_input(&self, _plan: &mut CodecInput<Self>, _extra: &Self::Extra) -> Result<()> {
-        Ok(())
-    }
-    /// Complete a composed result plan, including unit and multi-wire results.
-    /// Install call-level delivery here, after all output expressions are known.
-    /// The logical schema already includes the composed payload and error channels.
-    /// Edits to the tree or its adapter metadata are preserved and validated.
-    fn finish_output(&self, _plan: &mut CodecOutput<Self>, _extra: &Self::Extra) -> Result<()> {
-        Ok(())
-    }
-    /// Prepare delivery of the Rust expression `value` as one or more wires.
-    ///
-    /// Keep unpublished allocations under Rust ownership and transfer them only in
-    /// [`OutputPlan::commit`]. Return a generation error for unsupported
-    /// conversions. Install final delivery in [`Codec::finish_output`], rather
-    /// than on nested leaf plans; recursive composition rejects leaf delivery.
-    ///
-    /// # Arguments
-    ///
-    /// * `ty` — the owned source type of the value.
-    /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`]
-    ///   or [`Declarations::fill`].
-    /// * `wire` — fresh identifier for the delivered value. A leaf that needs more
-    ///   wires or locals derives their names from it.
-    /// * `value` — Rust expression producing the value to deliver.
-    /// * `borrowed` — `true` when `value` is a shared reference to `ty`, such as a
-    ///   record field observed in place; do not move out of it. `false` when
-    ///   `value` is owned.
-    fn output_leaf(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Self::Extra,
-        wire: syn::Ident,
-        value: TokenStream,
-        borrowed: bool,
-    ) -> Result<CodecOutput<Self>>;
-    /// Convert a reference supplied directly by the Rust return value.
-    ///
-    /// Unlike observing an owned value through a getter, this reference already
-    /// has the source function's lifetime contract. Adapters may expose it as a
-    /// non-owning foreign pointer. `reference` preserves the referent and mutability;
-    /// `value` produces exactly that Rust reference.
-    /// This also applies inside optional and successful Result returns and to
-    /// getter results whose receiver remains alive. Callback arguments supplied as references
-    /// also use this hook: their loan lasts only for the foreign invocation.
-    /// The foreign caller must preserve the referenced storage and Rust aliasing
-    /// rules. No runtime lifetime tracking is implied.
-    ///
-    /// Return `None` to use ordinary borrowed leaf conversion (the default).
-    fn output_return_reference(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _reference: &syn::TypeReference,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _value: TokenStream,
-    ) -> Result<Option<CodecOutput<Self>>> {
-        Ok(None)
-    }
-    /// Select an address-preserving representation of a borrowed collection.
-    ///
-    /// Called before element conversion when a sequence is borrowed and neither
-    /// its own policy nor an enclosing projection explicitly permits copying.
-    /// `value` is a reference to the collection; `element` is its resolved output
-    /// recipe. An adapter may return a non-owning view or reject an unsupported
-    /// borrow instead of allocating converted rows. `None` retains ordinary
-    /// sequence conversion, which may be required by the foreign representation.
-    /// `temporary` means the receiver backing this observation is destroyed
-    /// after the generated call; a view must not escape that receiver.
-    #[allow(clippy::too_many_arguments)]
-    fn output_borrowed_sequence(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _value: TokenStream,
-        _element: &Output,
-        _delivery: SequenceDelivery,
-        _temporary: bool,
-    ) -> Result<Option<CodecOutput<Self>>> {
-        Ok(None)
-    }
-    /// Place an owned value in its final foreign allocation before getter views.
-    ///
-    /// Returns its owning output conversion and a Rust `*mut ty` expression from
-    /// which getter receivers can be borrowed. That address must remain valid
-    /// across conversion, delivery and ownership commit. Until commit, the plan
-    /// must reclaim the allocation on failure. The default keeps ordinary output
-    /// conversion and observation-before-move ordering.
-    fn output_owner(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _value: TokenStream,
-    ) -> Result<Option<(CodecOutput<Self>, TokenStream)>> {
-        Ok(None)
-    }
-    /// Check a getter loan while its owning output is being delivered.
-    fn validate_owner_getter(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _owner: &Type,
-        _getter: &str,
-        _plan: &CodecOutput<Self>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    /// Check whether a getter's converted outputs can outlive its temporary owner.
-    /// Owner-backed views are compiled separately and already retain their owner.
-    fn validate_getter_output(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _receiver: &Type,
-        _borrowed: bool,
-        _ty: &Type,
-        _plan: &CodecOutput<Self>,
-        _extra: &Self::Extra,
-    ) -> Result<()> {
-        Ok(())
-    }
-}
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
 /// Unbound source helpers have `None` slots. Bound functions need `Some` for their
@@ -1471,12 +665,11 @@ pub fn compile_callback_return<C: Codec>(
     recipe: &Input,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Input> {
-    let mut plan = Compiler::new(flat, codec, "callback_return".into()).input(
-        ty,
-        recipe,
-        extra,
-        &Condition::default(),
-    )?;
+    let compiler = Compiler {
+        input_role: InputRole::CallbackResult,
+        ..Compiler::new(flat, codec, "callback_return".into())
+    };
+    let mut plan = compiler.input(ty, recipe, extra, &Condition::default())?;
     codec.finish_input(&mut plan, extra)?;
     codec.validate_input(&plan)?;
     Ok(plan.into())
@@ -1635,6 +828,7 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
+    input_role: InputRole,
     bulk: std::cell::Cell<bool>,
     // Explicit borrowed collection/record projections authorize owning copies
     // of borrowed leaves, without changing conversions of owned getter results.
@@ -1654,6 +848,7 @@ struct Compiler<'a, C: Codec> {
 impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
+            input_role: InputRole::Parameter,
             bulk: std::cell::Cell::new(false),
             copy_borrowed: std::cell::Cell::new(false),
             grouped_input: std::cell::Cell::new(false),
@@ -1824,11 +1019,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 child.node = WireNode::Branch {
                     controls: vec![],
                     children: vec![child.node],
-                    meta: self.codec.group_metadata(),
+                    meta: self.codec.group(GroupKind::Values)?,
                 };
                 return Ok(child);
             }
             Input::Bulk(inner) => {
+                require_bulk(self.codec, Direction::Input)?;
                 if self.bulk.get() {
                     return self.input_named(ty, inner, extra, active, names);
                 }
@@ -1946,18 +1142,33 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                return if self.bulk_input_row.get() && self.grouped_input.get() {
-                    self.codec
-                        .input_bulk_row_leaf(self.flat, ty, extra, w, var, active)
-                } else if self.bulk.get() {
-                    self.codec
-                        .input_bulk_leaf(self.flat, ty, extra, w, var, active)
-                } else if self.grouped_input.get() {
-                    self.codec
-                        .input_row_leaf(self.flat, ty, extra, w, var, active)
-                } else {
-                    self.codec.input_leaf(self.flat, ty, extra, w, var, active)
-                };
+                let (representation, construction) =
+                    if self.bulk_input_row.get() && self.grouped_input.get() {
+                        (Representation::Bulk, InputConstruction::GroupedRow)
+                    } else if self.bulk.get() {
+                        (Representation::Bulk, InputConstruction::EnclosingConversion)
+                    } else if self.grouped_input.get() {
+                        (Representation::Ordinary, InputConstruction::GroupedRow)
+                    } else {
+                        (
+                            Representation::Ordinary,
+                            InputConstruction::EnclosingConversion,
+                        )
+                    };
+                if representation == Representation::Bulk {
+                    require_bulk(self.codec, Direction::Input)?;
+                }
+                return self.codec.input_leaf(InputLeaf {
+                    flat: self.flat,
+                    ty,
+                    extra,
+                    wire: w,
+                    target: var,
+                    active,
+                    representation,
+                    construction,
+                    role: self.input_role,
+                });
             }
             Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
@@ -1969,7 +1180,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         node: WireNode::Branch {
                             controls: vec![],
                             children: vec![],
-                            meta: self.codec.fields_group(),
+                            meta: self.codec.group(GroupKind::Fields)?,
                         },
                         validation,
                         acquire,
@@ -2055,7 +1266,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 wires = vec![WireNode::Branch {
                     controls: vec![],
                     children: wires,
-                    meta: self.codec.group_metadata(),
+                    meta: self.codec.group(GroupKind::Values)?,
                 }];
             }
             Input::Selector(arms) => {
@@ -2069,7 +1280,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let tag = self.name();
                 let mut selector_layout = prebindgen_flat::WireNode::Leaf(vec![Wire {
                     name: tag.clone(),
-                    kind: self.codec.selector(extra),
+                    kind: self.codec.selector(extra)?,
                 }]);
                 self.prefix(&mut selector_layout, ComponentSegment::Selector);
                 let WireNode::Leaf(mut selector_values) = selector_layout else {
@@ -2089,7 +1300,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
                     self.prefix(&mut p.node, ComponentSegment::Alternative(i));
-                    self.codec.retire_niches(&mut p.node, None)?;
                     fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
@@ -2101,7 +1311,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
-                let metadata = self.codec.alternatives_metadata(&selector)?;
+                let metadata = self.codec.alternatives(Alternatives {
+                    selector: &selector,
+                    arms: &mut alternatives,
+                })?;
                 let node = WireNode::Branch {
                     controls: vec![selector],
                     meta: metadata,
@@ -2167,14 +1380,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
             } else {
                 None
             };
-            let mapped_error = mapped.is_some();
-            let message = self.codec.result_error_value(
-                self.flat,
-                error_ty,
-                quote!(#failure),
-                mapped,
+            let error = self.codec.source_error(SourceError {
+                flat: self.flat,
+                ty: error_ty,
+                value: quote!(#failure),
+                message: mapped,
                 extra,
-            )?;
+            })?;
+            let message = error.propagate;
             let mut child = if reference_return {
                 self.output_return(success_ty, ok, extra, quote!(#payload), false)?
             } else {
@@ -2189,10 +1402,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 #prepare
             };
 
-            let error = self
-                .codec
-                .source_error_layout(self.flat, error_ty, mapped_error, extra)?;
-            child.outcomes.source_error = Some(error);
+            child.outcomes.source_error = Some(error.payload);
             return Ok(child);
         }
         if reference_return {
@@ -2233,7 +1443,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                             success: WireNode::Branch {
                                 controls: vec![],
                                 children: vec![],
-                                meta: self.codec.group_metadata(),
+                                meta: self.codec.group(GroupKind::Values)?,
                             },
                             source_error: None,
                             binding_failure: None,
@@ -2309,7 +1519,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],
-                    meta: self.codec.group_metadata(),
+                    meta: self.codec.group(GroupKind::Values)?,
                 },
                 source_error: None,
                 binding_failure: None,
@@ -2319,6 +1529,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         };
         match recipe {
             Output::Bulk(inner) => {
+                require_bulk(self.codec, Direction::Output)?;
                 if self.bulk.get() {
                     return self.output_named(ty, inner, extra, value, borrowed, wire_name);
                 }
@@ -2332,7 +1543,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Output::Named { name, output } => {
                 let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
                 plan.outcomes.success = WireNode::Branch {
-                    meta: self.codec.named_output_group(name)?,
+                    meta: self.codec.group(GroupKind::NamedOutput(name))?,
                     controls: vec![],
                     children: vec![plan.outcomes.success],
                 };
@@ -2471,37 +1682,37 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Output::Request(never) => match *never {},
             Output::Leaf => {
-                let w = wire_name.cloned().unwrap_or_else(|| self.name());
-                if borrowed && self.copy_borrowed.get() {
-                    return if self.bulk.get() {
-                        self.codec.output_bulk_projected(
-                            self.flat,
-                            ty,
-                            extra,
-                            w,
-                            value,
-                            &Projection::borrowed(),
-                        )
-                    } else {
-                        self.codec.output_projected(
-                            self.flat,
-                            ty,
-                            extra,
-                            w,
-                            value,
-                            &Projection::borrowed(),
-                        )
-                    };
+                if self.bulk.get() {
+                    require_bulk(self.codec, Direction::Output)?;
                 }
-                return if self.bulk.get() {
+                let request = OutputLeaf {
+                    flat: self.flat,
+                    ty,
+                    extra,
+                    wire: wire_name.cloned().unwrap_or_else(|| self.name()),
+                    value,
+                    access: if borrowed {
+                        ValueAccess::Shared
+                    } else {
+                        ValueAccess::Owned
+                    },
+                    representation: if self.bulk.get() {
+                        Representation::Bulk
+                    } else {
+                        Representation::Ordinary
+                    },
+                };
+                return if borrowed && self.copy_borrowed.get() {
                     self.codec
-                        .output_bulk_leaf(self.flat, ty, extra, w, value, borrowed)
+                        .output_projected(request, &Projection::borrowed())
                 } else {
-                    self.codec
-                        .output_leaf(self.flat, ty, extra, w, value, borrowed)
+                    self.codec.output_leaf(request)
                 };
             }
             Output::Projected(projection) => {
+                if self.bulk.get() {
+                    require_bulk(self.codec, Direction::Output)?;
+                }
                 if borrowed && projection.mode == ProjectionMode::Owned {
                     return Err(
                         "owned projection cannot consume a shared-reference occurrence".into(),
@@ -2512,14 +1723,26 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 } else {
                     value
                 };
-                let wire = wire_name.cloned().unwrap_or_else(|| self.name());
-                return if self.bulk.get() {
-                    self.codec
-                        .output_bulk_projected(self.flat, ty, extra, wire, value, projection)
-                } else {
-                    self.codec
-                        .output_projected(self.flat, ty, extra, wire, value, projection)
-                };
+                return self.codec.output_projected(
+                    OutputLeaf {
+                        flat: self.flat,
+                        ty,
+                        extra,
+                        wire: wire_name.cloned().unwrap_or_else(|| self.name()),
+                        value,
+                        access: if projection.mode == ProjectionMode::Borrowed {
+                            ValueAccess::Shared
+                        } else {
+                            ValueAccess::Owned
+                        },
+                        representation: if self.bulk.get() {
+                            Representation::Bulk
+                        } else {
+                            Representation::Ordinary
+                        },
+                    },
+                    projection,
+                );
             }
             Output::Fields(children)
             | Output::OwnedFields(children)
@@ -2541,7 +1764,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     out.outcomes.success = WireNode::Branch {
                         controls: vec![],
-                        meta: self.codec.fields_group(),
+                        meta: self.codec.group(GroupKind::Fields)?,
                         children: vec![],
                     };
 
@@ -2698,7 +1921,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let owner = parts.iter().position(|part| {
             matches!(part,
             Output::Projected(p) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
-                || matches!(part, Output::Leaf) && self.codec.consumes(self.flat, ty, extra)
+                || matches!(part, Output::Leaf) && self.codec.output_consumes(self.flat, ty, extra)
         });
         let Some(owner) = owner else {
             return Ok(None);
@@ -2742,7 +1965,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],
-                    meta: self.codec.group_metadata(),
+                    meta: self.codec.group(GroupKind::Values)?,
                 },
                 source_error: None,
                 binding_failure: None,
@@ -2846,6 +2069,20 @@ fn append<W: prebindgen_flat::WireKind, C, N, B>(
     prebindgen_conversions::validate_value_bindings(&to.values)
 }
 
+fn require_bulk<C: Codec + ?Sized>(codec: &C, direction: Direction) -> Result<()> {
+    if codec.supports_bulk(direction) {
+        Ok(())
+    } else {
+        Err(match direction {
+            Direction::Input => "bulk inputs are unsupported by this codec",
+            Direction::Output => "bulk outputs are unsupported by this codec",
+        }
+        .into())
+    }
+}
+
+#[cfg(test)]
+mod operation_tests;
 #[cfg(test)]
 mod packet_tests;
 #[cfg(test)]

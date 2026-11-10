@@ -1,18 +1,15 @@
-//! Explicit enum declarations and the enum-aware C conversion codec.
+//! Declared C enum metadata and conversion helpers.
 use super::*;
-use prebindgen_declarations::{Condition, EnumMapping};
-
-/// C conversions read representation and error declarations from Flat.
-#[derive(Default)]
-pub(crate) struct EnumCodec {
-    pub(crate) callback_return: bool,
-}
-impl EnumCodec {
-    fn mapping<'a>(
+use prebindgen_declarations::EnumMapping;
+impl CCodec {
+    pub(super) fn enum_mapping<'a>(
         &self,
         flat: &'a Bindings,
         ty: &syn::Type,
     ) -> Option<(&'a str, &'a std::rc::Rc<EnumMapping>)> {
+        if !self.declared {
+            return None;
+        }
         let ty = if let syn::Type::Reference(r) = ty {
             &r.elem
         } else {
@@ -25,386 +22,8 @@ impl EnumCodec {
             .as_ref()
             .map(|e| (e.name.as_str(), &e.mapping))
     }
-    fn wire(name: &str, mapping: &std::rc::Rc<EnumMapping>) -> CWire {
+    pub(super) fn enum_wire(name: &str, mapping: &std::rc::Rc<EnumMapping>) -> CWire {
         CWire::enumeration(name, mapping.clone())
-    }
-}
-impl Codec for EnumCodec {
-    type Schema = CSchema;
-    type Wire = CWire;
-    type Niche = CNiche;
-    type Chain = CChain;
-    type Branch = CBranch;
-    fn validates_inputs(&self) -> bool {
-        false
-    }
-    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
-        CCodec.input_collection_is_leaf(flat, ty, e)
-    }
-    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, e: &()) -> bool {
-        CCodec.output_collection_is_leaf(flat, ty, e)
-    }
-    fn group_metadata(&self) -> CBranch {
-        CBranch::Group(CGroup::Values)
-    }
-
-    type Extra = ();
-    type Context = CContext;
-    fn named_output_group(&self, name: &str) -> Result<CBranch> {
-        CCodec.named_output_group(name)
-    }
-
-    fn binding_failure_layout(
-        &self,
-        e: &(),
-    ) -> Result<Option<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>>> {
-        CCodec.binding_failure_layout(e)
-    }
-    fn source_error_layout(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        mapped: bool,
-        e: &(),
-    ) -> Result<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>> {
-        if let Some(layout) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|t| t.metadata.error.as_ref())
-        {
-            return Ok(layout.plan()?.outcomes.success.clone());
-        }
-        CCodec.source_error_layout(flat, ty, mapped, e)
-    }
-    fn optional_metadata(
-        &self,
-        p: syn::Ident,
-        d: syn::Ident,
-        n: Option<CNiche>,
-        controls: &[prebindgen_flat::Wire<CWire>],
-    ) -> Result<CChain> {
-        CCodec.optional_metadata(p, d, n, controls)
-    }
-    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<CBranch> {
-        CCodec.alternatives_metadata(selector)
-    }
-    fn field_group(&self, n: syn::Ident) -> CBranch {
-        CCodec.field_group(n)
-    }
-    fn fields_group(&self) -> CBranch {
-        CCodec.fields_group()
-    }
-    fn finish_input(&self, p: &mut InputPlan<CWire>, e: &()) -> Result<()> {
-        CCodec.finish_input(p, e)
-    }
-    fn finish_output(&self, p: &mut OutputPlan<CWire>, e: &()) -> Result<()> {
-        CCodec.finish_output(p, e)
-    }
-    fn sequence_input(
-        &self,
-        e: &(),
-        w: syn::Ident,
-        n: syn::Ident,
-        i: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
-        active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CChain>> {
-        CCodec.sequence_input(e, w, n, i, element, active)
-    }
-    fn sequence_output(
-        &self,
-        e: &(),
-        w: syn::Ident,
-        n: syn::Ident,
-        i: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
-        values: &[(syn::Ident, TokenStream)],
-        delivery: prebindgen_declarations::SequenceDelivery,
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
-        CCodec.sequence_output(e, w, n, i, element, values, delivery)
-    }
-    fn result_error_value(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        value: TokenStream,
-        message: Option<TokenStream>,
-        extra: &(),
-    ) -> Result<TokenStream> {
-        if let Some(name) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|t| t.metadata.error.as_ref())
-            .map(|e| e.name.as_str())
-        {
-            if message.is_some() {
-                return Err("structured C errors cannot also select a message mapper".into());
-            }
-            let helper = errors::helper(name);
-            let pointer = prebindgen_conversions::template_parameter("error_pointer");
-            let reported = prebindgen_conversions::template_parameter("error_reported");
-            Ok(
-                quote!({unsafe {#helper(#value,#pointer,&mut #reported)}?;#reported=true;String::new()}),
-            )
-        } else {
-            CCodec.result_error_value(flat, ty, value, message, extra)
-        }
-    }
-    fn result_error(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        message: TokenStream,
-        extra: &(),
-    ) -> Result<TokenStream> {
-        CCodec.result_error(flat, ty, message, extra)
-    }
-    fn niche(&self, w: &CWire) -> Option<CNiche> {
-        CCodec.niche(w)
-    }
-    fn set_niche(&self, w: &mut CWire, n: Option<CNiche>) {
-        CCodec.set_niche(w, n)
-    }
-    fn remaining_niche(&self, w: &CWire, n: &CNiche) -> Option<CNiche> {
-        CCodec.remaining_niche(w, n)
-    }
-    fn is_present(&self, w: &CWire, n: &CNiche, v: TokenStream) -> Result<TokenStream> {
-        CCodec.is_present(w, n, v)
-    }
-    fn absent_value(&self, w: &CWire, n: Option<&CNiche>, input: bool) -> Result<TokenStream> {
-        CCodec.absent_value(w, n, input)
-    }
-    fn selector(&self, e: &()) -> CWire {
-        CCodec.selector(e)
-    }
-    fn consumes(&self, flat: &prebindgen_flat::Flat<Self::Schema>, ty: &syn::Type, e: &()) -> bool {
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            return self.consumes(flat, inner, e);
-        }
-        self.mapping(flat, ty).is_none() && CCodec.consumes(flat, ty, e)
-    }
-    fn callback_input(
-        &self,
-        flat: &Bindings,
-        callback: &prebindgen_declarations::CallbackInput,
-        _: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<CWire>> {
-        if callback.foreign.is_some() || callback.namespace.is_some() || callback.explicit_return {
-            return Err("configured callbacks are unsupported by the C adapter".into());
-        }
-        callback::input(flat, callback, wire, var, active)
-    }
-    fn input_leaf(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        e: &(),
-        w: syn::Ident,
-        v: syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<CWire>> {
-        if prebindgen_flat::callback_signature(ty)?.is_some() {
-            return Err("resolve Callback operations before leaf compilation".into());
-        }
-        if prebindgen_declarations::option_inner(ty).is_some() {
-            return Err("resolve Optional operations before leaf compilation".into());
-        }
-        if let Some((name, m)) = self.mapping(flat, ty) {
-            let decode = {
-                let ty = &m.ty;
-                let arms = m
-                    .variants
-                    .iter()
-                    .map(|(name, tag)| quote!(#tag=>#ty::#name));
-                quote!(match #w {#(#arms,)* _=>unsafe {::core::hint::unreachable_unchecked()}})
-            };
-            let mut plan = prebindgen_declarations::enum_input(
-                m,
-                ty,
-                w.clone(),
-                v.clone(),
-                active,
-                Self::wire(name, m),
-            )?;
-            let condition = active.rust();
-            plan.validation = quote!(let #v=if #condition {Some(#decode)}else{None};);
-            plan.fallible = false;
-            return Ok(plan);
-        }
-        if self.callback_return {
-            if let Some(owner) = owned::declaration(flat, ty).filter(|o| o.explicit) {
-                return Ok(owned::input(owner, ty, w, v, active, true, false));
-            }
-        }
-        CCodec.input_leaf(flat, ty, e, w, v, active)
-    }
-
-    fn input_borrowed_sequence(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        extra: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        element: &prebindgen_declarations::Input,
-        active: &Condition,
-    ) -> Result<Option<InputPlan<CWire>>> {
-        CCodec.input_borrowed_sequence(flat, ty, extra, wire, var, element, active)
-    }
-    fn input_row_leaf(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        extra: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<CWire>> {
-        let mut plan = self.input_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
-        sequence::prepare_input_leaf(&mut plan, ty, &wire, &var, active)?;
-        Ok(plan)
-    }
-    fn output_leaf(
-        &self,
-        flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        e: &(),
-        w: syn::Ident,
-        v: TokenStream,
-        borrowed: bool,
-    ) -> Result<OutputPlan<CWire>> {
-        if prebindgen_declarations::option_inner(ty).is_some() {
-            return Err("resolve Optional operations before leaf compilation".into());
-        }
-        if let Some((name, m)) = self.mapping(flat, ty) {
-            if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
-                return Err("mutable-reference outputs are unsupported".into());
-            }
-            return Ok(prebindgen_declarations::enum_output(
-                m,
-                w,
-                v,
-                Self::wire(name, m),
-            ));
-        }
-        CCodec.output_leaf(flat, ty, e, w, v, borrowed)
-    }
-
-    fn output_projected(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        _: &(),
-        wire: syn::Ident,
-        value: TokenStream,
-        projection: &prebindgen_declarations::Projection,
-    ) -> Result<OutputPlan<CWire>> {
-        if self.mapping(flat, ty).is_some() {
-            if !projection.fields.is_empty() {
-                return Err("enum values do not have projection fields".into());
-            }
-            return self.output_leaf(
-                flat,
-                ty,
-                &(),
-                wire,
-                value,
-                projection.mode == prebindgen_declarations::ProjectionMode::Borrowed,
-            );
-        }
-        CCodec.output_projected(flat, ty, &(), wire, value, projection)
-    }
-
-    fn output_return_reference(
-        &self,
-        flat: &Bindings,
-        reference: &syn::TypeReference,
-        extra: &(),
-        wire: syn::Ident,
-        value: TokenStream,
-    ) -> Result<Option<OutputPlan<CWire>>> {
-        CCodec.output_return_reference(flat, reference, extra, wire, value)
-    }
-
-    fn output_borrowed_sequence(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        extra: &(),
-        wire: syn::Ident,
-        value: TokenStream,
-        element: &prebindgen_declarations::Output,
-        delivery: prebindgen_declarations::SequenceDelivery,
-        temporary: bool,
-    ) -> Result<Option<OutputPlan<CWire>>> {
-        CCodec.output_borrowed_sequence(flat, ty, extra, wire, value, element, delivery, temporary)
-    }
-    fn output_owner(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        extra: &(),
-        wire: syn::Ident,
-        value: TokenStream,
-    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
-        CCodec.output_owner(flat, ty, extra, wire, value)
-    }
-    fn validate_owner_getter(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        getter: &str,
-        plan: &OutputPlan<CWire>,
-    ) -> Result<()> {
-        CCodec.validate_owner_getter(flat, ty, getter, plan)
-    }
-    fn validate_getter_output(
-        &self,
-        flat: &Bindings,
-        receiver: &syn::Type,
-        borrowed: bool,
-        ty: &syn::Type,
-        plan: &OutputPlan<CWire>,
-        extra: &(),
-    ) -> Result<()> {
-        CCodec.validate_getter_output(flat, receiver, borrowed, ty, plan, extra)
-    }
-
-    fn optional_niche(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
-        CCodec.optional_niche(payload)
-    }
-    fn optional_presence(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        CCodec.optional_presence(payload, reservation)
-    }
-    fn absent_output_values(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        CCodec.absent_output_values(payload, reservation)
-    }
-    fn retire_niches(
-        &self,
-        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
-    ) -> Result<()> {
-        CCodec.retire_niches(payload, reservation)
-    }
-    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
-        CCodec.validate_input(plan)
-    }
-    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
-        CCodec.validate_output(plan)
     }
 }
 
@@ -423,7 +42,7 @@ mod tests {
     }
     #[test]
     fn codec_reads_enum_declarations_from_flat_after_creation() {
-        let codec = EnumCodec::default();
+        let codec = CCodec::declared();
         let mut model = flat("pub enum E { A, B }pub fn echo(x:E)->E{}");
         let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
         let mapping =
@@ -434,14 +53,14 @@ mod tests {
                 mapping: mapping.clone(),
             }));
             let output = codec
-                .output_leaf(
+                .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &model,
                     &ty,
                     &(),
                     syn::parse_quote!(wire),
                     quote!(value),
-                    false,
-                )
+                    prebindgen_declarations::ValueAccess::Owned,
+                ))
                 .unwrap();
             let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
                 .next()
@@ -526,11 +145,11 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping =
             std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
-        let codec = EnumCodec::default();
-        let wire = EnumCodec::wire("code", &mapping);
+        let codec = CCodec::declared();
+        let wire = CCodec::enum_wire("code", &mapping);
         assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
         assert!(matches!(
-            codec.remaining_niche(&wire, &CNiche::Integer(8)),
+            wire.remaining_niche(&CNiche::Integer(8)),
             Some(CNiche::Integer(6))
         ));
         let mut ty: syn::Type = syn::parse_quote!(E);
@@ -588,7 +207,7 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping =
             std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
-        let wire = EnumCodec::wire("code", &mapping);
+        let wire = CCodec::enum_wire("code", &mapping);
         let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
             prebindgen_flat::WireNode::Leaf(vec![GenericWire {
                 name: syn::parse_quote!(wire),
@@ -632,7 +251,7 @@ mod tests {
         let mapping =
             std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
         for n in [-1, 0] {
-            let mut wire = EnumCodec::wire("code", &mapping);
+            let mut wire = CCodec::enum_wire("code", &mapping);
             let CWire::Enum {
                 next_integer_niche, ..
             } = &mut wire

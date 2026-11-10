@@ -150,25 +150,22 @@ pub(crate) fn input<C: Codec>(
     if child.acknowledgement.is_some() {
         return Err("collection element acknowledgement belongs to the whole call".into());
     }
-    let transport = if bulk {
-        codec.sequence_input_bulk(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.node,
-            active,
-        )
-    } else {
-        codec.sequence_input(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.node,
-            active,
-        )
-    }?;
+    if bulk {
+        require_bulk(codec, Direction::Input)?;
+    }
+    let transport = codec.sequence_input(SequenceInputRequest {
+        extra,
+        wire: wire.clone(),
+        length: length.clone(),
+        index: index.clone(),
+        element: &child.node,
+        active,
+        representation: if bulk {
+            Representation::Bulk
+        } else {
+            Representation::Ordinary
+        },
+    })?;
     if transport.validation_values.is_empty() && !bulk {
         return Err("collection elements must have at least one input binding".into());
     }
@@ -328,27 +325,23 @@ pub(crate) fn output<C: Codec>(
     if !child.delivery.statements.is_empty() {
         return Err("collection element delivery belongs to the outer slot".into());
     }
-    let transport = if bulk {
-        codec.sequence_output_bulk(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.outcomes.success,
-            &child.values,
-            delivery,
-        )
-    } else {
-        codec.sequence_output(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.outcomes.success,
-            &child.values,
-            delivery,
-        )
-    }?;
+    if bulk {
+        require_bulk(codec, Direction::Output)?;
+    }
+    let transport = codec.sequence_output(SequenceOutputRequest {
+        extra,
+        wire: wire.clone(),
+        length: length.clone(),
+        index: index.clone(),
+        element: &child.outcomes.success,
+        values: &child.values,
+        delivery,
+        representation: if bulk {
+            Representation::Bulk
+        } else {
+            Representation::Ordinary
+        },
+    })?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");
     let vector = matches!(view, SequenceView::Owned | SequenceView::Vector);
