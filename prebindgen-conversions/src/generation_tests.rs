@@ -37,6 +37,7 @@ impl Output {
             fallible: false,
             context: Default::default(),
             delivery: Delivery {
+                policy: crate::DeliveryPolicy::Fixed,
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
@@ -349,6 +350,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         values: vec![(wire().name, source_result_expr())],
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(),
             result: source_result_expr(),
         },
@@ -493,6 +495,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         values: vec![(wire().name, value.clone())],
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
             result: value,
         },
@@ -628,6 +631,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         statements: quote!(),
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(),
             result: quote!(#source + __prebindgen_argument_0_),
         },

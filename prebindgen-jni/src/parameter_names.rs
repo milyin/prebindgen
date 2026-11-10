@@ -15,7 +15,9 @@ fn segment_identity(segment: &ComponentSegment) -> String {
 }
 /// All declared foreign packages, including declarations retained when the native
 /// module is relocated. Those roots remain free references in any function body.
-pub(crate) fn package_roots(flat: &Bindings) -> BTreeSet<String> {
+pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
+) -> BTreeSet<String> {
     let mut names = vec![flat.metadata.package.clone()];
     for ty in flat.types.values() {
         if let Some(class) = &ty.metadata.class {

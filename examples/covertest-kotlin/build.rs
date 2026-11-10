@@ -171,6 +171,11 @@ fn bulk_replay_input() -> prebindgen_declarations::Input<prebindgen_jni::InputRe
     bulk_replay_input_with(false, true)
 }
 
+#[path = "build_support/input_contracts.rs"]
+mod input_contracts;
+#[path = "build_support/output_contracts.rs"]
+mod output_contracts;
+
 fn main() {
     use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
     let ordinary_rows = |element| Output::Sequence {
@@ -1966,6 +1971,16 @@ fn main() {
         relocated.rust
     ));
     for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = input_contracts::generate().expect("generate independent input converter");
+    independent.write_rust("input-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = output_contracts::generate().expect("generate independent output converters");
+    independent.write_rust("output-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
         assert!(jni.kotlin.insert(path, source).is_none());
     }
     for native_check in [

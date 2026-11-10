@@ -139,10 +139,11 @@ pub(crate) struct Fold {
     pub parameter: String,
     pub discard: String,
 }
-pub(crate) fn fold(
-    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+pub(crate) fn fold<O: KotlinOutputConversion>(
+    output: &O,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
+    let layout = &output.output_outcomes().success;
     let optional = crate::sequence::callback_optional(layout)?;
     let (carrier, element, _) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
@@ -177,12 +178,12 @@ pub(crate) fn fold(
     let fields_read = (0..fields.len())
         .map(|i| format!("__pb_fold_row.c{i}"))
         .collect::<Vec<_>>();
-    let mut unread = kotlin::output_kotlin(element, &ctx)?;
+    let mut unread = output.kotlin_sequence_element(&ctx, None)?;
     returns::remap(&mut unread, row, &fields, 0, &fields_read);
     let shared = nested_owners(element);
     let owners = "__pb_foldOwners";
     let child = if shared {
-        let mut child = kotlin::output_kotlin_scoped(element, &ctx, Some(owners))?;
+        let mut child = output.kotlin_sequence_element(&ctx, Some(owners))?;
         returns::remap(&mut child, row, &fields, 0, &fields_read);
         child
     } else {
