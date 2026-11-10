@@ -13,6 +13,7 @@ perftest-flat = {path = "../perftest-flat"}
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
 [build-dependencies]
+prebindgen.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true

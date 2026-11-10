@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 /// Prepared boundary roots, including typed error converters and declarations
 /// whose callback interfaces are emitted without a direct exported occurrence.
-pub(crate) fn nodes<I: KotlinInputConversion>(
-    flat: &Flat<JniSchema<I>>,
+pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
 ) -> Vec<(bool, &kotlin::JniNode)> {
     let mut nodes = Vec::new();
     for function in flat.functions.values() {
@@ -35,12 +35,13 @@ pub(crate) fn nodes<I: KotlinInputConversion>(
 }
 
 /// Metadata schema for a Kotlin/JNI binding model.
-/// `I` selects parameter converters while outputs and declaration metadata keep
-/// the standard JNI representation. No schema value is needed to construct Flat.
-pub struct JniSchema<I = JniInput>(std::marker::PhantomData<fn() -> I>);
-impl<I> prebindgen_flat::Schema for JniSchema<I> {
+/// `I` and `O` select occurrence converter types while declaration metadata keeps
+/// the JNI representation. Defaults also accept custom converters through their
+/// owned containers. No schema value is needed to construct Flat.
+pub struct JniSchema<I = JniInput, O = JniOutput>(std::marker::PhantomData<fn() -> (I, O)>);
+impl<I, O> prebindgen_flat::Schema for JniSchema<I, O> {
     type Input = I;
-    type Output = JniOutput;
+    type Output = O;
     type Module = JniModule;
     type Function = Option<JniFunction>;
     type Type = JniType;

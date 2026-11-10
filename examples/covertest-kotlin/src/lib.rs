@@ -2,6 +2,10 @@
 mod callback_frames;
 mod diagnostics;
 mod input_contracts;
+mod output_contracts;
+mod independent_output_contracts {
+    include!(concat!(env!("OUT_DIR"), "/output-contracts.rs"));
+}
 mod independent_input_contracts {
     include!(concat!(env!("OUT_DIR"), "/input-contracts.rs"));
 }

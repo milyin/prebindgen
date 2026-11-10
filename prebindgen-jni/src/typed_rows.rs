@@ -40,8 +40,8 @@ fn visit<'a>(node: &'a JniNode, input: bool, rows: &mut Vec<&'a JniNode>) {
         }
     }
 }
-pub(crate) fn emit<I: KotlinInputConversion>(
-    flat: &Flat<JniSchema<I>>,
+pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
     rust: &mut TokenStream,
     native: &mut String,
     names: &mut names::Names,

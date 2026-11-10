@@ -23,33 +23,49 @@ impl NativeReturn {
         }
     }
 }
-pub(crate) fn packet_delivery(plan: &OutputPlan<JniWire>) -> Result<Delivery> {
+pub(crate) fn packet_delivery(
+    node: &kotlin::JniNode,
+    values: &[(syn::Ident, TokenStream)],
+) -> Result<Delivery> {
     let env = prebindgen_conversions::template_parameter("environment");
-    let count = crate::group::result_packet_fields(&plan.outcomes.success).len() + 1;
+    let count = crate::group::result_packet_fields(node).len() + 1;
     let encode = encode_array(
-        crate::group::result_packet(&plan.outcomes.success, &plan.values)?,
+        crate::group::result_packet(node, values)?,
         &syn::parse_quote!(result),
         1,
     );
     let mark = prebindgen_conversions::template_parameter("mark_output");
     Ok(Delivery {
+        policy: ::prebindgen_conversions::DeliveryPolicy::AdapterSelected,
         statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode #mark),
         result: quote!(result.into_raw()),
     })
 }
-pub(crate) fn select(plan: &OutputPlan<JniWire>) -> Option<NativeReturn> {
-    let packet = packet_delivery(plan).ok()?;
-    if plan.delivery.statements.to_string() != packet.statements.to_string()
-        || plan.delivery.result.to_string() != packet.result.to_string()
-    {
+pub(crate) fn select<O: KotlinOutputConversion>(output: &O) -> Option<NativeReturn> {
+    if output.delivery_policy() != prebindgen_conversions::DeliveryPolicy::AdapterSelected {
         return None;
     }
-    let fields = crate::group::result_packet_fields(&plan.outcomes.success).collect::<Vec<_>>();
+    let fields =
+        crate::group::result_packet_fields(&output.output_outcomes().success).collect::<Vec<_>>();
     Some(match fields.as_slice() {
         [] => NativeReturn::Unit,
         [wire] => NativeReturn::Direct(wire.kind.clone()),
         _ => NativeReturn::Callback,
     })
+}
+pub(crate) fn prepare<O: KotlinOutputConversion>(
+    output: &O,
+    context: &mut JniContext,
+) -> Result<()> {
+    context.prepared_delivery = None;
+    if output.delivery_policy() == prebindgen_conversions::DeliveryPolicy::AdapterSelected {
+        context.prepared_delivery = Some(
+            output
+                .prepare_return_delivery(context)?
+                .ok_or("adapter-selected output did not prepare return delivery")?,
+        );
+    }
+    Ok(())
 }
 fn chunks(wires: &[&Wire<JniWire>]) -> Vec<std::ops::Range<usize>> {
     let mut ranges = Vec::new();
@@ -69,12 +85,13 @@ fn chunks(wires: &[&Wire<JniWire>]) -> Vec<std::ops::Range<usize>> {
 }
 
 pub(crate) fn callback_delivery(
-    plan: &OutputPlan<JniWire>,
+    node: &kotlin::JniNode,
+    values: &[(syn::Ident, TokenStream)],
     sink: &syn::Ident,
     domain: bool,
 ) -> Result<Delivery> {
     let env = prebindgen_conversions::template_parameter("environment");
-    let fields = crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
+    let fields = crate::group::result_packet(node, values)?;
     let wires = fields.iter().map(|(wire, _)| *wire).collect::<Vec<_>>();
     let mut prepare = TokenStream::new();
     let mut arguments = Vec::new();
@@ -105,32 +122,41 @@ pub(crate) fn callback_delivery(
         }
     }
     Ok(Delivery {
+        policy: ::prebindgen_conversions::DeliveryPolicy::Fixed,
         statements: quote!(#prepare #invoke),
         result: quote!(()),
     })
 }
 pub(crate) fn delivery(
-    plan: &OutputPlan<JniWire>,
+    node: &kotlin::JniNode,
+    values: &[(syn::Ident, TokenStream)],
     sink: &syn::Ident,
     domain: bool,
 ) -> Result<Delivery> {
     if domain {
-        return callback_delivery(plan, sink, true);
+        return callback_delivery(node, values, sink, true);
     }
-    let delivery = match select(plan).ok_or("custom output protocol cannot use a return capture")? {
+    let fields = crate::group::result_packet_fields(node).collect::<Vec<_>>();
+    let kind = match fields.as_slice() {
+        [] => NativeReturn::Unit,
+        [wire] => NativeReturn::Direct(wire.kind.clone()),
+        _ => NativeReturn::Callback,
+    };
+    let delivery = match kind {
         NativeReturn::Unit => Delivery::default(),
         NativeReturn::Direct(wire) => {
-            let fields = crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
+            let fields = crate::group::result_packet(node, values)?;
             let argument = wire.output_argument(fields[0].1, &format_ident!("__pb_direct_object"));
             let prepare = argument.statements;
             let argument = argument.value;
             let member = wire.value_member();
             Delivery {
+                policy: ::prebindgen_conversions::DeliveryPolicy::Fixed,
                 statements: quote!(#prepare let __pb_direct_result = unsafe { (#argument).#member };),
                 result: quote!(__pb_direct_result),
             }
         }
-        NativeReturn::Callback => callback_delivery(plan, sink, false)?,
+        NativeReturn::Callback => callback_delivery(node, values, sink, false)?,
     };
     Ok(delivery)
 }
@@ -338,12 +364,8 @@ mod tests {
             .error
             .as_mut()
             .unwrap();
-        std::rc::Rc::make_mut(error)
-            .output
-            .rust
-            .delivery
-            .statements
-            .extend(quote!(let custom_error_protocol = ();));
+        let binding = std::rc::Rc::make_mut(error);
+        binding.output = binding.output.clone().packet_only();
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions
@@ -381,12 +403,8 @@ mod tests {
             .error
             .as_mut()
             .unwrap();
-        std::rc::Rc::make_mut(error)
-            .output
-            .rust
-            .delivery
-            .statements
-            .extend(quote!(let custom_error_protocol = ();));
+        let binding = std::rc::Rc::make_mut(error);
+        binding.output = binding.output.clone().packet_only();
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions

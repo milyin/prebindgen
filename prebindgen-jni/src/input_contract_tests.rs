@@ -11,6 +11,8 @@ struct ExternalInput {
     preparations: Rc<Cell<usize>>,
     omit_handles: bool,
     omit_consumption: bool,
+    omit_allocation: bool,
+    inactive: bool,
 }
 impl Conversion for ExternalInput {
     type Wire = JniWire;
@@ -23,7 +25,23 @@ impl Conversion for ExternalInput {
         request: Self::SlotFragment<'_>,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        self.native.code_fragment_slot(request, expected)
+        if let InputFragment::Resources { context, resources } = request {
+            let start = resources.len();
+            let result = self
+                .native
+                .code_fragment_slot(InputFragment::Resources { context, resources }, expected)?;
+            for resource in &mut resources[start..] {
+                if self.omit_allocation {
+                    resource.allocation_type = None;
+                }
+                if self.inactive {
+                    resource.active = quote!(false);
+                }
+            }
+            Ok(result)
+        } else {
+            self.native.code_fragment_slot(request, expected)
+        }
     }
 }
 impl InputConversion for ExternalInput {
@@ -71,6 +89,8 @@ fn external(flat: Bindings) -> Flat<JniSchema<ExternalInput>> {
                             preparations: Rc::default(),
                             omit_handles: false,
                             omit_consumption: false,
+                            omit_allocation: false,
+                            inactive: false,
                         }),
                     },
                 });
@@ -113,6 +133,47 @@ fn external_inputs_share_the_builtin_emitter_and_prepare_kotlin_once() {
 }
 
 #[test]
+fn callback_bulk_return_requires_cached_carrier_support() {
+    let flat = external(handles());
+    let input = flat.function("mixed").unwrap().params[3]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap();
+    let context = JniContext {
+        return_delivery: JniReturnDelivery::Packet,
+        prepared_delivery: None,
+        environment: syn::parse_quote!(env),
+        acknowledgement: syn::parse_quote!(ack),
+        domain_output: syn::parse_quote!(domain),
+        return_sink: None,
+        is_domain_error: false,
+        output_committed: quote!(),
+    };
+    let request = || InputFragment::Validate {
+        context: &context,
+        next: quote!(()),
+    };
+    let expected = syn::parse_quote!(Vec<Handle>);
+    // An ordinary forwarding implementation must explicitly forward the cache
+    // operation as well; falling back to a second JNI read is not acceptable.
+    assert!(input
+        .callback_return_fragment(request(), &expected, true)
+        .unwrap_err()
+        .contains("reuse the native buffer cache"));
+    let cached = input
+        .native
+        .callback_return_fragment(request(), &expected, true)
+        .unwrap()
+        .to_string();
+    assert!(cached.contains("cached_bytes"));
+    assert!(!cached.contains(":: bulk :: input"));
+    assert!(input
+        .callback_return_fragment(request(), &expected, false)
+        .is_ok());
+}
+
+#[test]
 fn external_inputs_must_report_handles_and_native_ownership() {
     let mut flat = external(handles());
     flat.function_mut("mixed").unwrap().params[2]
@@ -138,10 +199,7 @@ fn external_inputs_must_report_handles_and_native_ownership() {
         .slot
         .as_mut()
         .unwrap()
-        .native
-        .rust
-        .resources[0]
-        .allocation_type = None;
+        .omit_allocation = true;
     let error = generate(&flat).err().unwrap();
     assert!(
         error.contains("allocation type of every native resource"),
@@ -156,17 +214,12 @@ fn conditional_resources_keep_their_preflight_and_symbol_identity() {
     let mut flat = external(builtin);
     // Resources describes static requirements, including currently inactive arms.
     // This condition only affects the shared acquisition protocol at emission.
-    for resource in &mut flat.function_mut("mixed").unwrap().params[1]
+    flat.function_mut("mixed").unwrap().params[1]
         .ty
         .slot
         .as_mut()
         .unwrap()
-        .native
-        .rust
-        .resources
-    {
-        resource.active = quote!(false);
-    }
+        .inactive = true;
     let actual = generate(&flat).unwrap();
     assert_eq!(actual.kotlin, expected.kotlin);
 }

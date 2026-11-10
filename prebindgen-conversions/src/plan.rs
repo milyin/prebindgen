@@ -93,9 +93,20 @@ pub struct Resource {
     /// Side-effect-free Rust boolean expression selecting active resources.
     pub active: TokenStream,
 }
+/// Whether the adapter may choose another supported result delivery protocol.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DeliveryPolicy {
+    /// Preserve the converter's explicit delivery code and native result ABI.
+    #[default]
+    Fixed,
+    /// Allow the adapter to choose its standard packet, direct or capture delivery.
+    AdapterSelected,
+}
 /// Result-slot glue executed after output preparation and before ownership commit.
 #[derive(Clone, Debug)]
 pub struct Delivery {
+    /// Permission to select an adapter delivery protocol; custom code stays fixed.
+    pub policy: DeliveryPolicy,
     /// Deliver every output; failure must leave owned temporaries uncommitted.
     pub statements: TokenStream,
     /// Infallible wrapper result expression evaluated after commit.
@@ -104,6 +115,7 @@ pub struct Delivery {
 impl Default for Delivery {
     fn default() -> Self {
         Self {
+            policy: DeliveryPolicy::Fixed,
             statements: TokenStream::new(),
             result: quote!(()),
         }

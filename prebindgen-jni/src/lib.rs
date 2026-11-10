@@ -40,6 +40,7 @@ use prebindgen_declarations::Codec;
 pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
+pub use errors::bind_error_output;
 mod handles;
 mod names;
 mod parameter_names;
@@ -48,17 +49,20 @@ type InputPlan<W> =
     prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
 type OutputPlan<W> =
     prebindgen_conversions::OutputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
+mod converters;
+pub use converters::{JniInput, JniOutput};
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
-    KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
+    JniReturnDelivery, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
+    KotlinInputConversion, KotlinOutput, KotlinOutputConversion, KotlinReturnContext,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
 ///
-/// The default input is [`JniInput`]. Independent parameter converters use
-/// `Flat<JniSchema<MyInput>>` and implement [`KotlinInputConversion`]; output and JNI
-/// metadata retain their standard types. The declaration builder prepares the
-/// default schema. Custom input models can be prepared directly for [`generate`].
+/// Defaults retain [`JniInput`] and [`JniOutput`] containers. Their `new`
+/// constructors accept independent implementations of the same conversion
+/// contracts, including per-function overrides in a builder's configure hook.
+/// `Flat<JniSchema<MyInput, MyOutput>>` also supports concrete occurrence types;
+/// JNI declaration metadata and wire representations remain adapter-specific.
 ///
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
 /// wire type belongs to a different adapter:
@@ -884,7 +888,7 @@ impl Codec for JniCodec {
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
             ));
-        plan.delivery = returns::packet_delivery(plan)?;
+        plan.delivery = returns::packet_delivery(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
 
@@ -1474,7 +1478,9 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 /// Built-in and independent inputs use this same emitter. Inputs must provide
 /// native resource/acknowledgement requests and matching Kotlin handle snapshots
 /// and ownership updates; incomplete descriptions return a generation error.
-pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<JniGen> {
+pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
+) -> Result<JniGen> {
     let prefix = &flat.metadata.package;
     validate_package(prefix)?;
     for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
@@ -1634,6 +1640,15 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
         let error = errors.get(&source);
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
+        if let (Some(declared), Some(error)) = (&outcomes.source_error, error) {
+            if group::error_wire_shape(declared)
+                != group::error_wire_shape(&error.output.output_outcomes().success)
+            {
+                return Err(format!(
+                    "`{source}`: domain-error converter differs from the declared error wires"
+                ));
+            }
+        }
         let input_slots: usize = crate::group::function_parameters(f)?
             .map(|w| w.kind.parameter_slots())
             .sum();
@@ -1656,11 +1671,9 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
         let acknowledgement = usize::from(kotlin_inputs.iter().any(|i| !i.consumed.is_empty()));
         // Keep the packet protocol when the extra capture would exceed the
         // existing native parameter limit; previously valid signatures stay valid.
-        let native_return = f
-            .output_conversion()?
-            .native_return()
+        let native_return = returns::select(f.output_conversion()?)
             .filter(|_| input_slots + acknowledgement + 2 * usize::from(callback) < 255)
-            .filter(|_| error.is_none_or(|e| e.output.native_return().is_some()));
+            .filter(|_| error.is_none_or(|e| returns::select(&e.output).is_some()));
         let native_result_type = native_return.as_ref().map_or_else(
             || syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
             returns::NativeReturn::rust_type,
@@ -1700,7 +1713,9 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
         let throws = error.map_or_else(String::new, |error| error.throws(exception));
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
-        let context = JniContext {
+        let mut context = JniContext {
+            return_delivery: crate::JniReturnDelivery::Packet,
+            prepared_delivery: None,
             environment: env.clone(),
             acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
@@ -1716,6 +1731,14 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
                 quote!()
             },
         };
+        context.return_delivery =
+            native_return
+                .as_ref()
+                .map_or(JniReturnDelivery::Packet, |kind| match kind {
+                    returns::NativeReturn::Callback => JniReturnDelivery::Capture,
+                    _ => JniReturnDelivery::Direct,
+                });
+        returns::prepare(f.output_conversion()?, &mut context)?;
         let source = format_ident!("source_value");
 
         let capture_name = if let Some(kind) = &native_return {
@@ -1969,7 +1992,7 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
         };
         let fold = if callback {
             Some(sequence_callback::fold(
-                &f.output_conversion()?.output_outcomes().success,
+                f.output_conversion()?,
                 &kotlin_context,
             )?)
         } else {
@@ -1979,39 +2002,28 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
         if let Some(fold) = &fold {
             setup.push_str(&fold.discard);
         }
-        let mut kotlin_output = match &fold {
-            Some(fold) => fold.output.clone(),
-            None => f.output_conversion()?.kotlin(&kotlin_context)?,
-        };
-        kotlin::remap_output(
-            &mut kotlin_output,
-            kotlin_context.result,
-            kotlin_context.result,
-            1,
-            crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
-                .len(),
-        );
         let success_fields = crate::group::result_packet_fields(logical).collect::<Vec<_>>();
-        if let Some(kind) = &native_return {
-            let values = success_fields
+        let return_values = if native_return.is_some() {
+            success_fields
                 .iter()
                 .enumerate()
                 .map(|(i, _)| {
-                    if matches!(kind, returns::NativeReturn::Direct(_)) {
+                    if matches!(native_return, Some(returns::NativeReturn::Direct(_))) {
                         "nativeResult".into()
                     } else {
                         format!("returnCapture.s{i}")
                     }
                 })
-                .collect::<Vec<_>>();
-            returns::remap(
-                &mut kotlin_output,
-                kotlin_context.result,
-                &success_fields,
-                1,
-                &values,
-            );
-        }
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let kotlin_output = f.output_conversion()?.kotlin_return(&KotlinReturnContext {
+            kotlin: &kotlin_context,
+            delivery: context.return_delivery,
+            values: &return_values,
+            sequence: fold.as_ref().map(|fold| &fold.output),
+        })?;
         let build_parameters = kotlin_output.callback_type_parameters()?;
         let KotlinOutput {
             delivered,
@@ -2236,6 +2248,8 @@ pub fn generate<I: KotlinInputConversion>(flat: &Flat<JniSchema<I>>) -> Result<J
 
 #[cfg(test)]
 mod input_contract_tests;
+#[cfg(test)]
+mod output_contract_tests;
 #[cfg(test)]
 mod tests;
 

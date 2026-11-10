@@ -379,8 +379,8 @@ impl DataCodec<'_> {
             .filter(|c| c.data))
     }
 }
-pub(crate) fn render_record<I: KotlinInputConversion>(
-    flat: &Flat<JniSchema<I>>,
+pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
     class: &Class,
     ty: &syn::Type,
 ) -> Result<String> {

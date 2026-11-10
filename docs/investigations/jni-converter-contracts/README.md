@@ -5,10 +5,10 @@ Investigation and proposed design for the first checkbox in
 `5afe625b0`, whose source tree matches #808 at `58d6f368c`.
 This document and its probe do not change the generators or their runtime code.
 
-An [input-only prototype](input-stage.md) is now available above this baseline.
-Its `independent-input` probe feature compiles using `Flat<JniSchema<IndependentInput>>`;
-the `independent-output` feature still intentionally fails. The failures below
-describe the investigation baseline.
+The [completed converter implementation](complete-stage.md), built above the
+[input-only prototype](input-stage.md), now accepts independent inputs and
+outputs. Both probe features compile with the JNI schema. The restrictions and
+expected failures below describe the investigation baseline.
 
 ## The problem
 
@@ -69,10 +69,11 @@ public contracts and instantiates an empty Flat model with their schema. It also
 prepares a function with a modified built-in input plan, generates Rust and Kotlin, and parses the
 generated Rust syntax. It does not compile or execute that generated JNI boundary.
 
-The next two commands deliberately fail separately with Rust error `E0308`:
+At the investigation baseline, the next two commands failed separately with Rust error `E0308`:
 `generate` expects `&Flat<JniSchema>`, but receives a model with the independent
 input or output type. These are expected investigation results, not regression
-tests that should currently pass. The probe is outside the production workspace.
+tests at that baseline. Both commands now pass with the completed implementation.
+The probe is outside the production workspace.
 
 The corresponding C positive control is an existing test:
 
@@ -206,8 +207,10 @@ current JNI wire model, staged Rust protocol and metadata. Keep `Bindings`,
    concrete use case. Do not claim that making root slots generic makes every
    nested converter replaceable.
 
-This approach avoids a new registry, trait-object allocation, downcasting or a
-parallel Kotlin configuration table. Source and binding data remain in Flat.
+This initial root-only proposal did not require a new registry, trait objects,
+downcasting or a parallel Kotlin configuration table. The completed implementation
+also supports nested callback/error converters through private generation-time
+containers; see [the final design](complete-stage.md). Source and binding data remain in Flat.
 The new work happens when bindings are generated; it does not require additional
 handle locks, native checks, JNI calls or per-call allocation in generated code.
 That is a design constraint to verify, not a measured speedup.
@@ -251,8 +254,8 @@ An implementation should meet these checks:
   generated native boundary. Compare allocations and throughput if emitted
   runtime code changes; generation-only refactoring is not a performance claim.
 
-This PR records the investigation and proposal. It does not complete the first
-checkbox in #898.
+The original investigation PR records this proposal. The subsequent
+[implementation](complete-stage.md) addresses the first two checkboxes in #898.
 
 ## Source map
 

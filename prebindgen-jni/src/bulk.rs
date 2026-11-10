@@ -966,8 +966,8 @@ fn records(node: &JniNode, out: &mut BTreeMap<String, Rc<BulkRecord>>) -> Result
     Ok(())
 }
 /// Emit all target measurements in one bootstrap query, before any Kotlin packing.
-pub(crate) fn emit<I: KotlinInputConversion>(
-    flat: &Flat<JniSchema<I>>,
+pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
     rust: &mut TokenStream,
     native: &mut String,
     files: &mut BTreeMap<String, String>,
