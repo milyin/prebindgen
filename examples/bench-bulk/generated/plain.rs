@@ -512,15 +512,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1batches
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: bench_flat::InputHandle = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: bench_flat::InputHandle = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 let mut callback_return_w4_f1: Vec<
                                                                     bench_flat::HandleRecord,
@@ -589,15 +590,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1batches
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w10_f0_pointer,
                                                                                 )?;
-                                                                                let callback_return_w9_f0 = unsafe {
-                                                                                    Box::from_raw(callback_return_w10_f0_pointer)
+                                                                                let callback_return_w9_f0: bench_flat::InputHandle = {
+                                                                                    let callback_return_w9_f0 = unsafe {
+                                                                                        Box::from_raw(callback_return_w10_f0_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w9_f0.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w9_f0: bench_flat::InputHandle = callback_return_w9_f0
-                                                                                    .value;
                                                                                 let callback_return_w9_field_0 = callback_return_w9_f0;
                                                                                 let callback_return_w9_f1: i64 = ::core::convert::Into::into(
                                                                                     *callback_return_w10_f1.as_ref().map_err(|e| e.clone())?,
@@ -1237,15 +1239,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1mixed_1
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: bench_flat::InputHandle = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: bench_flat::InputHandle = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 #[allow(clippy::redundant_closure_call)]
                                                                 let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
@@ -1323,15 +1326,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1mixed_1
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w11_f0_pointer,
                                                                                 )?;
-                                                                                let callback_return_w10_f0 = unsafe {
-                                                                                    Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                let callback_return_w10_f0: bench_flat::InputHandle = {
+                                                                                    let callback_return_w10_f0 = unsafe {
+                                                                                        Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w10_f0.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w10_f0: bench_flat::InputHandle = callback_return_w10_f0
-                                                                                    .value;
                                                                                 let callback_return_w10_field_0 = callback_return_w10_f0;
                                                                                 let callback_return_w10_f1: i64 = ::core::convert::Into::into(
                                                                                     callback_return_w11_f1,
@@ -2559,12 +2563,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                                     bench_flat::InputHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: bench_flat::InputHandle = p0_w4.value;
+                            let p0_w4: bench_flat::InputHandle = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -2786,12 +2792,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handle_1re
                                     bench_flat::InputHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_f0_pointer)?;
-                            let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4_f0: bench_flat::InputHandle = p0_w4_f0.value;
+                            let p0_w4_f0: bench_flat::InputHandle = {
+                                let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4_f0.value
+                            };
                             let p0_w4_field_0 = p0_w4_f0;
                             let p0_w4_f1: i64 = ::core::convert::Into::into(
                                 *p0_w5_f1.as_ref().map_err(|e| e.clone())?,
@@ -3062,15 +3070,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: bench_flat::InputHandle = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: bench_flat::InputHandle = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 let callback_return_w4_f1: i64 = ::core::convert::Into::into(
                                                                     *callback_return_w5_f1.as_ref().map_err(|e| e.clone())?,
@@ -3421,15 +3430,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1owned_1
                                             ::prebindgen_runtime::validate_pointer(
                                                 callback_return_w1_f0_pointer,
                                             )?;
-                                            let callback_return_w0_f0 = unsafe {
-                                                Box::from_raw(callback_return_w1_f0_pointer)
+                                            let callback_return_w0_f0: bench_flat::InputHandle = {
+                                                let callback_return_w0_f0 = unsafe {
+                                                    Box::from_raw(callback_return_w1_f0_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w0_f0.value
                                             };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w0_f0: bench_flat::InputHandle = callback_return_w0_f0
-                                                .value;
                                             let callback_return_w0_field_0 = callback_return_w0_f0;
                                             let callback_return_w0_f1: i64 = ::core::convert::Into::into(
                                                 callback_return_w1_f1,
@@ -3623,12 +3633,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1buffer_1re
                                     bench_flat::InputHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_f0_pointer)?;
-                            let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4_f0: bench_flat::InputHandle = p0_w4_f0.value;
+                            let p0_w4_f0: bench_flat::InputHandle = {
+                                let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4_f0.value
+                            };
                             let p0_w4_field_0 = p0_w4_f0;
                             let p0_w4_f1: String = ::core::convert::Into::into(
                                 ::prebindgen_jni_runtime::text(
@@ -3927,12 +3939,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                                                     bench_flat::InputHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                                            let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w8: bench_flat::InputHandle = p0_w8.value;
+                                            let p0_w8: bench_flat::InputHandle = {
+                                                let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w8.value
+                                            };
                                             let p0_w5_row_value = p0_w8;
                                             Ok(p0_w5_row_value)
                                         }
@@ -4292,15 +4306,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w9_pointer,
                                                                                 )?;
-                                                                                let callback_return_w8 = unsafe {
-                                                                                    Box::from_raw(callback_return_w9_pointer)
+                                                                                let callback_return_w8: bench_flat::InputHandle = {
+                                                                                    let callback_return_w8 = unsafe {
+                                                                                        Box::from_raw(callback_return_w9_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w8.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w8: bench_flat::InputHandle = callback_return_w8
-                                                                                    .value;
                                                                                 let callback_return_w5_row_value = callback_return_w8;
                                                                                 Ok(callback_return_w5_row_value)
                                                                             }
@@ -7721,12 +7736,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1owned_1handles_1e
                                     bench_flat::InputHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: bench_flat::InputHandle = p0_w4.value;
+                            let p0_w4: bench_flat::InputHandle = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -8006,12 +8023,14 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1nested_1owned_1ha
                                                     bench_flat::InputHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                                            let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w8: bench_flat::InputHandle = p0_w8.value;
+                                            let p0_w8: bench_flat::InputHandle = {
+                                                let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w8.value
+                                            };
                                             let p0_w5_row_value = p0_w8;
                                             Ok(p0_w5_row_value)
                                         }
@@ -8401,15 +8420,16 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1nested_
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w9_pointer,
                                                                                 )?;
-                                                                                let callback_return_w8 = unsafe {
-                                                                                    Box::from_raw(callback_return_w9_pointer)
+                                                                                let callback_return_w8: bench_flat::InputHandle = {
+                                                                                    let callback_return_w8 = unsafe {
+                                                                                        Box::from_raw(callback_return_w9_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w8.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w8: bench_flat::InputHandle = callback_return_w8
-                                                                                    .value;
                                                                                 let callback_return_w5_row_value = callback_return_w8;
                                                                                 Ok(callback_return_w5_row_value)
                                                                             }
