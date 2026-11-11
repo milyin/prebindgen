@@ -1932,7 +1932,43 @@ fn main() {
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let mut jni = binding.build().expect("build supported declarations");
+    let mut prepared = binding
+        .package(
+            package!("scopedinputs")
+                .fun(fun!(scoped_input_new))
+                .fun(fun!(scoped_input_id))
+                .fun(fun!(scoped_input_drops))
+                .fun(fun!(scoped_input_pair))
+                .fun(fun!(scoped_input_failure).expand_param(
+                    "second",
+                    Input::constructor(
+                        "scoped_input_checked",
+                        [
+                            Input::constructor("scoped_input_mode", [Input::Leaf]),
+                            Input::Leaf,
+                        ],
+                    ),
+                )),
+        )
+        .prepare()
+        .expect("prepare supported declarations");
+    for name in ["scoped_input_pair", "scoped_input_failure"] {
+        let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
+        let leaf = prebindgen_declarations::Codec::input_leaf(
+            &prebindgen_jni::JniCodec::raw(),
+            prebindgen_declarations::InputLeaf::new(
+                &prepared,
+                &ty,
+                &(),
+                syn::parse_quote!(scoped_first),
+                syn::parse_quote!(scoped_first_value),
+                &Default::default(),
+            ),
+        )
+        .unwrap();
+        prepared.function_mut(name).unwrap().params[0].ty.slot = Some(leaf.into());
+    }
+    let mut jni = prebindgen_jni::generate(&prepared).expect("generate mixed input declarations");
     // Test-only constructor fault injection: handwritten OutputCleanupRow has
     // the exact generated fields plus an init hook that can throw or take a
     // handle. All Rust/JNI and collection-decoder code remains generated.

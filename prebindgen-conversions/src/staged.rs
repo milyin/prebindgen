@@ -1,64 +1,24 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::{Access, InputPlan, OutputPlan, Resource, TemplateContext};
+use crate::{InputPlan, OutputPlan, TemplateContext};
 use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
-fn include_resources<C: TemplateContext>(
-    context: &C,
-    resources: &[Resource],
-    output: &mut Vec<Resource>,
-) -> Result<()> {
-    for resource in resources {
-        let mut resource = resource.clone();
-        resource.active = context.render(&resource.active)?;
-        if !resource.registered {
-            resource.count = context.render(&resource.count)?;
-        }
-        output.push(resource);
-    }
-    Ok(())
-}
-
-/// Slot requests understood by the stored input plans.
-pub enum InputFragment<'a, C> {
-    /// Validate and prepare storage, then evaluate `next` in that storage's scope.
-    Validate {
-        /// Bindings used to render prepared templates.
-        context: &'a C,
-        /// Expression evaluated inside the scope introduced by this request.
-        next: TokenStream,
-    },
-    /// Acquire ownership, then evaluate `next` while acquired owners remain alive.
-    Acquire {
-        /// Bindings used to render prepared templates.
-        context: &'a C,
-        /// Expression evaluated inside the scope introduced by this request.
-        next: TokenStream,
-    },
-    /// Construct the argument as `target`, then evaluate `next` in its scope.
-    Construct {
-        /// Bindings used to render prepared templates.
-        context: &'a C,
-        /// Caller-selected argument binding.
-        target: &'a syn::Ident,
-        /// Expression evaluated inside the scope introduced by this request.
-        next: TokenStream,
-    },
-    /// Unit expression acknowledging ownership, or exactly `()` if unnecessary.
-    Acknowledge {
-        /// Bindings used to render prepared templates.
-        context: &'a C,
-    },
-    /// Describe this parameter's resources for ownership acknowledgement.
-    Resources {
-        /// Bindings used to render active conditions.
-        context: &'a C,
-        /// Resource metadata accumulated for all call parameters.
-        resources: &'a mut Vec<Resource>,
-    },
+/// Convert one input, then run `next` while the value and its backing storage live.
+/// Takes must be reported in wire traversal order before later failures/unwinds.
+/// Incorrect access metadata or omitted reporting can make caller/callback cleanup
+/// free an acquired owner twice. Custom conversion authors must uphold this safety
+/// contract; arbitrary emitted Rust cannot be proved correct from another inventory.
+/// Place `next` exactly once as an unlabelled tail block, without a new closure.
+pub struct InputFragment<'a, C> {
+    /// Concrete bindings and ownership reporting for this boundary.
+    pub context: &'a C,
+    /// Caller-selected Rust argument name.
+    pub target: &'a syn::Ident,
+    /// Already-rendered remaining call code.
+    pub next: TokenStream,
 }
 /// Slot requests understood by stored output plans.
 pub enum OutputFragment<'a, C> {
@@ -106,53 +66,26 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
     type Chain = N;
     type Branch = B;
     type SlotFragment<'a> = InputFragment<'a, C>;
-
     fn code_fragment_slot(
         &self,
-        mode: InputFragment<'_, C>,
-        _expected_type: &syn::Type,
+        request: InputFragment<'_, C>,
+        _: &syn::Type,
     ) -> Result<TokenStream> {
-        self.emit_with_validation(mode, &self.validation)
+        self.emit_code(request, &self.code)
     }
 }
 impl<W: WireKind, C: TemplateContext + 'static, N, B> InputPlan<W, C, N, B> {
-    /// Emit the same input phases with caller-prepared validation code.
-    /// Used when a callback return shares already-read native buffer carriers.
-    pub fn emit_with_validation(
+    /// Emit the complete conversion using caller-specialized carrier reads.
+    pub fn emit_code(
         &self,
-        mode: InputFragment<'_, C>,
-        validation: &TokenStream,
+        request: InputFragment<'_, C>,
+        code: &TokenStream,
     ) -> Result<TokenStream> {
-        expression(match mode {
-            InputFragment::Validate { context, next } => {
-                let code = context.render(validation)?;
-                scope(code, next)?
-            }
-            InputFragment::Acquire { context, next } => {
-                let code = context.render(&self.acquire)?;
-                scope(code, next)?
-            }
-            InputFragment::Construct {
-                context,
-                target,
-                next,
-            } => {
-                let code = context.render(&self.statements)?;
-                let value = context.render(&self.argument)?;
-                scope(quote!(#code let #target = #value;), next)?
-            }
-            InputFragment::Acknowledge { context } => match &self.acknowledgement {
-                Some(code) => {
-                    let code = context.render(code)?;
-                    quote!({ #code })
-                }
-                None => quote!(()),
-            },
-            InputFragment::Resources { context, resources } => {
-                include_resources(context, &self.resources, resources)?;
-                quote!(())
-            }
-        })
+        let code = crate::emission::bind_target(code, request.target)?;
+        let code = request.context.render(&code)?;
+        let storage = request.context.render(&self.storage)?;
+        let body = continue_with(&code, request.next)?;
+        expression(scope(storage, body)?)
     }
 }
 impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<W, C, N, B> {
@@ -204,12 +137,11 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
         })
     }
 }
-/// Compose the opt-in staged protocol as a fallible expression.
+/// Compose complete input conversions, the source call and output delivery.
 /// `result_type` is the wrapper result type inside `Result<_, String>`.
 ///
-/// Generators choosing this helper share an ownership acknowledgement channel.
-/// Other generators can compose their own request protocols.
-/// This is deliberately outside Flat: none of these phases are required by its traits.
+/// Adapters establish their boundary receipt before entering this expression.
+/// Other generators may compose their own request protocols outside Flat.
 pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
     function: &Function<I, O, M>,
     context: &C,
@@ -227,47 +159,6 @@ where
     let expected = syn::parse_quote!(::core::result::Result<#result_type, ::std::string::String>);
     let continuation = crate::template_parameter("continuation");
     let path = &function.path;
-    let mut acknowledge: Option<TokenStream> = None;
-    for input in &inputs {
-        let code = input.code_fragment_slot(InputFragment::Acknowledge { context }, &unit)?;
-        if code.to_string() == quote!(()).to_string() {
-            continue;
-        }
-        if acknowledge
-            .as_ref()
-            .is_some_and(|previous| previous.to_string() != code.to_string())
-        {
-            return Err(format!(
-                "`{}`: conflicting input acknowledgements",
-                function.name
-            ));
-        }
-        acknowledge = Some(code);
-    }
-    let validation = inputs
-        .iter()
-        .map(|input| {
-            input.code_fragment_slot(
-                InputFragment::Validate {
-                    context,
-                    next: continuation.clone(),
-                },
-                &expected,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let acquire = inputs
-        .iter()
-        .map(|input| {
-            input.code_fragment_slot(
-                InputFragment::Acquire {
-                    context,
-                    next: continuation.clone(),
-                },
-                &expected,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
     let prepare = output.code_fragment_slot(
         OutputFragment::Prepare {
             context,
@@ -280,7 +171,7 @@ where
         OutputFragment::Deliver {
             context,
             source,
-            next: continuation.clone(),
+            next: continuation,
         },
         &expected,
     )?;
@@ -292,7 +183,7 @@ where
         .map(ToString::to_string)
         .collect::<std::collections::BTreeSet<_>>();
     reserve(
-        &quote!(#path #source #(#validation)* #(#acquire)* #prepare #deliver #commit #result #acknowledge),
+        &quote!(#path #source #prepare #deliver #commit #result),
         &mut used,
     );
     let mut fresh = |base: String| {
@@ -305,53 +196,12 @@ where
     let args: Vec<_> = (0..inputs.len())
         .map(|i| fresh(format!("__prebindgen_argument_{i}")))
         .collect();
-    let mut resources = Vec::new();
-    for input in &inputs {
-        input.code_fragment_slot(
-            InputFragment::Resources {
-                context,
-                resources: &mut resources,
-            },
-            &unit,
-        )?;
-    }
-    let eager = resources.iter().any(|r| r.registered);
-    // Eager construction can consume later parameters before deferred acquisition.
-    // A single consumed-prefix receipt cannot describe that ordering on failure.
-    if eager && resources.iter().any(|r| !r.registered) {
-        return Err(
-            "cannot mix deferred resource conversions with eagerly constructed inputs".into(),
-        );
-    }
-
-    let early_receipt = eager
-        || ((acknowledge.is_some() || resources.iter().any(|r| r.records_consumption))
-            && resources.iter().any(|r| r.access == Access::Move));
-    let setup = if early_receipt {
-        let counter = context_counter(context)?;
-        quote!(let __prebindgen_input_consumed=#counter;)
-    } else {
-        TokenStream::new()
-    };
-    let legacy_count = if !eager && early_receipt {
-        let counts = resources
-            .iter()
-            .filter(|r| !r.registered && r.access == Access::Move && !r.records_consumption)
-            .map(|r| {
-                let active = &r.active;
-                let count = &r.count;
-                quote!(if #active {#count} else {0usize})
-            });
-        quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get() #(+ (#counts))*);)
-    } else {
-        TokenStream::new()
-    };
-    let delivered = plug(&deliver, quote!({let _: () = #commit; Ok(#result)}))?;
-    let mut body = plug(&prepare, delivered)?;
+    let delivered = continue_with(&deliver, quote!({let _: () = #commit; Ok(#result)}))?;
+    let mut body = continue_with(&prepare, delivered)?;
     body = scope(quote!(let #source=#path(#(#args),*);), body)?;
     for (input, target) in inputs.iter().zip(&args).rev() {
         body = input.code_fragment_slot(
-            InputFragment::Construct {
+            InputFragment {
                 context,
                 target,
                 next: body,
@@ -359,35 +209,50 @@ where
             &expected,
         )?;
     }
-    for fragment in acquire.iter().rev() {
-        body = plug(fragment, body)?;
-    }
-    body = scope(legacy_count, body)?;
-    if !eager {
-        if let Some(ack) = &acknowledge {
-            body = scope(quote!(let _: () = #ack;), body)?;
-        }
-    }
-    for fragment in validation.iter().rev() {
-        body = plug(fragment, body)?;
-    }
-    if eager {
-        if let Some(ack) = acknowledge {
-            body = scope(quote!(let _: () = #ack;), body)?;
-        }
-    }
-    body = scope(setup, body)?;
-    context.render(&body)
+    Ok(body)
 }
-fn plug(scope: &TokenStream, next: TokenStream) -> Result<TokenStream> {
-    let code = crate::render_template(scope, &|name| {
-        if name == "continuation" {
-            Ok(next.clone())
-        } else {
-            Err(format!("unknown composition parameter `{name}`"))
+/// Replace exactly one continuation without rendering or re-scanning inserted code.
+/// This operation can compose prepared templates before adapter bindings exist.
+pub fn continue_with(code: &TokenStream, next: TokenStream) -> Result<TokenStream> {
+    fn walk(code: &TokenStream, next: &TokenStream, count: &mut usize) -> Result<TokenStream> {
+        let tokens: Vec<_> = code.clone().into_iter().collect();
+        let mut out = TokenStream::new();
+        let mut i = 0;
+        while i < tokens.len() {
+            if matches!(&tokens[i],proc_macro2::TokenTree::Ident(id) if id=="__prebindgen_emit")
+                && matches!(tokens.get(i+1),Some(proc_macro2::TokenTree::Punct(p)) if p.as_char()=='!')
+                && matches!(tokens.get(i+2),Some(proc_macro2::TokenTree::Group(g)) if g.stream().to_string()=="continuation")
+            {
+                *count += 1;
+                out.extend(next.clone());
+                i += 3;
+                continue;
+            }
+            match &tokens[i] {
+                proc_macro2::TokenTree::Group(g) => {
+                    let mut group =
+                        proc_macro2::Group::new(g.delimiter(), walk(&g.stream(), next, count)?);
+                    group.set_span(g.span());
+                    out.extend([proc_macro2::TokenTree::Group(group)]);
+                }
+                token => out.extend([token.clone()]),
+            }
+            i += 1;
         }
-    })?;
-    flatten_tail(code)
+        Ok(out)
+    }
+    let mut count = 0;
+    let out = walk(code, &next, &mut count)?;
+    if count != 1 {
+        return Err(format!(
+            "input/output conversion must contain exactly one continuation, found {count}"
+        ));
+    }
+    flatten_tail(out)
+}
+/// Place code inside an enclosing backing-storage scope.
+pub(crate) fn enclose(storage: TokenStream, body: TokenStream) -> Result<TokenStream> {
+    scope(storage, body)
 }
 
 // Scoped requests use a tail continuation. Merge unlabelled tail blocks to keep
@@ -437,8 +302,4 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputCon
     fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
         &self.outcomes
     }
-}
-
-fn context_counter(context: &impl TemplateContext) -> Result<TokenStream> {
-    context.render(&crate::template_parameter("input_consumed"))
 }

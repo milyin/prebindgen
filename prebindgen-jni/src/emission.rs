@@ -7,14 +7,14 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct JniContext {
+    /// Incoming ownership reporting selected by the wrapper boundary.
+    pub input_transfers: prebindgen_conversions::InputTransfers,
     /// Explicit function-return transport. Source callback argument scopes use Packet.
     pub return_delivery: crate::JniReturnDelivery,
     /// Delivery prepared once for the active result converter, if adapter-selected.
     pub prepared_delivery: Option<prebindgen_conversions::Delivery>,
     /// Mutable JNI environment parameter.
     pub environment: syn::Ident,
-    /// Long-array parameter recording completed input transfers.
-    pub acknowledgement: syn::Ident,
     /// Local retaining a committed domain-error packet or delivery marker across Rust unwinding.
     pub domain_output: syn::Ident,
     /// Borrowed synchronous function-return capture. None preserves custom
@@ -28,29 +28,31 @@ pub struct JniContext {
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         // Generated Kotlin validates aliases while acquiring handle locks.
-        render_template(code, &|name| match name {
-            "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
-            "environment" => Ok(self.environment.to_token_stream()),
-            "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),
-            "domain_output" => Ok(self.domain_output.to_token_stream()),
-            "return_sink" => Ok(self
-                .return_sink
-                .as_ref()
-                .map_or_else(|| quote::quote!(None), |sink| quote::quote!(Some(&#sink)))),
-            "mark_output" => {
-                let env = &self.environment;
-                Ok(if self.is_domain_error {
-                    quote::quote!(::prebindgen_jni_runtime::mark_domain_packet(&mut #env, &result)?;)
-                } else {
-                    TokenStream::new()
-                })
-            }
-            "output_committed" => Ok(self.output_committed.clone()),
-            name if name.starts_with("bulk_read_") => {
-                Ok(quote::quote!(::prebindgen_jni_runtime::bulk::input))
-            }
-            _ => Err(format!("unknown emission parameter `{name}`")),
-        })
+        render_template(
+            code,
+            &|name| match name {
+                "environment" => Ok(self.environment.to_token_stream()),
+                "domain_output" => Ok(self.domain_output.to_token_stream()),
+                "return_sink" => Ok(self
+                    .return_sink
+                    .as_ref()
+                    .map_or_else(|| quote::quote!(None), |sink| quote::quote!(Some(&#sink)))),
+                "mark_output" => {
+                    let env = &self.environment;
+                    Ok(if self.is_domain_error {
+                        quote::quote!(::prebindgen_jni_runtime::mark_domain_packet(&mut #env, &result)?;)
+                    } else {
+                        TokenStream::new()
+                    })
+                }
+                "output_committed" => Ok(self.output_committed.clone()),
+                name if name.starts_with("bulk_read_") => {
+                    Ok(quote::quote!(::prebindgen_jni_runtime::bulk::input))
+                }
+                _ => Err(format!("unknown emission parameter `{name}`")),
+            },
+            &|count| self.input_transfers.render(count),
+        )
     }
 }
 

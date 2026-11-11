@@ -22,14 +22,6 @@ pub enum Representation {
     /// Native fields inside an explicitly selected bulk frame.
     Bulk,
 }
-/// Scope in which input leaf construction must retain its temporaries.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InputConstruction {
-    /// The enclosing conversion retains ordinary prepared values.
-    EnclosingConversion,
-    /// The compiler combines fields while their row storage is alive.
-    GroupedRow,
-}
 /// Source operation for which an input is being prepared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputRole {
@@ -69,8 +61,6 @@ pub struct InputLeaf<'a, C: Codec + ?Sized> {
     pub active: &'a Condition,
     /// Ordinary values or native bulk fields.
     pub representation: Representation,
-    /// Required lifetime of decoded row-local values.
-    pub construction: InputConstruction,
     /// Ordinary parameter or source callback result.
     pub role: InputRole,
 }
@@ -92,7 +82,6 @@ impl<'a, C: Codec + ?Sized> InputLeaf<'a, C> {
             target,
             active,
             representation: Representation::Ordinary,
-            construction: InputConstruction::EnclosingConversion,
             role: InputRole::Parameter,
         }
     }
@@ -192,6 +181,8 @@ pub struct Alternatives<'a, C: Codec + ?Sized> {
 
 /// Choose the physical input transport for a prepared sequence element.
 pub struct SequenceInputRequest<'a, C: Codec + ?Sized> {
+    /// Source collection ownership/view semantics.
+    pub view: prebindgen_flat::SequenceView,
     /// Borrowed occurrence configuration.
     pub extra: &'a C::Extra,
     /// Unique carrier binding stem.

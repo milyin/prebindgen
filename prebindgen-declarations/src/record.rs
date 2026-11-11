@@ -9,8 +9,8 @@ use super::*;
 /// The caller supplies every field exactly once, with the correct source type,
 /// and chooses a fresh `var` identifier. Child plans must use the same context
 /// and activation condition and must not have been finalized with `finish_input`.
-/// Validation, acquisition, resources, acknowledgements and construction remain
-/// in their respective phases. Field paths are prepended through the codec.
+/// Children convert in field order. Backing storage is hoisted into the record
+/// scope. Field paths are prepended through the codec.
 /// Finalize only the complete occurrence with [`Codec::finish_input`].
 pub fn record_input<C: Codec>(
     codec: &C,
@@ -18,51 +18,41 @@ pub fn record_input<C: Codec>(
     var: syn::Ident,
     fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
 ) -> Result<CodecInput<C>> {
-    let mut out: CodecInput<C> = InputPlan {
-        fallible: false,
-        context: Default::default(),
-        acknowledgement: None,
-        node: WireNode::Branch {
-            controls: vec![],
-            children: vec![],
-            meta: codec.group(GroupKind::Fields)?,
-        },
-        validation: TokenStream::new(),
-        acquire: TokenStream::new(),
-        resources: Vec::new(),
-        statements: TokenStream::new(),
-        argument: quote!(#var),
-    };
+    let mut plans = Vec::new();
     let mut values = Vec::new();
     let mut names = std::collections::BTreeSet::new();
-    for field in fields {
+    let mut storage = TokenStream::new();
+    let mut fallible = false;
+    for (index, field) in fields.into_iter().enumerate() {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
         codec.prefix_layout(&mut child.node, ComponentSegment::Field(name.to_string()));
-        out.fallible |= child.fallible;
-        out.validation.extend(child.validation);
-        out.acquire.extend(child.acquire);
-        out.resources.extend(child.resources);
-        merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
-        out.statements.extend(child.statements);
-        child.node = prebindgen_flat::WireNode::Branch {
+        fallible |= child.fallible;
+        storage.extend(std::mem::take(&mut child.storage));
+        let target = format_ident!("{var}_field_{index}");
+        values.push(quote!(#name:#target));
+        child.node = WireNode::Branch {
             controls: vec![],
-            meta: codec.group(GroupKind::Field(&(name.clone())))?,
+            meta: codec.group(GroupKind::Field(&name))?,
             children: vec![std::mem::take(&mut child.node)],
         };
-        let WireNode::Branch {
-            children: elements, ..
-        } = &mut out.node
-        else {
-            unreachable!()
-        };
-        elements.push(child.node);
-        let argument = child.argument;
-        values.push(quote!(#name: #argument));
+        plans.push((target, child));
     }
-    out.statements
-        .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-
+    let mut out = InputPlan::new(
+        WireNode::default(),
+        quote!(let #var:#ty=#ty{#(#values),*};),
+        quote!(#var),
+    );
+    for (target, child) in plans.iter().rev() {
+        out.code = child.bind(target, out.code)?;
+    }
+    out.node = WireNode::Branch {
+        controls: vec![],
+        children: plans.into_iter().map(|(_, p)| p.node).collect(),
+        meta: codec.group(GroupKind::Fields)?,
+    };
+    out.storage = storage;
+    out.fallible = fallible;
     Ok(out)
 }
 

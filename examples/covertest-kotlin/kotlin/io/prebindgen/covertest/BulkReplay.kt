@@ -26,8 +26,8 @@ fun checkBulkReplay() {
             val error=JniErrorHandler {rejected=true;0uL}
             val value=when(mode){4->bulkReplayNestedRows(nested(failing),error);5->bulkReplayNestedCallback(BulkReplayNestedCallback {nested(failing)},error);3->bulkReplayObjectRows(failing,error);1->bulkReplayCallback(BulkReplayCallback {failing},error);2->bulkReplayRedundantRows(failing,error);else->bulkReplayRows(failing,error)}
             check(value==0uL && rejected && bulkReplayCount(3uL)==0uL)
-            val consumed=if(returned || fail==2uL) 6 else 2
-            check(pending.withIndex().all {(i,h)->h.isClosed==(i<consumed)})
+            val consumed=if(returned) 6 else if(fail==2uL) 5 else 1
+            check(pending.withIndex().all {(i,h)->h.isClosed==(i<consumed)}) { "mode=$mode fail=$fail expected=$consumed" }
             check(bulkDrops()==before+consumed.toULong())
             pending.forEach {it.close()}
             check(bulkDrops()==before+6uL)
@@ -137,8 +137,10 @@ private fun checkBulkReplayRaw() {
             val message=captureType.getMethod("getMessage").invoke(capture) as String
             check(message.isNotEmpty())
             if(mode==0)check(message.contains("UTF-8"))
-            val consumed=4
-            check(ownership[0]==-1L-consumed)
+            // Row zero completes; row one takes its first owner, then fails
+            // in text/bytes conversion before reaching its last owner.
+            val consumed=3
+            check(ownership[0]==-1L-consumed) { "mode=$mode receipt=${ownership[0]}" }
             handles.take(consumed).forEach {it.markConsumed()}
             check(bulkDrops()==before+consumed.toULong())
             handles.drop(consumed).forEachIndexed {i,h->check(bulkHandleValue(h)==10L+consumed+i)}

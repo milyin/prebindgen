@@ -41,9 +41,9 @@ mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
 use prebindgen_declarations::{
-    Alternatives, Codec, GroupKind, InputConstruction, InputLeaf, InputRequest, InputRole,
-    Optional, OptionalEncoding, OutputLeaf, OutputRequest, Presence, Representation,
-    SequenceInputRequest, SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
+    Alternatives, Codec, GroupKind, InputLeaf, InputRequest, InputRole, Optional, OptionalEncoding,
+    OutputLeaf, OutputRequest, Presence, Representation, SequenceInputRequest,
+    SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
 };
 use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
@@ -124,17 +124,7 @@ impl Codec for CCodec {
     type Wire = CWire;
     type Context = CContext;
     fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
-        validate_layout(&plan.node)?;
-        if plan
-            .resources
-            .iter()
-            .any(|r| r.access == prebindgen_conversions::Access::Move)
-            || prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
-                .any(|w| matches!(w.kind, CWire::Callback { .. }))
-        {
-            plan.acknowledgement = Some(quote!());
-        }
-        Ok(())
+        validate_layout(&plan.node)
     }
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.outcomes.success)?;
@@ -166,6 +156,9 @@ impl Codec for CCodec {
         &self,
         request: SequenceInputRequest<'_, Self>,
     ) -> Result<prebindgen_declarations::SequenceInput<CWire, CChain>> {
+        if !request.view.is_owned() && takes_input_owners(request.element) {
+            return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
+        }
         let SequenceInputRequest {
             extra: _,
             wire,
@@ -251,17 +244,9 @@ impl Codec for CCodec {
     }
 
     fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<CWire>> {
-        let wire = request.wire.clone();
-        let target = request.target.clone();
-        let ty = request.ty;
-        let active = request.active;
-        let grouped = request.construction == InputConstruction::GroupedRow;
-        let mut plan = self.input_value(request)?;
-        if grouped {
-            sequence::prepare_input_leaf(&mut plan, ty, &wire, &target, active)?;
-        }
-        Ok(plan)
+        self.input_value(request)
     }
+
     fn input_borrowed_sequence(
         &self,
         flat: &Bindings,
@@ -784,22 +769,31 @@ impl CCodec {
                         .map(|(name, tag)| quote!(#tag=>#ty::#name));
                     quote!(match #w {#(#arms,)* _=>unsafe {::core::hint::unreachable_unchecked()}})
                 };
-                let mut plan = prebindgen_declarations::enum_input(
-                    mapping,
-                    ty,
-                    w.clone(),
-                    v.clone(),
-                    active,
-                    Self::enum_wire(name, mapping),
-                )?;
-                let condition = active.rust();
-                plan.validation = quote!(let #v=if #condition {Some(#decode)}else{None};);
+                let borrowed = matches!(ty, syn::Type::Reference(_));
+                let (storage, code, value) = if borrowed {
+                    (
+                        quote!(#[allow(unused_mut,unused_assignments)] let mut #v=None;),
+                        quote!(#v=Some(#decode);),
+                        quote!(#v.as_ref().expect("active enum")),
+                    )
+                } else {
+                    (quote!(), quote!(let #v=#decode;), quote!(#v))
+                };
+                let mut plan = InputPlan::new(
+                    prebindgen_flat::WireNode::Leaf(vec![Wire {
+                        name: w,
+                        kind: Self::enum_wire(name, mapping),
+                    }]),
+                    code,
+                    value,
+                );
+                plan.storage = storage;
                 plan.fallible = false;
                 return Ok(plan);
             }
-            if role == InputRole::CallbackResult {
+            if role == InputRole::CallbackResult && !matches!(ty, syn::Type::Reference(_)) {
                 if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
-                    return Ok(owned::input(owner, ty, w, v, active, true, false));
+                    return owned::input(owner, ty, w, v, active, true);
                 }
             }
         }
@@ -812,7 +806,7 @@ impl CCodec {
             return Err("resolve Optional operations before leaf compilation".into());
         }
         if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
-            return Ok(owned::input(owner, ty, w, v, active, false, false));
+            return owned::input(owner, ty, w, v, active, false);
         }
         if owned::pointer_declared(_flat, ty) {
             return prebindgen_conversions::boxed::input(
@@ -820,7 +814,6 @@ impl CCodec {
                 ty,
                 w,
                 v,
-                &active.rust(),
                 |b| CWire::pointer(b.into()),
             );
         }
@@ -844,13 +837,11 @@ impl CCodec {
                     ty,
                     w,
                     v,
-                    &active.rust(),
                     |b| CWire::pointer(b.into()),
                 )
             }
         };
-        let mut plan =
-            prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)?;
+        let mut plan = prebindgen_conversions::value::input(ty, w, v, decode, kind)?;
         plan.fallible = false;
         Ok(plan)
     }
@@ -1802,7 +1793,23 @@ where
         if is_result && !has_binding_failure {
             return Err("recoverable C delivery requires a binding-failure schema".into());
         }
+        let receipt_counter = if is_result {
+            format_ident!("ownership_accepted")
+        } else {
+            format_ident!("_ownership_accepted")
+        };
         let context = CContext {
+            input_transfers: if !is_result {
+                prebindgen_conversions::InputTransfers::Abort
+            } else if f
+                .input_conversions()?
+                .iter()
+                .any(|i| takes_input_owners(i.input_node()))
+            {
+                prebindgen_conversions::InputTransfers::Report(receipt_counter.clone())
+            } else {
+                prebindgen_conversions::InputTransfers::Forbidden
+            },
             row_types: {
                 let mut schemas = Vec::new();
                 for slot in f.input_conversions()? {
@@ -1822,11 +1829,7 @@ where
                     })
                     .collect()
             },
-            acknowledgement: if is_result {
-                format_ident!("ownership_accepted")
-            } else {
-                format_ident!("_ownership_accepted")
-            },
+            acknowledgement: receipt_counter,
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
             error_pointer: format_ident!("error"),
@@ -2129,7 +2132,6 @@ The pointer must be null or a live allocation of the declared type returned by t
             &mut header,
         )?;
         let out = &context.output_pointer;
-        let accepted = &context.acknowledgement;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let inputs = crate::group::function_parameters(f)?.collect::<Vec<_>>();
@@ -2237,7 +2239,10 @@ The pointer must be null or a live allocation of the declared type returned by t
                 &mut next_option_label,
                 "return",
             );
-            let consumes=f.params.iter().filter_map(|p|p.ty.slot.as_ref()).any(|slot| !matches!(slot.code_fragment_slot(prebindgen_conversions::InputFragment::Acknowledge {context:&context},&syn::parse_quote!(())),Ok(code) if code.to_string()==quote!(()).to_string()));
+            let consumes = f
+                .input_conversions()?
+                .iter()
+                .any(|i| takes_input_owners(i.input_node()));
             errors::result_function(
                 &f.name,
                 error_ty,
@@ -2305,9 +2310,8 @@ The pointer must be null or a live allocation of the declared type returned by t
         tokens.extend(quote! {
          #definition
          #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
-         #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+         #[allow(clippy::let_and_return,clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
          #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {
-            #[allow(unused_mut)] let #accepted=::core::cell::Cell::new(0usize);
             let mut storage=std::mem::MaybeUninit::<#result>::uninit();
             let #out=storage.as_mut_ptr();
             if let Err(error)=::prebindgen_runtime::boundary(||{#body}) {panic!("C binding failed: {}",error);}
@@ -3127,6 +3131,7 @@ mod generation_tests {
     #[test]
     fn reclaiming_undelivered_outputs_does_not_destroy_loans() {
         let context = CContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             row_types: Default::default(),
             acknowledgement: syn::parse_quote!(accepted),
             output_pointer: syn::parse_quote!(out),
@@ -4075,3 +4080,15 @@ mod abort_policy_tests {
         );
     }
 }
+
+fn takes_input_owners(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) -> bool {
+    prebindgen_flat::wire_definitions(std::iter::once(node)).any(|w| match &w.kind {
+        CWire::Pointer { pointer, .. } => pointer.access == Access::Move,
+        CWire::Owned { access, .. } => *access == Access::Move,
+        CWire::Callback { .. } => true,
+        _ => false,
+    })
+}
+
+#[cfg(test)]
+mod input_contract_tests;

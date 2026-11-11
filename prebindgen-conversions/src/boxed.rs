@@ -1,7 +1,7 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`] policy and map
 //! [`BoxedWire`] data into their own wire kind.
-use crate::{Access, InputPlan, OutputPlan, Resource};
+use crate::{Access, InputPlan, OutputPlan};
 use prebindgen_flat::{Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -47,10 +47,11 @@ impl Storage {
 /// Prepare a boxed-address input for `T`, `&T` or `&mut T`.
 ///
 /// `T` transfers ownership; references borrow the allocation for the call.
+/// The parent invokes this complete operation only on active branches.
 /// Direct storage trusts the foreign caller. Wrapped storage checks only
 /// nonnull/aligned encoding. The caller or foreign wrapper must guarantee
 /// allocation provenance, type, liveness, synchronization and valid borrows.
-/// The returned resource records the allocation address and required access.
+/// The wire kind records the allocation type and required access.
 /// Generated code uses `prebindgen_runtime`.
 ///
 /// # Arguments
@@ -63,8 +64,6 @@ impl Storage {
 ///   is the adapter's choice, an integer or a pointer, as long as `wire as *mut _`
 ///   converts it to the allocation pointer.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — an emitted Rust boolean expression guarding validation and
-///   ownership acquisition. Its meaning is private to the converter.
 /// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
@@ -73,15 +72,12 @@ impl Storage {
 /// let input = boxed::input::<syn::Type, (), (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
-///     &quote::quote!(true), |boxed| {
+///     |boxed| {
 ///         let ty = boxed.ty;
 ///         syn::parse_quote!(*const #ty)
 ///     },
 /// )?;
-/// assert_eq!(input.resources[0].access, Access::Shared);
 /// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "* const Counter");
-/// assert!(input.acquire.is_empty());
-/// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
@@ -89,7 +85,6 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<InputPlan<W, C, N, B>> {
     if prebindgen_flat::callback_signature(ty)?.is_some() {
@@ -106,61 +101,36 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         ),
         _ => (ty, Access::Move),
     };
-    let condition = active.clone();
     let allocation = storage.ty(target);
     let field = storage.field();
     let pointer = format_ident!("{wire}_pointer");
-    let taken = match storage {
-        Storage::Direct => quote!(*#var.expect("active allocation")),
-        Storage::Wrapped(_) => quote!(#var.expect("active allocation").value),
-    };
     let check = matches!(storage, Storage::Wrapped(_))
-        .then(|| quote!(if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}));
-    let validation = quote!(
-        let #pointer = if #condition { #wire as *mut #allocation } else { ::core::ptr::null_mut() };
-        #check
-    );
-    let (acquire, statements) = match access {
-        Access::Move => (
-            quote!(let #var = if #condition {Some(unsafe {Box::from_raw(#pointer)})} else {None};),
-            quote!(let #var: #ty = #taken;),
-        ),
-        Access::Shared => (
-            quote!(),
-            quote!(let #var: #ty = unsafe { &(*#pointer)#field };),
-        ),
-        Access::Exclusive => (
-            quote!(),
-            quote!(let #var: #ty = unsafe { &mut (*#pointer)#field };),
-        ),
+        .then(|| quote!(::prebindgen_runtime::validate_pointer(#pointer)?;));
+    let transfer = crate::record_input_transfer(quote!(1usize));
+    let conversion = match access {
+        Access::Move => {
+            let value = match storage {
+                Storage::Direct => quote!(*#var),
+                Storage::Wrapped(_) => quote!(#var.value),
+            };
+            quote!(let #var=unsafe {Box::from_raw(#pointer)};#transfer let #var:#ty=#value;)
+        }
+        Access::Shared => quote!(let #var:#ty=unsafe {&(*#pointer)#field};),
+        Access::Exclusive => quote!(let #var:#ty=unsafe {&mut (*#pointer)#field};),
     };
-    Ok(InputPlan {
-        fallible: matches!(storage, Storage::Wrapped(_)),
-        context: Default::default(),
-        acknowledgement: None,
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
+    let mut plan = InputPlan::new(
+        prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
         }]),
-        validation,
-        acquire,
-        statements,
-        argument: quote!(#var),
-        resources: vec![Resource {
-            allocation_type: match storage {
-                Storage::Wrapped(_) => Some(target.clone()),
-                Storage::Direct => None,
-            },
-            registered: false,
-            records_consumption: false,
-            count: quote!(1usize),
-            active: active.clone(),
-            access,
-        }],
-    })
+        quote!(let #pointer=#wire as *mut #allocation;#check #conversion),
+        quote!(#var),
+    );
+    plan.fallible = matches!(storage, Storage::Wrapped(_));
+    Ok(plan)
 }
 /// Prepare an owned boxed-address output with deferred ownership transfer.
 ///

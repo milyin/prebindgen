@@ -1,6 +1,6 @@
 # Make the conversion API describe the work it executes
 
-Design proposal for [#898](https://github.com/milyin/prebindgen/pull/898), based
+Implemented contract, originally proposed for [#898](https://github.com/milyin/prebindgen/pull/898), based
 on merged #903 at `e78f4fd24ffaf85ccb342980f7dc33c377d39c34`.
 
 **The architectural problem is an outdated execution model.** The public API
@@ -20,10 +20,12 @@ Use the existing wire tree as the authoritative description of types, access and
 repetition. Remove the duplicate `Resource` inventory and global input-stage
 requests. Reuse runtime ownership reporting where the boundary needs it.
 
-This PR contains a proposal and a runnable investigation fixture. It changes no
-generator or runtime implementation and completes no implementation checkbox.
+The design below records the original analysis at that baseline. See the
+[implementation and migration guide](implementation.md) for the completed
+contract. The updated probe is a regression fixture: all eight combinations now
+generate successfully. Implementation checkboxes are marked after merging.
 Read this overview first, then the [API contract](contract.md). The
-[evidence](evidence.md) distinguishes observed behavior from proposed behavior.
+[evidence](evidence.md) records baseline observations.
 
 ## 1. Generation and application execution are different programs
 
@@ -198,9 +200,9 @@ tracking for an otherwise unobserved C call solely to help a diagnostic; the
 [contract](contract.md#runtime-ownership-reporting) specifies where reporting is
 needed and how a no-report boundary emits no counter updates.
 
-## 5. Why the current stage model causes the observed rejection
+## 5. Why the baseline stage model caused the observed rejection
 
-Today a low-level boxed leaf supplies separate pointer validation, ownership
+At the baseline, a low-level boxed leaf supplies separate pointer validation, ownership
 acquisition and final argument construction. The declaration compiler combines
 those pieces into its `validation` code so the constructed value stays alive.
 For a collection, this can be necessary to finish the current row efficiently.
@@ -210,7 +212,7 @@ requests, then all `Construct` requests. It infers early construction from
 `Resource::registered`, which is also set on shared borrows. Scalar conversion
 can construct early without having a resource descriptor at all.
 
-| Example source parameters | Converter combination | Current generation |
+| Example source parameters | Converter combination | Baseline generation |
 | --- | --- | --- |
 | `&Item, Item` | Both normally declaration-compiled | Succeeds. |
 | `&Item, Item` | Low-level borrow plus compiled move | Rejected. |
@@ -227,7 +229,8 @@ The rejection is:
 cannot mix deferred resource conversions with eagerly constructed inputs
 ```
 
-The [eight-case probe](probe/src/main.rs) verifies those generation outcomes.
+The original eight-case probe verified those baseline outcomes. The
+[updated probe](probe/src/main.rs) verifies that every combination now generates.
 This is unrelated to aliasing the same object. The examples assume independent
 allocations; Kotlin preflight and C's caller obligations still apply.
 

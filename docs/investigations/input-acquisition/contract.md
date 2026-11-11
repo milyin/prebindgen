@@ -1,6 +1,8 @@
 # Proposed API for the actual conversion pipelines
 
-Design for review, not implemented API. Read the [overview](README.md) first.
+Implemented contract, originally reviewed as a proposal. Read the
+[overview](README.md) first; the [migration guide](implementation.md) describes
+the concrete API and verification. Code sketches omit ordinary bounds.
 The proposal uses the existing Flat/converter model and concrete C/JNI wire
 representations. It adds no registry for execution stages, effects or diagnostics.
 

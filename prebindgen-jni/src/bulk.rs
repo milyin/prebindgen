@@ -70,13 +70,17 @@ fn parameter(name: &str) -> TokenStream {
     prebindgen_conversions::template_parameter(name)
 }
 fn resolve(code: &TokenStream, key: &str, value: &TokenStream) -> Result<TokenStream> {
-    prebindgen_conversions::render_template(code, &|name| {
-        Ok(if name == key {
-            value.clone()
-        } else {
-            parameter(name)
-        })
-    })
+    prebindgen_conversions::render_template(
+        code,
+        &|name| {
+            Ok(if name == key {
+                value.clone()
+            } else {
+                parameter(name)
+            })
+        },
+        &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
+    )
 }
 fn native_read(
     w: &Wire<JniWire>,
@@ -149,23 +153,25 @@ pub(crate) fn input(
         bind.extend(quote!(let #name=if #condition {#read}else{#absent};));
     }
     let bind = resolve(&bind, "bulk_reader", &quote!(#reader))?;
-    let validation = resolve(&child.validation, "bulk_reader", &quote!(#reader))?;
-    child.acquire = resolve(&child.acquire, "bulk_reader", &quote!(#reader))?;
-    child.statements = resolve(&child.statements, "bulk_reader", &quote!(#reader))?;
+    let conversion = resolve(&child.code, "bulk_reader", &quote!(#reader))?;
+    child.storage = resolve(&child.storage, "bulk_reader", &quote!(#reader))?;
+    let backing = std::mem::take(&mut child.storage);
+    child.storage = quote!(#[allow(unused_mut,unused_assignments)] let mut #bytes=None; #backing);
     let read = parameter(&format!("bulk_read_{wire}"));
     let env = parameter("environment");
     // Keep the wire operands explicit so enclosing row composition can rebind
     // them to the successfully decoded fields rather than their Result locals.
     let read = quote!((#read)(&mut #env, &#wire, #length));
-    let condition = active.rust();
     let truncated = active.and(quote!(#bytes.len()<::core::mem::size_of::<#ty>()));
-    child.validation = quote! {
+    child.code = quote! {{
         #[allow(clippy::redundant_closure_call)]
-        let #bytes=if #condition {#read?}else{::core::default::Default::default()};
-        let #reader=&::prebindgen_jni_runtime::bulk::Reader::new(&#bytes);
+        let bulk_value=#read?;
+        #bytes=Some(bulk_value);
+        let #bytes=#bytes.as_ref().expect("active bulk carrier");
+        let #reader=&::prebindgen_jni_runtime::bulk::Reader::new(#bytes);
         if #truncated{return Err("truncated bulk root record".into());}
-        #bind #validation
-    };
+        #bind #conversion
+    }};
     child.node = WireNode::Chain {
         meta: JniChain::Bulk(layout),
         child: Box::new(child.node),
@@ -320,52 +326,6 @@ fn decode_buffer(text: bool, wire: &syn::Ident) -> TokenStream {
     }
 }
 
-/// Keep potentially owning/borrowed row temporaries out of repeated validation.
-pub(crate) fn prepare_row_leaf(
-    plan: &mut InputPlan<JniWire>,
-    ty: &syn::Type,
-    wire: &syn::Ident,
-    var: &syn::Ident,
-    active: &Condition,
-) {
-    let WireNode::Leaf(wires) = &plan.node else {
-        return;
-    };
-    let [field] = wires.as_slice() else {
-        return;
-    };
-    let (storage, decode) = match &field.kind {
-        JniWire::NativeBuffer { text } => {
-            let decode = decode_buffer(*text, wire);
-            match ty {
-                syn::Type::Reference(r)
-                    if !matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]") =>
-                {
-                    let owned = &r.elem;
-                    (
-                        quote!(#owned),
-                        quote!(::core::convert::Into::<#owned>::into(#decode)),
-                    )
-                }
-                _ => (if *text { quote!(&str) } else { quote!(&[u8]) }, decode),
-            }
-        }
-        JniWire::Enum { enum_type, .. } => {
-            let native = &enum_type.mapping.ty;
-            (quote!(#native), enum_type.mapping.decode(quote!(#wire)))
-        }
-        _ => return,
-    };
-    let condition = active.rust();
-    let statements = std::mem::take(&mut plan.statements);
-    plan.validation = TokenStream::new();
-    // The option lives outside Optional/Selector blocks, through construction.
-    plan.acquire.extend(
-        quote!(#[allow(unused_mut,unused_assignments)] let mut #var: Option<#storage> = None;),
-    );
-    plan.statements = quote!(#var = if #condition {Some(#decode)} else {None}; #statements);
-}
-
 pub(crate) fn input_leaf(
     flat: &Bindings,
     ty: &syn::Type,
@@ -377,14 +337,7 @@ pub(crate) fn input_leaf(
         Some(Value::Text) | Some(Value::Bytes) => {
             let text = Value::of(ty) == Some(Value::Text);
             let decode = decode_buffer(text, &w);
-            prebindgen_conversions::value::input(
-                ty,
-                w,
-                v,
-                &active.rust(),
-                decode,
-                JniWire::NativeBuffer { text },
-            )
+            prebindgen_conversions::value::input(ty, w, v, decode, JniWire::NativeBuffer { text })
         }
         Some(Value::Scalar(p @ (Primitive::I128 | Primitive::U128))) => {
             let native = p.rust_type();
@@ -393,7 +346,6 @@ pub(crate) fn input_leaf(
                 ty,
                 w,
                 v,
-                &active.rust(),
                 decode,
                 JniWire::Native128 {
                     primitive: p,
@@ -1222,19 +1174,23 @@ pub(crate) fn cached_reads(code: &TokenStream, node: &JniNode) -> Result<TokenSt
             }
         })
         .collect::<std::collections::BTreeSet<_>>();
-    prebindgen_conversions::render_template(code, &|name| {
-        Ok(
-            if let Some(wire) = name
-                .strip_prefix("bulk_read_")
-                .filter(|wire| roots.contains(*wire))
-            {
-                let cache = format_ident!("{wire}_cached_bytes");
-                quote!(|_, _, _| Ok::<_,String>(#cache.as_slice()))
-            } else {
-                parameter(name)
-            },
-        )
-    })
+    prebindgen_conversions::render_template(
+        code,
+        &|name| {
+            Ok(
+                if let Some(wire) = name
+                    .strip_prefix("bulk_read_")
+                    .filter(|wire| roots.contains(*wire))
+                {
+                    let cache = format_ident!("{wire}_cached_bytes");
+                    quote!(|_, _, _| Ok::<_,String>(#cache.as_slice()))
+                } else {
+                    parameter(name)
+                },
+            )
+        },
+        &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
+    )
 }
 // Read independent owned fields separately on failure: a malformed nested
 // range must not prevent releasing valid sibling handles. All reads use cached

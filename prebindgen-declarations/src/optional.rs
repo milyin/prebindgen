@@ -158,7 +158,7 @@ fn mark<C: Codec>(tree: &mut CodecNode<C>, encoding: OptionalEncoding<C>) {
 }
 
 /// Wrap an input plan whose activation condition includes `tag == 1`.
-/// The payload's construction is guarded as well as its validation/acquisition.
+/// The complete child conversion executes only in the selected branch.
 /// Choose `tag` and `var` fresh within the complete slot.
 pub fn optional_input<C: Codec>(
     codec: &C,
@@ -175,27 +175,30 @@ pub fn optional_input<C: Codec>(
         direction: Direction::Input,
     })?;
     validate_encoding(&encoding, &tag, Direction::Input)?;
-    let mut validation = TokenStream::new();
+    let mut prefix = TokenStream::new();
     if let Presence::Niche {
         input_test: Some(present),
     } = &encoding.presence
     {
-        validation.extend(quote!(let #tag: i32 = i32::from(#present);));
+        prefix.extend(quote!(let #tag:i32=i32::from(#present);));
     } else if codec.validates_inputs() {
         child.fallible = true;
-        let bad = active.and(quote!(#tag != 0 && #tag != 1));
-        validation.extend(quote!(if #bad {return Err("invalid option presence".into());}));
+        let bad = active.and(quote!(#tag!=0 && #tag!=1));
+        prefix.extend(quote!(if #bad {return Err("invalid option presence".into());}));
     }
-    validation.extend(child.validation);
-    child.validation = validation;
-    let body = child.statements;
-    let arg = child.argument;
-    let selected = active.arm(tag.clone(), 1).rust();
-    child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
-    child.argument = quote!(#var);
+    let storage = std::mem::take(&mut child.storage);
+    let target = format_ident!("{var}_payload");
+    let body = child.bind(&target, quote!(Some(#target)))?;
+    let selected = active.arm(tag, 1).rust();
     mark(&mut child.node, encoding);
-
-    Ok(child)
+    let mut plan = InputPlan::new(
+        child.node,
+        quote!(#prefix let #var=if #selected {#body} else {None};),
+        quote!(#var),
+    );
+    plan.storage = storage;
+    plan.fallible = child.fallible;
+    Ok(plan)
 }
 
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
