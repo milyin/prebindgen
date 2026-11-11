@@ -4108,3 +4108,6 @@ fn takes_input_owners(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) 
 
 #[cfg(test)]
 mod input_contract_tests;
+
+#[cfg(test)]
+mod canonical_tests;

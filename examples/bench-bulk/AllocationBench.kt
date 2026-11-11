@@ -7,6 +7,14 @@ internal object Counters {
 private class Measured(val run: () -> Long, val close: () -> Unit)
 private fun makePlain(kind: String, size: Int): Measured {
     return when (kind) {
+        "canonical_value" -> Measured({bench.plain.canonicalValue(0)}, {})
+        "expanded_value" -> Measured({bench.plain.expandedValue(0)}, {})
+        "canonical_value_callback" -> Measured({bench.plain.canonicalValueCallback({it+1},0)}, {})
+        "expanded_value_callback" -> Measured({bench.plain.expandedValueCallback({it+1},0)}, {})
+        "canonical_values", "expanded_values" -> {
+            val rows=List(size) {it.toLong()}
+            Measured({val output=if(kind=="canonical_values") bench.plain.canonicalValues(rows) else bench.plain.expandedValues(rows);check(output==rows);size.toLong()}, {})
+        }
         "callback_batches", "callback_batches_many", "callback_mixed_batches", "callback_mixed_batches_many" -> {
             val small = kind.endsWith("_many")
             val mixed = kind.startsWith("callback_mixed")
@@ -68,6 +76,14 @@ private fun makePlain(kind: String, size: Int): Measured {
 }
 private fun makeBulk(kind: String, size: Int): Measured {
     return when (kind) {
+        "canonical_value" -> Measured({bench.bulk.canonicalValue(0)}, {})
+        "expanded_value" -> Measured({bench.bulk.expandedValue(0)}, {})
+        "canonical_value_callback" -> Measured({bench.bulk.canonicalValueCallback({it+1},0)}, {})
+        "expanded_value_callback" -> Measured({bench.bulk.expandedValueCallback({it+1},0)}, {})
+        "canonical_values", "expanded_values" -> {
+            val rows=List(size) {it.toLong()}
+            Measured({val output=if(kind=="canonical_values") bench.bulk.canonicalValues(rows) else bench.bulk.expandedValues(rows);check(output==rows);size.toLong()}, {})
+        }
         "callback_batches", "callback_batches_many", "callback_mixed_batches", "callback_mixed_batches_many" -> {
             val small = kind.endsWith("_many")
             val mixed = kind.startsWith("callback_mixed")

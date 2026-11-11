@@ -223,3 +223,19 @@ fn canonical_conversions_use_existing_flat_type_entries() {
         .unwrap();
     assert!(generated.kotlin["test/Functions.kt"].contains("v: Long"));
 }
+
+#[test]
+fn source_selection_includes_local_trait_representations() {
+    let items = syn::parse_file(
+        "pub struct Value{pub n:i64}pub struct Repr{pub n:i64}pub fn echo(v:Value)->Value{}",
+    )
+    .unwrap()
+    .items
+    .into_iter()
+    .map(|i| (i, Default::default()))
+    .collect::<Vec<_>>();
+    let function = fun!(echo).expand_param("v", convert!(Value).input(from!(crate::Repr)));
+    let names = prebindgen_declarations::declarations::source_items(&[], &[], &[], [&function]);
+    let selected = Bindings::parse_selected(items, &names, &[]).unwrap();
+    assert!(selected.type_info(&syn::parse_quote!(crate::Repr)).is_ok());
+}

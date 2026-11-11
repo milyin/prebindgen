@@ -385,7 +385,7 @@ impl Declarations {
                 flat,
                 codec,
                 ty,
-                conversion.clone(),
+                (**conversion).clone(),
                 input,
                 extra,
                 stack,
@@ -723,7 +723,7 @@ impl Declarations {
                 flat,
                 codec,
                 ty,
-                conversion.clone(),
+                (**conversion).clone(),
                 output,
                 extra,
                 stack,
@@ -827,17 +827,23 @@ impl Declarations {
                             .and_then(|i| i.conversion.output.clone())
                     });
                 if let Some(conversion) = converted {
+                    if let Output::Projected(policy) = tree {
+                        return self.resolve_output_value(
+                            flat,
+                            codec,
+                            ty,
+                            extra,
+                            stack,
+                            getter_result,
+                            Some(policy),
+                        );
+                    }
                     return self.resolve_output_conversion(
                         flat,
                         codec,
                         ty,
                         conversion,
-                        &match tree {
-                            Output::Projected(p) => Output::Request(OutputRequest::Value {
-                                projection: Some(p.clone()),
-                            }),
-                            _ => Output::value(),
-                        },
+                        &Output::value(),
                         extra,
                         stack,
                     );
@@ -1208,8 +1214,10 @@ pub fn source_items<'a>(
         struct References<'a>(&'a mut Vec<String>);
         impl syn::visit_mut::VisitMut for References<'_> {
             fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
-                if path.qself.is_none() && path.path.segments.len() == 1 {
-                    self.0.push(path.path.segments[0].ident.to_string());
+                if path.qself.is_none() {
+                    if let Some(segment) = path.path.segments.last() {
+                        self.0.push(segment.ident.to_string());
+                    }
                 }
                 syn::visit_mut::visit_type_path_mut(self, path);
             }

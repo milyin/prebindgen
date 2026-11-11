@@ -205,14 +205,16 @@ pub fn prepare_value_conversions<S: Schema>(
     for decl in decls {
         decl.validate()?;
         let ty = flat.resolve_type(&decl.ty)?;
-        if Primitive::from_type(&ty).is_some()
+        if !matches!(ty, Type::Path(_))
+            || Primitive::from_type(&ty).is_some()
             || prebindgen_flat::option_inner(&ty).is_some()
             || prebindgen_flat::sequence_parts(&ty).is_some()
             || type_key(&ty) == "String"
             || type_key(&ty) == "()"
         {
             return Err(
-                "canonical conversions require a domain type, not a built-in representation".into(),
+                "canonical conversions require a named domain type, not a built-in representation"
+                    .into(),
             );
         }
         let key = type_key(&ty);
@@ -302,7 +304,7 @@ impl Declarations {
         let input = self.input(flat, codec, &conversion.representation, child, extra, stack);
         stack.pop();
         Ok(Input::Convert {
-            conversion,
+            conversion: Box::new(conversion),
             input: Box::new(input?),
         })
     }
@@ -333,7 +335,7 @@ impl Declarations {
         );
         stack.pop();
         Ok(Output::Convert {
-            conversion,
+            conversion: Box::new(conversion),
             output: Box::new(output?),
         })
     }
@@ -395,6 +397,11 @@ impl Declarations {
                     .and_then(|i| i.conversion.output.clone())
             });
         if let Some(c) = c {
+            if policy.is_some_and(|p| !p.fields.is_empty()) {
+                return Err(
+                    "field projections on a canonical value require an explicit output tree".into(),
+                );
+            }
             if policy.is_some_and(|p| p.mode == crate::ProjectionMode::Borrowed)
                 && !conversion_borrows(flat, &c)?
             {
@@ -407,9 +414,7 @@ impl Declarations {
                 codec,
                 ty,
                 c,
-                &Output::Request(OutputRequest::Value {
-                    projection: policy.cloned(),
-                }),
+                &Output::value(),
                 extra,
                 stack,
             );
@@ -487,7 +492,8 @@ impl<C: Codec> Compiler<'_, C> {
         validate_conversion(self.flat, ty, conversion, true)?;
         let target = names.map(|(_, v)| v.clone()).unwrap_or_else(|| self.name());
         let repr = format_ident!("{target}_repr");
-        let child_names = names.map(|(w, _)| (w, &repr));
+        let decoded = format_ident!("{repr}_decoded");
+        let child_names = names.map(|(w, _)| (w, &decoded));
         let mut child = self.input_named(
             &conversion.representation,
             input,
@@ -601,16 +607,14 @@ impl<C: Codec> Compiler<'_, C> {
             quote!(#repr),
             false,
         )?;
-        if matches!(&conversion.representation, Type::Reference(_)) {
-            self.codec.validate_getter_output(
-                self.flat,
-                ty,
-                borrowed && !self.temporary_receiver.get(),
-                &conversion.representation,
-                &child,
-                extra,
-            )?;
-        }
+        self.codec.validate_getter_output(
+            self.flat,
+            ty,
+            borrowed && !self.temporary_receiver.get(),
+            &conversion.representation,
+            &child,
+            extra,
+        )?;
         let prepared = child.statements;
         child.statements = quote!(let #source=#value;let #repr=#expr;#prepared);
         child.fallible |= fallible;

@@ -1,5 +1,6 @@
 use prebindgen_declarations::{
     callback, convert, expand_param, expand_return, from, fun, into, try_from, try_into, Input,
+    Output, SequenceDelivery,
 };
 use prebindgen_jni::{data_class, package, ptr_class, JniGenBuilder};
 pub fn configure(jni: JniGenBuilder) -> JniGenBuilder {
@@ -28,6 +29,7 @@ pub fn configure(jni: JniGenBuilder) -> JniGenBuilder {
     .package(
         package!("canonical")
             .class(data_class!(CanonSettings))
+            .class(data_class!(CanonOutput))
             .class(data_class!(CanonView))
             .class(ptr_class!(CanonToken))
             .fun(
@@ -44,9 +46,21 @@ pub fn configure(jni: JniGenBuilder) -> JniGenBuilder {
             .fun(fun!(canonical_millis_callback))
             .fun(fun!(canonical_millis_notify))
             .fun(fun!(canonical_millis_static))
+            .fun(
+                fun!(canonical_millis_views).expand_return(Output::combine([
+                    convert!(CanonMillis)
+                        .output(fun!(canonical_millis_value))
+                        .into(),
+                    convert!(CanonMillis)
+                        .output(fun!(canonical_millis_value))
+                        .into(),
+                ])),
+            )
             .fun(fun!(canonical_celsius))
             .fun(fun!(canonical_percent))
             .fun(fun!(canonical_percent_invalid))
+            .fun(fun!(canonical_percent_callback))
+            .fun(fun!(canonical_percent_notify))
             .fun(fun!(canonical_label_echo))
             .fun(fun!(canonical_settings))
             .fun(
@@ -59,6 +73,20 @@ pub fn configure(jni: JniGenBuilder) -> JniGenBuilder {
             .fun(fun!(canonical_token_new))
             .fun(fun!(canonical_token_value))
             .fun(fun!(canonical_live))
+            .fun(fun!(canonical_output_rows))
+            .fun(
+                fun!(canonical_output_rows_plain).expand_return(Output::Sequence {
+                    element: Box::new(Output::value()),
+                    mode: None,
+                    delivery: SequenceDelivery::Value,
+                }),
+            )
+            .fun(fun!(canonical_output_notify))
+            .fun(fun!(canonical_consume_rows))
+            .fun(fun!(canonical_consume_rows_bulk).expand_param(
+                "values",
+                expand_param!(Vec<CanonOwned>).variant_self().bulk(),
+            ))
             .fun(fun!(canonical_consume))
             .fun(fun!(canonical_owned_callback))
             .fun(

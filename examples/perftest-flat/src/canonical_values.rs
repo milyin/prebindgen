@@ -273,3 +273,54 @@ impl From<String> for CanonError {
         Self { code: -1 }
     }
 }
+
+// A failed non-unit upcall follows the existing panic policy; source Rust may
+// catch it. Failed unit upcalls are reported by the callback diagnostics hook.
+#[prebindgen]
+pub fn canonical_percent_callback(callback: impl Fn() -> CanonPercent) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(callback)).is_err()
+}
+#[prebindgen]
+pub fn canonical_percent_notify(callback: impl Fn(CanonPercent)) {
+    callback(CanonPercent { value: 101 })
+}
+
+#[prebindgen]
+pub struct CanonOutput {
+    pub token: CanonOwned,
+    pub percent: CanonPercent,
+}
+#[prebindgen]
+pub fn canonical_output_rows(fail: bool) -> Vec<CanonOutput> {
+    (0..3)
+        .map(|i| CanonOutput {
+            token: CanonOwned {
+                token: canonical_token_new(i),
+            },
+            percent: CanonPercent {
+                value: if fail && i == 1 { 101 } else { 1 },
+            },
+        })
+        .collect()
+}
+#[prebindgen]
+pub fn canonical_output_rows_plain(fail: bool) -> Vec<CanonOutput> {
+    canonical_output_rows(fail)
+}
+#[prebindgen]
+pub fn canonical_output_notify(callback: impl Fn(Vec<CanonOutput>)) {
+    callback(canonical_output_rows(true))
+}
+#[prebindgen]
+pub fn canonical_consume_rows(values: Vec<CanonOwned>) -> i64 {
+    values.iter().map(|v| v.token.value).sum()
+}
+#[prebindgen]
+pub fn canonical_consume_rows_bulk(values: Vec<CanonOwned>) -> i64 {
+    canonical_consume_rows(values)
+}
+
+#[prebindgen]
+pub fn canonical_millis_views() -> CanonMillis {
+    CanonMillis { value: 37 }
+}

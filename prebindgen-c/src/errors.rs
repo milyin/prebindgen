@@ -258,6 +258,11 @@ pub(crate) fn emit(
             comments = comments.replace(&format!("output->v{i}"), &format!("error->{field}"));
         }
         header.push_str(&comments);
+        let drop_body = if drops.is_empty() {
+            quote!(let _=error;)
+        } else {
+            quote!(if !error.is_null(){#drops})
+        };
         let definition = prebindgen_reprc::Record::new(rust_name.clone(), fields)?.definition();
         tokens.extend(quote! {
             #definition
@@ -268,7 +273,7 @@ pub(crate) fn emit(
             }
             #[doc="# Safety\nThe pointer must be null or writable storage containing a live error produced by this library."]
             #[no_mangle]pub unsafe extern "C" fn #drop_name(error:*mut #rust_name) {
-                if let Err(message)=::prebindgen_runtime::boundary(|| {if !error.is_null(){#drops}Ok(())}) {panic!("C error destructor failed: {}",message);}
+                if let Err(message)=::prebindgen_runtime::boundary(|| {#drop_body Ok(())}) {panic!("C error destructor failed: {}",message);}
             }
         });
     }

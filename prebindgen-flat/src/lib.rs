@@ -257,8 +257,10 @@ impl<M: Schema> Flat<M> {
         struct References<'a>(&'a mut BTreeSet<String>);
         impl VisitMut for References<'_> {
             fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
-                if path.qself.is_none() && path.path.segments.len() == 1 {
-                    self.0.insert(path.path.segments[0].ident.to_string());
+                if path.qself.is_none() {
+                    if let Some(segment) = path.path.segments.last() {
+                        self.0.insert(segment.ident.to_string());
+                    }
                 }
                 syn::visit_mut::visit_type_path_mut(self, path);
             }

@@ -137,7 +137,7 @@ pub enum Input<P = std::convert::Infallible> {
     /// Convert one canonical representation before constructing the source value.
     Convert {
         /// Prepared source/representation operation.
-        conversion: prebindgen_flat::ValueConversion,
+        conversion: Box<prebindgen_flat::ValueConversion>,
         /// Conversion of the representation itself.
         input: Box<Input<P>>,
     },
@@ -324,7 +324,7 @@ pub enum Output<P = std::convert::Infallible> {
     /// Convert a source value before encoding its single-value representation.
     Convert {
         /// Prepared source/representation operation.
-        conversion: prebindgen_flat::ValueConversion,
+        conversion: Box<prebindgen_flat::ValueConversion>,
         /// Conversion of the representation itself.
         output: Box<Output<P>>,
     },
