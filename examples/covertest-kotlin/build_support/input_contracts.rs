@@ -21,15 +21,8 @@ impl Conversion for DurationInput {
         request: Self::SlotFragment<'_>,
         _: &syn::Type,
     ) -> Result<TokenStream> {
-        Ok(match request {
-            InputFragment::Validate { next, .. } | InputFragment::Acquire { next, .. } => {
-                quote!({ #next })
-            }
-            InputFragment::Construct { target, next, .. } => {
-                quote!({ let #target = millis_wire; #next })
-            }
-            InputFragment::Acknowledge { .. } | InputFragment::Resources { .. } => quote!(()),
-        })
+        let InputFragment { target, next, .. } = request;
+        Ok(quote!({let #target=millis_wire;#next}))
     }
 }
 

@@ -117,10 +117,7 @@ pub(crate) fn column_groups(node: &JniNode) -> Result<String> {
 }
 /// Every native resource must be represented by prepared Kotlin handle wires.
 /// Custom conversions without this information cannot use the generated JNI API.
-pub(crate) fn require_preflight<I: KotlinInputConversion>(
-    input: &I,
-    resources: &[prebindgen_conversions::Resource],
-) -> Result<()> {
+pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<()> {
     fn prepared(node: &JniNode) -> bool {
         match node {
             WireNode::Chain {
@@ -138,32 +135,6 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(
     }
     if !prepared(input.input_node()) {
         return Err("Kotlin handle preflight requires an enclosing prepared bulk frame".into());
-    }
-    let mut native = BTreeMap::new();
-    let mut kotlin = BTreeMap::new();
-    for resource in resources {
-        let Some(ty) = &resource.allocation_type else {
-            return Err(
-                "Kotlin handle preflight requires the allocation type of every native resource"
-                    .into(),
-            );
-        };
-        if !resource.registered {
-            return Err(
-                "Kotlin handle preflight requires eagerly prepared native resources".into(),
-            );
-        }
-        *native
-            .entry((type_key(ty), access_key(resource.access)))
-            .or_insert(0usize) += 1;
-    }
-    for wire in prebindgen_flat::wire_definitions(std::iter::once(input.input_node())) {
-        if let JniWire::Handle { handle, .. } = &wire.kind {
-            *kotlin.entry(key(handle)).or_insert(0usize) += 1;
-        }
-    }
-    if native != kotlin {
-        return Err("Kotlin handle preflight requires matching allocation types and access modes for native resources and Kotlin handle wires".into());
     }
     Ok(())
 }

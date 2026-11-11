@@ -584,6 +584,11 @@ internal object JNINative {
     @JvmStatic external fun call_data_floats_echo_cfa4c7cc9e4653c8(p0_w1_f0: ByteArray?, p0_w1_f1: Float, p0_w1_f2: Double, returns: Return_ByteArray_Float_Double3_ErrorEmpty_796e683dacd5930a): Unit
     @JvmStatic external fun call_blob_value_selected_bb0c7d8f79d57c4b(p0_w1: Int, p0_w3_f0_f0: Long, p0_w3_f0_f1: Long, p0_w3_f1: ByteArray?, p0_w6: Long, p0_w8: ByteArray?, returns: Return_Long_Long_ByteArray3_ErrorEmpty_aa6ead24a4efe458): Unit
     @JvmStatic external fun call_blob_value_views_9983ceb667085a50(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f1: ByteArray?, returns: Return_Long_Long_ByteArray9_ErrorEmpty_3b29111153baa628): Unit
+    @JvmStatic external fun call_scoped_input_new_70e3cb53d352b95c(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_scoped_input_id_62981d7db5d21b17(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_scoped_input_drops_fa257e78897eb776(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_scoped_input_pair_6d47da5d16732d9b(scoped_first: Long, p1_w1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_scoped_input_failure_c9f0d4981e8bf21b(scoped_first: Long, p1_w3: Long, p1_w5: Long, ownership: LongArray, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
     internal interface SequenceCapacity { fun reserve(capacity: Int) }
     @JvmStatic private external fun init_SequenceCapacity_e067e94ae7b50e2a(capacity: Class<*>)
     init { init_SequenceCapacity_e067e94ae7b50e2a(SequenceCapacity::class.java) }

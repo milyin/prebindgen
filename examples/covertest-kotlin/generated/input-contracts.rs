@@ -1,4 +1,5 @@
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -20,26 +21,27 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_inputcontracts_JNINat
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let __prebindgen_argument_0 = millis_wire;
-            let source_value = crate::input_contracts::duration_millis(
-                __prebindgen_argument_0,
-            );
-            let ret_w0 = source_value;
-            let __pb_direct_result = unsafe {
-                (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w0,
-                })
-                    .j
-            };
-            let _: () = {
-                direct_output = __pb_direct_result;
-                success_transferred = true;
-            };
-            Ok(__pb_direct_result)
+            {
+                let source_value = crate::input_contracts::duration_millis(
+                    __prebindgen_argument_0,
+                );
+                let ret_w0 = source_value;
+                let __pb_direct_result = unsafe {
+                    (::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: ret_w0,
+                    })
+                        .j
+                };
+                let _: () = {
+                    direct_output = __pb_direct_result;
+                    success_transferred = true;
+                };
+                Ok(__pb_direct_result)
+            }
         }
     });
     match outcome {

@@ -210,10 +210,10 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         let ty = &error.ty;
         let source = format_ident!("source");
         let context = JniContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             return_delivery: crate::JniReturnDelivery::Packet,
             prepared_delivery: None,
             environment: format_ident!("env"),
-            acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),
             return_sink: None,
             is_domain_error: true,
@@ -249,6 +249,7 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         };
         let body = body_for(&context)?;
         let callback_context = JniContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             return_delivery: JniReturnDelivery::Capture,
             prepared_delivery: None,
             return_sink: Some(format_ident!("__pb_return")),

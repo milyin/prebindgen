@@ -56,6 +56,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-gnu,i686-unknown-linux-gnu
-      - run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Ensure Clang is available
+        run: |
+          if command -v clang >/dev/null; then
+            exit 0
+          fi
+          # Hosted images can already contain a versioned compiler without the
+          # default-name package. Reuse it before contacting package mirrors.
+          for compiler in /usr/bin/clang-[0-9]*; do
+            if [ -x "$compiler" ]; then
+              mkdir -p "$RUNNER_TEMP/opaque-layout-tools"
+              ln -s "$compiler" "$RUNNER_TEMP/opaque-layout-tools/clang"
+              echo "$RUNNER_TEMP/opaque-layout-tools" >> "$GITHUB_PATH"
+              exit 0
+            fi
+          done
+          sudo apt-get update && sudo apt-get install -y clang
       - run: cargo fetch
       - run: python3 examples/check-opaque-layouts.py --target aarch64-unknown-linux-gnu --target i686-unknown-linux-gnu

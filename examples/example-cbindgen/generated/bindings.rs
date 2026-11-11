@@ -136,6 +136,7 @@ pub struct example_calculator_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -144,8 +145,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn example_calculator_new() -> *mut example_flat::Calculator {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<example_calculator_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -177,6 +176,7 @@ pub struct example_caption_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -189,54 +189,20 @@ pub unsafe extern "C" fn example_caption_new(
     p1_w1: __PbBuffer,
     p2_w1: u8,
 ) -> *mut example_flat::Caption {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<example_caption_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: u64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let p1_w0 = if true {
-                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) })
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true {
-                Some(
-                    ::core::convert::AsRef::<
-                        str,
-                    >::as_ref(p1_w0.as_ref().expect("active value")),
-                )
-            } else {
-                None
-            };
-            let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p2_w0_built = if true {
-                Some({
-                    let p2_w0: bool = ::core::convert::Into::into(
-                        p2_w0.expect("active value"),
-                    );
-                    p2_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
-            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let p0_w0: u64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
+            #[allow(unused_mut, unused_assignments)]
+            let mut p1_w0 = None;
+            p1_w0 = Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) });
+            let __prebindgen_argument_1 = ::core::convert::AsRef::<
+                str,
+            >::as_ref(p1_w0.as_ref().expect("active value"));
+            let p2_w0: bool = ::core::convert::Into::into(p2_w1 != 0);
+            let __prebindgen_argument_2 = p2_w0;
             let source_value = example_flat::caption_new(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -268,6 +234,7 @@ pub struct example_foo_get_id_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -276,38 +243,17 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<example_foo_get_id_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut example_flat::Foo
-            } else {
-                ::core::ptr::null_mut()
+            let p0_w1_pointer = p0_w1 as *mut example_flat::Foo;
+            let p0_w0: example_flat::Foo = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                let p0_w0 = if true {
-                    Some(unsafe { Box::from_raw(p0_w1_pointer) })
-                } else {
-                    None
-                };
-                if true {
-                    __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + (1usize));
-                }
-                Some({
-                    let p0_w0: example_flat::Foo = *p0_w0.expect("active allocation");
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::foo_get_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = example_foo_get_id_result {
@@ -330,6 +276,7 @@ pub struct example_foo_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -338,25 +285,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn example_foo_new(p0_w1: u64) -> *mut example_flat::Foo {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<example_foo_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: u64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: u64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::foo_new(__prebindgen_argument_0);
             let ret_w0: *mut example_flat::Foo = Box::into_raw(Box::new(source_value));
             let ret_w0_owner = __PbOutputOwner(ret_w0);
@@ -382,6 +316,7 @@ pub struct example_local_counter_label_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -393,57 +328,25 @@ pub unsafe extern "C" fn example_local_counter_label(
     p0_w1: *mut example_flat::LocalCounter,
     p1_w1: __PbBuffer,
 ) -> *mut example_flat::LocalCounter {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         example_local_counter_label_result,
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut example_flat::LocalCounter
-            } else {
-                ::core::ptr::null_mut()
+            let p0_w1_pointer = p0_w1 as *mut example_flat::LocalCounter;
+            let p0_w0: example_flat::LocalCounter = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                let p0_w0 = if true {
-                    Some(unsafe { Box::from_raw(p0_w1_pointer) })
-                } else {
-                    None
-                };
-                if true {
-                    __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + (1usize));
-                }
-                Some({
-                    let p0_w0: example_flat::LocalCounter = *p0_w0
-                        .expect("active allocation");
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let p1_w0 = if true {
-                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) })
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true {
-                Some(
-                    ::core::convert::AsRef::<
-                        str,
-                    >::as_ref(p1_w0.as_ref().expect("active value")),
-                )
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
+            #[allow(unused_mut, unused_assignments)]
+            let mut p1_w0 = None;
+            p1_w0 = Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p1_w1)) });
+            let __prebindgen_argument_1 = ::core::convert::AsRef::<
+                str,
+            >::as_ref(p1_w0.as_ref().expect("active value"));
             let source_value = example_flat::local_counter_label(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -474,6 +377,7 @@ pub struct example_local_counter_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -484,27 +388,14 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn example_local_counter_new(
     p0_w1: u64,
 ) -> *mut example_flat::LocalCounter {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         example_local_counter_new_result,
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: u64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: u64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_new(__prebindgen_argument_0);
             let ret_w0: *mut example_flat::LocalCounter = Box::into_raw(
                 Box::new(source_value),
@@ -532,6 +423,7 @@ pub struct example_local_counter_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -542,32 +434,15 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn example_local_counter_value(
     p0_w1: *const example_flat::LocalCounter,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         example_local_counter_value_result,
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut example_flat::LocalCounter
-            } else {
-                ::core::ptr::null_mut()
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: &example_flat::LocalCounter = unsafe {
-                        &(*p0_w1_pointer)
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w1_pointer = p0_w1 as *mut example_flat::LocalCounter;
+            let p0_w0: &example_flat::LocalCounter = unsafe { &(*p0_w1_pointer) };
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_value(
                 __prebindgen_argument_0,
             );

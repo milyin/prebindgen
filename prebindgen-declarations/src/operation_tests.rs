@@ -16,14 +16,7 @@ impl Codec for Scalars {
             return Err("this codec only supports i64".into());
         }
         let wire = &r.wire;
-        value::input(
-            r.ty,
-            r.wire.clone(),
-            r.target,
-            &r.active.rust(),
-            quote!(#wire),
-            r.ty.clone(),
-        )
+        value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
     }
     fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
@@ -167,6 +160,7 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     assert!(Scalars.group(GroupKind::NamedOutput("view")).is_err());
     assert!(Scalars
         .sequence_input(SequenceInputRequest {
+            view: prebindgen_flat::SequenceView::Owned,
             extra: &(),
             wire: format_ident!("rows"),
             length: format_ident!("len"),
@@ -219,7 +213,7 @@ fn default_projection_keeps_its_reference_and_field_checks() {
 // contexts without depending on either language's wire representation.
 #[derive(Default)]
 struct Probe(
-    std::cell::RefCell<Vec<(Representation, InputConstruction, InputRole)>>,
+    std::cell::RefCell<Vec<(Representation, InputRole)>>,
     std::cell::Cell<bool>,
 );
 impl Codec for Probe {
@@ -230,9 +224,7 @@ impl Codec for Probe {
     type Chain = ();
     type Branch = ();
     fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
-        self.0
-            .borrow_mut()
-            .push((r.representation, r.construction, r.role));
+        self.0.borrow_mut().push((r.representation, r.role));
         Scalars.input_leaf(InputLeaf {
             flat: r.flat,
             ty: r.ty,
@@ -241,7 +233,6 @@ impl Codec for Probe {
             target: r.target,
             active: r.active,
             representation: r.representation,
-            construction: r.construction,
             role: r.role,
         })
     }
@@ -272,57 +263,19 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
     let codec = Probe::default();
     let ty = syn::parse_quote!(i64);
     for role in [InputRole::Parameter, InputRole::CallbackResult] {
-        for (bulk, bulk_row, grouped, representation, construction) in [
-            (
-                false,
-                false,
-                false,
-                Representation::Ordinary,
-                InputConstruction::EnclosingConversion,
-            ),
-            (
-                false,
-                false,
-                true,
-                Representation::Ordinary,
-                InputConstruction::GroupedRow,
-            ),
-            (
-                true,
-                false,
-                false,
-                Representation::Bulk,
-                InputConstruction::EnclosingConversion,
-            ),
-            (
-                true,
-                false,
-                true,
-                Representation::Bulk,
-                InputConstruction::EnclosingConversion,
-            ),
-            (
-                true,
-                true,
-                true,
-                Representation::Bulk,
-                InputConstruction::GroupedRow,
-            ),
+        for (bulk, representation) in [
+            (false, Representation::Ordinary),
+            (true, Representation::Bulk),
         ] {
             let compiler = Compiler {
                 input_role: role,
                 ..Compiler::new(&flat, &codec, "arg".into())
             };
             compiler.bulk.set(bulk);
-            compiler.bulk_input_row.set(bulk_row);
-            compiler.grouped_input.set(grouped);
             compiler
                 .input(&ty, &Input::Leaf, &(), &Condition::default())
                 .unwrap();
-            assert_eq!(
-                codec.0.borrow().last(),
-                Some(&(representation, construction, role))
-            );
+            assert_eq!(codec.0.borrow().last(), Some(&(representation, role)));
         }
     }
     codec.0.borrow_mut().clear();
@@ -347,7 +300,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         .0
         .borrow()
         .iter()
-        .all(|r| r.2 == InputRole::CallbackResult));
+        .all(|r| r.1 == InputRole::CallbackResult));
     let error = compile_output_value(
         &flat,
         &codec,

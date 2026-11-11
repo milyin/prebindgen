@@ -223,16 +223,17 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         } else {
             quote!(true)
         };
-        return InputPlan {
-            fallible: false,
-            context: Default::default(),
-            node: WireNode::Leaf(wires),
-            validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
-            acquire: quote!(),
-            resources: vec![],
-            acknowledgement: None,
-            statements: quote!(),
-            argument: quote!(raw),
+        return {
+            let validation = quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");});
+            let acquire = quote!();
+            let statements = quote!();
+            let mut plan = InputPlan::new(
+                WireNode::Leaf(wires),
+                quote!(#validation #acquire #statements),
+                quote!(raw),
+            );
+            plan.fallible = false;
+            plan
         };
     }
     let tag = format_ident!("tag{depth}");
@@ -405,14 +406,13 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                     .map(|w| &w.name)
                     .collect::<Vec<_>>();
                 let types = DomainAbi::wires(&out.outcomes.success).map(|w| w.kind.rust_type());
-                let validation = inp.validation;
-                let construct = inp.statements;
-                let argument = inp.argument;
+                let target = syn::parse_quote!(decoded);
+                let conversion = inp.bind(&target, quote!(Ok(#target))).unwrap();
                 let prepare = out.statements;
                 let commit = out.commit;
                 let results = out.values.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
                 functions.extend(quote!{
-                fn #decode(#(#params),*) -> Result<#source_ty,&'static str> {#validation #construct Ok(#argument)}
+                fn #decode(#(#params),*) -> Result<#source_ty,&'static str> {#conversion}
                 fn #encode(source:#source_ty)->Result<(#(#types,)*), &'static str> {#prepare let result=(#(#results,)*);#commit Ok(result)}
             });
                 if depth == 1 {

@@ -139,13 +139,15 @@ pub(crate) fn input(
     var: syn::Ident,
     active: &Condition,
     by_value: bool,
-    defer_empty: bool,
-) -> InputPlan<CWire> {
+) -> Result<InputPlan<CWire>> {
     let access = match ty {
         syn::Type::Reference(r) if r.mutability.is_none() => Access::Shared,
         syn::Type::Reference(_) => Access::Exclusive,
         _ => Access::Move,
     };
+    if by_value && access != Access::Move {
+        return Err("borrowed inline C inputs require a pointer to caller storage".into());
+    }
     let condition = active.rust();
     let native = &owner.ty;
     let pointer = format_ident!("{wire}_pointer");
@@ -155,21 +157,16 @@ pub(crate) fn input(
     } else {
         quote!(#wire as *mut #native)
     };
-    let storage = by_value.then(|| {
-        if access == Access::Move {
-            quote!(#[allow(unused_parens)] let #local=#wire;)
-        } else {
-            quote!(#[allow(unused_parens)] let mut #local=#wire;)
-        }
-    });
+    let storage = by_value.then(|| quote!(#[allow(unused_parens)] let #local=#wire;));
     let empty_var = format_ident!("{wire}_empty");
     let empty = &owner.empty;
     let prepare_empty = (access == Access::Move && !by_value)
         .then(|| quote!(let #empty_var = if #condition {Some(#empty)} else {None};));
+    let transfer = prebindgen_conversions::record_input_transfer(quote!(1usize));
     let acquire = if access == Access::Move && by_value {
-        quote!(let #var=if #condition {let #pointer=::core::ptr::addr_of!(#local).cast::<#native>(); let value=unsafe {::core::ptr::read(#pointer)}; __prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); Some(value)} else {None};)
+        quote!(let #var=if #condition {let #pointer=::core::ptr::addr_of!(#local).cast::<#native>(); let value=unsafe {::core::ptr::read(#pointer)}; #transfer Some(value)} else {None};)
     } else if access == Access::Move {
-        quote!(let #var = if #condition {Some(unsafe {::core::ptr::replace(#pointer, #empty_var.expect("prepared empty owner"))})} else {None};)
+        quote!(let #var = if #condition {{let value=unsafe {::core::ptr::replace(#pointer, #empty_var.expect("prepared empty owner"))}; #transfer Some(value)}} else {None};)
     } else {
         quote!()
     };
@@ -194,40 +191,24 @@ pub(crate) fn input(
             quote!(#var),
         ),
     };
-    InputPlan {
-        fallible: false,
-        context: Default::default(),
-        acknowledgement: None,
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-            name: wire.clone(),
+    let prepare = if by_value {
+        quote!(#storage)
+    } else {
+        quote!(#storage let #pointer=#ptr;#prepare_empty)
+    };
+    let plan = InputPlan::new(
+        prebindgen_flat::WireNode::Leaf(vec![Wire {
+            name: wire,
             kind: CWire::Owned {
                 owner,
                 access,
                 by_value,
             },
         }]),
-        validation: if by_value {
-            quote!(#storage)
-        } else {
-            let prepare = (!defer_empty).then_some(&prepare_empty);
-            quote!(#storage let #pointer = #ptr; #prepare)
-        },
-        acquire: if defer_empty {
-            quote!(#prepare_empty #acquire)
-        } else {
-            acquire
-        },
-        statements,
+        quote!(#prepare #acquire #statements),
         argument,
-        resources: vec![prebindgen_conversions::Resource {
-            allocation_type: None,
-            registered: by_value,
-            records_consumption: by_value,
-            count: quote!(1usize),
-            active: condition,
-            access,
-        }],
-    }
+    );
+    Ok(plan)
 }
 
 pub(crate) fn auto_name(ty: &syn::Type) -> String {
@@ -498,6 +479,50 @@ mod tests {
                 .map(|i| (i, Default::default())),
         )
         .unwrap()
+    }
+    #[test]
+    fn callback_constructor_borrows_inline_owner_through_a_pointer() {
+        let model = Cbindgen::new(flat("pub struct Owner{pub n:i64} pub fn empty()->Owner{} pub fn inspect(value:&Owner)->i64{}"))
+            .opaque_owned_struct_with_empty(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<i64>(),
+                fun!(empty),
+            )
+            .function(fun!(inspect)).panic()
+            .prepare()
+            .unwrap();
+        let owner_type = referent(&model.function("inspect").unwrap().params[0].ty.ty).clone();
+        let owner = declaration(&model, &owner_type).unwrap();
+        for ty in [
+            syn::parse_quote!(&#owner_type),
+            syn::parse_quote!(&mut #owner_type),
+        ] {
+            let condition = Default::default();
+            let mut request = prebindgen_declarations::InputLeaf::new(
+                &model,
+                &ty,
+                &(),
+                syn::parse_quote!(wire),
+                syn::parse_quote!(value),
+                &condition,
+            );
+            request.role = prebindgen_declarations::InputRole::CallbackResult;
+            let plan = CCodec::declared().input_leaf(request).unwrap();
+            assert!(
+                matches!(&plan.node,prebindgen_flat::WireNode::Leaf(w) if matches!(&w[0].kind,CWire::Owned{by_value:false,..}))
+            );
+            assert!(input(
+                owner.clone(),
+                &ty,
+                syn::parse_quote!(wire),
+                syn::parse_quote!(value),
+                &condition,
+                true
+            )
+            .unwrap_err()
+            .contains("pointer to caller storage"));
+        }
     }
     #[test]
     fn native_owners_keep_vectors_as_leaves_but_explicit_rows_remain_available() {

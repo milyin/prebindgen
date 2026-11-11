@@ -211,10 +211,10 @@ fn one_prepared_output_supports_packet_direct_and_capture_without_mutation() {
     let flat = prepared();
     let output = flat.function("scalar").unwrap().ret.slot.as_ref().unwrap();
     let mut context = JniContext {
+        input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
         return_delivery: JniReturnDelivery::Packet,
         prepared_delivery: None,
         environment: syn::parse_quote!(env),
-        acknowledgement: syn::parse_quote!(unused_ack),
         domain_output: syn::parse_quote!(unused_domain),
         return_sink: Some(syn::parse_quote!(capture)),
         is_domain_error: false,

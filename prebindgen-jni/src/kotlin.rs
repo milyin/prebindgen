@@ -284,12 +284,10 @@ pub trait KotlinInputConversion:
         expected: &syn::Type,
         cached_buffers: bool,
     ) -> Result<TokenStream> {
-        if cached_buffers {
-            if let prebindgen_conversions::InputFragment::Validate { context, .. } = &request {
-                if !crate::bulk::callback_cache(self.input_node(), context)?.is_empty() {
-                    return Err("custom callback-return input must implement callback_return_fragment to reuse the native buffer cache".into());
-                }
-            }
+        if cached_buffers
+            && !crate::bulk::callback_cache(self.input_node(), request.context)?.is_empty()
+        {
+            return Err("custom callback-return input must implement callback_return_fragment to reuse the native buffer cache".into());
         }
         self.code_fragment_slot(request, expected)
     }
@@ -411,19 +409,11 @@ impl KotlinInputConversion for PlanInput {
         expected: &syn::Type,
         cached_buffers: bool,
     ) -> Result<TokenStream> {
-        if cached_buffers
-            && matches!(
-                request,
-                prebindgen_conversions::InputFragment::Validate { .. }
-            )
-        {
-            let context = match &request {
-                prebindgen_conversions::InputFragment::Validate { context, .. } => *context,
-                _ => unreachable!(),
-            };
-            let validation =
-                context.cached_callback_validation(&self.rust.validation, self.input_node())?;
-            return self.rust.emit_with_validation(request, &validation);
+        if cached_buffers {
+            let code = request
+                .context
+                .cached_callback_validation(&self.rust.code, self.input_node())?;
+            return self.rust.emit_code(request, &code);
         }
         self.code_fragment_slot(request, expected)
     }

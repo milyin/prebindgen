@@ -124,7 +124,6 @@ struct CodecImpl {
     reverse_values: bool,
     unknown_validation_read: bool,
     row_only_leaf: bool,
-    shared_scalar_resource: bool,
 }
 impl Codec for CodecImpl {
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
@@ -163,30 +162,12 @@ impl Codec for CodecImpl {
             extra: _,
             wire: w,
             target: v,
-            active,
             ..
         } = request;
 
-        let mut input = value::input(
-            ty,
-            w.clone(),
-            v.clone(),
-            &active.rust(),
-            quote!(#w),
-            ty.clone(),
-        )?;
+        let mut input = value::input(ty, w.clone(), v.clone(), quote!(#w), ty.clone())?;
         if self.row_only_leaf {
-            input.statements = quote!(let #v: #ty = #w;);
-        }
-        if self.shared_scalar_resource {
-            input.resources.push(prebindgen_conversions::Resource {
-                allocation_type: None,
-                registered: false,
-                records_consumption: false,
-                count: quote!(1usize),
-                access: prebindgen_conversions::Access::Shared,
-                active: active.rust(),
-            });
+            input = InputPlan::new(input.node, quote!(let #v:#ty=#w;), quote!(#v));
         }
         Ok(input)
     }
@@ -533,19 +514,14 @@ fn rows_lend_temporary_values_and_construct_once() {
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let codec = CodecImpl {
-        shared_scalar_resource: true,
-        ..Default::default()
-    };
+    let codec = CodecImpl::default();
     let recipe = Input::Sequence(Box::new(Input::constructor(
         "row",
         [Input::Temporary(Box::new(Input::Leaf))],
     )));
     let plan = compile_input(&flat, &codec, "consume", "values", &recipe, &()).unwrap();
-    let checked = plan.validation.clone();
-    let acquire = plan.acquire;
-    let statements = plan.statements;
-    let argument = plan.argument;
+    let target = syn::parse_quote!(values);
+    let conversion = plan.bind(&target, quote!(Ok(consume(#target)))).unwrap();
     let parameters = PointerLenAbi::parameters(&plan.node)
         .map(|w| {
             let name = &w.name;
@@ -563,10 +539,7 @@ fn rows_lend_temporary_values_and_construct_once() {
         fn consume(values:Vec<Row>)->i32{values.iter().map(|r|r.value).sum()}
         fn bridge(#(#parameters),*)->Result<i32,String>{
             let __prebindgen_input_consumed=std::cell::Cell::new(0usize);
-            #checked #acquire #statements
-            let values=#argument;
-            assert_eq!(__prebindgen_input_consumed.get(),0);
-            Ok(consume(values))
+            #conversion
         }
         fn main(){for values in [vec![],vec![1,2,3]] {
             CONSTRUCTED.store(0,Ordering::SeqCst);

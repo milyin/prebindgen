@@ -4108,3 +4108,39 @@ pub fn numeric_loan_static_bytes() -> &'static [u8] {
 pub fn numeric_loan_static_text() -> &'static str {
     "original text"
 }
+
+/// Mixed low-level/declaration inputs exercise the complete conversion contract.
+#[prebindgen]
+pub fn scoped_input_new(id: i64) -> OwnedResource {
+    OwnedResourceImpl { id }
+}
+#[prebindgen]
+pub fn scoped_input_id(value: &OwnedResource) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub fn scoped_input_drops() -> usize {
+    owned_resource_drops()
+}
+#[prebindgen]
+pub fn scoped_input_pair(first: &OwnedResource, second: OwnedResource) -> i64 {
+    first.id + second.id
+}
+#[prebindgen]
+pub fn scoped_input_mode(mode: i64) -> i64 {
+    assert_ne!(mode, 1, "failure before second ownership take");
+    mode
+}
+#[prebindgen]
+pub fn scoped_input_checked(mode: i64, value: OwnedResource) -> OwnedResource {
+    assert_ne!(mode, 2, "failure after second ownership take");
+    value
+}
+#[prebindgen]
+pub fn scoped_input_failure(
+    first: OwnedResource,
+    second: OwnedResource,
+) -> Result<i64, ResultFailure> {
+    assert_ne!(first.id, 3, "failure after source entry");
+    Ok(first.id + second.id)
+}
