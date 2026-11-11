@@ -9918,20 +9918,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
             let p0_w1_f0_pointer = p0_w1_f0
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::TypeInputA>;
             ::prebindgen_runtime::validate_pointer(p0_w1_f0_pointer)?;
-            let p0_w0_f0 = unsafe { Box::from_raw(p0_w1_f0_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0_f0: perftest_flat::TypeInputA = p0_w0_f0.value;
+            let p0_w0_f0: perftest_flat::TypeInputA = {
+                let p0_w0_f0 = unsafe { Box::from_raw(p0_w1_f0_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0_f0.value
+            };
             let p0_w0_field_0 = p0_w0_f0;
             let p0_w1_f1_pointer = p0_w1_f1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::TypeInputB>;
             ::prebindgen_runtime::validate_pointer(p0_w1_f1_pointer)?;
-            let p0_w0_f1 = unsafe { Box::from_raw(p0_w1_f1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0_f1: perftest_flat::TypeInputB = p0_w0_f1.value;
+            let p0_w0_f1: perftest_flat::TypeInputB = {
+                let p0_w0_f1 = unsafe { Box::from_raw(p0_w1_f1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0_f1.value
+            };
             let p0_w0_field_1 = p0_w0_f1;
             let p0_w0: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                 a: p0_w0_field_0,
@@ -10046,28 +10050,32 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                             perftest_flat::TypeInputA,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w1_f0_some_f0_pointer)?;
-                    let p0_w0_f0_some_f0 = unsafe {
-                        Box::from_raw(p0_w1_f0_some_f0_pointer)
+                    let p0_w0_f0_some_f0: perftest_flat::TypeInputA = {
+                        let p0_w0_f0_some_f0 = unsafe {
+                            Box::from_raw(p0_w1_f0_some_f0_pointer)
+                        };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w0_f0_some_f0.value
                     };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w0_f0_some_f0: perftest_flat::TypeInputA = p0_w0_f0_some_f0
-                        .value;
                     let p0_w0_f0_some_field_0 = p0_w0_f0_some_f0;
                     let p0_w1_f0_some_f1_pointer = p0_w1_f0_some_f1
                         as *mut ::prebindgen_jni_runtime::Allocation<
                             perftest_flat::TypeInputB,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w1_f0_some_f1_pointer)?;
-                    let p0_w0_f0_some_f1 = unsafe {
-                        Box::from_raw(p0_w1_f0_some_f1_pointer)
+                    let p0_w0_f0_some_f1: perftest_flat::TypeInputB = {
+                        let p0_w0_f0_some_f1 = unsafe {
+                            Box::from_raw(p0_w1_f0_some_f1_pointer)
+                        };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w0_f0_some_f1.value
                     };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w0_f0_some_f1: perftest_flat::TypeInputB = p0_w0_f0_some_f1
-                        .value;
                     let p0_w0_f0_some_field_1 = p0_w0_f0_some_f1;
                     let p0_w0_f0_some: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                         a: p0_w0_f0_some_field_0,
@@ -10249,24 +10257,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     perftest_flat::TypeInputA,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                            let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f0: perftest_flat::TypeInputA = p0_w6_f0.value;
+                            let p0_w6_f0: perftest_flat::TypeInputA = {
+                                let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f0.value
+                            };
                             let p0_w6_field_0 = p0_w6_f0;
                             let p0_w7_f1_pointer = (p0_w7_f1)
                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                     perftest_flat::TypeInputB,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f1_pointer)?;
-                            let p0_w6_f1 = unsafe { Box::from_raw(p0_w7_f1_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f1: perftest_flat::TypeInputB = p0_w6_f1.value;
+                            let p0_w6_f1: perftest_flat::TypeInputB = {
+                                let p0_w6_f1 = unsafe { Box::from_raw(p0_w7_f1_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f1.value
+                            };
                             let p0_w6_field_1 = p0_w6_f1;
                             let p0_w6: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                                 a: p0_w6_field_0,
@@ -10437,12 +10449,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     perftest_flat::TypeInputA,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_f0_pointer)?;
-                            let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4_f0: perftest_flat::TypeInputA = p0_w4_f0.value;
+                            let p0_w4_f0: perftest_flat::TypeInputA = {
+                                let p0_w4_f0 = unsafe { Box::from_raw(p0_w5_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4_f0.value
+                            };
                             let p0_w4_field_0 = p0_w4_f0;
                             let p0_w5_f1_pointer = (*p0_w5_f1
                                 .as_ref()
@@ -10451,12 +10465,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     perftest_flat::TypeInputB,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_f1_pointer)?;
-                            let p0_w4_f1 = unsafe { Box::from_raw(p0_w5_f1_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4_f1: perftest_flat::TypeInputB = p0_w4_f1.value;
+                            let p0_w4_f1: perftest_flat::TypeInputB = {
+                                let p0_w4_f1 = unsafe { Box::from_raw(p0_w5_f1_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4_f1.value
+                            };
                             let p0_w4_field_1 = p0_w4_f1;
                             let p0_w4: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                                 a: p0_w4_field_0,
@@ -10668,24 +10684,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                     perftest_flat::TypeInputA,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w11_f0_pointer)?;
-                                            let p0_w10_f0 = unsafe { Box::from_raw(p0_w11_f0_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w10_f0: perftest_flat::TypeInputA = p0_w10_f0.value;
+                                            let p0_w10_f0: perftest_flat::TypeInputA = {
+                                                let p0_w10_f0 = unsafe { Box::from_raw(p0_w11_f0_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w10_f0.value
+                                            };
                                             let p0_w10_field_0 = p0_w10_f0;
                                             let p0_w11_f1_pointer = (p0_w11_f1)
                                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                                     perftest_flat::TypeInputB,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w11_f1_pointer)?;
-                                            let p0_w10_f1 = unsafe { Box::from_raw(p0_w11_f1_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w10_f1: perftest_flat::TypeInputB = p0_w10_f1.value;
+                                            let p0_w10_f1: perftest_flat::TypeInputB = {
+                                                let p0_w10_f1 = unsafe { Box::from_raw(p0_w11_f1_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w10_f1.value
+                                            };
                                             let p0_w10_field_1 = p0_w10_f1;
                                             let p0_w10: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                                                 a: p0_w10_field_0,
@@ -11020,15 +11040,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f0_pointer,
                                                             )?;
-                                                            let callback_return_w6_f0 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f0_pointer)
+                                                            let callback_return_w6_f0: perftest_flat::TypeInputA = {
+                                                                let callback_return_w6_f0 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f0.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f0: perftest_flat::TypeInputA = callback_return_w6_f0
-                                                                .value;
                                                             let callback_return_w6_field_0 = callback_return_w6_f0;
                                                             let callback_return_w7_f1_pointer = (callback_return_w7_f1)
                                                                 as *mut ::prebindgen_jni_runtime::Allocation<
@@ -11037,15 +11058,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f1_pointer,
                                                             )?;
-                                                            let callback_return_w6_f1 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f1_pointer)
+                                                            let callback_return_w6_f1: perftest_flat::TypeInputB = {
+                                                                let callback_return_w6_f1 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f1_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f1.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f1: perftest_flat::TypeInputB = callback_return_w6_f1
-                                                                .value;
                                                             let callback_return_w6_field_1 = callback_return_w6_f1;
                                                             let callback_return_w6: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                                                                 a: callback_return_w6_field_0,
@@ -11423,15 +11445,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                 callback_return_w11_f0_pointer,
                                                                             )?;
-                                                                            let callback_return_w10_f0 = unsafe {
-                                                                                Box::from_raw(callback_return_w11_f0_pointer)
+                                                                            let callback_return_w10_f0: perftest_flat::TypeInputA = {
+                                                                                let callback_return_w10_f0 = unsafe {
+                                                                                    Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                };
+                                                                                {
+                                                                                    __pb_input_consumed
+                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                }
+                                                                                callback_return_w10_f0.value
                                                                             };
-                                                                            {
-                                                                                __pb_input_consumed
-                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                            }
-                                                                            let callback_return_w10_f0: perftest_flat::TypeInputA = callback_return_w10_f0
-                                                                                .value;
                                                                             let callback_return_w10_field_0 = callback_return_w10_f0;
                                                                             let callback_return_w11_f1_pointer = (callback_return_w11_f1)
                                                                                 as *mut ::prebindgen_jni_runtime::Allocation<
@@ -11440,15 +11463,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                 callback_return_w11_f1_pointer,
                                                                             )?;
-                                                                            let callback_return_w10_f1 = unsafe {
-                                                                                Box::from_raw(callback_return_w11_f1_pointer)
+                                                                            let callback_return_w10_f1: perftest_flat::TypeInputB = {
+                                                                                let callback_return_w10_f1 = unsafe {
+                                                                                    Box::from_raw(callback_return_w11_f1_pointer)
+                                                                                };
+                                                                                {
+                                                                                    __pb_input_consumed
+                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                }
+                                                                                callback_return_w10_f1.value
                                                                             };
-                                                                            {
-                                                                                __pb_input_consumed
-                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                            }
-                                                                            let callback_return_w10_f1: perftest_flat::TypeInputB = callback_return_w10_f1
-                                                                                .value;
                                                                             let callback_return_w10_field_1 = callback_return_w10_f1;
                                                                             let callback_return_w10: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
                                                                                 a: callback_return_w10_field_0,
@@ -11654,12 +11678,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                             perftest_flat::TypeInputA,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                                    let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w8: perftest_flat::TypeInputA = p0_w8.value;
+                                    let p0_w8: perftest_flat::TypeInputA = {
+                                        let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w8.value
+                                    };
                                     let p0_w5_row_value = p0_w8;
                                     Ok(p0_w5_row_value)
                                 }
@@ -11833,12 +11859,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     perftest_flat::TypeInputA,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
-                            let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6: perftest_flat::TypeInputA = p0_w6.value;
+                            let p0_w6: perftest_flat::TypeInputA = {
+                                let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6.value
+                            };
                             let p0_w3_row_value = p0_w6;
                             Ok(p0_w3_row_value)
                         }
@@ -17393,12 +17421,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                            let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f0: perftest_flat::BulkHandle = p0_w6_f0.value;
+                            let p0_w6_f0: perftest_flat::BulkHandle = {
+                                let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f0.value
+                            };
                             let p0_w6_field_0 = p0_w6_f0;
                             if (p0_w7_f1_present) != 0 && (p0_w7_f1_present) != 1 {
                                 return Err("invalid option presence".into());
@@ -17481,12 +17511,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f4_pointer)?;
-                            let p0_w6_f4 = unsafe { Box::from_raw(p0_w7_f4_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f4: perftest_flat::BulkHandle = p0_w6_f4.value;
+                            let p0_w6_f4: perftest_flat::BulkHandle = {
+                                let p0_w6_f4 = unsafe { Box::from_raw(p0_w7_f4_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f4.value
+                            };
                             let p0_w6_field_4 = p0_w6_f4;
                             let p0_w6: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                 first: p0_w6_field_0,
@@ -17741,12 +17773,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w8_f0_pointer)?;
-                            let p0_w7_f0 = unsafe { Box::from_raw(p0_w8_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w7_f0: perftest_flat::BulkHandle = p0_w7_f0.value;
+                            let p0_w7_f0: perftest_flat::BulkHandle = {
+                                let p0_w7_f0 = unsafe { Box::from_raw(p0_w8_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w7_f0.value
+                            };
                             let p0_w7_field_0 = p0_w7_f0;
                             if (p0_w8_f1_present) != 0 && (p0_w8_f1_present) != 1 {
                                 return Err("invalid option presence".into());
@@ -17829,12 +17863,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w8_f4_pointer)?;
-                            let p0_w7_f4 = unsafe { Box::from_raw(p0_w8_f4_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w7_f4: perftest_flat::BulkHandle = p0_w7_f4.value;
+                            let p0_w7_f4: perftest_flat::BulkHandle = {
+                                let p0_w7_f4 = unsafe { Box::from_raw(p0_w8_f4_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w7_f4.value
+                            };
                             let p0_w7_field_4 = p0_w7_f4;
                             let p0_w7: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                 first: p0_w7_field_0,
@@ -18115,12 +18151,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     perftest_flat::BulkHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w14_f0_pointer)?;
-                                            let p0_w13_f0 = unsafe { Box::from_raw(p0_w14_f0_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w13_f0: perftest_flat::BulkHandle = p0_w13_f0.value;
+                                            let p0_w13_f0: perftest_flat::BulkHandle = {
+                                                let p0_w13_f0 = unsafe { Box::from_raw(p0_w14_f0_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w13_f0.value
+                                            };
                                             let p0_w13_field_0 = p0_w13_f0;
                                             if (p0_w14_f1_present) != 0 && (p0_w14_f1_present) != 1 {
                                                 return Err("invalid option presence".into());
@@ -18203,12 +18241,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     perftest_flat::BulkHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w14_f4_pointer)?;
-                                            let p0_w13_f4 = unsafe { Box::from_raw(p0_w14_f4_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w13_f4: perftest_flat::BulkHandle = p0_w13_f4.value;
+                                            let p0_w13_f4: perftest_flat::BulkHandle = {
+                                                let p0_w13_f4 = unsafe { Box::from_raw(p0_w14_f4_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w13_f4.value
+                                            };
                                             let p0_w13_field_4 = p0_w13_f4;
                                             let p0_w13: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                                 first: p0_w13_field_0,
@@ -18664,15 +18704,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                 callback_return_w12_f0_pointer,
                                                                             )?;
-                                                                            let callback_return_w11_f0 = unsafe {
-                                                                                Box::from_raw(callback_return_w12_f0_pointer)
+                                                                            let callback_return_w11_f0: perftest_flat::BulkHandle = {
+                                                                                let callback_return_w11_f0 = unsafe {
+                                                                                    Box::from_raw(callback_return_w12_f0_pointer)
+                                                                                };
+                                                                                {
+                                                                                    __pb_input_consumed
+                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                }
+                                                                                callback_return_w11_f0.value
                                                                             };
-                                                                            {
-                                                                                __pb_input_consumed
-                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                            }
-                                                                            let callback_return_w11_f0: perftest_flat::BulkHandle = callback_return_w11_f0
-                                                                                .value;
                                                                             let callback_return_w11_field_0 = callback_return_w11_f0;
                                                                             if (callback_return_w12_f1_present) != 0
                                                                                 && (callback_return_w12_f1_present) != 1
@@ -18773,15 +18814,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                 callback_return_w12_f4_pointer,
                                                                             )?;
-                                                                            let callback_return_w11_f4 = unsafe {
-                                                                                Box::from_raw(callback_return_w12_f4_pointer)
+                                                                            let callback_return_w11_f4: perftest_flat::BulkHandle = {
+                                                                                let callback_return_w11_f4 = unsafe {
+                                                                                    Box::from_raw(callback_return_w12_f4_pointer)
+                                                                                };
+                                                                                {
+                                                                                    __pb_input_consumed
+                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                }
+                                                                                callback_return_w11_f4.value
                                                                             };
-                                                                            {
-                                                                                __pb_input_consumed
-                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                            }
-                                                                            let callback_return_w11_f4: perftest_flat::BulkHandle = callback_return_w11_f4
-                                                                                .value;
                                                                             let callback_return_w11_field_4 = callback_return_w11_f4;
                                                                             let callback_return_w11: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                                                                 first: callback_return_w11_field_0,
@@ -19059,12 +19101,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                            let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f0: perftest_flat::BulkHandle = p0_w6_f0.value;
+                            let p0_w6_f0: perftest_flat::BulkHandle = {
+                                let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f0.value
+                            };
                             let p0_w6_field_0 = p0_w6_f0;
                             if (p0_w7_f1_present) != 0 && (p0_w7_f1_present) != 1 {
                                 return Err("invalid option presence".into());
@@ -19147,12 +19191,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f4_pointer)?;
-                            let p0_w6_f4 = unsafe { Box::from_raw(p0_w7_f4_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f4: perftest_flat::BulkHandle = p0_w6_f4.value;
+                            let p0_w6_f4: perftest_flat::BulkHandle = {
+                                let p0_w6_f4 = unsafe { Box::from_raw(p0_w7_f4_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f4.value
+                            };
                             let p0_w6_field_4 = p0_w6_f4;
                             let p0_w6: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                 first: p0_w6_field_0,
@@ -19546,15 +19592,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f0_pointer,
                                                             )?;
-                                                            let callback_return_w6_f0 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f0_pointer)
+                                                            let callback_return_w6_f0: perftest_flat::BulkHandle = {
+                                                                let callback_return_w6_f0 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f0.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f0: perftest_flat::BulkHandle = callback_return_w6_f0
-                                                                .value;
                                                             let callback_return_w6_field_0 = callback_return_w6_f0;
                                                             if (callback_return_w7_f1_present) != 0
                                                                 && (callback_return_w7_f1_present) != 1
@@ -19655,15 +19702,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f4_pointer,
                                                             )?;
-                                                            let callback_return_w6_f4 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f4_pointer)
+                                                            let callback_return_w6_f4: perftest_flat::BulkHandle = {
+                                                                let callback_return_w6_f4 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f4_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f4.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f4: perftest_flat::BulkHandle = callback_return_w6_f4
-                                                                .value;
                                                             let callback_return_w6_field_4 = callback_return_w6_f4;
                                                             let callback_return_w6: perftest_flat::BulkReplayRow = perftest_flat::BulkReplayRow {
                                                                 first: callback_return_w6_field_0,
@@ -19888,12 +19936,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                     perftest_flat::BulkHandle,
                                                                 >;
                                                             ::prebindgen_runtime::validate_pointer(p0_w18_pointer)?;
-                                                            let p0_w17 = unsafe { Box::from_raw(p0_w18_pointer) };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let p0_w17: perftest_flat::BulkHandle = p0_w17.value;
+                                                            let p0_w17: perftest_flat::BulkHandle = {
+                                                                let p0_w17 = unsafe { Box::from_raw(p0_w18_pointer) };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                p0_w17.value
+                                                            };
                                                             let p0_w15_payload = p0_w17;
                                                             Some(p0_w15_payload)
                                                         }
@@ -20308,15 +20358,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                                 callback_return_w16_pointer,
                                                                                             )?;
-                                                                                            let callback_return_w15 = unsafe {
-                                                                                                Box::from_raw(callback_return_w16_pointer)
+                                                                                            let callback_return_w15: perftest_flat::BulkHandle = {
+                                                                                                let callback_return_w15 = unsafe {
+                                                                                                    Box::from_raw(callback_return_w16_pointer)
+                                                                                                };
+                                                                                                {
+                                                                                                    __pb_input_consumed
+                                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                                }
+                                                                                                callback_return_w15.value
                                                                                             };
-                                                                                            {
-                                                                                                __pb_input_consumed
-                                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                                            }
-                                                                                            let callback_return_w15: perftest_flat::BulkHandle = callback_return_w15
-                                                                                                .value;
                                                                                             let callback_return_w12_payload = callback_return_w15;
                                                                                             Some(callback_return_w12_payload)
                                                                                         }
@@ -20667,15 +20718,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                             ::prebindgen_runtime::validate_pointer(
                                                 callback_return_w3_f1_pointer,
                                             )?;
-                                            let callback_return_w2_f1 = unsafe {
-                                                Box::from_raw(callback_return_w3_f1_pointer)
+                                            let callback_return_w2_f1: perftest_flat::BulkHandle = {
+                                                let callback_return_w2_f1 = unsafe {
+                                                    Box::from_raw(callback_return_w3_f1_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w2_f1.value
                                             };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w2_f1: perftest_flat::BulkHandle = callback_return_w2_f1
-                                                .value;
                                             let callback_return_w2_field_1 = callback_return_w2_f1;
                                             let callback_return_w2_f2: String = ::core::convert::Into::into(
                                                 ::core::str::from_utf8(
@@ -21001,11 +21053,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             perftest_flat::BulkHandle,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                    let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w5: perftest_flat::BulkHandle = p0_w5.value;
+                    let p0_w5: perftest_flat::BulkHandle = {
+                        let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w5.value
+                    };
                     let p0_w3_payload = p0_w5;
                     Some(p0_w3_payload)
                 }
@@ -21096,12 +21151,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                             perftest_flat::BulkHandle,
                                                                         >;
                                                                     ::prebindgen_runtime::validate_pointer(p0_w22_pointer)?;
-                                                                    let p0_w21 = unsafe { Box::from_raw(p0_w22_pointer) };
-                                                                    {
-                                                                        __pb_input_consumed
-                                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                                    }
-                                                                    let p0_w21: perftest_flat::BulkHandle = p0_w21.value;
+                                                                    let p0_w21: perftest_flat::BulkHandle = {
+                                                                        let p0_w21 = unsafe { Box::from_raw(p0_w22_pointer) };
+                                                                        {
+                                                                            __pb_input_consumed
+                                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                                        }
+                                                                        p0_w21.value
+                                                                    };
                                                                     let p0_w19_payload = p0_w21;
                                                                     Some(p0_w19_payload)
                                                                 }
@@ -21150,11 +21207,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let p0_w24_pointer = p0_w24
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::BulkHandle>;
             ::prebindgen_runtime::validate_pointer(p0_w24_pointer)?;
-            let p0_w23 = unsafe { Box::from_raw(p0_w24_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w23: perftest_flat::BulkHandle = p0_w23.value;
+            let p0_w23: perftest_flat::BulkHandle = {
+                let p0_w23 = unsafe { Box::from_raw(p0_w24_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w23.value
+            };
             let p0_w2_argument_2 = p0_w23;
             let p0_w2: perftest_flat::BulkPatchRow = perftest_flat::bulk_patch_row_new(
                 p0_w2_argument_0,
@@ -21575,15 +21634,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                                 callback_return_w16_pointer,
                                                                                             )?;
-                                                                                            let callback_return_w15 = unsafe {
-                                                                                                Box::from_raw(callback_return_w16_pointer)
+                                                                                            let callback_return_w15: perftest_flat::BulkHandle = {
+                                                                                                let callback_return_w15 = unsafe {
+                                                                                                    Box::from_raw(callback_return_w16_pointer)
+                                                                                                };
+                                                                                                {
+                                                                                                    __pb_input_consumed
+                                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                                }
+                                                                                                callback_return_w15.value
                                                                                             };
-                                                                                            {
-                                                                                                __pb_input_consumed
-                                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                                            }
-                                                                                            let callback_return_w15: perftest_flat::BulkHandle = callback_return_w15
-                                                                                                .value;
                                                                                             let callback_return_w12_payload = callback_return_w15;
                                                                                             Some(callback_return_w12_payload)
                                                                                         }
@@ -22196,15 +22256,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f1_pointer,
                                                             )?;
-                                                            let callback_return_w6_f1 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f1_pointer)
+                                                            let callback_return_w6_f1: perftest_flat::BulkHandle = {
+                                                                let callback_return_w6_f1 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f1_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f1.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f1: perftest_flat::BulkHandle = callback_return_w6_f1
-                                                                .value;
                                                             let callback_return_w6_field_1 = callback_return_w6_f1;
                                                             let callback_return_w6_f2: String = ::core::convert::Into::into(
                                                                 ::core::str::from_utf8(
@@ -22404,12 +22465,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                            let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f0: perftest_flat::BulkHandle = p0_w6_f0.value;
+                            let p0_w6_f0: perftest_flat::BulkHandle = {
+                                let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f0.value
+                            };
                             let p0_w6_field_0 = p0_w6_f0;
                             let p0_w6_f1: String = ::core::convert::Into::into(
                                 ::core::str::from_utf8(
@@ -22667,12 +22730,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                             perftest_flat::BulkHandle,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
-                                    let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w6: perftest_flat::BulkHandle = p0_w6.value;
+                                    let p0_w6: perftest_flat::BulkHandle = {
+                                        let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w6.value
+                                    };
                                     let p0_w3_row_value = p0_w6;
                                     Ok(p0_w3_row_value)
                                 }
@@ -22734,12 +22799,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p1_w5_pointer)?;
-                            let p1_w4 = unsafe { Box::from_raw(p1_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p1_w4: perftest_flat::BulkHandle = p1_w4.value;
+                            let p1_w4: perftest_flat::BulkHandle = {
+                                let p1_w4 = unsafe { Box::from_raw(p1_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p1_w4.value
+                            };
                             let p1_w1_row_value = p1_w4;
                             Ok(p1_w1_row_value)
                         }
@@ -22975,12 +23042,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     perftest_flat::BulkHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
-                                            let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w11: perftest_flat::BulkHandle = p0_w11.value;
+                                            let p0_w11: perftest_flat::BulkHandle = {
+                                                let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w11.value
+                                            };
                                             let p0_w8_row_value = p0_w11;
                                             Ok(p0_w8_row_value)
                                         }
@@ -23390,15 +23459,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 callback_return_w7_f0_pointer,
                                                             )?;
-                                                            let callback_return_w6_f0 = unsafe {
-                                                                Box::from_raw(callback_return_w7_f0_pointer)
+                                                            let callback_return_w6_f0: perftest_flat::BulkHandle = {
+                                                                let callback_return_w6_f0 = unsafe {
+                                                                    Box::from_raw(callback_return_w7_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w6_f0.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w6_f0: perftest_flat::BulkHandle = callback_return_w6_f0
-                                                                .value;
                                                             let callback_return_w6_field_0 = callback_return_w6_f0;
                                                             let callback_return_w6_f1: String = ::core::convert::Into::into(
                                                                 ::core::str::from_utf8(
@@ -25070,15 +25140,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                                     ::prebindgen_runtime::validate_pointer(
                                                                         callback_return_w10_pointer,
                                                                     )?;
-                                                                    let callback_return_w9 = unsafe {
-                                                                        Box::from_raw(callback_return_w10_pointer)
+                                                                    let callback_return_w9: perftest_flat::BulkHandle = {
+                                                                        let callback_return_w9 = unsafe {
+                                                                            Box::from_raw(callback_return_w10_pointer)
+                                                                        };
+                                                                        {
+                                                                            __pb_input_consumed
+                                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                                        }
+                                                                        callback_return_w9.value
                                                                     };
-                                                                    {
-                                                                        __pb_input_consumed
-                                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                                    }
-                                                                    let callback_return_w9: perftest_flat::BulkHandle = callback_return_w9
-                                                                        .value;
                                                                     let callback_return_w6_row_value = callback_return_w9;
                                                                     Ok(callback_return_w6_row_value)
                                                                 }
@@ -26508,12 +26579,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     perftest_flat::BulkHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                            let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w7: perftest_flat::BulkHandle = p0_w7.value;
+                            let p0_w7: perftest_flat::BulkHandle = {
+                                let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w7.value
+                            };
                             let p0_w3_row_value = p0_w7;
                             Ok(p0_w3_row_value)
                         }
@@ -26821,11 +26894,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let p0_w3_pointer = p0_w3
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::BulkHandle>;
             ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
-            let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w2: perftest_flat::BulkHandle = p0_w2.value;
+            let p0_w2: perftest_flat::BulkHandle = {
+                let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w2.value
+            };
             let __prebindgen_argument_0 = p0_w2;
             #[allow(unused_mut, unused_assignments)]
             let mut p1_w1_bytes = None;
@@ -28207,15 +28282,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     ::prebindgen_runtime::validate_pointer(
                                                         callback_return_w8_pointer,
                                                     )?;
-                                                    let callback_return_w7 = unsafe {
-                                                        Box::from_raw(callback_return_w8_pointer)
+                                                    let callback_return_w7: perftest_flat::BulkHandle = {
+                                                        let callback_return_w7 = unsafe {
+                                                            Box::from_raw(callback_return_w8_pointer)
+                                                        };
+                                                        {
+                                                            __pb_input_consumed
+                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                        }
+                                                        callback_return_w7.value
                                                     };
-                                                    {
-                                                        __pb_input_consumed
-                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                    }
-                                                    let callback_return_w7: perftest_flat::BulkHandle = callback_return_w7
-                                                        .value;
                                                     let callback_return_w4_row_value = callback_return_w7;
                                                     Ok(callback_return_w4_row_value)
                                                 }
@@ -29375,12 +29451,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     perftest_flat::BulkHandle,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
-                                            let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w11: perftest_flat::BulkHandle = p0_w11.value;
+                                            let p0_w11: perftest_flat::BulkHandle = {
+                                                let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w11.value
+                                            };
                                             let p0_w9_payload = p0_w11;
                                             Some(p0_w9_payload)
                                         }
@@ -35019,12 +35097,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
                                             perftest_flat::NullabilityHandle,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
-                                    let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w6: perftest_flat::NullabilityHandle = p0_w6.value;
+                                    let p0_w6: perftest_flat::NullabilityHandle = {
+                                        let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w6.value
+                                    };
                                     let p0_w3_row_value = p0_w6;
                                     Ok(p0_w3_row_value)
                                 }
@@ -36829,11 +36909,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::GcResource>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::GcResource = p0_w0.value;
+            let p0_w0: perftest_flat::GcResource = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::gc_resource_consume(
                 __prebindgen_argument_0,
@@ -36936,11 +37018,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::GcResource>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::GcResource = p0_w0.value;
+            let p0_w0: perftest_flat::GcResource = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::gc_resource_fail(__prebindgen_argument_0);
             let ret_w0 = match source_value {
@@ -37056,20 +37140,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::GcResource>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::GcResource = p0_w0.value;
+            let p0_w0: perftest_flat::GcResource = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w1_pointer = p1_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::GcResource>;
             ::prebindgen_runtime::validate_pointer(p1_w1_pointer)?;
-            let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p1_w0: perftest_flat::GcResource = p1_w0.value;
+            let p1_w0: perftest_flat::GcResource = {
+                let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p1_w0.value
+            };
             let __prebindgen_argument_1 = p1_w0;
             let source_value = perftest_flat::gc_resource_pair(
                 __prebindgen_argument_0,
@@ -37387,12 +37475,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                                     perftest_flat::GcResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::GcResource = p0_w4.value;
+                            let p0_w4: perftest_flat::GcResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -37912,15 +38002,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
                                         ::prebindgen_runtime::validate_pointer(
                                             callback_return_w1_pointer,
                                         )?;
-                                        let callback_return_w0 = unsafe {
-                                            Box::from_raw(callback_return_w1_pointer)
+                                        let callback_return_w0: perftest_flat::GcResource = {
+                                            let callback_return_w0 = unsafe {
+                                                Box::from_raw(callback_return_w1_pointer)
+                                            };
+                                            {
+                                                __pb_input_consumed
+                                                    .set(__pb_input_consumed.get() + (1usize));
+                                            }
+                                            callback_return_w0.value
                                         };
-                                        {
-                                            __pb_input_consumed
-                                                .set(__pb_input_consumed.get() + (1usize));
-                                        }
-                                        let callback_return_w0: perftest_flat::GcResource = callback_return_w0
-                                            .value;
                                         let callback_return_value = callback_return_w0;
                                         Ok::<_, String>(callback_return_value)
                                     }
@@ -46280,15 +46371,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w5_f0_some_pointer,
                                                                         )?;
-                                                                        let callback_return_w4_f0_some = unsafe {
-                                                                            Box::from_raw(callback_return_w5_f0_some_pointer)
+                                                                        let callback_return_w4_f0_some: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w4_f0_some = unsafe {
+                                                                                Box::from_raw(callback_return_w5_f0_some_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w4_f0_some.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w4_f0_some: perftest_flat::CallbackReturnResource = callback_return_w4_f0_some
-                                                                            .value;
                                                                         let callback_return_w4_f0_payload = callback_return_w4_f0_some;
                                                                         Some(callback_return_w4_f0_payload)
                                                                     }
@@ -46398,15 +46490,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w11_f0_pointer,
                                                                                 )?;
-                                                                                let callback_return_w10_f0 = unsafe {
-                                                                                    Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                let callback_return_w10_f0: perftest_flat::CallbackReturnResource = {
+                                                                                    let callback_return_w10_f0 = unsafe {
+                                                                                        Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w10_f0.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w10_f0: perftest_flat::CallbackReturnResource = callback_return_w10_f0
-                                                                                    .value;
                                                                                 let callback_return_w10_field_0 = callback_return_w10_f0;
                                                                                 let callback_return_w11_f1_present: i32 = i32::from(
                                                                                     ((callback_return_w11_f1_some) as usize) != 0,
@@ -46422,15 +46515,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w11_f1_some_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w10_f1_some = unsafe {
-                                                                                            Box::from_raw(callback_return_w11_f1_some_pointer)
+                                                                                        let callback_return_w10_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w10_f1_some = unsafe {
+                                                                                                Box::from_raw(callback_return_w11_f1_some_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w10_f1_some.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w10_f1_some: perftest_flat::CallbackReturnResource = callback_return_w10_f1_some
-                                                                                            .value;
                                                                                         let callback_return_w10_f1_payload = callback_return_w10_f1_some;
                                                                                         Some(callback_return_w10_f1_payload)
                                                                                     }
@@ -46456,15 +46550,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w11_f3_pointer,
                                                                                 )?;
-                                                                                let callback_return_w10_f3 = unsafe {
-                                                                                    Box::from_raw(callback_return_w11_f3_pointer)
+                                                                                let callback_return_w10_f3: perftest_flat::CallbackReturnResource = {
+                                                                                    let callback_return_w10_f3 = unsafe {
+                                                                                        Box::from_raw(callback_return_w11_f3_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w10_f3.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w10_f3: perftest_flat::CallbackReturnResource = callback_return_w10_f3
-                                                                                    .value;
                                                                                 let callback_return_w10_field_3 = callback_return_w10_f3;
                                                                                 let callback_return_w10: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                     first: callback_return_w10_field_0,
@@ -46498,15 +46593,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f2_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f2 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f2_pointer)
+                                                                let callback_return_w4_f2: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f2 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f2_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f2.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f2: perftest_flat::CallbackReturnResource = callback_return_w4_f2
-                                                                    .value;
                                                                 let callback_return_w4_field_2 = callback_return_w4_f2;
                                                                 let callback_return_w4: perftest_flat::CallbackOptionalBatch = perftest_flat::CallbackOptionalBatch {
                                                                     first: callback_return_w4_field_0,
@@ -47550,15 +47646,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 ::prebindgen_runtime::validate_pointer(
                                                     callback_return_w1_f0_pointer,
                                                 )?;
-                                                let callback_return_w0_f0 = unsafe {
-                                                    Box::from_raw(callback_return_w1_f0_pointer)
+                                                let callback_return_w0_f0: perftest_flat::CallbackReturnResource = {
+                                                    let callback_return_w0_f0 = unsafe {
+                                                        Box::from_raw(callback_return_w1_f0_pointer)
+                                                    };
+                                                    {
+                                                        __pb_input_consumed
+                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                    }
+                                                    callback_return_w0_f0.value
                                                 };
-                                                {
-                                                    __pb_input_consumed
-                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
-                                                    .value;
                                                 let callback_return_w0_field_0 = callback_return_w0_f0;
                                                 let callback_return_w3_pointer = callback_return_w3
                                                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -47725,15 +47822,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w15_f0_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w14_f0 = unsafe {
-                                                                                            Box::from_raw(callback_return_w15_f0_pointer)
+                                                                                        let callback_return_w14_f0: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w14_f0 = unsafe {
+                                                                                                Box::from_raw(callback_return_w15_f0_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w14_f0.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w14_f0: perftest_flat::CallbackReturnResource = callback_return_w14_f0
-                                                                                            .value;
                                                                                         let callback_return_w14_field_0 = callback_return_w14_f0;
                                                                                         let callback_return_w15_f1_present: i32 = i32::from(
                                                                                             ((callback_return_w15_f1_some) as usize) != 0,
@@ -47749,15 +47847,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                                     callback_return_w15_f1_some_pointer,
                                                                                                 )?;
-                                                                                                let callback_return_w14_f1_some = unsafe {
-                                                                                                    Box::from_raw(callback_return_w15_f1_some_pointer)
+                                                                                                let callback_return_w14_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                                    let callback_return_w14_f1_some = unsafe {
+                                                                                                        Box::from_raw(callback_return_w15_f1_some_pointer)
+                                                                                                    };
+                                                                                                    {
+                                                                                                        __pb_input_consumed
+                                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                                    }
+                                                                                                    callback_return_w14_f1_some.value
                                                                                                 };
-                                                                                                {
-                                                                                                    __pb_input_consumed
-                                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                                }
-                                                                                                let callback_return_w14_f1_some: perftest_flat::CallbackReturnResource = callback_return_w14_f1_some
-                                                                                                    .value;
                                                                                                 let callback_return_w14_f1_payload = callback_return_w14_f1_some;
                                                                                                 Some(callback_return_w14_f1_payload)
                                                                                             }
@@ -47783,15 +47882,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w15_f3_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w14_f3 = unsafe {
-                                                                                            Box::from_raw(callback_return_w15_f3_pointer)
+                                                                                        let callback_return_w14_f3: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w14_f3 = unsafe {
+                                                                                                Box::from_raw(callback_return_w15_f3_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w14_f3.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w14_f3: perftest_flat::CallbackReturnResource = callback_return_w14_f3
-                                                                                            .value;
                                                                                         let callback_return_w14_field_3 = callback_return_w14_f3;
                                                                                         let callback_return_w14: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                             first: callback_return_w14_field_0,
@@ -47936,15 +48036,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w24_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w23_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w24_f0_pointer)
+                                                                let callback_return_w23_f0: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w23_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w24_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w23_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w23_f0: perftest_flat::CallbackReturnResource = callback_return_w23_f0
-                                                                    .value;
                                                                 let callback_return_w23_field_0 = callback_return_w23_f0;
                                                                 let callback_return_w24_f1_present: i32 = i32::from(
                                                                     ((*callback_return_w24_f1_some
@@ -47964,15 +48065,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w24_f1_some_pointer,
                                                                         )?;
-                                                                        let callback_return_w23_f1_some = unsafe {
-                                                                            Box::from_raw(callback_return_w24_f1_some_pointer)
+                                                                        let callback_return_w23_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w23_f1_some = unsafe {
+                                                                                Box::from_raw(callback_return_w24_f1_some_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w23_f1_some.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w23_f1_some: perftest_flat::CallbackReturnResource = callback_return_w23_f1_some
-                                                                            .value;
                                                                         let callback_return_w23_f1_payload = callback_return_w23_f1_some;
                                                                         Some(callback_return_w23_f1_payload)
                                                                     }
@@ -48002,15 +48104,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w24_f3_pointer,
                                                                 )?;
-                                                                let callback_return_w23_f3 = unsafe {
-                                                                    Box::from_raw(callback_return_w24_f3_pointer)
+                                                                let callback_return_w23_f3: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w23_f3 = unsafe {
+                                                                        Box::from_raw(callback_return_w24_f3_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w23_f3.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w23_f3: perftest_flat::CallbackReturnResource = callback_return_w23_f3
-                                                                    .value;
                                                                 let callback_return_w23_field_3 = callback_return_w23_f3;
                                                                 let callback_return_w23: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                     first: callback_return_w23_field_0,
@@ -48043,15 +48146,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 ::prebindgen_runtime::validate_pointer(
                                                     callback_return_w1_f5_pointer,
                                                 )?;
-                                                let callback_return_w0_f5 = unsafe {
-                                                    Box::from_raw(callback_return_w1_f5_pointer)
+                                                let callback_return_w0_f5: perftest_flat::CallbackReturnResource = {
+                                                    let callback_return_w0_f5 = unsafe {
+                                                        Box::from_raw(callback_return_w1_f5_pointer)
+                                                    };
+                                                    {
+                                                        __pb_input_consumed
+                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                    }
+                                                    callback_return_w0_f5.value
                                                 };
-                                                {
-                                                    __pb_input_consumed
-                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w0_f5: perftest_flat::CallbackReturnResource = callback_return_w0_f5
-                                                    .value;
                                                 let callback_return_w0_field_5 = callback_return_w0_f5;
                                                 let callback_return_w0: perftest_flat::CallbackNestedBatch = perftest_flat::CallbackNestedBatch {
                                                     first: callback_return_w0_field_0,
@@ -48919,26 +49023,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     perftest_flat::CallbackReturnResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f0_pointer)?;
-                            let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f0: perftest_flat::CallbackReturnResource = p0_w6_f0
-                                .value;
+                            let p0_w6_f0: perftest_flat::CallbackReturnResource = {
+                                let p0_w6_f0 = unsafe { Box::from_raw(p0_w7_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f0.value
+                            };
                             let p0_w6_field_0 = p0_w6_f0;
                             let p0_w7_f1_pointer = (p0_w7_f1)
                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                     perftest_flat::CallbackReturnResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f1_pointer)?;
-                            let p0_w6_f1 = unsafe { Box::from_raw(p0_w7_f1_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f1: perftest_flat::CallbackReturnResource = p0_w6_f1
-                                .value;
+                            let p0_w6_f1: perftest_flat::CallbackReturnResource = {
+                                let p0_w6_f1 = unsafe { Box::from_raw(p0_w7_f1_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f1.value
+                            };
                             let p0_w6_field_1 = p0_w6_f1;
                             let mut p0_w6_f2: Vec<
                                 Option<Vec<perftest_flat::CallbackFixedResult>>,
@@ -49060,13 +49166,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                             perftest_flat::CallbackReturnResource,
                                                                         >;
                                                                     ::prebindgen_runtime::validate_pointer(p0_w18_f0_pointer)?;
-                                                                    let p0_w17_f0 = unsafe { Box::from_raw(p0_w18_f0_pointer) };
-                                                                    {
-                                                                        __pb_input_consumed
-                                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                                    }
-                                                                    let p0_w17_f0: perftest_flat::CallbackReturnResource = p0_w17_f0
-                                                                        .value;
+                                                                    let p0_w17_f0: perftest_flat::CallbackReturnResource = {
+                                                                        let p0_w17_f0 = unsafe { Box::from_raw(p0_w18_f0_pointer) };
+                                                                        {
+                                                                            __pb_input_consumed
+                                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                                        }
+                                                                        p0_w17_f0.value
+                                                                    };
                                                                     let p0_w17_field_0 = p0_w17_f0;
                                                                     let p0_w18_f1_present: i32 = i32::from(
                                                                         ((p0_w18_f1_some) as usize) != 0,
@@ -49080,15 +49187,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                             ::prebindgen_runtime::validate_pointer(
                                                                                 p0_w18_f1_some_pointer,
                                                                             )?;
-                                                                            let p0_w17_f1_some = unsafe {
-                                                                                Box::from_raw(p0_w18_f1_some_pointer)
+                                                                            let p0_w17_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                let p0_w17_f1_some = unsafe {
+                                                                                    Box::from_raw(p0_w18_f1_some_pointer)
+                                                                                };
+                                                                                {
+                                                                                    __pb_input_consumed
+                                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                                }
+                                                                                p0_w17_f1_some.value
                                                                             };
-                                                                            {
-                                                                                __pb_input_consumed
-                                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                                            }
-                                                                            let p0_w17_f1_some: perftest_flat::CallbackReturnResource = p0_w17_f1_some
-                                                                                .value;
                                                                             let p0_w17_f1_payload = p0_w17_f1_some;
                                                                             Some(p0_w17_f1_payload)
                                                                         }
@@ -49112,13 +49220,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                             perftest_flat::CallbackReturnResource,
                                                                         >;
                                                                     ::prebindgen_runtime::validate_pointer(p0_w18_f3_pointer)?;
-                                                                    let p0_w17_f3 = unsafe { Box::from_raw(p0_w18_f3_pointer) };
-                                                                    {
-                                                                        __pb_input_consumed
-                                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                                    }
-                                                                    let p0_w17_f3: perftest_flat::CallbackReturnResource = p0_w17_f3
-                                                                        .value;
+                                                                    let p0_w17_f3: perftest_flat::CallbackReturnResource = {
+                                                                        let p0_w17_f3 = unsafe { Box::from_raw(p0_w18_f3_pointer) };
+                                                                        {
+                                                                            __pb_input_consumed
+                                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                                        }
+                                                                        p0_w17_f3.value
+                                                                    };
                                                                     let p0_w17_field_3 = p0_w17_f3;
                                                                     let p0_w17: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                         first: p0_w17_field_0,
@@ -49242,13 +49351,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     perftest_flat::CallbackReturnResource,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w27_f0_pointer)?;
-                                            let p0_w26_f0 = unsafe { Box::from_raw(p0_w27_f0_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w26_f0: perftest_flat::CallbackReturnResource = p0_w26_f0
-                                                .value;
+                                            let p0_w26_f0: perftest_flat::CallbackReturnResource = {
+                                                let p0_w26_f0 = unsafe { Box::from_raw(p0_w27_f0_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w26_f0.value
+                                            };
                                             let p0_w26_field_0 = p0_w26_f0;
                                             let p0_w27_f1_present: i32 = i32::from(
                                                 ((p0_w27_f1_some) as usize) != 0,
@@ -49262,15 +49372,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     ::prebindgen_runtime::validate_pointer(
                                                         p0_w27_f1_some_pointer,
                                                     )?;
-                                                    let p0_w26_f1_some = unsafe {
-                                                        Box::from_raw(p0_w27_f1_some_pointer)
+                                                    let p0_w26_f1_some: perftest_flat::CallbackReturnResource = {
+                                                        let p0_w26_f1_some = unsafe {
+                                                            Box::from_raw(p0_w27_f1_some_pointer)
+                                                        };
+                                                        {
+                                                            __pb_input_consumed
+                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                        }
+                                                        p0_w26_f1_some.value
                                                     };
-                                                    {
-                                                        __pb_input_consumed
-                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                    }
-                                                    let p0_w26_f1_some: perftest_flat::CallbackReturnResource = p0_w26_f1_some
-                                                        .value;
                                                     let p0_w26_f1_payload = p0_w26_f1_some;
                                                     Some(p0_w26_f1_payload)
                                                 }
@@ -49294,13 +49405,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     perftest_flat::CallbackReturnResource,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w27_f3_pointer)?;
-                                            let p0_w26_f3 = unsafe { Box::from_raw(p0_w27_f3_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w26_f3: perftest_flat::CallbackReturnResource = p0_w26_f3
-                                                .value;
+                                            let p0_w26_f3: perftest_flat::CallbackReturnResource = {
+                                                let p0_w26_f3 = unsafe { Box::from_raw(p0_w27_f3_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w26_f3.value
+                                            };
                                             let p0_w26_field_3 = p0_w26_f3;
                                             let p0_w26: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                 first: p0_w26_field_0,
@@ -49327,13 +49439,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     perftest_flat::CallbackReturnResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w7_f5_pointer)?;
-                            let p0_w6_f5 = unsafe { Box::from_raw(p0_w7_f5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w6_f5: perftest_flat::CallbackReturnResource = p0_w6_f5
-                                .value;
+                            let p0_w6_f5: perftest_flat::CallbackReturnResource = {
+                                let p0_w6_f5 = unsafe { Box::from_raw(p0_w7_f5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w6_f5.value
+                            };
                             let p0_w6_field_5 = p0_w6_f5;
                             let p0_w6: perftest_flat::CallbackNestedBatch = perftest_flat::CallbackNestedBatch {
                                 first: p0_w6_field_0,
@@ -50081,15 +50194,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 let callback_return_w7_pointer = (*callback_return_w7
                                                                     .as_ref()
@@ -50259,15 +50373,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                                             callback_return_w19_f0_pointer,
                                                                                                         )?;
-                                                                                                        let callback_return_w18_f0 = unsafe {
-                                                                                                            Box::from_raw(callback_return_w19_f0_pointer)
+                                                                                                        let callback_return_w18_f0: perftest_flat::CallbackReturnResource = {
+                                                                                                            let callback_return_w18_f0 = unsafe {
+                                                                                                                Box::from_raw(callback_return_w19_f0_pointer)
+                                                                                                            };
+                                                                                                            {
+                                                                                                                __pb_input_consumed
+                                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                                            }
+                                                                                                            callback_return_w18_f0.value
                                                                                                         };
-                                                                                                        {
-                                                                                                            __pb_input_consumed
-                                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                                        }
-                                                                                                        let callback_return_w18_f0: perftest_flat::CallbackReturnResource = callback_return_w18_f0
-                                                                                                            .value;
                                                                                                         let callback_return_w18_field_0 = callback_return_w18_f0;
                                                                                                         let callback_return_w19_f1_present: i32 = i32::from(
                                                                                                             ((callback_return_w19_f1_some) as usize) != 0,
@@ -50283,15 +50398,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                                                     callback_return_w19_f1_some_pointer,
                                                                                                                 )?;
-                                                                                                                let callback_return_w18_f1_some = unsafe {
-                                                                                                                    Box::from_raw(callback_return_w19_f1_some_pointer)
+                                                                                                                let callback_return_w18_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                                                    let callback_return_w18_f1_some = unsafe {
+                                                                                                                        Box::from_raw(callback_return_w19_f1_some_pointer)
+                                                                                                                    };
+                                                                                                                    {
+                                                                                                                        __pb_input_consumed
+                                                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                                                    }
+                                                                                                                    callback_return_w18_f1_some.value
                                                                                                                 };
-                                                                                                                {
-                                                                                                                    __pb_input_consumed
-                                                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                                                }
-                                                                                                                let callback_return_w18_f1_some: perftest_flat::CallbackReturnResource = callback_return_w18_f1_some
-                                                                                                                    .value;
                                                                                                                 let callback_return_w18_f1_payload = callback_return_w18_f1_some;
                                                                                                                 Some(callback_return_w18_f1_payload)
                                                                                                             }
@@ -50317,15 +50433,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                                             callback_return_w19_f3_pointer,
                                                                                                         )?;
-                                                                                                        let callback_return_w18_f3 = unsafe {
-                                                                                                            Box::from_raw(callback_return_w19_f3_pointer)
+                                                                                                        let callback_return_w18_f3: perftest_flat::CallbackReturnResource = {
+                                                                                                            let callback_return_w18_f3 = unsafe {
+                                                                                                                Box::from_raw(callback_return_w19_f3_pointer)
+                                                                                                            };
+                                                                                                            {
+                                                                                                                __pb_input_consumed
+                                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                                            }
+                                                                                                            callback_return_w18_f3.value
                                                                                                         };
-                                                                                                        {
-                                                                                                            __pb_input_consumed
-                                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                                        }
-                                                                                                        let callback_return_w18_f3: perftest_flat::CallbackReturnResource = callback_return_w18_f3
-                                                                                                            .value;
                                                                                                         let callback_return_w18_field_3 = callback_return_w18_f3;
                                                                                                         let callback_return_w18: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                                             first: callback_return_w18_field_0,
@@ -50487,15 +50604,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w29_f0_pointer,
                                                                                 )?;
-                                                                                let callback_return_w28_f0 = unsafe {
-                                                                                    Box::from_raw(callback_return_w29_f0_pointer)
+                                                                                let callback_return_w28_f0: perftest_flat::CallbackReturnResource = {
+                                                                                    let callback_return_w28_f0 = unsafe {
+                                                                                        Box::from_raw(callback_return_w29_f0_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w28_f0.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w28_f0: perftest_flat::CallbackReturnResource = callback_return_w28_f0
-                                                                                    .value;
                                                                                 let callback_return_w28_field_0 = callback_return_w28_f0;
                                                                                 let callback_return_w29_f1_present: i32 = i32::from(
                                                                                     ((callback_return_w29_f1_some) as usize) != 0,
@@ -50511,15 +50629,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w29_f1_some_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w28_f1_some = unsafe {
-                                                                                            Box::from_raw(callback_return_w29_f1_some_pointer)
+                                                                                        let callback_return_w28_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w28_f1_some = unsafe {
+                                                                                                Box::from_raw(callback_return_w29_f1_some_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w28_f1_some.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w28_f1_some: perftest_flat::CallbackReturnResource = callback_return_w28_f1_some
-                                                                                            .value;
                                                                                         let callback_return_w28_f1_payload = callback_return_w28_f1_some;
                                                                                         Some(callback_return_w28_f1_payload)
                                                                                     }
@@ -50545,15 +50664,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w29_f3_pointer,
                                                                                 )?;
-                                                                                let callback_return_w28_f3 = unsafe {
-                                                                                    Box::from_raw(callback_return_w29_f3_pointer)
+                                                                                let callback_return_w28_f3: perftest_flat::CallbackReturnResource = {
+                                                                                    let callback_return_w28_f3 = unsafe {
+                                                                                        Box::from_raw(callback_return_w29_f3_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w28_f3.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w28_f3: perftest_flat::CallbackReturnResource = callback_return_w28_f3
-                                                                                    .value;
                                                                                 let callback_return_w28_field_3 = callback_return_w28_f3;
                                                                                 let callback_return_w28: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                     first: callback_return_w28_field_0,
@@ -50587,15 +50707,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f5_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f5 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f5_pointer)
+                                                                let callback_return_w4_f5: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f5 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f5_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f5.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f5: perftest_flat::CallbackReturnResource = callback_return_w4_f5
-                                                                    .value;
                                                                 let callback_return_w4_field_5 = callback_return_w4_f5;
                                                                 let callback_return_w4: perftest_flat::CallbackNestedBatch = perftest_flat::CallbackNestedBatch {
                                                                     first: callback_return_w4_field_0,
@@ -51339,22 +51460,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackReturnResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_f0_pointer)?;
-            let p0_w0_f0 = unsafe { Box::from_raw(p0_w1_f0_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0_f0: perftest_flat::CallbackReturnResource = p0_w0_f0.value;
+            let p0_w0_f0: perftest_flat::CallbackReturnResource = {
+                let p0_w0_f0 = unsafe { Box::from_raw(p0_w1_f0_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0_f0.value
+            };
             let p0_w0_field_0 = p0_w0_f0;
             let p0_w1_f1_pointer = p0_w1_f1
                 as *mut ::prebindgen_jni_runtime::Allocation<
                     perftest_flat::CallbackReturnResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_f1_pointer)?;
-            let p0_w0_f1 = unsafe { Box::from_raw(p0_w1_f1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0_f1: perftest_flat::CallbackReturnResource = p0_w0_f1.value;
+            let p0_w0_f1: perftest_flat::CallbackReturnResource = {
+                let p0_w0_f1 = unsafe { Box::from_raw(p0_w1_f1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0_f1.value
+            };
             let p0_w0_field_1 = p0_w0_f1;
             let mut p0_w0_f2: Vec<Option<Vec<perftest_flat::CallbackFixedResult>>> = Vec::new();
             if true {
@@ -51481,13 +51606,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             perftest_flat::CallbackReturnResource,
                                                         >;
                                                     ::prebindgen_runtime::validate_pointer(p0_w12_f0_pointer)?;
-                                                    let p0_w11_f0 = unsafe { Box::from_raw(p0_w12_f0_pointer) };
-                                                    {
-                                                        __pb_input_consumed
-                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                    }
-                                                    let p0_w11_f0: perftest_flat::CallbackReturnResource = p0_w11_f0
-                                                        .value;
+                                                    let p0_w11_f0: perftest_flat::CallbackReturnResource = {
+                                                        let p0_w11_f0 = unsafe { Box::from_raw(p0_w12_f0_pointer) };
+                                                        {
+                                                            __pb_input_consumed
+                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                        }
+                                                        p0_w11_f0.value
+                                                    };
                                                     let p0_w11_field_0 = p0_w11_f0;
                                                     let p0_w12_f1_present: i32 = i32::from(
                                                         ((*p0_w12_f1_some.as_ref().map_err(|e| e.clone())?)
@@ -51504,15 +51630,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             ::prebindgen_runtime::validate_pointer(
                                                                 p0_w12_f1_some_pointer,
                                                             )?;
-                                                            let p0_w11_f1_some = unsafe {
-                                                                Box::from_raw(p0_w12_f1_some_pointer)
+                                                            let p0_w11_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                let p0_w11_f1_some = unsafe {
+                                                                    Box::from_raw(p0_w12_f1_some_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                p0_w11_f1_some.value
                                                             };
-                                                            {
-                                                                __pb_input_consumed
-                                                                    .set(__pb_input_consumed.get() + (1usize));
-                                                            }
-                                                            let p0_w11_f1_some: perftest_flat::CallbackReturnResource = p0_w11_f1_some
-                                                                .value;
                                                             let p0_w11_f1_payload = p0_w11_f1_some;
                                                             Some(p0_w11_f1_payload)
                                                         }
@@ -51538,13 +51665,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             perftest_flat::CallbackReturnResource,
                                                         >;
                                                     ::prebindgen_runtime::validate_pointer(p0_w12_f3_pointer)?;
-                                                    let p0_w11_f3 = unsafe { Box::from_raw(p0_w12_f3_pointer) };
-                                                    {
-                                                        __pb_input_consumed
-                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                    }
-                                                    let p0_w11_f3: perftest_flat::CallbackReturnResource = p0_w11_f3
-                                                        .value;
+                                                    let p0_w11_f3: perftest_flat::CallbackReturnResource = {
+                                                        let p0_w11_f3 = unsafe { Box::from_raw(p0_w12_f3_pointer) };
+                                                        {
+                                                            __pb_input_consumed
+                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                        }
+                                                        p0_w11_f3.value
+                                                    };
                                                     let p0_w11_field_3 = p0_w11_f3;
                                                     let p0_w11: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                         first: p0_w11_field_0,
@@ -51669,13 +51797,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     perftest_flat::CallbackReturnResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w19_f0_pointer)?;
-                            let p0_w18_f0 = unsafe { Box::from_raw(p0_w19_f0_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w18_f0: perftest_flat::CallbackReturnResource = p0_w18_f0
-                                .value;
+                            let p0_w18_f0: perftest_flat::CallbackReturnResource = {
+                                let p0_w18_f0 = unsafe { Box::from_raw(p0_w19_f0_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w18_f0.value
+                            };
                             let p0_w18_field_0 = p0_w18_f0;
                             let p0_w19_f1_present: i32 = i32::from(
                                 ((*p0_w19_f1_some.as_ref().map_err(|e| e.clone())?)
@@ -51692,15 +51821,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     ::prebindgen_runtime::validate_pointer(
                                         p0_w19_f1_some_pointer,
                                     )?;
-                                    let p0_w18_f1_some = unsafe {
-                                        Box::from_raw(p0_w19_f1_some_pointer)
+                                    let p0_w18_f1_some: perftest_flat::CallbackReturnResource = {
+                                        let p0_w18_f1_some = unsafe {
+                                            Box::from_raw(p0_w19_f1_some_pointer)
+                                        };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w18_f1_some.value
                                     };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w18_f1_some: perftest_flat::CallbackReturnResource = p0_w18_f1_some
-                                        .value;
                                     let p0_w18_f1_payload = p0_w18_f1_some;
                                     Some(p0_w18_f1_payload)
                                 }
@@ -51726,13 +51856,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     perftest_flat::CallbackReturnResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w19_f3_pointer)?;
-                            let p0_w18_f3 = unsafe { Box::from_raw(p0_w19_f3_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w18_f3: perftest_flat::CallbackReturnResource = p0_w18_f3
-                                .value;
+                            let p0_w18_f3: perftest_flat::CallbackReturnResource = {
+                                let p0_w18_f3 = unsafe { Box::from_raw(p0_w19_f3_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w18_f3.value
+                            };
                             let p0_w18_field_3 = p0_w18_f3;
                             let p0_w18: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                 first: p0_w18_field_0,
@@ -51760,11 +51891,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackReturnResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_f5_pointer)?;
-            let p0_w0_f5 = unsafe { Box::from_raw(p0_w1_f5_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0_f5: perftest_flat::CallbackReturnResource = p0_w0_f5.value;
+            let p0_w0_f5: perftest_flat::CallbackReturnResource = {
+                let p0_w0_f5 = unsafe { Box::from_raw(p0_w1_f5_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0_f5.value
+            };
             let p0_w0_field_5 = p0_w0_f5;
             let p0_w0: perftest_flat::CallbackNestedBatch = perftest_flat::CallbackNestedBatch {
                 first: p0_w0_field_0,
@@ -52367,15 +52500,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w11_f0_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w10_f0 = unsafe {
-                                                                                            Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                        let callback_return_w10_f0: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w10_f0 = unsafe {
+                                                                                                Box::from_raw(callback_return_w11_f0_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w10_f0.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w10_f0: perftest_flat::CallbackReturnResource = callback_return_w10_f0
-                                                                                            .value;
                                                                                         let callback_return_w10_field_0 = callback_return_w10_f0;
                                                                                         let callback_return_w11_f1_present: i32 = i32::from(
                                                                                             ((*callback_return_w11_f1_some
@@ -52395,15 +52529,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                                     callback_return_w11_f1_some_pointer,
                                                                                                 )?;
-                                                                                                let callback_return_w10_f1_some = unsafe {
-                                                                                                    Box::from_raw(callback_return_w11_f1_some_pointer)
+                                                                                                let callback_return_w10_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                                    let callback_return_w10_f1_some = unsafe {
+                                                                                                        Box::from_raw(callback_return_w11_f1_some_pointer)
+                                                                                                    };
+                                                                                                    {
+                                                                                                        __pb_input_consumed
+                                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                                    }
+                                                                                                    callback_return_w10_f1_some.value
                                                                                                 };
-                                                                                                {
-                                                                                                    __pb_input_consumed
-                                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                                }
-                                                                                                let callback_return_w10_f1_some: perftest_flat::CallbackReturnResource = callback_return_w10_f1_some
-                                                                                                    .value;
                                                                                                 let callback_return_w10_f1_payload = callback_return_w10_f1_some;
                                                                                                 Some(callback_return_w10_f1_payload)
                                                                                             }
@@ -52433,15 +52568,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w11_f3_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w10_f3 = unsafe {
-                                                                                            Box::from_raw(callback_return_w11_f3_pointer)
+                                                                                        let callback_return_w10_f3: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w10_f3 = unsafe {
+                                                                                                Box::from_raw(callback_return_w11_f3_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w10_f3.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w10_f3: perftest_flat::CallbackReturnResource = callback_return_w10_f3
-                                                                                            .value;
                                                                                         let callback_return_w10_field_3 = callback_return_w10_f3;
                                                                                         let callback_return_w10: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                             first: callback_return_w10_field_0,
@@ -53038,15 +53174,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 ::prebindgen_runtime::validate_pointer(
                                                     callback_return_w1_f0_pointer,
                                                 )?;
-                                                let callback_return_w0_f0 = unsafe {
-                                                    Box::from_raw(callback_return_w1_f0_pointer)
+                                                let callback_return_w0_f0: perftest_flat::CallbackReturnResource = {
+                                                    let callback_return_w0_f0 = unsafe {
+                                                        Box::from_raw(callback_return_w1_f0_pointer)
+                                                    };
+                                                    {
+                                                        __pb_input_consumed
+                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                    }
+                                                    callback_return_w0_f0.value
                                                 };
-                                                {
-                                                    __pb_input_consumed
-                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
-                                                    .value;
                                                 let callback_return_w0_field_0 = callback_return_w0_f0;
                                                 let callback_return_w3_pointer = callback_return_w3
                                                     as *mut ::prebindgen_jni_runtime::Allocation<
@@ -53202,15 +53339,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w14_f0_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w13_f0 = unsafe {
-                                                                                            Box::from_raw(callback_return_w14_f0_pointer)
+                                                                                        let callback_return_w13_f0: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w13_f0 = unsafe {
+                                                                                                Box::from_raw(callback_return_w14_f0_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w13_f0.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w13_f0: perftest_flat::CallbackReturnResource = callback_return_w13_f0
-                                                                                            .value;
                                                                                         let callback_return_w13_field_0 = callback_return_w13_f0;
                                                                                         let callback_return_w14_f1_present: i32 = i32::from(
                                                                                             ((*callback_return_w14_f1_some
@@ -53230,15 +53368,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                                     callback_return_w14_f1_some_pointer,
                                                                                                 )?;
-                                                                                                let callback_return_w13_f1_some = unsafe {
-                                                                                                    Box::from_raw(callback_return_w14_f1_some_pointer)
+                                                                                                let callback_return_w13_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                                    let callback_return_w13_f1_some = unsafe {
+                                                                                                        Box::from_raw(callback_return_w14_f1_some_pointer)
+                                                                                                    };
+                                                                                                    {
+                                                                                                        __pb_input_consumed
+                                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                                    }
+                                                                                                    callback_return_w13_f1_some.value
                                                                                                 };
-                                                                                                {
-                                                                                                    __pb_input_consumed
-                                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                                }
-                                                                                                let callback_return_w13_f1_some: perftest_flat::CallbackReturnResource = callback_return_w13_f1_some
-                                                                                                    .value;
                                                                                                 let callback_return_w13_f1_payload = callback_return_w13_f1_some;
                                                                                                 Some(callback_return_w13_f1_payload)
                                                                                             }
@@ -53268,15 +53407,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                         ::prebindgen_runtime::validate_pointer(
                                                                                             callback_return_w14_f3_pointer,
                                                                                         )?;
-                                                                                        let callback_return_w13_f3 = unsafe {
-                                                                                            Box::from_raw(callback_return_w14_f3_pointer)
+                                                                                        let callback_return_w13_f3: perftest_flat::CallbackReturnResource = {
+                                                                                            let callback_return_w13_f3 = unsafe {
+                                                                                                Box::from_raw(callback_return_w14_f3_pointer)
+                                                                                            };
+                                                                                            {
+                                                                                                __pb_input_consumed
+                                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                                            }
+                                                                                            callback_return_w13_f3.value
                                                                                         };
-                                                                                        {
-                                                                                            __pb_input_consumed
-                                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                                        }
-                                                                                        let callback_return_w13_f3: perftest_flat::CallbackReturnResource = callback_return_w13_f3
-                                                                                            .value;
                                                                                         let callback_return_w13_field_3 = callback_return_w13_f3;
                                                                                         let callback_return_w13: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                                             first: callback_return_w13_field_0,
@@ -53423,15 +53563,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w23_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w22_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w23_f0_pointer)
+                                                                let callback_return_w22_f0: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w22_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w23_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w22_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w22_f0: perftest_flat::CallbackReturnResource = callback_return_w22_f0
-                                                                    .value;
                                                                 let callback_return_w22_field_0 = callback_return_w22_f0;
                                                                 let callback_return_w23_f1_present: i32 = i32::from(
                                                                     ((*callback_return_w23_f1_some
@@ -53451,15 +53592,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w23_f1_some_pointer,
                                                                         )?;
-                                                                        let callback_return_w22_f1_some = unsafe {
-                                                                            Box::from_raw(callback_return_w23_f1_some_pointer)
+                                                                        let callback_return_w22_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w22_f1_some = unsafe {
+                                                                                Box::from_raw(callback_return_w23_f1_some_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w22_f1_some.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w22_f1_some: perftest_flat::CallbackReturnResource = callback_return_w22_f1_some
-                                                                            .value;
                                                                         let callback_return_w22_f1_payload = callback_return_w22_f1_some;
                                                                         Some(callback_return_w22_f1_payload)
                                                                     }
@@ -53489,15 +53631,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w23_f3_pointer,
                                                                 )?;
-                                                                let callback_return_w22_f3 = unsafe {
-                                                                    Box::from_raw(callback_return_w23_f3_pointer)
+                                                                let callback_return_w22_f3: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w22_f3 = unsafe {
+                                                                        Box::from_raw(callback_return_w23_f3_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w22_f3.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w22_f3: perftest_flat::CallbackReturnResource = callback_return_w22_f3
-                                                                    .value;
                                                                 let callback_return_w22_field_3 = callback_return_w22_f3;
                                                                 let callback_return_w22: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                     first: callback_return_w22_field_0,
@@ -53530,15 +53673,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 ::prebindgen_runtime::validate_pointer(
                                                     callback_return_w1_f5_pointer,
                                                 )?;
-                                                let callback_return_w0_f5 = unsafe {
-                                                    Box::from_raw(callback_return_w1_f5_pointer)
+                                                let callback_return_w0_f5: perftest_flat::CallbackReturnResource = {
+                                                    let callback_return_w0_f5 = unsafe {
+                                                        Box::from_raw(callback_return_w1_f5_pointer)
+                                                    };
+                                                    {
+                                                        __pb_input_consumed
+                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                    }
+                                                    callback_return_w0_f5.value
                                                 };
-                                                {
-                                                    __pb_input_consumed
-                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w0_f5: perftest_flat::CallbackReturnResource = callback_return_w0_f5
-                                                    .value;
                                                 let callback_return_w0_field_5 = callback_return_w0_f5;
                                                 let callback_return_w0: perftest_flat::CallbackNestedBatch = perftest_flat::CallbackNestedBatch {
                                                     first: callback_return_w0_field_0,
@@ -54538,15 +54682,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             ::prebindgen_runtime::validate_pointer(
                                                 callback_return_w1_f0_pointer,
                                             )?;
-                                            let callback_return_w0_f0 = unsafe {
-                                                Box::from_raw(callback_return_w1_f0_pointer)
+                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = {
+                                                let callback_return_w0_f0 = unsafe {
+                                                    Box::from_raw(callback_return_w1_f0_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w0_f0.value
                                             };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
-                                                .value;
                                             let callback_return_w0_field_0 = callback_return_w0_f0;
                                             let callback_return_w1_f1_present: i32 = i32::from(
                                                 (callback_return_w1_f1_some as usize) != 0,
@@ -54562,15 +54707,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     ::prebindgen_runtime::validate_pointer(
                                                         callback_return_w1_f1_some_pointer,
                                                     )?;
-                                                    let callback_return_w0_f1_some = unsafe {
-                                                        Box::from_raw(callback_return_w1_f1_some_pointer)
+                                                    let callback_return_w0_f1_some: perftest_flat::CallbackReturnResource = {
+                                                        let callback_return_w0_f1_some = unsafe {
+                                                            Box::from_raw(callback_return_w1_f1_some_pointer)
+                                                        };
+                                                        {
+                                                            __pb_input_consumed
+                                                                .set(__pb_input_consumed.get() + (1usize));
+                                                        }
+                                                        callback_return_w0_f1_some.value
                                                     };
-                                                    {
-                                                        __pb_input_consumed
-                                                            .set(__pb_input_consumed.get() + (1usize));
-                                                    }
-                                                    let callback_return_w0_f1_some: perftest_flat::CallbackReturnResource = callback_return_w0_f1_some
-                                                        .value;
                                                     let callback_return_w0_f1_payload = callback_return_w0_f1_some;
                                                     Some(callback_return_w0_f1_payload)
                                                 }
@@ -54596,15 +54742,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             ::prebindgen_runtime::validate_pointer(
                                                 callback_return_w1_f3_pointer,
                                             )?;
-                                            let callback_return_w0_f3 = unsafe {
-                                                Box::from_raw(callback_return_w1_f3_pointer)
+                                            let callback_return_w0_f3: perftest_flat::CallbackReturnResource = {
+                                                let callback_return_w0_f3 = unsafe {
+                                                    Box::from_raw(callback_return_w1_f3_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w0_f3.value
                                             };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w0_f3: perftest_flat::CallbackReturnResource = callback_return_w0_f3
-                                                .value;
                                             let callback_return_w0_field_3 = callback_return_w0_f3;
                                             let callback_return_w0: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                 first: callback_return_w0_field_0,
@@ -54835,15 +54982,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 let callback_return_w5_f1_present: i32 = i32::from(
                                                                     ((*callback_return_w5_f1_some
@@ -54863,15 +55011,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w5_f1_some_pointer,
                                                                         )?;
-                                                                        let callback_return_w4_f1_some = unsafe {
-                                                                            Box::from_raw(callback_return_w5_f1_some_pointer)
+                                                                        let callback_return_w4_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w4_f1_some = unsafe {
+                                                                                Box::from_raw(callback_return_w5_f1_some_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w4_f1_some.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w4_f1_some: perftest_flat::CallbackReturnResource = callback_return_w4_f1_some
-                                                                            .value;
                                                                         let callback_return_w4_f1_payload = callback_return_w4_f1_some;
                                                                         Some(callback_return_w4_f1_payload)
                                                                     }
@@ -54901,15 +55050,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f3_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f3 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f3_pointer)
+                                                                let callback_return_w4_f3: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f3 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f3_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f3.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f3: perftest_flat::CallbackReturnResource = callback_return_w4_f3
-                                                                    .value;
                                                                 let callback_return_w4_field_3 = callback_return_w4_f3;
                                                                 let callback_return_w4: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                     first: callback_return_w4_field_0,
@@ -55409,15 +55559,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w7_f0_pointer,
                                                                         )?;
-                                                                        let callback_return_w6_f0 = unsafe {
-                                                                            Box::from_raw(callback_return_w7_f0_pointer)
+                                                                        let callback_return_w6_f0: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w6_f0 = unsafe {
+                                                                                Box::from_raw(callback_return_w7_f0_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w6_f0.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w6_f0: perftest_flat::CallbackReturnResource = callback_return_w6_f0
-                                                                            .value;
                                                                         let callback_return_w6_field_0 = callback_return_w6_f0;
                                                                         let callback_return_w7_f1_present: i32 = i32::from(
                                                                             ((*callback_return_w7_f1_some
@@ -55437,15 +55588,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                                 ::prebindgen_runtime::validate_pointer(
                                                                                     callback_return_w7_f1_some_pointer,
                                                                                 )?;
-                                                                                let callback_return_w6_f1_some = unsafe {
-                                                                                    Box::from_raw(callback_return_w7_f1_some_pointer)
+                                                                                let callback_return_w6_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                                    let callback_return_w6_f1_some = unsafe {
+                                                                                        Box::from_raw(callback_return_w7_f1_some_pointer)
+                                                                                    };
+                                                                                    {
+                                                                                        __pb_input_consumed
+                                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                                    }
+                                                                                    callback_return_w6_f1_some.value
                                                                                 };
-                                                                                {
-                                                                                    __pb_input_consumed
-                                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                                }
-                                                                                let callback_return_w6_f1_some: perftest_flat::CallbackReturnResource = callback_return_w6_f1_some
-                                                                                    .value;
                                                                                 let callback_return_w6_f1_payload = callback_return_w6_f1_some;
                                                                                 Some(callback_return_w6_f1_payload)
                                                                             }
@@ -55471,15 +55623,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w7_f3_pointer,
                                                                         )?;
-                                                                        let callback_return_w6_f3 = unsafe {
-                                                                            Box::from_raw(callback_return_w7_f3_pointer)
+                                                                        let callback_return_w6_f3: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w6_f3 = unsafe {
+                                                                                Box::from_raw(callback_return_w7_f3_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w6_f3.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w6_f3: perftest_flat::CallbackReturnResource = callback_return_w6_f3
-                                                                            .value;
                                                                         let callback_return_w6_field_3 = callback_return_w6_f3;
                                                                         let callback_return_w6: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                             first: callback_return_w6_field_0,
@@ -56004,15 +56157,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                         ::prebindgen_runtime::validate_pointer(
                                                                             callback_return_w5_f1_some_pointer,
                                                                         )?;
-                                                                        let callback_return_w4_f1_some = unsafe {
-                                                                            Box::from_raw(callback_return_w5_f1_some_pointer)
+                                                                        let callback_return_w4_f1_some: perftest_flat::CallbackReturnResource = {
+                                                                            let callback_return_w4_f1_some = unsafe {
+                                                                                Box::from_raw(callback_return_w5_f1_some_pointer)
+                                                                            };
+                                                                            {
+                                                                                __pb_input_consumed
+                                                                                    .set(__pb_input_consumed.get() + (1usize));
+                                                                            }
+                                                                            callback_return_w4_f1_some.value
                                                                         };
-                                                                        {
-                                                                            __pb_input_consumed
-                                                                                .set(__pb_input_consumed.get() + (1usize));
-                                                                        }
-                                                                        let callback_return_w4_f1_some: perftest_flat::CallbackReturnResource = callback_return_w4_f1_some
-                                                                            .value;
                                                                         let callback_return_w4_f1_payload = callback_return_w4_f1_some;
                                                                         Some(callback_return_w4_f1_payload)
                                                                     }
@@ -56042,15 +56196,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f3_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f3 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f3_pointer)
+                                                                let callback_return_w4_f3: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f3 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f3_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f3.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f3: perftest_flat::CallbackReturnResource = callback_return_w4_f3
-                                                                    .value;
                                                                 let callback_return_w4_field_3 = callback_return_w4_f3;
                                                                 let callback_return_w4: perftest_flat::CallbackFixedResult = perftest_flat::CallbackFixedResult {
                                                                     first: callback_return_w4_field_0,
@@ -56472,15 +56627,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_f0_pointer,
                                                                 )?;
-                                                                let callback_return_w4_f0 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_f0_pointer)
+                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4_f0 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_f0_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4_f0.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4_f0: perftest_flat::CallbackReturnResource = callback_return_w4_f0
-                                                                    .value;
                                                                 let callback_return_w4_field_0 = callback_return_w4_f0;
                                                                 let callback_return_w4_f1: char = ::core::convert::Into::into(
                                                                     u32::try_from(
@@ -56777,15 +56933,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             ::prebindgen_runtime::validate_pointer(
                                                 callback_return_w1_f0_pointer,
                                             )?;
-                                            let callback_return_w0_f0 = unsafe {
-                                                Box::from_raw(callback_return_w1_f0_pointer)
+                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = {
+                                                let callback_return_w0_f0 = unsafe {
+                                                    Box::from_raw(callback_return_w1_f0_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w0_f0.value
                                             };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w0_f0: perftest_flat::CallbackReturnResource = callback_return_w0_f0
-                                                .value;
                                             let callback_return_w0_field_0 = callback_return_w0_f0;
                                             let callback_return_w0_f1: char = ::core::convert::Into::into(
                                                 u32::try_from(callback_return_w1_f1)
@@ -59543,15 +59700,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         ::prebindgen_runtime::validate_pointer(
                                             callback_return_w1_pointer,
                                         )?;
-                                        let callback_return_w0 = unsafe {
-                                            Box::from_raw(callback_return_w1_pointer)
+                                        let callback_return_w0: perftest_flat::CallbackReturnResource = {
+                                            let callback_return_w0 = unsafe {
+                                                Box::from_raw(callback_return_w1_pointer)
+                                            };
+                                            {
+                                                __pb_input_consumed
+                                                    .set(__pb_input_consumed.get() + (1usize));
+                                            }
+                                            callback_return_w0.value
                                         };
-                                        {
-                                            __pb_input_consumed
-                                                .set(__pb_input_consumed.get() + (1usize));
-                                        }
-                                        let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
-                                            .value;
                                         let callback_return_value = callback_return_w0;
                                         Ok::<_, String>(callback_return_value)
                                     }
@@ -59704,15 +59862,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 ::prebindgen_runtime::validate_pointer(
                                     callback_return_w1_pointer,
                                 )?;
-                                let callback_return_w0 = unsafe {
-                                    Box::from_raw(callback_return_w1_pointer)
+                                let callback_return_w0: perftest_flat::CallbackReturnResource = {
+                                    let callback_return_w0 = unsafe {
+                                        Box::from_raw(callback_return_w1_pointer)
+                                    };
+                                    {
+                                        __pb_input_consumed
+                                            .set(__pb_input_consumed.get() + (1usize));
+                                    }
+                                    callback_return_w0.value
                                 };
-                                {
-                                    __pb_input_consumed
-                                        .set(__pb_input_consumed.get() + (1usize));
-                                }
-                                let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
-                                    .value;
                                 let callback_return_value = callback_return_w0;
                                 Ok::<_, String>(callback_return_value)
                             }
@@ -59852,15 +60011,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 ::prebindgen_runtime::validate_pointer(
                                                     callback_return_w3_pointer,
                                                 )?;
-                                                let callback_return_w2 = unsafe {
-                                                    Box::from_raw(callback_return_w3_pointer)
+                                                let callback_return_w2: perftest_flat::CallbackReturnResource = {
+                                                    let callback_return_w2 = unsafe {
+                                                        Box::from_raw(callback_return_w3_pointer)
+                                                    };
+                                                    {
+                                                        __pb_input_consumed
+                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                    }
+                                                    callback_return_w2.value
                                                 };
-                                                {
-                                                    __pb_input_consumed
-                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w2: perftest_flat::CallbackReturnResource = callback_return_w2
-                                                    .value;
                                                 let callback_return_w0_payload = callback_return_w2;
                                                 Some(callback_return_w0_payload)
                                             }
@@ -60062,15 +60222,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_pointer,
                                                                 )?;
-                                                                let callback_return_w4 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_pointer)
+                                                                let callback_return_w4: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4: perftest_flat::CallbackReturnResource = callback_return_w4
-                                                                    .value;
                                                                 let callback_return_w1_row_value = callback_return_w4;
                                                                 Ok(callback_return_w1_row_value)
                                                             }
@@ -60434,11 +60595,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackReturnJob,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackReturnJob = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackReturnJob = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_return_join(
                 __prebindgen_argument_0,
@@ -61285,15 +61448,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                 ::prebindgen_runtime::validate_pointer(
                                                                     callback_return_w5_pointer,
                                                                 )?;
-                                                                let callback_return_w4 = unsafe {
-                                                                    Box::from_raw(callback_return_w5_pointer)
+                                                                let callback_return_w4: perftest_flat::CallbackReturnResource = {
+                                                                    let callback_return_w4 = unsafe {
+                                                                        Box::from_raw(callback_return_w5_pointer)
+                                                                    };
+                                                                    {
+                                                                        __pb_input_consumed
+                                                                            .set(__pb_input_consumed.get() + (1usize));
+                                                                    }
+                                                                    callback_return_w4.value
                                                                 };
-                                                                {
-                                                                    __pb_input_consumed
-                                                                        .set(__pb_input_consumed.get() + (1usize));
-                                                                }
-                                                                let callback_return_w4: perftest_flat::CallbackReturnResource = callback_return_w4
-                                                                    .value;
                                                                 let callback_return_w1_row_value = callback_return_w4;
                                                                 Ok(callback_return_w1_row_value)
                                                             }
@@ -69357,15 +69521,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 ::prebindgen_runtime::validate_pointer(
                                     callback_return_w1_pointer,
                                 )?;
-                                let callback_return_w0 = unsafe {
-                                    Box::from_raw(callback_return_w1_pointer)
+                                let callback_return_w0: perftest_flat::CallbackReturnResource = {
+                                    let callback_return_w0 = unsafe {
+                                        Box::from_raw(callback_return_w1_pointer)
+                                    };
+                                    {
+                                        __pb_input_consumed
+                                            .set(__pb_input_consumed.get() + (1usize));
+                                    }
+                                    callback_return_w0.value
                                 };
-                                {
-                                    __pb_input_consumed
-                                        .set(__pb_input_consumed.get() + (1usize));
-                                }
-                                let callback_return_w0: perftest_flat::CallbackReturnResource = callback_return_w0
-                                    .value;
                                 let callback_return_value = callback_return_w0;
                                 Ok::<_, String>(callback_return_value)
                             }
@@ -75144,11 +75309,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackReentry,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackReentry = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackReentry = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_reentry_take(
                 __prebindgen_argument_0,
@@ -75482,11 +75649,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackReentry,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackReentry = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackReentry = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
                 &mut jni_environment,
@@ -77304,11 +77473,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackConstructorJob,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackConstructorJob = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackConstructorJob = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_constructor_run(
                 __prebindgen_argument_0,
@@ -77456,11 +77627,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             perftest_flat::CallbackConstructor,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                    let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w5: perftest_flat::CallbackConstructor = p0_w5.value;
+                    let p0_w5: perftest_flat::CallbackConstructor = {
+                        let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w5.value
+                    };
                     let p0_w0_alternative_1 = p0_w5;
                     p0_w0_alternative_1
                 }
@@ -78295,11 +78469,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::CallbackJob>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackJob = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackJob = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_job_join(__prebindgen_argument_0);
             let _: () = {
@@ -79391,11 +79567,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     perftest_flat::CallbackOwned,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::CallbackOwned = p0_w0.value;
+            let p0_w0: perftest_flat::CallbackOwned = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
                 &mut jni_environment,
@@ -84202,12 +84380,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w5: perftest_flat::OwnedResource = p0_w5.value;
+                            let p0_w5: perftest_flat::OwnedResource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w5.value
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w4: perftest_flat::CollectionItem = perftest_flat::collection_construct(
                                 p0_w4_argument_0,
@@ -84662,12 +84842,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                             perftest_flat::OwnedResource,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
-                                    let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w6: perftest_flat::OwnedResource = p0_w6.value;
+                                    let p0_w6: perftest_flat::OwnedResource = {
+                                        let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w6.value
+                                    };
                                     let p0_w3_row_value = p0_w6;
                                     Ok(p0_w3_row_value)
                                 }
@@ -84947,12 +85129,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                                     perftest_flat::OwnedResource,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                                            let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w8: perftest_flat::OwnedResource = p0_w8.value;
+                                            let p0_w8: perftest_flat::OwnedResource = {
+                                                let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w8.value
+                                            };
                                             let p0_w5_row_value = p0_w8;
                                             Ok(p0_w5_row_value)
                                         }
@@ -87820,12 +88004,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -88065,12 +88251,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -88504,12 +88692,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -90053,11 +90243,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     perftest_flat::OwnedResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::OwnedResource = p0_w0.value;
+            let p0_w0: perftest_flat::OwnedResource = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w1);
             let __prebindgen_argument_1 = p1_w0;
@@ -91909,12 +92101,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
                                     perftest_flat::NicheChoiceHandle,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
-                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w9: perftest_flat::NicheChoiceHandle = p0_w9.value;
+                            let p0_w9: perftest_flat::NicheChoiceHandle = {
+                                let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w9.value
+                            };
                             let p0_w2_alternative_1 = p0_w9;
                             p0_w2_alternative_1
                         }
@@ -93079,12 +93273,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
                                             perftest_flat::NicheChoiceHandle,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
-                                    let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w11: perftest_flat::NicheChoiceHandle = p0_w11.value;
+                                    let p0_w11: perftest_flat::NicheChoiceHandle = {
+                                        let p0_w11 = unsafe { Box::from_raw(p0_w12_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w11.value
+                                    };
                                     let p0_w4_alternative_1 = p0_w11;
                                     p0_w4_alternative_1
                                 }
@@ -93476,11 +93672,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                             perftest_flat::OptionCtor,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                    let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w7: perftest_flat::OptionCtor = p0_w7.value;
+                    let p0_w7: perftest_flat::OptionCtor = {
+                        let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w7.value
+                    };
                     let p0_w0_alternative_1 = p0_w7;
                     p0_w0_alternative_1
                 }
@@ -93596,12 +93795,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w2_payload = p0_w4;
                             Some(p0_w2_payload)
                         }
@@ -93783,12 +93984,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                                     perftest_flat::OptionChoice,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                            let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w7: perftest_flat::OptionChoice = p0_w7.value;
+                            let p0_w7: perftest_flat::OptionChoice = {
+                                let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w7.value
+                            };
                             let p0_w2_alternative_1 = p0_w7;
                             p0_w2_alternative_1
                         }
@@ -94575,11 +94778,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                             perftest_flat::OwnedResource,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
-                    let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w2: perftest_flat::OwnedResource = p0_w2.value;
+                    let p0_w2: perftest_flat::OwnedResource = {
+                        let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w2.value
+                    };
                     let p0_w0_payload = p0_w2;
                     Some(p0_w0_payload)
                 }
@@ -94595,11 +94801,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                             perftest_flat::OwnedResource,
                         >;
                     ::prebindgen_runtime::validate_pointer(p1_w3_pointer)?;
-                    let p1_w2 = unsafe { Box::from_raw(p1_w3_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p1_w2: perftest_flat::OwnedResource = p1_w2.value;
+                    let p1_w2: perftest_flat::OwnedResource = {
+                        let p1_w2 = unsafe { Box::from_raw(p1_w3_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p1_w2.value
+                    };
                     let p1_w0_payload = p1_w2;
                     Some(p1_w0_payload)
                 }
@@ -94715,11 +94924,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                             perftest_flat::OwnedResource,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w4_pointer)?;
-                    let p0_w3 = unsafe { Box::from_raw(p0_w4_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w3: perftest_flat::OwnedResource = p0_w3.value;
+                    let p0_w3: perftest_flat::OwnedResource = {
+                        let p0_w3 = unsafe { Box::from_raw(p0_w4_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w3.value
+                    };
                     let p0_w2_argument_0 = p0_w3;
                     let p0_w5: i64 = ::core::convert::Into::into(p0_w6);
                     let p0_w2_argument_1 = p0_w5;
@@ -96523,11 +96735,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                             perftest_flat::OwnedResource,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
-                    let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w2: perftest_flat::OwnedResource = p0_w2.value;
+                    let p0_w2: perftest_flat::OwnedResource = {
+                        let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w2.value
+                    };
                     let p0_w0_payload = p0_w2;
                     Some(p0_w0_payload)
                 }
@@ -98229,11 +98444,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
                             perftest_flat::Summary,
                         >;
                     ::prebindgen_runtime::validate_pointer(p1_w8_pointer)?;
-                    let p1_w7 = unsafe { Box::from_raw(p1_w8_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p1_w7: perftest_flat::Summary = p1_w7.value;
+                    let p1_w7: perftest_flat::Summary = {
+                        let p1_w7 = unsafe { Box::from_raw(p1_w8_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p1_w7.value
+                    };
                     let p1_w0_alternative_1 = p1_w7;
                     p1_w0_alternative_1
                 }
@@ -99341,11 +99559,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                             perftest_flat::Report,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
-                    let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w2: perftest_flat::Report = p0_w2.value;
+                    let p0_w2: perftest_flat::Report = {
+                        let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w2.value
+                    };
                     let p0_w0_alternative_0 = p0_w2;
                     p0_w0_alternative_0
                 }
@@ -99815,11 +100036,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                             perftest_flat::Summary,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                    let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w7: perftest_flat::Summary = p0_w7.value;
+                    let p0_w7: perftest_flat::Summary = {
+                        let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w7.value
+                    };
                     let p0_w0_alternative_1 = p0_w7;
                     p0_w0_alternative_1
                 }
@@ -101307,11 +101531,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                             perftest_flat::Summary,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                    let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w8: perftest_flat::Summary = p0_w8.value;
+                    let p0_w8: perftest_flat::Summary = {
+                        let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w8.value
+                    };
                     let p0_w1_alternative_1 = p0_w8;
                     p0_w1_alternative_1
                 }
@@ -101435,11 +101662,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Report>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::Report = p0_w0.value;
+            let p0_w0: perftest_flat::Report = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             #[allow(unused_mut, unused_assignments)]
             let mut p1_w0 = None;
@@ -102140,11 +102369,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                             perftest_flat::Summary,
                         >;
                     ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
-                    let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p0_w7: perftest_flat::Summary = p0_w7.value;
+                    let p0_w7: perftest_flat::Summary = {
+                        let p0_w7 = unsafe { Box::from_raw(p0_w8_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p0_w7.value
+                    };
                     let p0_w0_alternative_1 = p0_w7;
                     p0_w0_alternative_1
                 }
@@ -102173,11 +102405,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
                             perftest_flat::Summary,
                         >;
                     ::prebindgen_runtime::validate_pointer(p1_w8_pointer)?;
-                    let p1_w7 = unsafe { Box::from_raw(p1_w8_pointer) };
-                    {
-                        __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-                    }
-                    let p1_w7: perftest_flat::Summary = p1_w7.value;
+                    let p1_w7: perftest_flat::Summary = {
+                        let p1_w7 = unsafe { Box::from_raw(p1_w8_pointer) };
+                        {
+                            __pb_input_consumed
+                                .set(__pb_input_consumed.get() + (1usize));
+                        }
+                        p1_w7.value
+                    };
                     let p1_w0_alternative_1 = p1_w7;
                     p1_w0_alternative_1
                 }
@@ -104701,11 +104936,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let p0_w1_pointer = p0_w1
                 as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>;
             ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p0_w0: perftest_flat::Storage = p0_w0.value;
+            let p0_w0: perftest_flat::Storage = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w0.value
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0_f0: String = ::core::convert::Into::into(
                 ::prebindgen_jni_runtime::text(&mut jni_environment, &p1_w1_f0)?,
@@ -105788,11 +106025,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1scope
                     perftest_flat::OwnedResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p1_w1_pointer)?;
-            let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p1_w0: perftest_flat::OwnedResource = p1_w0.value;
+            let p1_w0: perftest_flat::OwnedResource = {
+                let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p1_w0.value
+            };
             let __prebindgen_argument_1 = p1_w0;
             let source_value = perftest_flat::scoped_input_pair(
                 __prebindgen_argument_0,
@@ -105900,12 +106139,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1scope
                     perftest_flat::OwnedResource,
                 >;
             ::prebindgen_runtime::validate_pointer(scoped_first_pointer)?;
-            let scoped_first_value = unsafe { Box::from_raw(scoped_first_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let scoped_first_value: perftest_flat::OwnedResource = scoped_first_value
-                .value;
+            let scoped_first_value: perftest_flat::OwnedResource = {
+                let scoped_first_value = unsafe { Box::from_raw(scoped_first_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                scoped_first_value.value
+            };
             let __prebindgen_argument_0 = scoped_first_value;
             let p1_w2: i64 = ::core::convert::Into::into(p1_w3);
             let p1_w1_argument_0 = p1_w2;
@@ -105916,11 +106156,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1scope
                     perftest_flat::OwnedResource,
                 >;
             ::prebindgen_runtime::validate_pointer(p1_w5_pointer)?;
-            let p1_w4 = unsafe { Box::from_raw(p1_w5_pointer) };
-            {
-                __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
-            }
-            let p1_w4: perftest_flat::OwnedResource = p1_w4.value;
+            let p1_w4: perftest_flat::OwnedResource = {
+                let p1_w4 = unsafe { Box::from_raw(p1_w5_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p1_w4.value
+            };
             let p1_w0_argument_1 = p1_w4;
             let p1_w0: perftest_flat::OwnedResource = perftest_flat::scoped_input_checked(
                 p1_w0_argument_0,
@@ -109184,12 +109426,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                             perftest_flat::OwnedResource,
                                         >;
                                     ::prebindgen_runtime::validate_pointer(p0_w7_pointer)?;
-                                    let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
-                                    {
-                                        __pb_input_consumed
-                                            .set(__pb_input_consumed.get() + (1usize));
-                                    }
-                                    let p0_w6: perftest_flat::OwnedResource = p0_w6.value;
+                                    let p0_w6: perftest_flat::OwnedResource = {
+                                        let p0_w6 = unsafe { Box::from_raw(p0_w7_pointer) };
+                                        {
+                                            __pb_input_consumed
+                                                .set(__pb_input_consumed.get() + (1usize));
+                                        }
+                                        p0_w6.value
+                                    };
                                     let p0_w3_row_value = p0_w6;
                                     Ok(p0_w3_row_value)
                                 }
@@ -109486,12 +109730,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                                     perftest_flat::OwnedResource,
                                                 >;
                                             ::prebindgen_runtime::validate_pointer(p0_w9_pointer)?;
-                                            let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
-                                            {
-                                                __pb_input_consumed
-                                                    .set(__pb_input_consumed.get() + (1usize));
-                                            }
-                                            let p0_w8: perftest_flat::OwnedResource = p0_w8.value;
+                                            let p0_w8: perftest_flat::OwnedResource = {
+                                                let p0_w8 = unsafe { Box::from_raw(p0_w9_pointer) };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                p0_w8.value
+                                            };
                                             let p0_w5_row_value = p0_w8;
                                             Ok(p0_w5_row_value)
                                         }
@@ -112167,12 +112413,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -112660,12 +112908,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                                     perftest_flat::OwnedResource,
                                 >;
                             ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {
-                                __pb_input_consumed
-                                    .set(__pb_input_consumed.get() + (1usize));
-                            }
-                            let p0_w4: perftest_flat::OwnedResource = p0_w4.value;
+                            let p0_w4: perftest_flat::OwnedResource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w4.value
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }

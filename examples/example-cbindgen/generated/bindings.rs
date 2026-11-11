@@ -248,9 +248,11 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = p0_w1 as *mut example_flat::Foo;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {}
-            let p0_w0: example_flat::Foo = *p0_w0;
+            let p0_w0: example_flat::Foo = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::foo_get_id(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -333,9 +335,11 @@ pub unsafe extern "C" fn example_local_counter_label(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = p0_w1 as *mut example_flat::LocalCounter;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {}
-            let p0_w0: example_flat::LocalCounter = *p0_w0;
+            let p0_w0: example_flat::LocalCounter = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
+            };
             let __prebindgen_argument_0 = p0_w0;
             #[allow(unused_mut, unused_assignments)]
             let mut p1_w0 = None;

@@ -1080,9 +1080,11 @@ pub unsafe extern "C" fn owner_inline_boxed_numbers_take(p0_w1: *mut Vec<i32>) -
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = p0_w1 as *mut Vec<i32>;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {}
-            let p0_w0: Vec<i32> = *p0_w0;
+            let p0_w0: Vec<i32> = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
+            };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::inline_boxed_numbers_take(
                 __prebindgen_argument_0,
@@ -1803,14 +1805,16 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                                                         {
                                                             let callback_return_w10_pointer = (callback_return_w10)
                                                                 as *mut perftest_flat::OwnedResource;
-                                                            let callback_return_w9 = unsafe {
-                                                                Box::from_raw(callback_return_w10_pointer)
+                                                            let callback_return_w9: perftest_flat::OwnedResource = {
+                                                                let callback_return_w9 = unsafe {
+                                                                    Box::from_raw(callback_return_w10_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_callback_consumed
+                                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                                }
+                                                                *callback_return_w9
                                                             };
-                                                            {
-                                                                __pb_callback_consumed
-                                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9;
                                                             let callback_return_w8_argument_0 = callback_return_w9;
                                                             #[allow(unused_parens)]
                                                             let callback_return_w12_storage = (callback_return_w12);
@@ -1835,14 +1839,16 @@ pub unsafe extern "C" fn owner_inline_callback_optional(
                                                             let callback_return_w8_argument_1 = callback_return_w11;
                                                             let callback_return_w14_pointer = (callback_return_w14)
                                                                 as *mut perftest_flat::OwnedResource;
-                                                            let callback_return_w13 = unsafe {
-                                                                Box::from_raw(callback_return_w14_pointer)
+                                                            let callback_return_w13: perftest_flat::OwnedResource = {
+                                                                let callback_return_w13 = unsafe {
+                                                                    Box::from_raw(callback_return_w14_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_callback_consumed
+                                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                                }
+                                                                *callback_return_w13
                                                             };
-                                                            {
-                                                                __pb_callback_consumed
-                                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                                            }
-                                                            let callback_return_w13: perftest_flat::OwnedResource = *callback_return_w13;
                                                             let callback_return_w8_argument_2 = callback_return_w13;
                                                             let callback_return_w15: char = ::core::convert::Into::into(unsafe {
                                                                 char::from_u32_unchecked(callback_return_w16)
@@ -2165,14 +2171,16 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                         {
                                             let callback_return_w6_pointer = (callback_return_w6)
                                                 as *mut perftest_flat::OwnedResource;
-                                            let callback_return_w5 = unsafe {
-                                                Box::from_raw(callback_return_w6_pointer)
+                                            let callback_return_w5: perftest_flat::OwnedResource = {
+                                                let callback_return_w5 = unsafe {
+                                                    Box::from_raw(callback_return_w6_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w5
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w5: perftest_flat::OwnedResource = *callback_return_w5;
                                             let callback_return_w4_argument_0 = callback_return_w5;
                                             #[allow(unused_parens)]
                                             let callback_return_w8_storage = (callback_return_w8);
@@ -2197,14 +2205,16 @@ pub unsafe extern "C" fn owner_inline_callback_rows(
                                             let callback_return_w4_argument_1 = callback_return_w7;
                                             let callback_return_w10_pointer = (callback_return_w10)
                                                 as *mut perftest_flat::OwnedResource;
-                                            let callback_return_w9 = unsafe {
-                                                Box::from_raw(callback_return_w10_pointer)
+                                            let callback_return_w9: perftest_flat::OwnedResource = {
+                                                let callback_return_w9 = unsafe {
+                                                    Box::from_raw(callback_return_w10_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w9
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w9: perftest_flat::OwnedResource = *callback_return_w9;
                                             let callback_return_w4_argument_2 = callback_return_w9;
                                             let callback_return_w11: char = ::core::convert::Into::into(unsafe {
                                                 char::from_u32_unchecked(callback_return_w12)
@@ -2773,11 +2783,13 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut perftest_flat::OwnedResource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {
-                                ownership_accepted.set(ownership_accepted.get() + (1usize));
-                            }
-                            let p0_w5: perftest_flat::OwnedResource = *p0_w5;
+                            let p0_w5: perftest_flat::OwnedResource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {
+                                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                                }
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w8_pointer = (p0_w8)
                                 as *mut perftest_flat::InlinePacket;
@@ -2807,11 +2819,13 @@ pub unsafe extern "C" fn owner_inline_inputs_mixed(
                             let p0_w4_argument_1 = p0_w7;
                             let p0_w10_pointer = (p0_w10)
                                 as *mut perftest_flat::OwnedResource;
-                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
-                            {
-                                ownership_accepted.set(ownership_accepted.get() + (1usize));
-                            }
-                            let p0_w9: perftest_flat::OwnedResource = *p0_w9;
+                            let p0_w9: perftest_flat::OwnedResource = {
+                                let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                                {
+                                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                                }
+                                *p0_w9
+                            };
                             let p0_w4_argument_2 = p0_w9;
                             let p0_w4: i64 = perftest_flat::inline_input_mixed(
                                 p0_w4_argument_0,
@@ -2943,11 +2957,13 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
                                         {
                                             let p0_w10_pointer = (p0_w10)
                                                 as *mut perftest_flat::OwnedResource;
-                                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
-                                            {
-                                                ownership_accepted.set(ownership_accepted.get() + (1usize));
-                                            }
-                                            let p0_w9: perftest_flat::OwnedResource = *p0_w9;
+                                            let p0_w9: perftest_flat::OwnedResource = {
+                                                let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                                                {
+                                                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                                                }
+                                                *p0_w9
+                                            };
                                             let p0_w8_argument_0 = p0_w9;
                                             let p0_w12_pointer = (p0_w12)
                                                 as *mut perftest_flat::InlinePacket;
@@ -2977,11 +2993,13 @@ pub unsafe extern "C" fn owner_inline_inputs_optional(
                                             let p0_w8_argument_1 = p0_w11;
                                             let p0_w14_pointer = (p0_w14)
                                                 as *mut perftest_flat::OwnedResource;
-                                            let p0_w13 = unsafe { Box::from_raw(p0_w14_pointer) };
-                                            {
-                                                ownership_accepted.set(ownership_accepted.get() + (1usize));
-                                            }
-                                            let p0_w13: perftest_flat::OwnedResource = *p0_w13;
+                                            let p0_w13: perftest_flat::OwnedResource = {
+                                                let p0_w13 = unsafe { Box::from_raw(p0_w14_pointer) };
+                                                {
+                                                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                                                }
+                                                *p0_w13
+                                            };
                                             let p0_w8_argument_2 = p0_w13;
                                             let p0_w8: i64 = perftest_flat::inline_input_mixed(
                                                 p0_w8_argument_0,
@@ -3705,14 +3723,16 @@ pub unsafe extern "C" fn owner_inline_mixed_rows_sum(
                                             let callback_return_w4_argument_0 = callback_return_w5;
                                             let callback_return_w8_pointer = (callback_return_w8)
                                                 as *mut perftest_flat::InlineChild;
-                                            let callback_return_w7 = unsafe {
-                                                Box::from_raw(callback_return_w8_pointer)
+                                            let callback_return_w7: perftest_flat::InlineChild = {
+                                                let callback_return_w7 = unsafe {
+                                                    Box::from_raw(callback_return_w8_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w7
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w7: perftest_flat::InlineChild = *callback_return_w7;
                                             let callback_return_w4_argument_1 = callback_return_w7;
                                             let callback_return_w4: perftest_flat::InlineMixed = perftest_flat::inline_mixed_new(
                                                 callback_return_w4_argument_0,

@@ -113,7 +113,10 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
                 Storage::Direct => quote!(*#var),
                 Storage::Wrapped(_) => quote!(#var.value),
             };
-            quote!(let #var=unsafe {Box::from_raw(#pointer)};#transfer let #var:#ty=#value;)
+            // Release the emptied allocation as part of this conversion, before
+            // the next input or source call. Keeping its Box in the enclosing
+            // scope changes allocator reuse and needlessly retains storage.
+            quote!(let #var:#ty={let #var=unsafe {Box::from_raw(#pointer)};#transfer #value};)
         }
         Access::Shared => quote!(let #var:#ty=unsafe {&(*#pointer)#field};),
         Access::Exclusive => quote!(let #var:#ty=unsafe {&mut (*#pointer)#field};),

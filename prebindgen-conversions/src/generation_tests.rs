@@ -127,6 +127,126 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     );
 }
 
+#[test]
+fn boxed_input_releases_empty_allocation_before_continuation() {
+    struct Context;
+    impl TemplateContext for Context {
+        fn render(&self, code: &TokenStream) -> Result<TokenStream> {
+            render_template(
+                code,
+                &|name| Err(format!("unexpected binding {name}")),
+                &|count| InputTransfers::Report(syn::parse_quote!(taken)).render(count),
+            )
+        }
+    }
+    let mut wrappers = TokenStream::new();
+    for (name, storage) in [
+        ("direct", boxed::Storage::Direct),
+        (
+            "wrapped",
+            boxed::Storage::Wrapped(syn::parse_quote!(Wrapper)),
+        ),
+    ] {
+        let name = format_ident!("{name}");
+        let plan = boxed::input::<syn::Type, Context, (), ()>(
+            &storage,
+            &syn::parse_quote!(Item),
+            syn::parse_quote!(incoming),
+            syn::parse_quote!(decoded),
+            |wire| {
+                let ty = wire.ty;
+                syn::parse_quote!(*mut #ty)
+            },
+        )
+        .unwrap();
+        let body = plan
+            .code_fragment_slot(
+                InputFragment {
+                    context: &Context,
+                    target: &syn::parse_quote!(argument),
+                    next: quote! {
+                        assert_eq!(taken.get(), 1);
+                        assert!(FREED.load(Ordering::SeqCst));
+                        assert_eq!(DROPPED.load(Ordering::SeqCst), 0);
+                        assert_eq!(argument.0, 42);
+                        drop(argument);
+                        assert_eq!(DROPPED.load(Ordering::SeqCst), 1);
+                        Ok(())
+                    },
+                },
+                &syn::parse_quote!(()),
+            )
+            .unwrap();
+        wrappers.extend(quote! {
+            fn #name(incoming: usize) -> Result<(), String> {
+                let taken = std::cell::Cell::new(0usize);
+                #body
+            }
+        });
+    }
+    let code = quote! {
+        extern crate self as prebindgen_runtime;
+        use std::alloc::{GlobalAlloc, Layout, System};
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        static WATCHED: AtomicUsize = AtomicUsize::new(0);
+        static FREED: AtomicBool = AtomicBool::new(false);
+        static DROPPED: AtomicUsize = AtomicUsize::new(0);
+        struct Allocator;
+        unsafe impl GlobalAlloc for Allocator {
+            unsafe fn alloc(&self, layout: Layout) -> *mut u8 { System.alloc(layout) }
+            unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+                if pointer as usize == WATCHED.load(Ordering::SeqCst) {
+                    FREED.store(true, Ordering::SeqCst);
+                }
+                System.dealloc(pointer, layout);
+            }
+        }
+        #[global_allocator]
+        static ALLOCATOR: Allocator = Allocator;
+        struct Item(u64);
+        impl Drop for Item {
+            fn drop(&mut self) { DROPPED.fetch_add(1, Ordering::SeqCst); }
+        }
+        struct Wrapper<T> { value: T }
+        fn validate_pointer<T>(pointer: *mut T) -> Result<(), String> {
+            assert!(!pointer.is_null()); Ok(())
+        }
+        #wrappers
+        fn main() {
+            let pointer = Box::into_raw(Box::new(Item(42)));
+            WATCHED.store(pointer as usize, Ordering::SeqCst);
+            direct(pointer as usize).unwrap();
+            FREED.store(false, Ordering::SeqCst);
+            DROPPED.store(0, Ordering::SeqCst);
+            let pointer = Box::into_raw(Box::new(Wrapper { value: Item(42) }));
+            WATCHED.store(pointer as usize, Ordering::SeqCst);
+            wrapped(pointer as usize).unwrap();
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("boxed_scope.rs");
+    let executable = dir.path().join("boxed_scope");
+    std::fs::write(&source, code.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let run = std::process::Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
 fn record_model() -> Flat {
     let items =
         syn::parse_file("pub struct Point { pub x:f64, pub y:f64 } pub fn point()->Point {}")
