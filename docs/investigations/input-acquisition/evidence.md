@@ -1,9 +1,60 @@
-# Evidence for the input-acquisition proposal
+# Evidence for the conversion-pipeline proposal
 
 Baseline: #898 after merged #903,
 `e78f4fd24ffaf85ccb342980f7dc33c377d39c34`. These observations describe the current
 implementation. The [proposed contract](contract.md) is not implemented by this
 investigation.
+
+## The architectural mismatch comes before the reproduction
+
+The low-level [boxed input helper](../../../prebindgen-conversions/src/boxed.rs#L87)
+returns separate validation, acquisition and construction fragments. Borrowed
+inputs have empty acquisition; their reference is created in construction.
+The helper describes resources with `registered = false`.
+
+The declaration compiler's
+[`input_named`](../../../prebindgen-declarations/src/lib.rs#L910) combines those
+fragments into `validation`, retains the constructed argument there and clears
+later fragments. It sets `registered = true` even for shared borrows. Scalar
+conversion can execute early without a resource descriptor at all.
+
+These are different representations of the same operation. A phase name no
+longer tells an independent converter author when construction runs. Meanwhile,
+the assembler still nests all validation, then all acquisition, then all
+construction. It chooses receipt readiness and automatic counting using resource
+flags. C's by-value inline-owner leaf is another warning against interpreting
+`registered` as a schedule: it marks itself registered/accounted while acquisition
+remains in its `acquire` buffer until composition.
+
+An existing [execution-order test](../../../prebindgen-conversions/src/generation_tests.rs#L60)
+asserts separated phases. The proposal deliberately changes that public contract.
+Tests must establish the new operation/lifetime boundaries rather than merely
+remove assertions that reject mixed implementations.
+
+### Some existing distinctions represent real lifetimes
+
+The solution cannot simply concatenate code and forget storage scope:
+
+- [`Input::Temporary`](../../../prebindgen-declarations/src/lib.rs) retains an
+  owned value behind a borrowed argument. In grouped input, its storage is
+  declared outside optional/selector branches and filled during construction.
+- [`record_input`](../../../prebindgen-declarations/src/record.rs) and
+  [`optional_input`](../../../prebindgen-declarations/src/optional.rs) compose
+  fields and active alternatives. A borrowed field's backing owner must survive
+  through the enclosing record's use.
+- [`sequence_input`](../../../prebindgen-declarations/src/sequence.rs) opens a
+  carrier, binds a row, constructs into final storage and releases row-local
+  state. It currently combines phased fragments itself. Release must precede
+  propagation of an ordinary row error.
+- The JNI [callback-result decoder](../../../prebindgen-jni/src/callback.rs)
+  establishes owner protection and supplies cached reads, then composes the
+  current input fragments. Its unread-owner cleanup depends on actual progress.
+
+These requirements justify storage/transport operations, not a global
+validate/acquire/construct schedule. The proposed storage rewrite needs a
+prototype proving explicit backing-storage composition across codec/compiler
+crates without duplicating continuations
+through alternatives or adding per-row closures.
 
 ## Reproduce with the public C preparation and emission APIs
 
@@ -14,53 +65,36 @@ cargo run --manifest-path docs/investigations/input-acquisition/probe/Cargo.toml
 ```
 
 The standalone [probe](probe/src/main.rs) has its own Cargo manifest outside the
-production workspace, so the workspace CI does not build it. The commands above
-and its explicit Clippy check are separate investigation verification. It performs these steps:
+production workspace, so workspace CI does not build it. This command and its
+explicit Clippy check are separate investigation verification. The probe:
 
-1. Parse a Rust source API into `Flat<CSchema>`.
-2. Declare the opaque `Item` representation and the exported function through
-   `Cbindgen`, then call `prepare()`.
-3. Optionally replace selected parameter slots with `CCodec::raw().input_leaf`.
-   Call the normal `finish_input` and `validate_input` hooks on those leaves.
-4. Invoke `prebindgen_c::generate` and verify success or the expected rejection.
-   Parse the generated Rust source for each successful case with `syn`.
+1. Parses a Rust source API into `Flat<CSchema>`.
+2. Declares opaque `Item`/`Packet` representations and an exported function through
+   `Cbindgen`, then calls `prepare()`.
+3. Optionally replaces selected parameter slots with `CCodec::raw().input_leaf`,
+   completing the normal `finish_input` and `validate_input` hooks.
+4. Invokes `prebindgen_c::generate` and checks success or the expected rejection.
+   It parses each successful generated Rust source with `syn`.
 
 This exercises the actual public generation path. It does **not** compile or
 execute the emitted C/Rust boundary, measure performance, or demonstrate the
-proposed behavior. The expected rejections are observations, not the desired
-future behavior. Revisit the fixture when the implementation changes them.
+proposed behavior. Expected rejections are observations, not desired behavior.
+Revisit the fixture when implementation changes those outcomes.
 
-The probe varies only converter preparation, except for the last two controls,
-which change the second source parameter to a borrow or scalar:
-
-| Source parameters | Converters | `registered` flags on resources | Result |
+| Source parameters | Converters | Current `registered` flags | Result |
 | --- | --- | --- | --- |
 | `&Item, Item` | Both declaration-compiled | `true, true` | Generation succeeds. |
 | `&Item, Item` | First low-level | `false, true` | Expected mixed-mode rejection. |
 | `&Item, Item` | Second low-level | `true, false` | Expected mixed-mode rejection. |
 | `&Item, Item` | Both low-level | `false, false` | Generation succeeds. |
-| `&Item, &Item` | First low-level | `false, true` | Expected mixed-mode rejection despite no moves. |
-| `&Item, i64` | First low-level | Only the borrow has a descriptor: `false` | Generation succeeds despite the scalar being compiled early. |
+| `&Item, &Item` | First low-level | `false, true` | Rejected despite no moves. |
+| `&Item, i64` | First low-level | Only the borrow has a descriptor: `false` | Succeeds despite early scalar construction. |
+| `&Item, Packet` | Both declaration-compiled | `true, true` | Generation succeeds. |
+| `&Item, Packet` | First low-level | `false, true` | Rejected despite unrelated pointee types. |
 
-All resource descriptors in these cases have `records_consumption = false`.
-For compiled inputs, the declaration compiler already inserted the count where
-needed and set `registered`; it did not set `records_consumption`. This is one
-reason those flags need explanation before an author can compose helpers safely.
-
-## The relevant current control flow
-
-The low-level [boxed input helper](../../../prebindgen-conversions/src/boxed.rs#L87)
-returns separate validation, acquisition and construction fragments. It sets
-`registered = false`. Borrowed inputs have empty acquisition; their reference
-is created in construction. Direct C storage trusts the caller; wrapped JNI
-storage performs its existing pointer-encoding checks.
-
-The declaration compiler's
-[`input_named`](../../../prebindgen-declarations/src/lib.rs#L910) moves those
-fragments into `validation`, retains the constructed value there and clears the
-later acquisition/construction fragments. It sets `registered = true` even for
-shared borrows. It inserts transfer counts for moves not already accounted for.
-Grouped collection inputs have specialized composition to keep row values live.
+All resource descriptors in the probe have `records_consumption = false`.
+For compiled inputs, the declaration compiler already inserted counts where
+needed and set `registered`; it did not set `records_consumption`.
 
 The shared [call assembler](../../../prebindgen-conversions/src/staged.rs#L318)
 currently computes, schematically:
@@ -72,92 +106,130 @@ if eager && resources.iter().any(|r| !r.registered) {
 }
 ```
 
-The condition does not distinguish moves from borrows. With no such mixture,
-the assembler generally nests all validation, then all acquisition, then all
-construction fragments around the source call. It selects receipt readiness and
-automatic consumption counting using the resource flags.
+The condition compares neither source types nor actual pointer values. It does
+not distinguish moves from borrows. An existing
+[assembler test](../../../prebindgen-conversions/src/generation_tests.rs#L787)
+checks rejection of mixed owning resource metadata. Removing that condition
+alone leaves mixed scheduling and automatic counting inconsistent; it is not
+the proposed fix.
 
-The C inline-owner by-value leaf is another warning against interpreting
-`registered` as a complete schedule: it marks itself registered/accounted while
-its acquisition code is still in the `acquire` buffer until composition.
+## Existing access information and runtime accounting
 
-An existing [assembler test](../../../prebindgen-conversions/src/generation_tests.rs#L787)
-checks rejection of mixed owning resource metadata. An existing
-[execution-order test](../../../prebindgen-conversions/src/generation_tests.rs#L60)
-checks the separated phase ordering. The proposed ordering deliberately changes
-that contract; updating the tests must document the new behavior rather than
-simply deleting their assertions.
+The adapters already describe native type and access in their wire kinds:
+
+- [`CWire::Pointer` and `CWire::Owned`](../../../prebindgen-c/src/wire.rs) carry
+  pointer/inline-owner type, access and storage representation.
+- [`JniWire::Handle`](../../../prebindgen-jni/src/wire.rs) carries boxed allocation
+  type, access and active condition.
+- C's [incoming callback leaf](../../../prebindgen-c/src/callback.rs#L232)
+  has an empty `resources` list but increments the consumed count when adopting
+  the callback context. Its `CWire::Callback` already identifies that carrier.
+  JNI's Java callback reference does not transfer an analogous native owner.
+
+Today, C's `finish_input` separately inspects resources and callback wires to
+supply `Acknowledge`. The C emitter uses that request to decide receipt needs.
+JNI compares resource metadata with handle wires and also compares receipt
+availability with Kotlin's actual consumption projection. The proposal replaces
+the resource/setup queries with adapter-owned traversal of existing wires, while
+retaining the real Kotlin sources used for locking and invalidation.
+
+### Runtime progress remains necessary at some boundaries
+
+The current wrapper contexts bind `input_consumed` to a local `Cell`. Recoverable
+C results return an ownership count; consuming JNI calls encode it in their
+receipt array. Callback-result guards/scans use their own invocation-local count
+to avoid destroying acquired owners a second time. These are runtime ownership
+protocols, not build-time diagnostics.
+
+Ordinary input/field/row takes must follow the same owner traversal as the caller's
+receipt handling. Kotlin builds `KotlinInput.consumed` in input-wire order; the
+emitter joins parameters in source order. Failure limits that walk by the decoded
+prefix. Success invalidates all consumed inputs. For carriers,
+`NativeInputCarrier.consume` in
+[`native_handle.kt`](../../../prebindgen-jni/src/native_handle.kt) walks the
+ordered `owners` list, populated while packing in
+[`bulk.kt`](../../../prebindgen-jni/src/bulk.kt).
+
+`HandleLocks` in [`handles.rs`](../../../prebindgen-jni/src/handles.rs) deliberately
+keeps consumption separate from allocation-type/access grouping and lock order.
+Those existing traversals remain authoritative; type buckets must not reorder
+ownership takes.
+
+The current [`TemplateContext`](../../../prebindgen-conversions/src/emission.rs)
+renders named binding markers, including `input_consumed`. It does **not** yet
+implement the proposed receipt-update operation or an explicit no-report policy.
+That renderer extension would let an unobserved boundary emit no updates while
+a nested callback-result decoder retains its independently rendered reporting.
+This is an implementation requirement, not a capability demonstrated by the probe.
+
+### C recovery and receipt coverage
+
+The current C emitter selects [Result handling](../../../prebindgen-c/src/lib.rs)
+from the source return type. For that branch, `consumes` is derived from the input
+`Acknowledge` requests, and [result_function](../../../prebindgen-c/src/errors.rs)
+adds a required ownership output when `consumes` is true. C's `finish_input`
+sets acknowledgement for moving resources or callback input wires, including
+potential transfers in optional/repeated inputs. Replacing that setup query with
+a wire traversal must preserve this potential-transfer rule.
+
+The other branch emits a non-Result wrapper whose safety documentation states
+that binding errors and Rust panics abort. It has no recoverable failure receipt.
+A Result with no potential incoming owner has no ownership output and cannot
+partially transfer an input owner. There is no supported built-in recoverable
+consuming category relying on global validation instead of an ownership output.
+Custom code omitting metadata today is not proof that such a contract is safe;
+the proposed adapter must require a receipt for every recoverable consuming path.
 
 ## Source inventory
 
-The paths below are implementation locations, not separate registries. Flat
-remains the authoritative source/binding model.
+These are implementation locations, not proposed tracking structures:
 
 | Location | Current responsibility relevant to migration |
 | --- | --- |
-| [`prebindgen-conversions/src/plan.rs`](../../../prebindgen-conversions/src/plan.rs) | `InputPlan` code storage and `Resource`'s access, registration, counting and activation fields. |
-| [`prebindgen-conversions/src/staged.rs`](../../../prebindgen-conversions/src/staged.rs) | Requests, template rendering, execution scheduling, readiness placement, automatic prefix counts and mixed-mode rejection. |
-| [`prebindgen-conversions/src/boxed.rs`](../../../prebindgen-conversions/src/boxed.rs) | Shared boxed-pointer leaf; its move acquisition currently relies on parent/assembler counting. |
-| [`prebindgen-declarations/src/lib.rs`](../../../prebindgen-declarations/src/lib.rs) | Compiles complete arguments into early code and marks resources registered. |
-| [`prebindgen-declarations/src/sequence.rs`](../../../prebindgen-declarations/src/sequence.rs) | Builds rows directly; currently emits `validation`, then an automatic count, then `acquire`. Replace that pre-acquisition count with reporting at each actual take; preserve grouped decoding. |
-| [`prebindgen-c/src/sequence.rs`](../../../prebindgen-c/src/sequence.rs) | Specializes grouped row leaves and appends per-leaf counting where needed. |
-| [`prebindgen-c/src/owned.rs`](../../../prebindgen-c/src/owned.rs) | Inline-owner acquisition, empty replacement, and already tracked by-value transfers. |
-| [`prebindgen-c/src/callback.rs`](../../../prebindgen-c/src/callback.rs) | Incoming callback-context acquisition and callback-return decoding/cleanup. |
-| [`prebindgen-c/src/lib.rs`](../../../prebindgen-c/src/lib.rs) | Creates the local counter for non-Result wrappers and invokes the assembler; supplies its name in `CContext`. |
-| [`prebindgen-c/src/errors.rs`](../../../prebindgen-c/src/errors.rs) | Creates the recoverable Result wrapper's local counter and writes its ownership count on return. |
-| [`prebindgen-c/src/emission.rs`](../../../prebindgen-c/src/emission.rs) | `CContext` renders `input_consumed` as a reference to the wrapper-local counter. |
-| [`prebindgen-jni/src/handles.rs`](../../../prebindgen-jni/src/handles.rs) | Native resource/Kotlin handle coverage; currently rejects unregistered resources in `require_preflight`. |
-| [`prebindgen-jni/src/lib.rs`](../../../prebindgen-jni/src/lib.rs) | Creates the ordinary JNI counter, receipt-array readiness and output, assembler invocation and Kotlin consumed-handle updates. |
-| [`prebindgen-jni/src/emission.rs`](../../../prebindgen-jni/src/emission.rs) | Renders `input_consumed` to that invocation's local cell. |
-| [`prebindgen-jni/src/kotlin.rs`](../../../prebindgen-jni/src/kotlin.rs) | Forwards the staged protocol and implements callback-return fragment/cached-read behavior. |
-| [`prebindgen-jni/src/callback.rs`](../../../prebindgen-jni/src/callback.rs) | Directly composes callback-result phases; protects or rescans unread owners on failure. |
-| [`prebindgen-jni/src/bulk.rs`](../../../prebindgen-jni/src/bulk.rs) | Bulk carrier code and callback cached-read preparation; preserve single decoding under `Convert`. |
-| [`prebindgen-jni/src/callback_rows.rs`](../../../prebindgen-jni/src/callback_rows.rs) | Failure-only scans of unread ordinary/bulk callback owners; uses the consumed prefix. |
-| [`prebindgen-conversions/src/generation_tests.rs`](../../../prebindgen-conversions/src/generation_tests.rs) | Current phase-order and mixed-mode tests; migrate to the new schedule and expanded failure matrix. |
-| [`prebindgen-runtime/src/callback.rs`](../../../prebindgen-runtime/src/callback.rs) | Uses the consumed prefix to avoid reclaiming values already acquired by Rust. |
+| [`prebindgen-conversions/src/plan.rs`](../../../prebindgen-conversions/src/plan.rs) | Phased `InputPlan` storage and duplicate `Resource` metadata; both must change. |
+| [`prebindgen-conversions/src/staged.rs`](../../../prebindgen-conversions/src/staged.rs) | Five input requests, global execution schedule, automatic counts and mixed-mode rejection. |
+| [`prebindgen-conversions/src/emission.rs`](../../../prebindgen-conversions/src/emission.rs) | Renders binding templates; proposed complete conversion/reporting operations need explicit rendering rules. |
+| [`prebindgen-conversions/src/boxed.rs`](../../../prebindgen-conversions/src/boxed.rs) | Boxed-pointer leaf; moves currently rely on enclosing automatic counting. |
+| [`prebindgen-declarations/src/lib.rs`](../../../prebindgen-declarations/src/lib.rs) | Recipe compilation, temporary backing storage and early construction marked registered. |
+| [`prebindgen-declarations/src/record.rs`](../../../prebindgen-declarations/src/record.rs), [`optional.rs`](../../../prebindgen-declarations/src/optional.rs) | Field/alternative composition and enclosing lifetime requirements. |
+| [`prebindgen-declarations/src/sequence.rs`](../../../prebindgen-declarations/src/sequence.rs) | Direct row construction; currently emits validation, automatic count, acquisition. Preserve grouping while reporting actual takes. |
+| [`prebindgen-c/src/sequence.rs`](../../../prebindgen-c/src/sequence.rs) | Specialized grouped leaves and per-leaf counting. |
+| [`prebindgen-c/src/owned.rs`](../../../prebindgen-c/src/owned.rs) | Inline owners, empty replacement and tracked by-value transfers. |
+| [`prebindgen-c/src/callback.rs`](../../../prebindgen-c/src/callback.rs) | Incoming callback context and callback-return protection/decoding. |
+| [`prebindgen-c/src/lib.rs`](../../../prebindgen-c/src/lib.rs), [`errors.rs`](../../../prebindgen-c/src/errors.rs) | Counter binding, receipt policy/delivery and assembler calls for normal/Result wrappers. |
+| [`prebindgen-c/src/emission.rs`](../../../prebindgen-c/src/emission.rs) | C emission context and counter rendering. |
+| [`prebindgen-jni/src/handles.rs`](../../../prebindgen-jni/src/handles.rs) | Duplicate resource/wire comparison and genuine Kotlin handle-source coverage. |
+| [`prebindgen-jni/src/lib.rs`](../../../prebindgen-jni/src/lib.rs), [`emission.rs`](../../../prebindgen-jni/src/emission.rs) | JNI counter/receipt readiness and delivery, Kotlin invalidation and context rendering. |
+| [`prebindgen-jni/src/kotlin.rs`](../../../prebindgen-jni/src/kotlin.rs) | Input request forwarding and callback-result cached-read specialization. |
+| [`prebindgen-jni/src/callback.rs`](../../../prebindgen-jni/src/callback.rs), [`bulk.rs`](../../../prebindgen-jni/src/bulk.rs) | Callback-local accounting, protection, cached reads and complete-result composition. |
+| [`prebindgen-jni/src/callback_rows.rs`](../../../prebindgen-jni/src/callback_rows.rs) | Failure-only unread-owner scans using the consumed prefix. |
+| [`prebindgen-conversions/src/generation_tests.rs`](../../../prebindgen-conversions/src/generation_tests.rs) | Current phase-order/mixed-mode tests to replace with new contract and failure coverage. |
+| [`prebindgen-runtime/src/callback.rs`](../../../prebindgen-runtime/src/callback.rs) | Prefix-aware reclamation, preserving already acquired values. |
 
-`registered` is read by the assembler, declaration composition, collection
-composition, C row specialization and JNI preflight. `records_consumption` is
-read by the counting paths. `count` and `active` are rendered/used by those same
-automatic counting paths. The proposed metadata reduction depends on migrating
-all of these users, not only the mixed-mode conditional.
+`registered`, `records_consumption`, `count` and `active` have users throughout
+these paths. Remove their resource-inventory consumers together with the public
+queries; do not leave unused support behind or substitute a new effects list.
 
-The independent-converter fixtures also use this protocol: migrate
+Independent-converter fixtures also require migration:
 [`input_contracts.rs`](../../../examples/covertest-kotlin/build_support/input_contracts.rs),
 [`output_contracts.rs`](../../../examples/covertest-kotlin/build_support/output_contracts.rs)
-and the existing
-[JNI contract probe](../jni-converter-contracts/probe/src/main.rs).
+and the existing [JNI contract probe](../jni-converter-contracts/probe/src/main.rs).
 
 The JNI runtime audit finds no direct critical-array access in the adapter or
 runtime. [`text` and `bytes`](../../../prebindgen-jni-runtime/src/lib.rs#L26)
 produce owned `String`/`Vec<u8>` values; string access ends inside the helper.
 [Bulk input](../../../prebindgen-jni-runtime/src/bulk.rs#L319) reads a byte-array
-region into Rust-owned storage. Those lifetimes can span later JNI calls.
-This observation concerns the current built-ins, not arbitrary custom fragments.
+region into Rust-owned storage. Those values can span later JNI calls.
+This observation concerns current built-ins, not arbitrary custom fragments.
 
-## Ownership traversal and lock grouping are separate
+## Limits of this evidence
 
-For ordinary values, `kotlin.rs` builds `KotlinInput.consumed` in input-wire
-order. The writer in `lib.rs` joins those statements in parameter order and
-limits their visitor by the decoded prefix on failure. For carriers,
-`NativeInputCarrier.consume` in
-[`native_handle.kt`](../../../prebindgen-jni/src/native_handle.kt) walks its
-ordered `owners` list. The bulk writer appends owners to that list while packing
-in [`bulk.kt`](../../../prebindgen-jni/src/bulk.kt).
+The source audit and eight-case probe establish the stage mismatch and its
+composition restriction. They do not validate the proposed expression storage,
+lifetime composition, receipt-marker rendering or cleanup schedule. No new
+runtime behavior or speedup is claimed.
 
-`HandleLocks` in `handles.rs` explicitly keeps those consumption walks separate
-from its allocation-type/access grouping and lock order. Preserve these actual
-adapter traversals as the authority. The proposed two-type interleaving test
-checks Rust takes, Kotlin invalidation and callback cleanup against them.
-
-## Scope of the evidence
-
-The source audit and C probe establish the composition restriction and the
-coupling between scheduling and accounting. The invalid prefix execution in the
-overview is a counterexample to removing the guard; the probe does not execute
-that invalid scenario.
-
-Existing boundary suites cover many owned-input, collection, callback and
-failure-cleanup cases. Their existence is not proof that a new schedule is
-correct. The implementation needs the explicit mixed-converter failure matrix
-and performance checks listed in the [acceptance plan](contract.md#acceptance-and-measurement).
+Existing boundary suites cover owned inputs, collections, callbacks and failure
+cleanup. Their existence does not prove a new schedule correct. Implementation
+requires the scope prototype, mixed-converter execution matrix and performance
+checks in the [acceptance plan](contract.md#acceptance-and-measurement).

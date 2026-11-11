@@ -1,302 +1,260 @@
-# When does an input become a Rust value?
+# Make the conversion API describe the work it executes
 
-A proposal for the input-acquisition work in
-[#898](https://github.com/milyin/prebindgen/pull/898), based on merged #903 at
-`e78f4fd24ffaf85ccb342980f7dc33c377d39c34`.
+Design proposal for [#898](https://github.com/milyin/prebindgen/pull/898), based
+on merged #903 at `e78f4fd24ffaf85ccb342980f7dc33c377d39c34`.
 
-**Current problem:** two individually supported input converters cannot always
-be used in the same exported function. One converter may construct its Rust
-argument early, while another constructs it later. The common call assembler
-rejects the combination, including some combinations containing only borrows.
-Its execution order and ownership accounting currently depend on the same
-resource flags.
+**The architectural problem is an outdated execution model.** The public API
+separates validation, acquisition and construction, while the declaration compiler
+already emits argument-construction code into the phase called validation. That behavior
+keeps temporary data alive and permits efficient collection conversion. The
+contract should describe it directly.
 
-**Recommendation:** finish converting each parameter in source order, have the
-code that takes an incoming owner record that transfer, and describe the
-conversion phases according to their actual effects. Keep the existing compact
-ownership receipt and the existing collection decoding strategies.
+The rejection of mixed converter implementations is evidence of the mismatch.
+It is not specific to `&Item` and `Item`, or even to related types. The common
+assembler chooses a schedule from resource-accounting flags instead of asking
+for the actual operation: convert these incoming values into a Rust argument.
 
-This PR documents the problem and proposes a contract. It changes no generator,
-wrapper or runtime implementation. The small [probe](probe/src/main.rs) reproduces
-the current restriction; it is not a prototype of the proposed fix. The six
-remaining implementation checkboxes in #898 stay open.
+**Recommendation:** represent complete, scoped input conversion; keep transport
+reading, value conversion and output delivery as their actual operations.
+Use the existing wire tree as the authoritative description of types, access and
+repetition. Remove the duplicate `Resource` inventory and global input-stage
+requests. Reuse runtime ownership reporting where the boundary needs it.
 
-Read this overview first. [The proposed contract](contract.md) specifies the API,
-execution order, compatibility effects and acceptance criteria.
-[Evidence and reproduction](evidence.md) provides the executable controls and
-links to the current implementation.
+This PR contains a proposal and a runnable investigation fixture. It changes no
+generator or runtime implementation and completes no implementation checkbox.
+Read this overview first, then the [API contract](contract.md). The
+[evidence](evidence.md) distinguishes observed behavior from proposed behavior.
 
-## 1. Two different Rust programs run at different times
+## 1. Generation and application execution are different programs
 
-Prebindgen generates code that will later execute. Both the generator and the
-code it generates happen to be written in Rust. Keeping those two programs
-separate is essential to understanding this problem.
+Prebindgen generates Rust code that will execute later. The generator and its
+output both use Rust, but they run at different times:
 
-| Time | Program running | Its work |
+| Time | Who runs | Work |
 | --- | --- | --- |
-| Binding build | A binding crate's `build.rs` calls prebindgen. | Read the source API, apply binding declarations and write Rust wrappers and C headers or Kotlin sources. |
-| Application call | A C or Kotlin caller invokes a generated wrapper. | Translate the actual arguments, call the source Rust function, translate its result and clean up temporary values. |
+| Binding build | The binding crate's `build.rs` calls prebindgen. | Read the annotated source API and binding declarations; emit Rust wrappers and C headers or Kotlin sources. |
+| Application call | C or Kotlin invokes the generated binding. | Decode actual arguments, obtain Rust values, invoke the source function, deliver outputs and clean up. |
 
-The generator does not acquire a user's packet while it builds a binding.
-It prepares Rust code that will acquire the packet when the application calls
-the generated wrapper.
+The binding author selects declarations and conversion rules. The library
+traverses them and drives generation. A custom converter can implement the same
+emission contract without using the library's concrete conversion-plan storage.
 
-The library drives generation. The binding author selects declarations and
-conversion rules; the author does not manually traverse every function and
-write its wrapper. Authors can also supply custom prepared converters. Those
-custom converters are an intentional extension point and must compose with the
-ordinary declaration-generated converters.
+A **wire value** crosses the foreign boundary: for example, a primitive, pointer,
+Java reference or bulk frame. A **wire tree** groups those definitions into
+records, alternatives and repeated rows. It describes a representation; it is
+not a list of runtime objects or a second execution schedule.
 
-## 2. A concrete source function and its ownership contract
-
-Consider this source Rust API:
-
-```rust,ignore
-pub struct Item { pub value: i64 }
-
-pub fn use_both(first: &Item, second: Item) {
-    // Observe first and take ownership of second.
-}
-```
-
-For this example, declare `Item` as an opaque pointer type in C. The caller has
-two independent allocations. The pointers must not alias in a way that violates
-the source signature.
-
-| Source parameter | C representation in this example | Ownership during the call |
-| --- | --- | --- |
-| `first: &Item` | Pointer to an existing `Item`, exposed as `const`. | Rust borrows it. The C caller keeps the owner alive throughout the call. |
-| `second: Item` | Pointer to an existing owning allocation. | Rust takes the value. After the transfer, C must not reuse or free that allocation. |
-
-Kotlin represents opaque owners with generated handle objects; a native address
-crosses JNI as an integer. Kotlin performs handle preflight and locking before
-entering Rust. The source ownership distinction remains the same: a borrow
-keeps its owner, while a move makes the incoming handle unusable after transfer.
-This proposal preserves that Kotlin preflight and C's trusted-caller policy.
-
-Taking `second` does not require allocating another `Item` or cloning it.
-For a boxed pointer, Rust reconstructs the existing owning `Box` from its address
-and moves the value out. Rust then manages the value's destruction. Constructing
-a new Rust value from scalar fields is a different operation: it creates no
-incoming foreign-owner transfer to report.
-
-## 3. How prebindgen gets from the source to a callable wrapper
-
-The following are build-time steps:
+**Flat** stores the source API, binding metadata and prepared converters. A
+**slot** holds the converter for one parameter or return occurrence. `Schema`
+chooses the Rust types stored in those slots and metadata fields; it is not a
+runtime layout. A **recipe** describes how to construct or project a value.
+The declaration compiler walks the recipe and asks a language **codec** to
+supply conversions and physical representations.
 
 ```text
-annotated source crate
-    -> captured source items
-    -> Flat: source API plus binding metadata and converter slots
-    -> language builder + declaration compiler + language codec
-    -> prepared Flat with a converter in each exported parameter/result slot
+annotated source -> captured items -> Flat
+    -> binding declarations + declaration compiler + language codec
+    -> prepared converters stored in Flat
     -> language emitter + common call assembler
     -> generated Rust wrapper and C/Kotlin surface
 ```
 
-A **slot** is the place on a parameter or result that stores its prepared
-converter. Two parameters of the same source type can have different converters.
-The `Schema` trait chooses the Rust types of those stored converters and their metadata;
-it is not a runtime packet layout.
+The common assembler combines emitted conversion code with the source function
+call. The language emitter owns the foreign ABI, Kotlin preflight and receipt
+delivery. Neither requires the application user to write the traversal.
 
-A **recipe** describes a conversion: use a leaf, call a constructor, expand
-record fields, decode a collection, and so on. The **declaration compiler**
-walks that recipe. A language **codec** supplies the physical values and Rust
-conversion fragments for the leaves and language-specific operations.
-The compiler assembles those fragments into a prepared converter and stores it
-in Flat. Recipes are preparation inputs, not a second runtime model.
+## 2. The actual runtime pipelines
 
-A **wire value** is a value crossing the boundary, such as an integer, a native
-pointer, a Java reference or a bulk buffer. One source argument can require
-several wire values. A converter's **wire tree** describes their grouping,
-including repeated collection rows; the tree is a description, not an array of
-runtime objects.
+### Ordinary arguments
 
-A prepared `InputPlan` stores the wire tree, Rust code fragments and resource
-metadata. Independent converters can implement the emission contracts without
-using that concrete plan. The **call assembler** requests fragments from the
-converters and places them around the source function call. C and JNI both use
-this shared assembler for ordinary function calls.
-
-The result is compiled into the binding library. Only then can a foreign caller
-invoke it with real values.
-
-## 4. What the current input phases actually do
-
-`InputFragment` is a generation-time request enum. A request returns Rust code;
-the enum is not interpreted on every native call.
-
-| Current request / plan storage | Meaning in generated Rust today |
-| --- | --- |
-| `Validate` / `validation` | Check or decode wire values. For ordinary declaration-compiled inputs, also take owners, run constructors and construct the argument. |
-| `Acquire` / `acquire` | Take owners still deferred by a low-level converter. Empty after ordinary declaration compilation; grouped rows use specialized composition. |
-| `Construct` / `statements` and `argument` | Bind the final Rust argument. A low-level converter may create the reference or move the owned value here; an ordinary compiled converter retrieves a value built earlier. |
-| `Acknowledge` / `acknowledgement` | Make the shared ownership-reporting channel ready. JNI checks its receipt array before permitting transfers. This operation does not itself mean that every input was consumed. |
-| `Resources` / `resources` | Describe relevant native allocation classes/access modes and provide today's consumption-accounting metadata to the generator. |
-
-The declaration compiler deliberately builds values inside `validation`.
-For example, a collection decoder can read a row, validate its fields, construct
-the final Rust element while row-local storage is alive, and append that element
-to its destination. Moving everything into a later global phase would require
-retaining extra row state. Earlier work removed such staging; this proposal
-keeps that benefit.
-
-There are therefore two current shapes:
+The foreign entry point already receives wire arguments. Some leaf conversions
+read those arguments directly; others decode text, bytes or native handles.
+Bulk transport may open one frame and expose its fields. Reading can remain
+lazy or grouped where useful; there is no requirement to decode every argument
+before constructing any Rust value.
 
 ```text
-Low-level boxed leaf:
-    Validate: decode the pointer and perform applicable encoding checks
-    Acquire:  reconstruct an owning Box for a move; empty for a borrow
-    Construct: move the value out, or create the Rust reference
-
-Declaration-compiled input:
-    Validate: decode + acquire + construct, retaining the value in scope
-    Acquire:  usually empty
-    Construct: retrieve the already constructed argument
+enter the C/JNI wrapper with wire arguments
+    -> establish boundary-specific receipt handling, if needed
+    -> convert an argument, retaining its supporting storage
+        -> convert the next argument
+            -> call the source Rust function
+            -> prepare outputs -> deliver -> commit output ownership
 ```
 
-For a borrowed low-level leaf, the actual `&Item` is created in `Construct`,
-not `Acquire`. For C direct pointers, encoding validity is the caller's
-responsibility; the diagram does not add native pointer or alias checks.
+A conversion can check its wire values, take incoming owners and call a source
+constructor. Applicable checks precede use. A later failure may occur after an
+earlier input has transferred. Already constructed Rust owners are then cleaned
+up through ordinary Rust scope destruction.
 
-## 5. The restriction is observable through the supported C API
+### Collections
 
-The probe first prepares the example through `Cbindgen`. It then replaces one
-parameter slot with a low-level `CCodec::input_leaf` plan and completes that
-plan's normal finalization. Source signature, ownership intent and C wire types
-stay the same.
+A collection adds an actual transport lifetime: the current row's decoded
+fields and JNI local references may be valid only until that row is released.
 
-At the current baseline:
+```text
+open the ordinary or bulk carrier once
+    -> bind the next row's incoming fields
+    -> convert those fields and construct the Rust element
+    -> place the element in its destination
+    -> release row-local transport state
+    -> continue with the next row
+```
 
-| First converter | Second converter | Generation |
+C, ordinary JNI rows and bulk rows have different reading code. They can still
+use one value-conversion operation. Keep grouped field reads, cached bulk reads
+and construction directly into final storage. A borrowed view backed by the
+whole carrier retains that carrier for its required lifetime instead of being
+forced through an owning-element reconstruction loop.
+
+### Values returned by foreign callbacks
+
+A callback result enters Rust through input conversion, but its cleanup
+responsibility differs from ordinary incoming arguments:
+
+```text
+invoke the foreign callback and receive its result carrier
+    -> protect incoming owners before a failing read can lose them
+    -> read/bind result values, using existing caches where appropriate
+    -> convert the returned value into Rust
+    -> release carrier storage and finish the result
+```
+
+On failure, constructed Rust values are dropped and unread callback-owned values
+are reclaimed by the existing guards or failure-only scans. Ordinary function
+arguments leave unread owners with the foreign caller. Those cleanup policies
+remain boundary responsibilities; they are not alternate decoder modes.
+
+### Outputs keep their real delivery boundary
+
+Output preparation, foreign delivery and ownership commit remain distinct.
+Preparing a result does not prove the foreign recipient has accepted it. If
+preparation or delivery fails, uncommitted owners must still be reclaimable.
+This proposal changes input conversion, not that output contract.
+
+## 3. One scoped value-conversion operation
+
+The assembler needs this operation:
+
+> Construct the Rust argument as `target`, then execute `next` while the argument
+> and its supporting storage remain valid.
+
+This is the proposed **Convert** operation. `next` is the remaining Rust code
+inserted inside that scope during generation; it is not a runtime closure.
+The same operation serves an ordinary parameter, a field/constructor input,
+a collection element and a callback result. Their transport and cleanup scopes
+are composed around it.
+
+The built-in plan must store conversion code according to that contract.
+Merely renaming `validation` to `preparation` while retaining global
+`acquire/construction` phases would preserve the architectural mismatch.
+A plan explicitly exposes backing-storage declarations so codecs and the
+declaration compiler can keep owners outside optional/selector branches. That
+storage performs no validation or acquisition. Code generation can still read
+fields together and specialize row release. Those are actual
+lifetime and transport requirements, not per-converter stage classifications.
+
+For example, in generated Rust for a C opaque pointer:
+
+```rust,ignore
+let owner = unsafe { Box::from_raw(packet_pointer) }; // Existing allocation.
+// Record the incoming ownership take here if this boundary needs a receipt.
+let packet = *owner;
+let packet = source_constructor(packet);             // May panic.
+// The remaining call runs in the scope of any required supporting storage.
+```
+
+`Box::from_raw` does not allocate another object or clone the packet. A borrow
+creates a Rust reference without taking its owner. A constructor building a new
+Rust record from scalars creates no incoming foreign-owner transfer to report.
+
+## 4. Describe access once; keep runtime reporting for its real purpose
+
+The adapters' wire descriptions already identify native allocation types and
+move/shared/exclusive access. C additionally describes inline owners and
+ownership-transferring callback contexts. JNI handles describe allocation type
+and access; retaining a Java callback reference is not a native-owner transfer.
+
+The language emitter should derive preflight and receipt needs from that
+existing representation. A separate `Resource` list repeats part of the same
+information and also carries scheduling/accounting flags. The proposal removes
+that list and its query; it does not replace them with an effects registry,
+phase table or a record of checks performed during generation.
+
+Kotlin's existing prepared handle sources have a real execution purpose:
+they retain the objects used for preflight, locking and post-call invalidation.
+Keep those sources and their correspondence to the wire tree. C continues to
+trust its caller's pointer, lifetime and aliasing obligations.
+
+The **consumed-prefix counter** is different from diagnostic metadata. Existing
+recoverable C calls, consuming JNI calls and callback-result cleanup use it at
+runtime to know which incoming owners Rust has taken. Preserve those protocols.
+For owners `[A, B, C]`, a prefix of two means A and B, not B and C. Borrows and
+locally constructed objects do not advance it.
+
+Record actual successful takes in the established ownership traversal order.
+Keep ordinary function and callback-result counters separate. Do not generate
+tracking for an otherwise unobserved C call solely to help a diagnostic; the
+[contract](contract.md#runtime-ownership-reporting) specifies where reporting is
+needed and how a no-report boundary emits no counter updates.
+
+## 5. Why the current stage model causes the observed rejection
+
+Today a low-level boxed leaf supplies separate pointer validation, ownership
+acquisition and final argument construction. The declaration compiler combines
+those pieces into its `validation` code so the constructed value stays alive.
+For a collection, this can be necessary to finish the current row efficiently.
+
+The assembler still composes all `Validate` requests, then all `Acquire`
+requests, then all `Construct` requests. It infers early construction from
+`Resource::registered`, which is also set on shared borrows. Scalar conversion
+can construct early without having a resource descriptor at all.
+
+| Example source parameters | Converter combination | Current generation |
 | --- | --- | --- |
-| Compiled borrow | Compiled move | Succeeds. |
-| Low-level borrow | Compiled move | Rejected. |
-| Compiled borrow | Low-level move | Rejected. |
-| Low-level borrow | Low-level move | Succeeds. |
-| Low-level borrow | Compiled borrow | Rejected, although neither input consumes an owner. |
-| Low-level borrow | Compiled scalar | Succeeds; the scalar has no resource descriptor. |
+| `&Item, Item` | Both normally declaration-compiled | Succeeds. |
+| `&Item, Item` | Low-level borrow plus compiled move | Rejected. |
+| `&Item, Item` | Compiled borrow plus low-level move | Rejected. |
+| `&Item, Item` | Both low-level | Succeeds. |
+| `&Item, &Item` | Mixed preparation styles | Rejected despite no ownership moves. |
+| `&Item, i64` | Low-level borrow plus compiled scalar | Succeeds despite early scalar construction. |
+| `&Item, Packet` | Both normally declaration-compiled | Succeeds. |
+| `&Item, Packet` | Low-level borrow plus compiled move | Rejected despite unrelated pointee types. |
 
-The rejected cases report:
+The rejection is:
 
 ```text
 cannot mix deferred resource conversions with eagerly constructed inputs
 ```
 
-Ordinary functions with both borrowed and owned parameters already work through
-the usual builder. The failure concerns combining converter implementations,
-not the Rust signature itself. It happens during generation, before a foreign
-application can call the wrapper.
+The [eight-case probe](probe/src/main.rs) verifies those generation outcomes.
+This is unrelated to aliasing the same object. The examples assume independent
+allocations; Kotlin preflight and C's caller obligations still apply.
 
-JNI has another relevant restriction: its preflight verifier currently requires
-`Resource::registered` on native resources. A raw JNI leaf can be rejected there
-before the common assembler is reached. Fixing only the assembler would not
-complete the JNI customization path.
+Removing just the conditional is insufficient. With two owning inputs, a late
+conversion of A and early conversion of B can produce a non-prefix transfer
+order. Without the guard, the current assembler would also omit A's automatic count
+in a mixed path.
+Those are reasons to establish a consistent conversion/reporting contract, not
+reasons to restore global validation or add another tracking structure.
 
-## 6. Why ownership reporting constrains the order
+## 6. Design and implementation order
 
-When conversion fails after taking some incoming owners, Rust may already have
-dropped them. The foreign caller must learn which owners it must no longer
-reuse or destroy. An **ownership receipt** supplies that information.
+First establish the transport, conversion, lifetime and delivery operations.
+Migrate the existing built-ins and independent converters to that API, including
+callback cached reads and row cleanup. Remove the obsolete public stages,
+phased plan storage, `Resources` and converter-provided `Acknowledge` requests.
+The emitter initializes its own boundary receipt instead.
 
-The current compact receipt is a count of consumed owned wire values in the
-established argument/row/field traversal order, with inactive alternatives and
-borrowed values skipped. It counts incoming owners, not source parameters or
-all objects created in Rust. A collection of 1,000 incoming handles can contribute
-1,000 transfers; a constructor consuming two handles contributes two even if it
-produces one Rust object.
+Then verify mixed converters through the same contract, using both related and
+unrelated types, shared-only inputs and owning inputs with partial failures.
+The reproduction is an acceptance test for the architecture, not its organizing
+principle. Do not consider the work complete after removing one rejection.
 
-For incoming owners `[A, B, C]`, a count of two means **A and B** transferred.
-A count alone cannot mean **B and C**. C recoverable `Result` wrappers write the
-count through their ownership output. On native failure, Kotlin decodes the count and marks the corresponding prefix
-of handle objects consumed. After native success, Kotlin marks all active owning
-inputs consumed; its success path does not use the numeric count as a limit.
-Callback-result decoders also use a consumed prefix to distinguish Rust-owned
-values from unread callback-owned values that still need reclamation. Receipt
-order is independent of the type/address sorting used to acquire Kotlin locks;
-that lock ordering stays unchanged.
-
-Now consider two owning inputs, A converted late and B converted early. The
-current assembler places all `Validate` fragments before all `Acquire` fragments.
-If the early conversion takes B and a constructor then panics, A has not yet
-transferred. A count of one would wrongly describe A. This is a hypothetical
-execution if the current rejection were removed unconditionally; the generator
-currently prevents it.
-
-There is a second defect if the guard is simply removed: with any compiled
-resource present, the assembler disables its deferred-input aggregate count.
-A low-level move can therefore go entirely unreported. Even a successful call
-would give C an incorrect count; on failure Kotlin can invalidate the wrong
-owners, and callback cleanup depends on exact accounting as well. Fix both
-count coverage and order.
-
-The guard exists for a real reason, but it rejects too much. A deferred shared
-borrow contributes no incoming owner to that count. The same guard also rejects
-the all-borrowing combination in the table above.
-
-## 7. Why the flags are an architectural problem
-
-`Resource::registered` currently says a resource was acquired during preparation
-and that preparation accounts for its consumption. The declaration compiler also
-sets it on shared borrows. The assembler tests whether **any** resource has that
-flag to decide the execution/receipt path, then rejects a mixture of flag values.
-
-The flag does not describe the complete behavior of a converter: a scalar or
-resource-free constructor can execute early without any resource descriptor.
-`records_consumption` adds another distinction: some acquisition code increments
-the counter itself, while other acquisition code depends on a parent or the
-assembler to insert the increment.
-
-This spreads responsibility across the leaf helper, declaration compiler,
-collection compiler, C row specialization and call assembler. The JNI preflight
-verifier also reads `registered` to require prepared resources. In callback-result
-decoding, that gate also prevents admitting a move whose transfer has not been
-counted before cleanup examines the unread suffix. An author must know
-which layer will eventually account for a move, not merely how to decode and
-construct the requested argument.
-
-The proposed rework gives each responsibility one place:
-
-- Input converters expose one scoped `Convert` operation, which completes each
-  argument in parameter order. Code buffers for preparation/acquisition/construction
-  can remain inside the built-in plan implementation.
-- The code taking a foreign owner records that successful transfer.
-- Resource metadata describes foreign access requirements, including whether a
-  move is possible and therefore a local counter/ownership receipt is required.
-- The assembler coordinates calls and receipt readiness without inferring
-  execution timing from resource metadata.
-
-## 8. Proposed behavior and practical limits
-
-For each source parameter, run its preparation, remaining acquisition and final
-construction before starting the next parameter. Preserve each converter's
-scope around subsequent work so borrowed temporary storage remains alive.
-Only call the source function after every argument has been constructed.
-
-Acquisitions follow the receipt's owned-wire order within each parameter,
-including nested fields and collection rows. Record transfers before subsequent
-user code, fallible work or destruction can fail. This keeps a prefix count
-truthful without an owner bitmap or per-handle journal.
-
-A later failure may consume earlier inputs. Rust drops acquired values and
-partially built collections through ordinary scope cleanup. Source constructors
-and destructors may change state. The contract requires correct destruction and
-ownership reporting, not restoration of the caller's original state.
-
-This changes the ordering seen by old low-level converters: an earlier input may
-now transfer before a later input fails validation. Declaration-compiled inputs
-already permit that behavior. This is a deliberate proposed contract change,
-and low-level converter authors need a migration and ordering tests.
-
-Bulk and ordinary collection decoders retain their existing row construction,
-resource grouping, caching and failure cleanup. C still trusts callers. Kotlin
-still performs preflight and locks before native entry. Output conversions,
-typed domain-error delivery and binding-error handlers keep their existing
-contracts.
-
-No acceleration has been measured for this proposal. The implementation must
-check that built-in hot paths keep their allocation counts, JNI call counts and
-throughput. There is a specific risk for low-level batches whose old automatic
-receipt update used one aggregate count: precise per-take updates could cost
-more. [The acceptance plan](contract.md#acceptance-and-measurement) includes that
-case rather than assuming the refactoring is faster.
+The normal Cbindgen/JniGen declaration syntax and explicit copy choices stay
+unchanged. Error paths may consume earlier inputs before a later check fails;
+correct destruction and truthful receipts are required, not state restoration.
+No performance improvement has been measured. The
+[acceptance plan](contract.md#acceptance-and-measurement) checks hot paths,
+optional/temporary scopes, carrier caching and code size before the new contract
+can be considered implemented.

@@ -5,7 +5,8 @@ use prebindgen_flat::Result;
 use quote::format_ident;
 
 fn model(source: &str) -> Result<Bindings> {
-    let source = syn::parse_file(source).map_err(|e| e.to_string())?;
+    let source = format!("pub struct Packet {{ pub id:u32 }} {source}");
+    let source = syn::parse_file(&source).map_err(|e| e.to_string())?;
     let flat = Bindings::parse(
         source
             .items
@@ -14,6 +15,7 @@ fn model(source: &str) -> Result<Bindings> {
     )?;
     Cbindgen::new(flat)
         .opaque_ptr("item", syn::parse_quote!(Item))
+        .opaque_ptr("packet", syn::parse_quote!(Packet))
         .function(fun!(use_both))
         .panic()
         .prepare()
@@ -89,5 +91,13 @@ fn main() -> Result<()> {
     run_case("deferred inputs", owned, &[0, 1], false)?;
     run_case("mixed shared borrows", borrowed, &[0], true)?;
     run_case("deferred borrow + compiled scalar", scalar, &[0], false)?;
+    let unrelated = "pub struct Item {pub value:i64} pub fn use_both(first:&Item,second:Packet){}";
+    run_case("unrelated compiled inputs", unrelated, &[], false)?;
+    run_case(
+        "unrelated deferred borrow + compiled move",
+        unrelated,
+        &[0],
+        true,
+    )?;
     Ok(())
 }
