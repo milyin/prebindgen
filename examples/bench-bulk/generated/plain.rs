@@ -1227,8 +1227,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1mixed_1
                                                             bench_flat::HandleBatch,
                                                             String,
                                                         > {
-                                                            #[allow(unused_mut, unused_assignments)]
-                                                            let mut callback_return_w6_bytes = None;
+                                                            #[allow(clippy::needless_late_init)]
+                                                            let callback_return_w6_bytes;
                                                             {
                                                                 let callback_return_w5_f0_pointer = (*callback_return_w5_f0
                                                                     .as_ref()
@@ -1256,10 +1256,8 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1callback_1mixed_1
                                                                     &(*callback_return_w6.as_ref().map_err(|e| e.clone())?),
                                                                     *callback_return_w6_length.as_ref().map_err(|e| e.clone())?,
                                                                 )?;
-                                                                callback_return_w6_bytes = Some(bulk_value);
-                                                                let callback_return_w6_bytes = callback_return_w6_bytes
-                                                                    .as_ref()
-                                                                    .expect("active bulk carrier");
+                                                                callback_return_w6_bytes = bulk_value;
+                                                                let callback_return_w6_bytes = &callback_return_w6_bytes;
                                                                 let callback_return_w6_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                                     callback_return_w6_bytes,
                                                                 );
