@@ -158,7 +158,7 @@ ownership takes.
 The current [`TemplateContext`](../../../prebindgen-conversions/src/emission.rs)
 renders named binding markers, including `input_consumed`. It does **not** yet
 implement the proposed receipt-update operation or an explicit no-report policy.
-That renderer extension would let an unobserved boundary emit no updates while
+That renderer extension would let an aborting boundary emit no updates while
 a nested callback-result decoder retains its independently rendered reporting.
 This is an implementation requirement, not a capability demonstrated by the probe.
 

@@ -101,13 +101,25 @@ Independent converters may instead emit that whole expression themselves.
 
 ### Template composition and rendering order
 
-Bind the requested target in the converter's own template, render that local
-template with its emission context, then insert the already-rendered `next`.
-During local rendering the reserved continuation marker remains intact. Only
-after other markers are resolved does composition replace that marker and flatten
-the tail block. The current `plug` rejects other markers, so passing a partly
-rendered template to it is invalid. Use this defined pass order for both stored
-plans and independent implementations.
+There are two generation-time operations; only the second has an emission
+context:
+
+1. **Preparation-time composition:** the declaration compiler binds child-local
+   target names and replaces a child's single continuation with the enclosing
+   composition. Preserve unresolved binding/transfer markers. Replace exactly
+   once without re-scanning inserted code; reject a missing/duplicate continuation.
+   This lets record, optional, selector, temporary and row plans compose during
+   `prepare()`. It is not rendering, and the current strict `plug` cannot do it.
+2. **Emission-time render then plug:** bind the requested outer target, render
+   that converter's local template with its context, then insert the already
+   rendered `next`. The renderer preserves the reserved continuation marker
+   itself, without requiring every context's parameter resolver to special-case
+   it. Composition replaces that final marker and flattens the tail block.
+
+Use marker-preserving substitution for the first operation and the defined
+rendering order for the second, including independent converters. The current
+`plug` rejects markers other than continuation; it may only see the fully
+rendered template in the second operation.
 
 Do not re-render the growing remaining call once per parameter. Each producer
 renders its own code; the assembler composes the rendered expressions. In
@@ -284,21 +296,36 @@ pub fn render_template(
 The renderer recognizes the transfer marker, resolves any binding markers in its
 count, and gives that expression to `transfer`. Ordinary groups are traversed
 normally. `TemplateContext::render` keeps its signature, but input contexts must
-implement the new operation and preserve the reserved continuation marker until
-composition. This is an explicit source/semantic change to the public rendering
+implement the new operation. The renderer preserves its reserved continuation
+marker until composition. This is an explicit source/semantic change to the public rendering
 contract, including custom contexts, not just private marker syntax.
 
-A reporting C/JNI context supplies the existing local count binding and emits
-`Cell` arithmetic. A no-report context, including `()`, emits `()` and declares no
-count for this purpose. This is a generation decision, with no runtime flag or
-reliance on the optimizer. Unknown operations or an input context unable to
-implement them fail generation; custom contexts must not leave them as Rust
-macros or silently ignore them. The final generated Rust contains no markers.
+The boundary chooses the transfer resolver from its actual policy:
+
+| Context | Transfer marker handling |
+| --- | --- |
+| Reporting C/JNI call or callback result | Existing local `Cell` arithmetic. |
+| Aborting C call with no receipt | `()`, with no counter or updates emitted for this purpose. |
+| Recoverable boundary with no incoming-owner receipt | Generation error: a transfer contradicts the boundary's declared contract. |
+| `()` | Generation error for transfer markers; it supplies no ownership-reporting contract. |
+
+Erasure is allowed only at an explicitly aborting boundary, not merely whenever
+wire traversal found no owners. That catches a custom converter declaring
+shared-only inputs but emitting a take, without another tracking inventory.
+There is no runtime policy flag or reliance on the optimizer. Custom input
+contexts must handle this operation or fail generation; never leave it as a Rust
+macro or silently ignore it. The final generated Rust contains no markers.
+Update `TemplateContext` documentation: already-rendered Rust stays unchanged;
+scoped producers render local templates before adding their continuation, rather
+than repeatedly rendering the whole composed call.
 
 Each producer renders only its own template before inserting the continuation.
 For callback results, including the C callback closure assembled during binding
 preparation, create an explicit callback-local reporting context/binding and
-render the decoder there. That local scope exists independently of whether the
+render the decoder there. The local context overrides reporting and preserves
+other bindings, such as JNI environment, row types and cached reads. A C decoder
+assembled during `prepare()` must already contain no emission markers. That
+local scope exists independently of whether the
 enclosing wrapper has a receipt. An outer no-report C context therefore sees
 ordinary rendered Rust and cannot erase inner reporting. Do not rely solely on
 lexical shadowing of the old counter name to distinguish rendering policies.
