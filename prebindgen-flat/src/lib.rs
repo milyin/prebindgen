@@ -258,17 +258,12 @@ impl<M: Schema> Flat<M> {
         // `std::io::Error` must not pull in an unrelated flat type named Error.
         let qualified: BTreeSet<_> = items
             .iter()
-            .filter_map(|(item, location)| {
-                matches!(
-                    item,
-                    syn::Item::Struct(_) | syn::Item::Enum(_) | syn::Item::Type(_)
-                )
-                .then(|| {
-                    (
-                        location.crate_name.as_deref().unwrap_or("crate").to_owned(),
-                        name(item).unwrap(),
-                    )
-                })
+            .filter_map(|(item, location)| match item {
+                syn::Item::Struct(_) | syn::Item::Enum(_) | syn::Item::Type(_) => Some((
+                    location.crate_name.as_deref().unwrap_or("crate").to_owned(),
+                    name(item).unwrap(),
+                )),
+                _ => None,
             })
             .collect();
         struct References<'a>(&'a mut BTreeSet<String>, &'a BTreeSet<(String, String)>);
