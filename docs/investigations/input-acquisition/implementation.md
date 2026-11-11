@@ -44,6 +44,8 @@ The adapter establishes receipt handling before input conversion. Actual takes
 record transfers in argument/row/field order. A later conversion can fail after
 an earlier owner transferred: normal Rust destruction cleans constructed values,
 and the existing prefix receipt tells C/Kotlin which owners were consumed.
+An emptied input box is freed within its conversion, before the next argument or
+source call; only the moved value and required borrowed backing storage survive.
 Unread callback-result owners are reclaimed by the existing guards/failure scans.
 A field failure may therefore consume fewer owners than the old grouped phases;
 error paths promise correct destruction/reporting, not a fixed consumption count.
@@ -79,8 +81,8 @@ Ordinary Cbindgen/JniGen declaration syntax stays the same. Existing boundary
 ABIs are retained except for callback-result constructors borrowing an explicit
 C inline owner: these now receive a pointer to caller storage, rather than a copy
 of its descriptor. By-value borrows are rejected, preserving mutation and
-interior-mutability behavior without implicit copies. Low-level plan construction, input requests, leaf helper signatures and
-custom template contexts must migrate to the complete operation. A context
+interior-mutability behavior without implicit copies. Low-level plan construction,
+input requests, leaf helper signatures and custom template contexts must migrate to the complete operation. A context
 supplies `input_transfers`; JNI contexts no longer carry an unused input receipt
 parameter binding. `SequenceInputRequest` carries the source collection view so
 each adapter can enforce its existing borrowed-element ownership rules using its
