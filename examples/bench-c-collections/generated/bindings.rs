@@ -399,6 +399,7 @@ pub struct bench_borrowed_emit_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -411,102 +412,60 @@ pub unsafe extern "C" fn bench_borrowed_emit(
     p1_callback: bench_callback_3832b9cb035dc725,
     p2_w1: usize,
 ) {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_borrowed_emit_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut c_collection_flat::BorrowedNumbers
-            } else {
-                ::core::ptr::null_mut()
+            let p0_w1_pointer = p0_w1 as *mut c_collection_flat::BorrowedNumbers;
+            let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
+                &(*p0_w1_pointer)
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
-                        &(*p0_w1_pointer)
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
+            let __prebindgen_argument_0 = p0_w0;
             let p1_callback_run = if true {
                 Some(unsafe { p1_callback.run.unwrap_unchecked() })
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_callback_value_built = if true {
-                let p1_callback_owner = if true {
-                    {
-                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p1_callback.context, p1_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p1_callback_run = p1_callback_run
-                        .expect("validated active callback");
-                    let p1_callback_owner = p1_callback_owner
-                        .expect("validated active callback");
-                    let p1_callback_value = move |callback_source_0: &[i64]| {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let callback_arg_0_w0_source = &(callback_source_0);
-                            let callback_arg_0_w0: &[::core::primitive::i64] = ::core::convert::AsRef::<
-                                [::core::primitive::i64],
-                            >::as_ref(callback_arg_0_w0_source);
-                            let callback_arg_0_w0 = __PbSliceView_i64 {
-                                data: <[::core::primitive::i64]>::as_ptr(callback_arg_0_w0),
-                                len: <[::core::primitive::i64]>::len(callback_arg_0_w0),
-                            };
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let callback_argument_0 = callback_arg_0_w0;
-                            {}
-                            let raw_result = unsafe {
-                                p1_callback_run(
-                                    p1_callback_owner.context(),
-                                    callback_argument_0,
-                                )
-                            };
-                            Ok(())
-                        });
-                        if let Err(error) = result {
-                            ::prebindgen_runtime::report_callback_error(
-                                "bench_callback_3832b9cb035dc725",
-                                "(& [i64])->()",
-                                &error,
-                            );
-                        }
+            let p1_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p1_callback.context,
+                    p1_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p1_callback_run = p1_callback_run.expect("active callback");
+            let p1_callback_owner = p1_callback_owner.expect("active callback");
+            let p1_callback_value = move |callback_source_0: &[i64]| {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let callback_arg_0_w0_source = &(callback_source_0);
+                    let callback_arg_0_w0: &[::core::primitive::i64] = ::core::convert::AsRef::<
+                        [::core::primitive::i64],
+                    >::as_ref(callback_arg_0_w0_source);
+                    let callback_arg_0_w0 = __PbSliceView_i64 {
+                        data: <[::core::primitive::i64]>::as_ptr(callback_arg_0_w0),
+                        len: <[::core::primitive::i64]>::len(callback_arg_0_w0),
                     };
-                    p1_callback_value
-                })
-            } else {
-                None
-            };
-            let p2_w0 = if true { Some(p2_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p2_w0_built = if true {
-                Some({
-                    let p2_w0: usize = ::core::convert::Into::into(
-                        p2_w0.expect("active value"),
+                    let callback_argument_0 = callback_arg_0_w0;
+                    {}
+                    let raw_result = unsafe {
+                        p1_callback_run(p1_callback_owner.context(), callback_argument_0)
+                    };
+                    Ok(())
+                });
+                if let Err(error) = result {
+                    ::prebindgen_runtime::report_callback_error(
+                        "bench_callback_3832b9cb035dc725",
+                        "(& [i64])->()",
+                        &error,
                     );
-                    p2_w0
-                })
-            } else {
-                None
+                }
             };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let __prebindgen_argument_1 = p1_callback_value_built.expect("active input");
-            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_callback_value;
+            let p2_w0: usize = ::core::convert::Into::into(p2_w1);
+            let __prebindgen_argument_2 = p2_w0;
             let source_value = c_collection_flat::borrowed_emit(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -530,6 +489,7 @@ pub struct bench_borrowed_numbers_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -540,27 +500,14 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_borrowed_numbers_new(
     p0_w1: usize,
 ) -> *mut c_collection_flat::BorrowedNumbers {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         bench_borrowed_numbers_new_result,
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::borrowed_numbers_new(
                 __prebindgen_argument_0,
             );
@@ -590,6 +537,7 @@ pub struct bench_borrowed_values_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -600,30 +548,15 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_borrowed_values(
     p0_w1: *const c_collection_flat::BorrowedNumbers,
 ) -> __PbSliceView_i64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_borrowed_values_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut c_collection_flat::BorrowedNumbers
-            } else {
-                ::core::ptr::null_mut()
+            let p0_w1_pointer = p0_w1 as *mut c_collection_flat::BorrowedNumbers;
+            let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
+                &(*p0_w1_pointer)
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: &c_collection_flat::BorrowedNumbers = unsafe {
-                        &(*p0_w1_pointer)
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::borrowed_values(
                 __prebindgen_argument_0,
             );
@@ -655,6 +588,7 @@ pub struct bench_callback_fixed_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -665,8 +599,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_callback_fixed(
     p0_callback: bench_callback_d4c2b6b7f94cdedf,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_callback_fixed_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -676,179 +608,121 @@ pub unsafe extern "C" fn bench_callback_fixed(
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                let p0_callback_owner = if true {
-                    {
-                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p0_callback_run = p0_callback_run
-                        .expect("validated active callback");
-                    let p0_callback_owner = p0_callback_owner
-                        .expect("validated active callback");
-                    let p0_callback_value = move || {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let raw_result = unsafe {
-                                p0_callback_run(p0_callback_owner.context())
-                            };
-                            let callback_return_w2 = raw_result.v0;
-                            let callback_return_w4 = raw_result.v1;
-                            let callback_return_w6 = raw_result.v2;
-                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                            {
-                                let mut __pb_return_ordinal = 0usize;
-                                {
-                                    let ordinal = __pb_return_ordinal;
-                                    __pb_return_ordinal += 1;
-                                    if ordinal >= __prebindgen_input_consumed.get() {
-                                        if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                            unsafe {
-                                                drop(
-                                                    Box::from_raw(
-                                                        callback_return_w2 as *mut c_collection_flat::Resource,
-                                                    ),
-                                                );
-                                            }
-                                            Ok(())
-                                        }) {
-                                            ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                        }
-                                    }
-                                }
-                                {
-                                    let ordinal = __pb_return_ordinal;
-                                    __pb_return_ordinal += 1;
-                                    if ordinal >= __prebindgen_input_consumed.get() {
-                                        if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                            unsafe {
-                                                drop(
-                                                    Box::from_raw(
-                                                        callback_return_w6 as *mut c_collection_flat::Resource,
-                                                    ),
-                                                );
-                                            }
-                                            Ok(())
-                                        }) {
-                                            ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                        }
-                                    }
-                                }
-                                Ok(())
-                            });
-                            {
-                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    let callback_return_w2_pointer = if true {
-                                        callback_return_w2 as *mut c_collection_flat::Resource
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w1_built = if true {
-                                        let callback_return_w1 = if true {
-                                            Some(unsafe { Box::from_raw(callback_return_w2_pointer) })
-                                        } else {
-                                            None
-                                        };
-                                        if true {
-                                            __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + (1usize));
-                                        }
-                                        Some({
-                                            let callback_return_w1: c_collection_flat::Resource = *callback_return_w1
-                                                .expect("active allocation");
-                                            callback_return_w1
-                                        })
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_w3 = if true {
-                                        Some(callback_return_w4)
-                                    } else {
-                                        None
-                                    };
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w3_built = if true {
-                                        Some({
-                                            let callback_return_w3: u64 = ::core::convert::Into::into(
-                                                callback_return_w3.expect("active value"),
-                                            );
-                                            callback_return_w3
-                                        })
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_w6_pointer = if true {
-                                        callback_return_w6 as *mut c_collection_flat::Resource
-                                    } else {
-                                        ::core::ptr::null_mut()
-                                    };
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w5_built = if true {
-                                        let callback_return_w5 = if true {
-                                            Some(unsafe { Box::from_raw(callback_return_w6_pointer) })
-                                        } else {
-                                            None
-                                        };
-                                        if true {
-                                            __prebindgen_input_consumed
-                                                .set(__prebindgen_input_consumed.get() + (1usize));
-                                        }
-                                        Some({
-                                            let callback_return_w5: c_collection_flat::Resource = *callback_return_w5
-                                                .expect("active allocation");
-                                            callback_return_w5
-                                        })
-                                    } else {
-                                        None
-                                    };
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w0_built = if true {
-                                        Some({
-                                            let callback_return_w0: c_collection_flat::Record = c_collection_flat::record_new(
-                                                callback_return_w1_built.expect("active input"),
-                                                callback_return_w3_built.expect("active input"),
-                                                callback_return_w5_built.expect("active input"),
-                                            );
-                                            callback_return_w0
-                                        })
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_value = callback_return_w0_built
-                                        .expect("active input");
-                                    Ok(callback_return_value)
-                                };
-                                let callback_decoded = callback_outcome?;
-                                callback_return_cleanup.commit();
-                                Ok(callback_decoded)
-                            }
-                        });
-                        result
-                            .unwrap_or_else(|error| {
-                                ::prebindgen_runtime::report_callback_error(
-                                    "bench_callback_d4c2b6b7f94cdedf",
-                                    "()->c_collection_flat :: Record",
-                                    &error,
-                                );
-                                panic!("callback failed: {}", error)
-                            })
-                    };
-                    p0_callback_value
-                })
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
             } else {
                 None
             };
-            let _: () = {};
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move || {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context())
+                    };
+                    let callback_return_w2 = raw_result.v0;
+                    let callback_return_w4 = raw_result.v1;
+                    let callback_return_w6 = raw_result.v2;
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                    unsafe {
+                                        drop(
+                                            Box::from_raw(
+                                                callback_return_w2 as *mut c_collection_flat::Resource,
+                                            ),
+                                        );
+                                    }
+                                    Ok(())
+                                }) {
+                                    ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                }
+                            }
+                        }
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                    unsafe {
+                                        drop(
+                                            Box::from_raw(
+                                                callback_return_w6 as *mut c_collection_flat::Resource,
+                                            ),
+                                        );
+                                    }
+                                    Ok(())
+                                }) {
+                                    ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    {
+                        let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                            let callback_return_w2_pointer = callback_return_w2
+                                as *mut c_collection_flat::Resource;
+                            let callback_return_w1 = unsafe {
+                                Box::from_raw(callback_return_w2_pointer)
+                            };
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            let callback_return_w1: c_collection_flat::Resource = *callback_return_w1;
+                            let callback_return_w0_argument_0 = callback_return_w1;
+                            let callback_return_w3: u64 = ::core::convert::Into::into(
+                                callback_return_w4,
+                            );
+                            let callback_return_w0_argument_1 = callback_return_w3;
+                            let callback_return_w6_pointer = callback_return_w6
+                                as *mut c_collection_flat::Resource;
+                            let callback_return_w5 = unsafe {
+                                Box::from_raw(callback_return_w6_pointer)
+                            };
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            let callback_return_w5: c_collection_flat::Resource = *callback_return_w5;
+                            let callback_return_w0_argument_2 = callback_return_w5;
+                            let callback_return_w0: c_collection_flat::Record = c_collection_flat::record_new(
+                                callback_return_w0_argument_0,
+                                callback_return_w0_argument_1,
+                                callback_return_w0_argument_2,
+                            );
+                            let callback_return_value = callback_return_w0;
+                            Ok(callback_return_value)
+                        };
+                        let callback_decoded = callback_outcome?;
+                        callback_return_cleanup.commit();
+                        Ok(callback_decoded)
+                    }
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "bench_callback_d4c2b6b7f94cdedf",
+                            "()->c_collection_flat :: Record",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
             let source_value = c_collection_flat::callback_fixed(
                 __prebindgen_argument_0,
             );
@@ -873,6 +747,7 @@ pub struct bench_callback_many_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -883,8 +758,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_callback_many(
     p0_callback: bench_callback_7fc0734290773f1a,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_callback_many_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -894,152 +767,130 @@ pub unsafe extern "C" fn bench_callback_many(
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                let p0_callback_release_result = p0_callback.release_result;
-                let p0_callback_owner = if true {
-                    {
-                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p0_callback_run = p0_callback_run
-                        .expect("validated active callback");
-                    let p0_callback_owner = p0_callback_owner
-                        .expect("validated active callback");
-                    let p0_callback_value = move || {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let raw_result = unsafe {
-                                p0_callback_run(p0_callback_owner.context())
-                            };
-                            let callback_result = __PbCallbackResult {
-                                value: raw_result,
-                                context: p0_callback_owner.context(),
-                                release: p0_callback_release_result,
-                            };
-                            let raw_result = callback_result.value;
-                            let callback_return_w1 = raw_result;
-                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                            {
-                                let mut __pb_return_ordinal = 0usize;
-                                #[allow(clippy::explicit_counter_loop)]
-                                for index in 0..callback_return_w1.len {
-                                    let callback_return_w5 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1)
-                                            .add(index)))
-                                            .v0
-                                    };
-                                    {
-                                        let ordinal = __pb_return_ordinal;
-                                        __pb_return_ordinal += 1;
-                                        if ordinal >= __prebindgen_input_consumed.get() {
-                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                                unsafe {
-                                                    drop(
-                                                        Box::from_raw(
-                                                            callback_return_w5 as *mut c_collection_flat::Resource,
-                                                        ),
-                                                    );
-                                                }
-                                                Ok(())
-                                            }) {
-                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                            }
-                                        }
-                                    }
-                                }
-                                Ok(())
-                            });
-                            {
-                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    let mut callback_return_w0: Vec<
-                                        c_collection_flat::Resource,
-                                    > = Vec::new();
-                                    if true {
-                                        let callback_return_w2 = callback_return_w1.len;
-                                        let callback_return_w1_data = callback_return_w1.data
-                                            as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1;
-                                        callback_return_w0.reserve_exact(callback_return_w2);
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w5 = unsafe {
-                                                (*callback_return_w1_data.add(callback_return_w3)).v0
-                                            };
-                                            #[allow(clippy::redundant_closure_call)]
-                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                                c_collection_flat::Resource,
-                                                String,
-                                            > {
-                                                let callback_return_w5_pointer = if true {
-                                                    (callback_return_w5) as *mut c_collection_flat::Resource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                let callback_return_w4 = if true {
-                                                    Some(unsafe { Box::from_raw(callback_return_w5_pointer) })
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w4: c_collection_flat::Resource = *callback_return_w4
-                                                    .expect("active allocation");
-                                                let callback_return_w0 = callback_return_w4;
-                                                Ok(callback_return_w0)
-                                            })();
-                                            let element = callback_return_w1_element_built?;
-                                            #[allow(clippy::zst_offset)]
-                                            unsafe {
-                                                let initialized = callback_return_w0.len();
-                                                callback_return_w0
-                                                    .as_mut_ptr()
-                                                    .add(initialized)
-                                                    .write(element);
-                                                callback_return_w0.set_len(initialized + 1);
-                                            }
-                                        }
-                                    }
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w0_built = if true {
-                                        Some(callback_return_w0)
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_value = callback_return_w0_built
-                                        .expect("active input");
-                                    Ok(callback_return_value)
-                                };
-                                let callback_decoded = callback_outcome?;
-                                callback_return_cleanup.commit();
-                                Ok(callback_decoded)
-                            }
-                        });
-                        result
-                            .unwrap_or_else(|error| {
-                                ::prebindgen_runtime::report_callback_error(
-                                    "bench_callback_7fc0734290773f1a",
-                                    "()->Vec < c_collection_flat :: Resource >",
-                                    &error,
-                                );
-                                panic!("callback failed: {}", error)
-                            })
-                    };
-                    p0_callback_value
-                })
+            let p0_callback_release_result = p0_callback.release_result;
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
             } else {
                 None
             };
-            let _: () = {};
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move || {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context())
+                    };
+                    let callback_result = __PbCallbackResult {
+                        value: raw_result,
+                        context: p0_callback_owner.context(),
+                        release: p0_callback_release_result,
+                    };
+                    let raw_result = callback_result.value;
+                    let callback_return_w1 = raw_result;
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        #[allow(clippy::explicit_counter_loop)]
+                        for index in 0..callback_return_w1.len {
+                            let callback_return_w5 = unsafe {
+                                (*((callback_return_w1.data
+                                    as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1)
+                                    .add(index)))
+                                    .v0
+                            };
+                            {
+                                let ordinal = __pb_return_ordinal;
+                                __pb_return_ordinal += 1;
+                                if ordinal >= __prebindgen_input_consumed.get() {
+                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                        unsafe {
+                                            drop(
+                                                Box::from_raw(
+                                                    callback_return_w5 as *mut c_collection_flat::Resource,
+                                                ),
+                                            );
+                                        }
+                                        Ok(())
+                                    }) {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                    }
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    {
+                        let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                            let mut callback_return_w0: Vec<
+                                c_collection_flat::Resource,
+                            > = Vec::new();
+                            if true {
+                                let callback_return_w2 = callback_return_w1.len;
+                                let callback_return_w1_data = callback_return_w1.data
+                                    as *const __PbRow_callback_7fc0734290773f1a_callback_return_w1;
+                                callback_return_w0.reserve_exact(callback_return_w2);
+                                for callback_return_w3 in 0..callback_return_w2 {
+                                    let callback_return_w5 = unsafe {
+                                        (*callback_return_w1_data.add(callback_return_w3)).v0
+                                    };
+                                    #[allow(clippy::redundant_closure_call)]
+                                    let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                        c_collection_flat::Resource,
+                                        String,
+                                    > {
+                                        {
+                                            let callback_return_w5_pointer = (callback_return_w5)
+                                                as *mut c_collection_flat::Resource;
+                                            let callback_return_w4 = unsafe {
+                                                Box::from_raw(callback_return_w5_pointer)
+                                            };
+                                            {
+                                                __pb_callback_consumed
+                                                    .set(__pb_callback_consumed.get() + (1usize));
+                                            }
+                                            let callback_return_w4: c_collection_flat::Resource = *callback_return_w4;
+                                            let callback_return_w1_row_value = callback_return_w4;
+                                            Ok(callback_return_w1_row_value)
+                                        }
+                                    })();
+                                    let element = callback_return_w1_element_built?;
+                                    #[allow(clippy::zst_offset)]
+                                    unsafe {
+                                        let initialized = callback_return_w0.len();
+                                        callback_return_w0
+                                            .as_mut_ptr()
+                                            .add(initialized)
+                                            .write(element);
+                                        callback_return_w0.set_len(initialized + 1);
+                                    }
+                                }
+                            }
+                            let callback_return_value = callback_return_w0;
+                            Ok(callback_return_value)
+                        };
+                        let callback_decoded = callback_outcome?;
+                        callback_return_cleanup.commit();
+                        Ok(callback_decoded)
+                    }
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "bench_callback_7fc0734290773f1a",
+                            "()->Vec < c_collection_flat :: Resource >",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
             let source_value = c_collection_flat::callback_many(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_callback_many_result {
@@ -1062,6 +913,7 @@ pub struct bench_callback_native_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1072,8 +924,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_callback_native(
     p0_callback: bench_callback_fc8e455d100e4602,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_callback_native_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -1083,159 +933,145 @@ pub unsafe extern "C" fn bench_callback_native(
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                let p0_callback_release_result = p0_callback.release_result;
-                let p0_callback_owner = if true {
-                    {
-                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p0_callback_run = p0_callback_run
-                        .expect("validated active callback");
-                    let p0_callback_owner = p0_callback_owner
-                        .expect("validated active callback");
-                    let p0_callback_value = move || {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let raw_result = unsafe {
-                                p0_callback_run(p0_callback_owner.context())
-                            };
-                            let callback_result = __PbCallbackResult {
-                                value: raw_result,
-                                context: p0_callback_owner.context(),
-                                release: p0_callback_release_result,
-                            };
-                            let raw_result = callback_result.value;
-                            let callback_return_w1 = raw_result;
-                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                            {
-                                let mut __pb_return_ordinal = 0usize;
-                                #[allow(clippy::explicit_counter_loop)]
-                                for index in 0..callback_return_w1.len {
-                                    let callback_return_w5 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1)
-                                            .add(index)))
-                                            .v0
-                                    };
-                                    {
-                                        let ordinal = __pb_return_ordinal;
-                                        __pb_return_ordinal += 1;
-                                        if ordinal >= __prebindgen_input_consumed.get() {
-                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                                unsafe {
-                                                    drop(
-                                                        ::core::ptr::read(
-                                                            (::core::ptr::addr_of!(
-                                                                (* ((callback_return_w1.data as * const
-                                                                __PbRow_callback_fc8e455d100e4602_callback_return_w1)
-                                                                .add(index))).v0
-                                                            ) as *const __PbOwned_native_packet)
-                                                                .cast::<c_collection_flat::NativePacket>(),
-                                                        ),
-                                                    );
-                                                }
-                                                Ok(())
-                                            }) {
-                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                            }
-                                        }
-                                    }
-                                }
-                                Ok(())
-                            });
-                            {
-                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    let mut callback_return_w0: Vec<
-                                        c_collection_flat::NativePacket,
-                                    > = Vec::new();
-                                    if true {
-                                        let callback_return_w2 = callback_return_w1.len;
-                                        let callback_return_w1_data = callback_return_w1.data
-                                            as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1;
-                                        callback_return_w0.reserve_exact(callback_return_w2);
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w5 = unsafe {
-                                                (*callback_return_w1_data.add(callback_return_w3)).v0
-                                            };
-                                            #[allow(clippy::redundant_closure_call)]
-                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                                c_collection_flat::NativePacket,
-                                                String,
-                                            > {
-                                                #[allow(unused_parens)]
-                                                let callback_return_w5_storage = (callback_return_w5);
-                                                let callback_return_w4 = if true {
-                                                    let callback_return_w5_pointer = ::core::ptr::addr_of!(
-                                                        callback_return_w5_storage
-                                                    )
-                                                        .cast::<c_collection_flat::NativePacket>();
-                                                    let value = unsafe {
-                                                        ::core::ptr::read(callback_return_w5_pointer)
-                                                    };
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
-                                                    Some(value)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w4: c_collection_flat::NativePacket = callback_return_w4
-                                                    .expect("active inline owner");
-                                                let callback_return_w0 = callback_return_w4;
-                                                Ok(callback_return_w0)
-                                            })();
-                                            let element = callback_return_w1_element_built?;
-                                            #[allow(clippy::zst_offset)]
-                                            unsafe {
-                                                let initialized = callback_return_w0.len();
-                                                callback_return_w0
-                                                    .as_mut_ptr()
-                                                    .add(initialized)
-                                                    .write(element);
-                                                callback_return_w0.set_len(initialized + 1);
-                                            }
-                                        }
-                                    }
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w0_built = if true {
-                                        Some(callback_return_w0)
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_value = callback_return_w0_built
-                                        .expect("active input");
-                                    Ok(callback_return_value)
-                                };
-                                let callback_decoded = callback_outcome?;
-                                callback_return_cleanup.commit();
-                                Ok(callback_decoded)
-                            }
-                        });
-                        result
-                            .unwrap_or_else(|error| {
-                                ::prebindgen_runtime::report_callback_error(
-                                    "bench_callback_fc8e455d100e4602",
-                                    "()->Vec < c_collection_flat :: NativePacket >",
-                                    &error,
-                                );
-                                panic!("callback failed: {}", error)
-                            })
-                    };
-                    p0_callback_value
-                })
+            let p0_callback_release_result = p0_callback.release_result;
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
             } else {
                 None
             };
-            let _: () = {};
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move || {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context())
+                    };
+                    let callback_result = __PbCallbackResult {
+                        value: raw_result,
+                        context: p0_callback_owner.context(),
+                        release: p0_callback_release_result,
+                    };
+                    let raw_result = callback_result.value;
+                    let callback_return_w1 = raw_result;
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        #[allow(clippy::explicit_counter_loop)]
+                        for index in 0..callback_return_w1.len {
+                            let callback_return_w5 = unsafe {
+                                (*((callback_return_w1.data
+                                    as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1)
+                                    .add(index)))
+                                    .v0
+                            };
+                            {
+                                let ordinal = __pb_return_ordinal;
+                                __pb_return_ordinal += 1;
+                                if ordinal >= __prebindgen_input_consumed.get() {
+                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                        unsafe {
+                                            drop(
+                                                ::core::ptr::read(
+                                                    (::core::ptr::addr_of!(
+                                                        (* ((callback_return_w1.data as * const
+                                                        __PbRow_callback_fc8e455d100e4602_callback_return_w1)
+                                                        .add(index))).v0
+                                                    ) as *const __PbOwned_native_packet)
+                                                        .cast::<c_collection_flat::NativePacket>(),
+                                                ),
+                                            );
+                                        }
+                                        Ok(())
+                                    }) {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                    }
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    {
+                        let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                            let mut callback_return_w0: Vec<
+                                c_collection_flat::NativePacket,
+                            > = Vec::new();
+                            if true {
+                                let callback_return_w2 = callback_return_w1.len;
+                                let callback_return_w1_data = callback_return_w1.data
+                                    as *const __PbRow_callback_fc8e455d100e4602_callback_return_w1;
+                                callback_return_w0.reserve_exact(callback_return_w2);
+                                for callback_return_w3 in 0..callback_return_w2 {
+                                    let callback_return_w5 = unsafe {
+                                        (*callback_return_w1_data.add(callback_return_w3)).v0
+                                    };
+                                    #[allow(clippy::redundant_closure_call)]
+                                    let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                        c_collection_flat::NativePacket,
+                                        String,
+                                    > {
+                                        {
+                                            #[allow(unused_parens)]
+                                            let callback_return_w5_storage = (callback_return_w5);
+                                            let callback_return_w4 = if true {
+                                                let callback_return_w5_pointer = ::core::ptr::addr_of!(
+                                                    callback_return_w5_storage
+                                                )
+                                                    .cast::<c_collection_flat::NativePacket>();
+                                                let value = unsafe {
+                                                    ::core::ptr::read(callback_return_w5_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                Some(value)
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w4: c_collection_flat::NativePacket = callback_return_w4
+                                                .expect("active inline owner");
+                                            let callback_return_w1_row_value = callback_return_w4;
+                                            Ok(callback_return_w1_row_value)
+                                        }
+                                    })();
+                                    let element = callback_return_w1_element_built?;
+                                    #[allow(clippy::zst_offset)]
+                                    unsafe {
+                                        let initialized = callback_return_w0.len();
+                                        callback_return_w0
+                                            .as_mut_ptr()
+                                            .add(initialized)
+                                            .write(element);
+                                        callback_return_w0.set_len(initialized + 1);
+                                    }
+                                }
+                            }
+                            let callback_return_value = callback_return_w0;
+                            Ok(callback_return_value)
+                        };
+                        let callback_decoded = callback_outcome?;
+                        callback_return_cleanup.commit();
+                        Ok(callback_decoded)
+                    }
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "bench_callback_fc8e455d100e4602",
+                            "()->Vec < c_collection_flat :: NativePacket >",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
             let source_value = c_collection_flat::callback_native(
                 __prebindgen_argument_0,
             );
@@ -1260,6 +1096,7 @@ pub struct bench_callback_native_mixed_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1270,8 +1107,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_callback_native_mixed(
     p0_callback: bench_callback_f1755815cfab1b60,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         bench_callback_native_mixed_result,
     >::uninit();
@@ -1283,250 +1118,227 @@ pub unsafe extern "C" fn bench_callback_native_mixed(
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                let p0_callback_release_result = p0_callback.release_result;
-                let p0_callback_owner = if true {
-                    {
-                        (&_ownership_accepted).set((&_ownership_accepted).get() + 1);
-                        Some(
-                            __PbCallbackOwner::new(p0_callback.context, p0_callback.drop),
-                        )
-                    }
-                } else {
-                    None
-                };
-                Some({
-                    let p0_callback_run = p0_callback_run
-                        .expect("validated active callback");
-                    let p0_callback_owner = p0_callback_owner
-                        .expect("validated active callback");
-                    let p0_callback_value = move || {
-                        let result = ::prebindgen_runtime::boundary(|| {
-                            let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
-                            let __prebindgen_input_consumed = &__pb_callback_consumed;
-                            let raw_result = unsafe {
-                                p0_callback_run(p0_callback_owner.context())
-                            };
-                            let callback_result = __PbCallbackResult {
-                                value: raw_result,
-                                context: p0_callback_owner.context(),
-                                release: p0_callback_release_result,
-                            };
-                            let raw_result = callback_result.value;
-                            let callback_return_w1 = raw_result;
-                            let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
-                            {
-                                let mut __pb_return_ordinal = 0usize;
-                                #[allow(clippy::explicit_counter_loop)]
-                                for index in 0..callback_return_w1.len {
-                                    let callback_return_w6 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
-                                            .add(index)))
-                                            .v0
-                                    };
-                                    let callback_return_w8 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
-                                            .add(index)))
-                                            .v1
-                                    };
-                                    let callback_return_w10 = unsafe {
-                                        (*((callback_return_w1.data
-                                            as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
-                                            .add(index)))
-                                            .v2
-                                    };
-                                    {
-                                        let ordinal = __pb_return_ordinal;
-                                        __pb_return_ordinal += 1;
-                                        if ordinal >= __prebindgen_input_consumed.get() {
-                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                                unsafe {
-                                                    drop(
-                                                        Box::from_raw(
-                                                            callback_return_w6 as *mut c_collection_flat::Resource,
-                                                        ),
-                                                    );
-                                                }
-                                                Ok(())
-                                            }) {
-                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                            }
-                                        }
-                                    }
-                                    {
-                                        let ordinal = __pb_return_ordinal;
-                                        __pb_return_ordinal += 1;
-                                        if ordinal >= __prebindgen_input_consumed.get() {
-                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                                unsafe {
-                                                    drop(
-                                                        ::core::ptr::read(
-                                                            (::core::ptr::addr_of!(
-                                                                (* ((callback_return_w1.data as * const
-                                                                __PbRow_callback_f1755815cfab1b60_callback_return_w1)
-                                                                .add(index))).v1
-                                                            ) as *const __PbOwned_native_packet)
-                                                                .cast::<c_collection_flat::NativePacket>(),
-                                                        ),
-                                                    );
-                                                }
-                                                Ok(())
-                                            }) {
-                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                            }
-                                        }
-                                    }
-                                    {
-                                        let ordinal = __pb_return_ordinal;
-                                        __pb_return_ordinal += 1;
-                                        if ordinal >= __prebindgen_input_consumed.get() {
-                                            if let Err(error) = ::prebindgen_runtime::boundary(|| {
-                                                unsafe {
-                                                    drop(
-                                                        Box::from_raw(
-                                                            callback_return_w10 as *mut c_collection_flat::Resource,
-                                                        ),
-                                                    );
-                                                }
-                                                Ok(())
-                                            }) {
-                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
-                                            }
-                                        }
-                                    }
-                                }
-                                Ok(())
-                            });
-                            {
-                                let callback_outcome: ::prebindgen_runtime::Result<_> = {
-                                    let mut callback_return_w0: Vec<
-                                        c_collection_flat::NativeMixed,
-                                    > = Vec::new();
-                                    if true {
-                                        let callback_return_w2 = callback_return_w1.len;
-                                        let callback_return_w1_data = callback_return_w1.data
-                                            as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1;
-                                        callback_return_w0.reserve_exact(callback_return_w2);
-                                        for callback_return_w3 in 0..callback_return_w2 {
-                                            let callback_return_w6 = unsafe {
-                                                (*callback_return_w1_data.add(callback_return_w3)).v0
-                                            };
-                                            let callback_return_w8 = unsafe {
-                                                (*callback_return_w1_data.add(callback_return_w3)).v1
-                                            };
-                                            let callback_return_w10 = unsafe {
-                                                (*callback_return_w1_data.add(callback_return_w3)).v2
-                                            };
-                                            #[allow(clippy::redundant_closure_call)]
-                                            let callback_return_w1_element_built = (|| -> ::core::result::Result<
-                                                c_collection_flat::NativeMixed,
-                                                String,
-                                            > {
-                                                let callback_return_w6_pointer = if true {
-                                                    (callback_return_w6) as *mut c_collection_flat::Resource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                #[allow(unused_parens)]
-                                                let callback_return_w8_storage = (callback_return_w8);
-                                                let callback_return_w10_pointer = if true {
-                                                    (callback_return_w10) as *mut c_collection_flat::Resource
-                                                } else {
-                                                    ::core::ptr::null_mut()
-                                                };
-                                                let callback_return_w5 = if true {
-                                                    Some(unsafe { Box::from_raw(callback_return_w6_pointer) })
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w7 = if true {
-                                                    let callback_return_w8_pointer = ::core::ptr::addr_of!(
-                                                        callback_return_w8_storage
-                                                    )
-                                                        .cast::<c_collection_flat::NativePacket>();
-                                                    let value = unsafe {
-                                                        ::core::ptr::read(callback_return_w8_pointer)
-                                                    };
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + 1);
-                                                    Some(value)
-                                                } else {
-                                                    None
-                                                };
-                                                let callback_return_w9 = if true {
-                                                    Some(unsafe { Box::from_raw(callback_return_w10_pointer) })
-                                                } else {
-                                                    None
-                                                };
-                                                if true {
-                                                    __prebindgen_input_consumed
-                                                        .set(__prebindgen_input_consumed.get() + (1usize));
-                                                }
-                                                let callback_return_w5: c_collection_flat::Resource = *callback_return_w5
-                                                    .expect("active allocation");
-                                                let callback_return_w7: c_collection_flat::NativePacket = callback_return_w7
-                                                    .expect("active inline owner");
-                                                let callback_return_w9: c_collection_flat::Resource = *callback_return_w9
-                                                    .expect("active allocation");
-                                                let callback_return_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
-                                                    callback_return_w5,
-                                                    callback_return_w7,
-                                                    callback_return_w9,
-                                                );
-                                                let callback_return_w0 = callback_return_w4;
-                                                Ok(callback_return_w0)
-                                            })();
-                                            let element = callback_return_w1_element_built?;
-                                            #[allow(clippy::zst_offset)]
-                                            unsafe {
-                                                let initialized = callback_return_w0.len();
-                                                callback_return_w0
-                                                    .as_mut_ptr()
-                                                    .add(initialized)
-                                                    .write(element);
-                                                callback_return_w0.set_len(initialized + 1);
-                                            }
-                                        }
-                                    }
-                                    #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                    let callback_return_w0_built = if true {
-                                        Some(callback_return_w0)
-                                    } else {
-                                        None
-                                    };
-                                    let callback_return_value = callback_return_w0_built
-                                        .expect("active input");
-                                    Ok(callback_return_value)
-                                };
-                                let callback_decoded = callback_outcome?;
-                                callback_return_cleanup.commit();
-                                Ok(callback_decoded)
-                            }
-                        });
-                        result
-                            .unwrap_or_else(|error| {
-                                ::prebindgen_runtime::report_callback_error(
-                                    "bench_callback_f1755815cfab1b60",
-                                    "()->Vec < c_collection_flat :: NativeMixed >",
-                                    &error,
-                                );
-                                panic!("callback failed: {}", error)
-                            })
-                    };
-                    p0_callback_value
-                })
+            let p0_callback_release_result = p0_callback.release_result;
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
             } else {
                 None
             };
-            let _: () = {};
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move || {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context())
+                    };
+                    let callback_result = __PbCallbackResult {
+                        value: raw_result,
+                        context: p0_callback_owner.context(),
+                        release: p0_callback_release_result,
+                    };
+                    let raw_result = callback_result.value;
+                    let callback_return_w1 = raw_result;
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        #[allow(clippy::explicit_counter_loop)]
+                        for index in 0..callback_return_w1.len {
+                            let callback_return_w6 = unsafe {
+                                (*((callback_return_w1.data
+                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                    .add(index)))
+                                    .v0
+                            };
+                            let callback_return_w8 = unsafe {
+                                (*((callback_return_w1.data
+                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                    .add(index)))
+                                    .v1
+                            };
+                            let callback_return_w10 = unsafe {
+                                (*((callback_return_w1.data
+                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                    .add(index)))
+                                    .v2
+                            };
+                            {
+                                let ordinal = __pb_return_ordinal;
+                                __pb_return_ordinal += 1;
+                                if ordinal >= __prebindgen_input_consumed.get() {
+                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                        unsafe {
+                                            drop(
+                                                Box::from_raw(
+                                                    callback_return_w6 as *mut c_collection_flat::Resource,
+                                                ),
+                                            );
+                                        }
+                                        Ok(())
+                                    }) {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                    }
+                                }
+                            }
+                            {
+                                let ordinal = __pb_return_ordinal;
+                                __pb_return_ordinal += 1;
+                                if ordinal >= __prebindgen_input_consumed.get() {
+                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                        unsafe {
+                                            drop(
+                                                ::core::ptr::read(
+                                                    (::core::ptr::addr_of!(
+                                                        (* ((callback_return_w1.data as * const
+                                                        __PbRow_callback_f1755815cfab1b60_callback_return_w1)
+                                                        .add(index))).v1
+                                                    ) as *const __PbOwned_native_packet)
+                                                        .cast::<c_collection_flat::NativePacket>(),
+                                                ),
+                                            );
+                                        }
+                                        Ok(())
+                                    }) {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                    }
+                                }
+                            }
+                            {
+                                let ordinal = __pb_return_ordinal;
+                                __pb_return_ordinal += 1;
+                                if ordinal >= __prebindgen_input_consumed.get() {
+                                    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                        unsafe {
+                                            drop(
+                                                Box::from_raw(
+                                                    callback_return_w10 as *mut c_collection_flat::Resource,
+                                                ),
+                                            );
+                                        }
+                                        Ok(())
+                                    }) {
+                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                    }
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    {
+                        let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                            let mut callback_return_w0: Vec<
+                                c_collection_flat::NativeMixed,
+                            > = Vec::new();
+                            if true {
+                                let callback_return_w2 = callback_return_w1.len;
+                                let callback_return_w1_data = callback_return_w1.data
+                                    as *const __PbRow_callback_f1755815cfab1b60_callback_return_w1;
+                                callback_return_w0.reserve_exact(callback_return_w2);
+                                for callback_return_w3 in 0..callback_return_w2 {
+                                    let callback_return_w6 = unsafe {
+                                        (*callback_return_w1_data.add(callback_return_w3)).v0
+                                    };
+                                    let callback_return_w8 = unsafe {
+                                        (*callback_return_w1_data.add(callback_return_w3)).v1
+                                    };
+                                    let callback_return_w10 = unsafe {
+                                        (*callback_return_w1_data.add(callback_return_w3)).v2
+                                    };
+                                    #[allow(clippy::redundant_closure_call)]
+                                    let callback_return_w1_element_built = (|| -> ::core::result::Result<
+                                        c_collection_flat::NativeMixed,
+                                        String,
+                                    > {
+                                        {
+                                            let callback_return_w6_pointer = (callback_return_w6)
+                                                as *mut c_collection_flat::Resource;
+                                            let callback_return_w5 = unsafe {
+                                                Box::from_raw(callback_return_w6_pointer)
+                                            };
+                                            {
+                                                __pb_callback_consumed
+                                                    .set(__pb_callback_consumed.get() + (1usize));
+                                            }
+                                            let callback_return_w5: c_collection_flat::Resource = *callback_return_w5;
+                                            let callback_return_w4_argument_0 = callback_return_w5;
+                                            #[allow(unused_parens)]
+                                            let callback_return_w8_storage = (callback_return_w8);
+                                            let callback_return_w7 = if true {
+                                                let callback_return_w8_pointer = ::core::ptr::addr_of!(
+                                                    callback_return_w8_storage
+                                                )
+                                                    .cast::<c_collection_flat::NativePacket>();
+                                                let value = unsafe {
+                                                    ::core::ptr::read(callback_return_w8_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                Some(value)
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w7: c_collection_flat::NativePacket = callback_return_w7
+                                                .expect("active inline owner");
+                                            let callback_return_w4_argument_1 = callback_return_w7;
+                                            let callback_return_w10_pointer = (callback_return_w10)
+                                                as *mut c_collection_flat::Resource;
+                                            let callback_return_w9 = unsafe {
+                                                Box::from_raw(callback_return_w10_pointer)
+                                            };
+                                            {
+                                                __pb_callback_consumed
+                                                    .set(__pb_callback_consumed.get() + (1usize));
+                                            }
+                                            let callback_return_w9: c_collection_flat::Resource = *callback_return_w9;
+                                            let callback_return_w4_argument_2 = callback_return_w9;
+                                            let callback_return_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
+                                                callback_return_w4_argument_0,
+                                                callback_return_w4_argument_1,
+                                                callback_return_w4_argument_2,
+                                            );
+                                            let callback_return_w1_row_value = callback_return_w4;
+                                            Ok(callback_return_w1_row_value)
+                                        }
+                                    })();
+                                    let element = callback_return_w1_element_built?;
+                                    #[allow(clippy::zst_offset)]
+                                    unsafe {
+                                        let initialized = callback_return_w0.len();
+                                        callback_return_w0
+                                            .as_mut_ptr()
+                                            .add(initialized)
+                                            .write(element);
+                                        callback_return_w0.set_len(initialized + 1);
+                                    }
+                                }
+                            }
+                            let callback_return_value = callback_return_w0;
+                            Ok(callback_return_value)
+                        };
+                        let callback_decoded = callback_outcome?;
+                        callback_return_cleanup.commit();
+                        Ok(callback_decoded)
+                    }
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "bench_callback_f1755815cfab1b60",
+                            "()->Vec < c_collection_flat :: NativeMixed >",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
             let source_value = c_collection_flat::callback_native_mixed(
                 __prebindgen_argument_0,
             );
@@ -1551,6 +1363,7 @@ pub struct bench_control_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1559,25 +1372,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_control(p0_w1: usize) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_control_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::control(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_control_result { v0: ret_w0 };
@@ -1598,6 +1398,7 @@ pub struct bench_fixed_borrow_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1609,47 +1410,18 @@ pub unsafe extern "C" fn bench_fixed_borrow(
     p0_w1: *const c_collection_flat::Resource,
     p1_w1: *mut c_collection_flat::Resource,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_fixed_borrow_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut c_collection_flat::Resource
-            } else {
-                ::core::ptr::null_mut()
+            let p0_w1_pointer = p0_w1 as *mut c_collection_flat::Resource;
+            let p0_w0: &c_collection_flat::Resource = unsafe { &(*p0_w1_pointer) };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w1_pointer = p1_w1 as *mut c_collection_flat::Resource;
+            let p1_w0: &mut c_collection_flat::Resource = unsafe {
+                &mut (*p1_w1_pointer)
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: &c_collection_flat::Resource = unsafe {
-                        &(*p0_w1_pointer)
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let p1_w1_pointer = if true {
-                p1_w1 as *mut c_collection_flat::Resource
-            } else {
-                ::core::ptr::null_mut()
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true {
-                Some({
-                    let p1_w0: &mut c_collection_flat::Resource = unsafe {
-                        &mut (*p1_w1_pointer)
-                    };
-                    p1_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0;
             let source_value = c_collection_flat::fixed_borrow(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -1675,6 +1447,7 @@ pub struct bench_fixed_move_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1686,64 +1459,20 @@ pub unsafe extern "C" fn bench_fixed_move(
     p0_w1: *mut c_collection_flat::Resource,
     p1_w1: *mut c_collection_flat::Resource,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_fixed_move_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut c_collection_flat::Resource
-            } else {
-                ::core::ptr::null_mut()
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                let p0_w0 = if true {
-                    Some(unsafe { Box::from_raw(p0_w1_pointer) })
-                } else {
-                    None
-                };
-                if true {
-                    __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + (1usize));
-                }
-                Some({
-                    let p0_w0: c_collection_flat::Resource = *p0_w0
-                        .expect("active allocation");
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let p1_w1_pointer = if true {
-                p1_w1 as *mut c_collection_flat::Resource
-            } else {
-                ::core::ptr::null_mut()
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p1_w0_built = if true {
-                let p1_w0 = if true {
-                    Some(unsafe { Box::from_raw(p1_w1_pointer) })
-                } else {
-                    None
-                };
-                if true {
-                    __prebindgen_input_consumed
-                        .set(__prebindgen_input_consumed.get() + (1usize));
-                }
-                Some({
-                    let p1_w0: c_collection_flat::Resource = *p1_w0
-                        .expect("active allocation");
-                    p1_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
-            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let p0_w1_pointer = p0_w1 as *mut c_collection_flat::Resource;
+            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+            {}
+            let p0_w0: c_collection_flat::Resource = *p0_w0;
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w1_pointer = p1_w1 as *mut c_collection_flat::Resource;
+            let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
+            {}
+            let p1_w0: c_collection_flat::Resource = *p1_w0;
+            let __prebindgen_argument_1 = p1_w0;
             let source_value = c_collection_flat::fixed_move(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -1789,6 +1518,7 @@ pub struct bench_make_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1797,25 +1527,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_make_handles(p0_w1: usize) -> __PbRows {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_make_handles_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::make_handles(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<c_collection_flat::Resource> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
@@ -1928,6 +1645,7 @@ pub struct bench_make_many_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -1936,25 +1654,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_make_many(p0_w1: usize) -> __PbRows {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_make_many_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::make_many(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<c_collection_flat::Resource>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
@@ -2122,6 +1827,7 @@ pub struct bench_make_nested_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2130,25 +1836,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_make_nested(p0_w1: usize) -> __PbRows {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_make_nested_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::make_nested(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<Vec<c_collection_flat::Resource>> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
@@ -2296,6 +1989,7 @@ pub struct bench_make_numbers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2304,25 +1998,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_make_numbers(p0_w1: usize) -> __PbRows {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_make_numbers_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::make_numbers(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<u64> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
@@ -2403,6 +2084,7 @@ pub struct bench_make_records_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2411,25 +2093,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_make_records(p0_w1: usize) -> __PbRows {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_make_records_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: usize = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: usize = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::make_records(__prebindgen_argument_0);
             let ret_w0_source: ::std::vec::Vec<c_collection_flat::Record> = source_value;
             let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
@@ -2520,6 +2189,7 @@ pub struct bench_native_packet_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2528,25 +2198,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_native_packet_new(p0_w1: u64) -> __PbOwned_native_packet {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_native_packet_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: u64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: u64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::native_packet_new(
                 __prebindgen_argument_0,
             );
@@ -2573,6 +2230,7 @@ pub struct bench_resource_new_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2583,25 +2241,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_resource_new(
     p0_w1: u64,
 ) -> *mut c_collection_flat::Resource {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_resource_new_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: u64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: u64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::resource_new(__prebindgen_argument_0);
             let ret_w0: *mut c_collection_flat::Resource = Box::into_raw(
                 Box::new(source_value),
@@ -2629,6 +2274,7 @@ pub struct bench_resource_value_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2639,30 +2285,13 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn bench_resource_value(
     p0_w1: *const c_collection_flat::Resource,
 ) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_resource_value_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let p0_w1_pointer = if true {
-                p0_w1 as *mut c_collection_flat::Resource
-            } else {
-                ::core::ptr::null_mut()
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: &c_collection_flat::Resource = unsafe {
-                        &(*p0_w1_pointer)
-                    };
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w1_pointer = p0_w1 as *mut c_collection_flat::Resource;
+            let p0_w0: &c_collection_flat::Resource = unsafe { &(*p0_w1_pointer) };
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::resource_value(
                 __prebindgen_argument_0,
             );
@@ -2687,6 +2316,7 @@ pub struct bench_shared_input_array_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2695,8 +2325,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_shared_input_array(p0_w1: __PbSliceView_i64) -> i64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_shared_input_array_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -2717,13 +2345,7 @@ pub unsafe extern "C" fn bench_shared_input_array(p0_w1: __PbSliceView_i64) -> i
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w0.expect("active slice view"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0.expect("active slice view");
             let source_value = c_collection_flat::shared_input_array(
                 __prebindgen_argument_0,
             );
@@ -2748,6 +2370,7 @@ pub struct bench_shared_input_inspect_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2756,8 +2379,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_shared_input_inspect(p0_w1: __PbSliceView_i64) -> usize {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         bench_shared_input_inspect_result,
     >::uninit();
@@ -2778,13 +2399,7 @@ pub unsafe extern "C" fn bench_shared_input_inspect(p0_w1: __PbSliceView_i64) ->
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w0.expect("active slice view"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0.expect("active slice view");
             let source_value = c_collection_flat::shared_input_inspect(
                 __prebindgen_argument_0,
             );
@@ -2809,6 +2424,7 @@ pub struct bench_shared_input_owned_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2817,29 +2433,14 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_shared_input_owned(p0_w1: __PbBuffer) -> usize {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_shared_input_owned_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true {
-                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p0_w1)) })
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: String = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: String = ::core::convert::Into::into(unsafe {
+                std::str::from_utf8_unchecked(__pb_read(p0_w1))
+            });
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::shared_input_owned(
                 __prebindgen_argument_0,
             );
@@ -2864,6 +2465,7 @@ pub struct bench_shared_input_sum_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2872,8 +2474,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_shared_input_sum(p0_w1: __PbSliceView_i64) -> i64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_shared_input_sum_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -2892,13 +2492,7 @@ pub unsafe extern "C" fn bench_shared_input_sum(p0_w1: __PbSliceView_i64) -> i64
             } else {
                 None
             };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(p0_w0.expect("active slice view"))
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0.expect("active slice view");
             let source_value = c_collection_flat::shared_input_sum(
                 __prebindgen_argument_0,
             );
@@ -2923,6 +2517,7 @@ pub struct bench_shared_input_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2931,28 +2526,16 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_shared_input_text(p0_w1: __PbBuffer) -> usize {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_shared_input_text_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true {
-                Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p0_w1)) })
-            } else {
-                None
-            };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some(
-                    ::core::convert::AsRef::<
-                        str,
-                    >::as_ref(p0_w0.as_ref().expect("active value")),
-                )
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            #[allow(unused_mut, unused_assignments)]
+            let mut p0_w0 = None;
+            p0_w0 = Some(unsafe { std::str::from_utf8_unchecked(__pb_read(p0_w1)) });
+            let __prebindgen_argument_0 = ::core::convert::AsRef::<
+                str,
+            >::as_ref(p0_w0.as_ref().expect("active value"));
             let source_value = c_collection_flat::shared_input_text(
                 __prebindgen_argument_0,
             );
@@ -2984,6 +2567,7 @@ pub struct bench_take_buffers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -2992,14 +2576,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_buffers(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_buffers_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::BuffersInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3014,47 +2594,29 @@ pub unsafe extern "C" fn bench_take_buffers(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::BuffersInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe {
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7: String = ::core::convert::Into::into(unsafe {
                                 std::str::from_utf8_unchecked(__pb_read(p0_w8))
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w9 = if true {
-                            Some(unsafe { __pb_read(p0_w10) })
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                            });
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w9: Vec<u8> = ::core::convert::Into::into(unsafe {
+                                __pb_read(p0_w10)
+                            });
+                            let p0_w4_argument_2 = p0_w9;
+                            let p0_w4: c_collection_flat::BuffersInput = c_collection_flat::buffers_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                                p0_w4_argument_2,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: String = ::core::convert::Into::into(
-                            p0_w7.expect("active value"),
-                        );
-                        let p0_w9: Vec<u8> = ::core::convert::Into::into(
-                            p0_w9.expect("active value"),
-                        );
-                        let p0_w4: c_collection_flat::BuffersInput = c_collection_flat::buffers_new(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3065,9 +2627,7 @@ pub unsafe extern "C" fn bench_take_buffers(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_buffers(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_buffers_result {
@@ -3096,6 +2656,7 @@ pub struct bench_take_bytes_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3104,14 +2665,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_bytes(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_bytes_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::BytesInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3125,36 +2682,24 @@ pub unsafe extern "C" fn bench_take_bytes(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::BytesInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe { __pb_read(p0_w8) })
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7: Vec<u8> = ::core::convert::Into::into(unsafe {
+                                __pb_read(p0_w8)
+                            });
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w4: c_collection_flat::BytesInput = c_collection_flat::bytes_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: Vec<u8> = ::core::convert::Into::into(
-                            p0_w7.expect("active value"),
-                        );
-                        let p0_w4: c_collection_flat::BytesInput = c_collection_flat::bytes_new(
-                            p0_w5,
-                            p0_w7,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3165,9 +2710,7 @@ pub unsafe extern "C" fn bench_take_bytes(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_bytes(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_bytes_result {
@@ -3195,6 +2738,7 @@ pub struct bench_take_handles_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3203,14 +2747,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_handles_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::Resource> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3223,24 +2763,15 @@ pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::Resource,
                         String,
                     > {
-                        let p0_w5_pointer = if true {
-                            (p0_w5) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w4 = if true {
-                            Some(unsafe { Box::from_raw(p0_w5_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                        {
+                            let p0_w5_pointer = (p0_w5)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                            {}
+                            let p0_w4: c_collection_flat::Resource = *p0_w4;
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w4: c_collection_flat::Resource = *p0_w4
-                            .expect("active allocation");
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3251,9 +2782,7 @@ pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_handles(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_handles_result {
@@ -3281,6 +2810,7 @@ pub struct bench_take_native_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3289,14 +2819,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_native(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_native_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::NativePacket> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3309,33 +2835,35 @@ pub unsafe extern "C" fn bench_take_native(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::NativePacket,
                         String,
                     > {
-                        let p0_w5_pointer = (p0_w5)
-                            as *mut c_collection_flat::NativePacket;
-                        let p0_w5_empty = if true {
-                            Some(
-                                <c_collection_flat::NativePacket as ::core::default::Default>::default(),
-                            )
-                        } else {
-                            None
-                        };
-                        let p0_w4 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w5_pointer,
-                                    p0_w5_empty.expect("prepared empty owner"),
+                        {
+                            let p0_w5_pointer = (p0_w5)
+                                as *mut c_collection_flat::NativePacket;
+                            let p0_w5_empty = if true {
+                                Some(
+                                    <c_collection_flat::NativePacket as ::core::default::Default>::default(),
                                 )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                            } else {
+                                None
+                            };
+                            let p0_w4 = if true {
+                                {
+                                    let value = unsafe {
+                                        ::core::ptr::replace(
+                                            p0_w5_pointer,
+                                            p0_w5_empty.expect("prepared empty owner"),
+                                        )
+                                    };
+                                    {}
+                                    Some(value)
+                                }
+                            } else {
+                                None
+                            };
+                            let p0_w4: c_collection_flat::NativePacket = p0_w4
+                                .expect("active inline owner");
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w4: c_collection_flat::NativePacket = p0_w4
-                            .expect("active inline owner");
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3346,9 +2874,7 @@ pub unsafe extern "C" fn bench_take_native(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_native(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_native_result {
@@ -3378,6 +2904,7 @@ pub struct bench_take_native_mixed_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3386,14 +2913,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_native_mixed(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_native_mixed_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::NativeMixed> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3408,70 +2931,53 @@ pub unsafe extern "C" fn bench_take_native_mixed(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::NativeMixed,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w8_pointer = (p0_w8)
-                            as *mut c_collection_flat::NativePacket;
-                        let p0_w10_pointer = if true {
-                            (p0_w10) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
-                        }
-                        let p0_w8_empty = if true {
-                            Some(
-                                <c_collection_flat::NativePacket as ::core::default::Default>::default(),
-                            )
-                        } else {
-                            None
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe {
-                                ::core::ptr::replace(
-                                    p0_w8_pointer,
-                                    p0_w8_empty.expect("prepared empty owner"),
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w8_pointer = (p0_w8)
+                                as *mut c_collection_flat::NativePacket;
+                            let p0_w8_empty = if true {
+                                Some(
+                                    <c_collection_flat::NativePacket as ::core::default::Default>::default(),
                                 )
-                            })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                            } else {
+                                None
+                            };
+                            let p0_w7 = if true {
+                                {
+                                    let value = unsafe {
+                                        ::core::ptr::replace(
+                                            p0_w8_pointer,
+                                            p0_w8_empty.expect("prepared empty owner"),
+                                        )
+                                    };
+                                    {}
+                                    Some(value)
+                                }
+                            } else {
+                                None
+                            };
+                            let p0_w7: c_collection_flat::NativePacket = p0_w7
+                                .expect("active inline owner");
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w10_pointer = (p0_w10)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                            {}
+                            let p0_w9: c_collection_flat::Resource = *p0_w9;
+                            let p0_w4_argument_2 = p0_w9;
+                            let p0_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                                p0_w4_argument_2,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w9 = if true {
-                            Some(unsafe { Box::from_raw(p0_w10_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
-                        }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: c_collection_flat::NativePacket = p0_w7
-                            .expect("active inline owner");
-                        let p0_w9: c_collection_flat::Resource = *p0_w9
-                            .expect("active allocation");
-                        let p0_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3482,9 +2988,7 @@ pub unsafe extern "C" fn bench_take_native_mixed(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_native_mixed(
                 __prebindgen_argument_0,
             );
@@ -3514,6 +3018,7 @@ pub struct bench_take_numbers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3522,8 +3027,6 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_numbers(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_numbers_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
@@ -3537,12 +3040,11 @@ pub unsafe extern "C" fn bench_take_numbers(p0_w1: __PbRows) -> u64 {
                     let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
                     #[allow(clippy::redundant_closure_call)]
                     let p0_w1_element_built = (|| -> ::core::result::Result<u64, String> {
-                        let p0_w4 = if true { Some(p0_w5) } else { None };
-                        let p0_w4: u64 = ::core::convert::Into::into(
-                            p0_w4.expect("active value"),
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
+                        {
+                            let p0_w4: u64 = ::core::convert::Into::into(p0_w5);
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
+                        }
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3553,9 +3055,7 @@ pub unsafe extern "C" fn bench_take_numbers(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_numbers(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_numbers_result {
@@ -3585,6 +3085,7 @@ pub struct bench_take_records_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3593,14 +3094,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_records_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::Record> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3615,49 +3112,29 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::Record,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true { Some(p0_w8) } else { None };
-                        let p0_w10_pointer = if true {
-                            (p0_w10) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7: u64 = ::core::convert::Into::into(p0_w8);
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w10_pointer = (p0_w10)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                            {}
+                            let p0_w9: c_collection_flat::Resource = *p0_w9;
+                            let p0_w4_argument_2 = p0_w9;
+                            let p0_w4: c_collection_flat::Record = c_collection_flat::record_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                                p0_w4_argument_2,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w9 = if true {
-                            Some(unsafe { Box::from_raw(p0_w10_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
-                        }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: u64 = ::core::convert::Into::into(
-                            p0_w7.expect("active value"),
-                        );
-                        let p0_w9: c_collection_flat::Resource = *p0_w9
-                            .expect("active allocation");
-                        let p0_w4: c_collection_flat::Record = c_collection_flat::record_new(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3668,9 +3145,7 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_records(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_records_result {
@@ -3699,6 +3174,7 @@ pub struct bench_take_tagged_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3707,14 +3183,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_tagged_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::TaggedInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3728,41 +3200,27 @@ pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::TaggedInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true {
-                            Some(
-                                match p0_w8 {
-                                    -3i32 => c_collection_flat::InputTag::Low,
-                                    0i32 => c_collection_flat::InputTag::Normal,
-                                    17i32 => c_collection_flat::InputTag::High,
-                                    _ => unsafe { ::core::hint::unreachable_unchecked() }
-                                },
-                            )
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7 = match p0_w8 {
+                                -3i32 => c_collection_flat::InputTag::Low,
+                                0i32 => c_collection_flat::InputTag::Normal,
+                                17i32 => c_collection_flat::InputTag::High,
+                                _ => unsafe { ::core::hint::unreachable_unchecked() }
+                            };
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w4: c_collection_flat::TaggedInput = c_collection_flat::tagged_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7 = p0_w7.expect("active enum");
-                        let p0_w4: c_collection_flat::TaggedInput = c_collection_flat::tagged_new(
-                            p0_w5,
-                            p0_w7,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3773,9 +3231,7 @@ pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_tagged(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_tagged_result {
@@ -3806,6 +3262,7 @@ pub struct bench_take_tagged_buffers_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3814,16 +3271,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<
         bench_take_tagged_buffers_result,
     >::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::TaggedBuffersInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3839,61 +3292,37 @@ pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::TaggedBuffersInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true {
-                            Some(
-                                match p0_w8 {
-                                    -3i32 => c_collection_flat::InputTag::Low,
-                                    0i32 => c_collection_flat::InputTag::Normal,
-                                    17i32 => c_collection_flat::InputTag::High,
-                                    _ => unsafe { ::core::hint::unreachable_unchecked() }
-                                },
-                            )
-                        } else {
-                            None
-                        };
-                        let p0_w9 = if true {
-                            Some(unsafe {
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7 = match p0_w8 {
+                                -3i32 => c_collection_flat::InputTag::Low,
+                                0i32 => c_collection_flat::InputTag::Normal,
+                                17i32 => c_collection_flat::InputTag::High,
+                                _ => unsafe { ::core::hint::unreachable_unchecked() }
+                            };
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w9: String = ::core::convert::Into::into(unsafe {
                                 std::str::from_utf8_unchecked(__pb_read(p0_w10))
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w11 = if true {
-                            Some(unsafe { __pb_read(p0_w12) })
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                            });
+                            let p0_w4_argument_2 = p0_w9;
+                            let p0_w11: Vec<u8> = ::core::convert::Into::into(unsafe {
+                                __pb_read(p0_w12)
+                            });
+                            let p0_w4_argument_3 = p0_w11;
+                            let p0_w4: c_collection_flat::TaggedBuffersInput = c_collection_flat::tagged_buffers_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                                p0_w4_argument_2,
+                                p0_w4_argument_3,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7 = p0_w7.expect("active enum");
-                        let p0_w9: String = ::core::convert::Into::into(
-                            p0_w9.expect("active value"),
-                        );
-                        let p0_w11: Vec<u8> = ::core::convert::Into::into(
-                            p0_w11.expect("active value"),
-                        );
-                        let p0_w4: c_collection_flat::TaggedBuffersInput = c_collection_flat::tagged_buffers_new(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                            p0_w11,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -3904,9 +3333,7 @@ pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_tagged_buffers(
                 __prebindgen_argument_0,
             );
@@ -3937,6 +3364,7 @@ pub struct bench_take_text_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -3945,14 +3373,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_text(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_text_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::TextInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -3966,38 +3390,24 @@ pub unsafe extern "C" fn bench_take_text(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::TextInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true {
-                            Some(unsafe {
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7: String = ::core::convert::Into::into(unsafe {
                                 std::str::from_utf8_unchecked(__pb_read(p0_w8))
-                            })
-                        } else {
-                            None
-                        };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                            });
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w4: c_collection_flat::TextInput = c_collection_flat::text_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: String = ::core::convert::Into::into(
-                            p0_w7.expect("active value"),
-                        );
-                        let p0_w4: c_collection_flat::TextInput = c_collection_flat::text_new(
-                            p0_w5,
-                            p0_w7,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -4008,9 +3418,7 @@ pub unsafe extern "C" fn bench_take_text(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_text(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_text_result {
@@ -4045,6 +3453,7 @@ pub struct bench_take_wide_result {
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
 #[allow(
+    clippy::let_and_return,
     clippy::needless_range_loop,
     clippy::needless_borrow,
     clippy::let_unit_value,
@@ -4053,14 +3462,10 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 )]
 #[no_mangle]
 pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
-    #[allow(unused_mut)]
-    let _ownership_accepted = ::core::cell::Cell::new(0usize);
     let mut storage = std::mem::MaybeUninit::<bench_take_wide_result>::uninit();
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let __prebindgen_input_consumed = &_ownership_accepted;
-            let _: () = {};
             let mut p0_w0: Vec<c_collection_flat::WideInput> = Vec::new();
             if true {
                 let p0_w2 = p0_w1.len;
@@ -4080,62 +3485,40 @@ pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
                         c_collection_flat::WideInput,
                         String,
                     > {
-                        let p0_w6_pointer = if true {
-                            (p0_w6) as *mut c_collection_flat::Resource
-                        } else {
-                            ::core::ptr::null_mut()
-                        };
-                        let p0_w7 = if true { Some(p0_w8) } else { None };
-                        let p0_w9 = if true { Some(p0_w10) } else { None };
-                        let p0_w11 = if true { Some(p0_w12) } else { None };
-                        let p0_w13 = if true { Some(p0_w14) } else { None };
-                        let p0_w15 = if true { Some(p0_w16) } else { None };
-                        let p0_w17 = if true { Some(p0_w18) } else { None };
-                        let p0_w19 = if true { Some(p0_w20) } else { None };
-                        let p0_w5 = if true {
-                            Some(unsafe { Box::from_raw(p0_w6_pointer) })
-                        } else {
-                            None
-                        };
-                        if true {
-                            __prebindgen_input_consumed
-                                .set(__prebindgen_input_consumed.get() + (1usize));
+                        {
+                            let p0_w6_pointer = (p0_w6)
+                                as *mut c_collection_flat::Resource;
+                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                            {}
+                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w4_argument_0 = p0_w5;
+                            let p0_w7: u64 = ::core::convert::Into::into(p0_w8);
+                            let p0_w4_argument_1 = p0_w7;
+                            let p0_w9: u64 = ::core::convert::Into::into(p0_w10);
+                            let p0_w4_argument_2 = p0_w9;
+                            let p0_w11: u64 = ::core::convert::Into::into(p0_w12);
+                            let p0_w4_argument_3 = p0_w11;
+                            let p0_w13: u64 = ::core::convert::Into::into(p0_w14);
+                            let p0_w4_argument_4 = p0_w13;
+                            let p0_w15: u64 = ::core::convert::Into::into(p0_w16);
+                            let p0_w4_argument_5 = p0_w15;
+                            let p0_w17: u64 = ::core::convert::Into::into(p0_w18);
+                            let p0_w4_argument_6 = p0_w17;
+                            let p0_w19: u64 = ::core::convert::Into::into(p0_w20);
+                            let p0_w4_argument_7 = p0_w19;
+                            let p0_w4: c_collection_flat::WideInput = c_collection_flat::wide_new(
+                                p0_w4_argument_0,
+                                p0_w4_argument_1,
+                                p0_w4_argument_2,
+                                p0_w4_argument_3,
+                                p0_w4_argument_4,
+                                p0_w4_argument_5,
+                                p0_w4_argument_6,
+                                p0_w4_argument_7,
+                            );
+                            let p0_w1_row_value = p0_w4;
+                            Ok(p0_w1_row_value)
                         }
-                        let p0_w5: c_collection_flat::Resource = *p0_w5
-                            .expect("active allocation");
-                        let p0_w7: u64 = ::core::convert::Into::into(
-                            p0_w7.expect("active value"),
-                        );
-                        let p0_w9: u64 = ::core::convert::Into::into(
-                            p0_w9.expect("active value"),
-                        );
-                        let p0_w11: u64 = ::core::convert::Into::into(
-                            p0_w11.expect("active value"),
-                        );
-                        let p0_w13: u64 = ::core::convert::Into::into(
-                            p0_w13.expect("active value"),
-                        );
-                        let p0_w15: u64 = ::core::convert::Into::into(
-                            p0_w15.expect("active value"),
-                        );
-                        let p0_w17: u64 = ::core::convert::Into::into(
-                            p0_w17.expect("active value"),
-                        );
-                        let p0_w19: u64 = ::core::convert::Into::into(
-                            p0_w19.expect("active value"),
-                        );
-                        let p0_w4: c_collection_flat::WideInput = c_collection_flat::wide_new(
-                            p0_w5,
-                            p0_w7,
-                            p0_w9,
-                            p0_w11,
-                            p0_w13,
-                            p0_w15,
-                            p0_w17,
-                            p0_w19,
-                        );
-                        let p0_w0 = p0_w4;
-                        Ok(p0_w0)
                     })();
                     let element = p0_w1_element_built?;
                     #[allow(clippy::zst_offset)]
@@ -4146,9 +3529,7 @@ pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
                     }
                 }
             }
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true { Some(p0_w0) } else { None };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = c_collection_flat::take_wide(__prebindgen_argument_0);
             let ret_w0 = source_value;
             let result = bench_take_wide_result {
