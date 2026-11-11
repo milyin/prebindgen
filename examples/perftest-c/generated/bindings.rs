@@ -1631,7 +1631,7 @@ pub unsafe extern "C" fn perftest_drop_canonical_error(
     error: *mut __PbError_canonical_error,
 ) {
     if let Err(message) = ::prebindgen_runtime::boundary(|| {
-        if !error.is_null() {}
+        let _ = error;
         Ok(())
     }) {
         panic!("C error destructor failed: {}", message);

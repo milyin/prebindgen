@@ -85,6 +85,9 @@ fn invalid_and_unused_canonical_declarations_are_diagnosed() {
         convert!(Value).input(from!(i64)).input(from!(i32)),
         convert!(Value).input(into!(i64)),
         convert!(i64).input(from!(i32)),
+        convert!(str).input(from!(String)),
+        convert!(Result<Value,String>).input(from!(i64)),
+        convert!(Box<Value>).input(from!(i64)),
     ] {
         assert!(builder(VALUE).convert(declaration).build().is_err());
     }

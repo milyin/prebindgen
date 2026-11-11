@@ -209,8 +209,9 @@ pub fn prepare_value_conversions<S: Schema>(
             || Primitive::from_type(&ty).is_some()
             || prebindgen_flat::option_inner(&ty).is_some()
             || prebindgen_flat::sequence_parts(&ty).is_some()
-            || type_key(&ty) == "String"
-            || type_key(&ty) == "()"
+            || prebindgen_flat::result_parts(&ty).is_some()
+            || matches!(type_key(&ty).as_str(), "String" | "str" | "()")
+            || flat.type_info(&ty).is_err()
         {
             return Err(
                 "canonical conversions require a named domain type, not a built-in representation"
@@ -277,7 +278,6 @@ pub fn prepare_value_conversions<S: Schema>(
     }
     for (key, pair) in selected {
         let ty = syn::parse_str(&key).map_err(|e| format!("conversion type: {e}"))?;
-        flat.type_metadata_mut(&ty)?;
         flat.type_info_mut(&ty)?.conversion = pair;
     }
     Ok(())

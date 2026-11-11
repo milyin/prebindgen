@@ -32,7 +32,7 @@ Both global declarations and local overrides resolve to the same `ValueConversio
 node; they share compilation, error routing, borrowing and ownership reporting.
 At a function/callback boundary the precedence is: explicit local tree, type-wide
 boundary expansion, canonical value conversion, built-in representation. This
-preserves production expansion precedence. Properties and conversion representation
+preserves existing expansion precedence. Properties and conversion representation
 types use canonical values without applying unrelated boundary expansions.
 
 The same declaration can be used as a local override:
@@ -104,8 +104,8 @@ Vec, data-class and handle property model. Property representation
 support does not imply adding payload enums, reference-valued records or arbitrary
 C by-value structs.
 
-Tests must exercise generated Rust plus actual C and Kotlin callers, including
+Coverage exercises generated Rust plus actual C and Kotlin callers, including
 conversion failures, ownership cleanup, borrowed outputs and input reconstruction,
-cyclic declarations, incompatible property directions and local overrides. Record
-changed generated sources. Compare the new conversions with equivalent explicit
-expansions and verify unchanged declarations retain their generated artifacts.
+cyclic declarations, incompatible property directions and local overrides. Changed
+generated sources are recorded. See the [matched performance comparison](performance.md)
+for latency, allocation counts and generated-code comparisons.
