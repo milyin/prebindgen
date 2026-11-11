@@ -9,6 +9,9 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
+mod value;
+pub use value::{ValueConversion, ValueConversions, ValueSource};
+
 mod conversion;
 pub use conversion::*;
 
@@ -57,6 +60,8 @@ impl Schema for () {
 /// including for opaque aliases that have neither fields nor variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeInfo<M = ()> {
+    /// Prepared canonical value representations; empty for source-only inspection.
+    pub conversion: ValueConversions,
     /// Qualified Rust type. Alias implementations remain opaque.
     pub ty: Type,
     /// Generator-owned declaration information shared by every occurrence.
@@ -249,18 +254,40 @@ impl<M: Schema> Flat<M> {
                 _ => None,
             }
         }
-        struct References<'a>(&'a mut BTreeSet<String>);
+        // A qualified path selects a capture only when its origin crate matches.
+        // `std::io::Error` must not pull in an unrelated flat type named Error.
+        let qualified: BTreeSet<_> = items
+            .iter()
+            .filter_map(|(item, location)| match item {
+                syn::Item::Struct(_) | syn::Item::Enum(_) | syn::Item::Type(_) => Some((
+                    location.crate_name.as_deref().unwrap_or("crate").to_owned(),
+                    name(item).unwrap(),
+                )),
+                _ => None,
+            })
+            .collect();
+        struct References<'a>(&'a mut BTreeSet<String>, &'a BTreeSet<(String, String)>);
         impl VisitMut for References<'_> {
             fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
-                if path.qself.is_none() && path.path.segments.len() == 1 {
-                    self.0.insert(path.path.segments[0].ident.to_string());
+                if path.qself.is_none() {
+                    let segments = &path.path.segments;
+                    if segments.len() == 1 {
+                        self.0.insert(segments[0].ident.to_string());
+                    } else if segments.len() == 2
+                        && self.1.contains(&(
+                            segments[0].ident.to_string(),
+                            segments[1].ident.to_string(),
+                        ))
+                    {
+                        self.0.insert(segments[1].ident.to_string());
+                    }
                 }
                 syn::visit_mut::visit_type_path_mut(self, path);
             }
         }
         let mut needed: BTreeSet<_> = functions.iter().cloned().collect();
         for ty in types {
-            References(&mut needed).visit_type_mut(&mut ty.clone());
+            References(&mut needed, &qualified).visit_type_mut(&mut ty.clone());
         }
         loop {
             let old = needed.len();
@@ -268,7 +295,7 @@ impl<M: Schema> Flat<M> {
                 if !name(item).is_some_and(|n| needed.contains(&n)) {
                     continue;
                 }
-                let mut visitor = References(&mut needed);
+                let mut visitor = References(&mut needed, &qualified);
                 match item {
                     syn::Item::Fn(f) => visitor.visit_signature_mut(&mut f.sig.clone()),
                     syn::Item::Struct(s) => visitor.visit_fields_mut(&mut s.fields.clone()),
@@ -336,6 +363,7 @@ impl<M: Schema> Flat<M> {
                 types.insert(
                     id.to_string(),
                     TypeInfo {
+                        conversion: Default::default(),
                         ty: syn::parse_quote!(#module::#id),
                         metadata: Default::default(),
                     },
@@ -549,6 +577,7 @@ impl<M: Schema> Flat<M> {
             .types
             .entry(key)
             .or_insert_with(|| TypeInfo {
+                conversion: Default::default(),
                 ty,
                 metadata: Default::default(),
             })

@@ -14,6 +14,12 @@ internal object JNINative {
     @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
     init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Long_2_c3e8677e51c52ca2::class.java, SequenceRow_Long_Long_Long_8_3346a47ef3bb7c4a::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java)) }
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_canonical_value_6b06907d41ff5474(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_expanded_value_bb1afc8a668b541f(p0_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_canonical_values_4a18f6c897a6e47d(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_expanded_values_69fd56d541c804cc(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
+    @JvmStatic external fun call_canonical_value_callback_32a58c45934fa8ba(p0_callback: Any?, p1_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_expanded_value_callback_785f73f6925ad475(p0_callback: Any?, p1_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_batches_owned_handles_33b783abb5780e95(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_callback_mixed_batches_owned_handles_2c0ba11b9a082cc3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

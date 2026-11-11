@@ -76,6 +76,40 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_c
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
+`convert!` selects a domain type's canonical foreign value in both adapters:
+
+```rust,ignore
+.convert(convert!(Millis)
+    .input(fun!(millis_from_long))
+    .output(fun!(millis_value)))
+.convert(convert!(Percent).input(try_from!(i32)).output(try_into!(i32)))
+```
+
+An input helper takes one representation and returns the domain value, optionally
+through `Result`. An output helper takes the domain value or its shared reference
+and returns the representation, optionally through `Result`. `from!`/`into!` and
+`try_from!`/`try_into!` use Rust's conversion traits. Directions are independent;
+using an undeclared canonical direction requires an explicit boundary override.
+Kotlin data-class properties, options, collection elements and callbacks use the
+same value conversion. C's native whole-vector owners retain their representation;
+explicitly expanding a sequence applies the element conversions.
+
+Local overrides use the same declaration:
+
+```rust,ignore
+fun!(echo).expand_param("value", convert!(Millis).input(from!(i32)))
+fun!(echo).expand_return(convert!(Millis).output(into!(i32)))
+```
+
+Local trees override type-wide boundary expansions, which override canonical
+conversions. Record properties and a conversion's representation use canonical
+values independently of boundary expansions. Conversion failures use the existing
+binding-error policy; source-function `Result` errors retain their typed channel.
+Borrowed inputs require their native representation or explicit reconstruction.
+A consuming output conversion cannot convert a borrowed source; use a helper taking
+`&T`. No cloning or reconstruction is implicit. See the
+[conversion design and ownership rules](docs/investigations/canonical-values/README.md).
+
 Public Kotlin function parameters use the Rust source names in camelCase. For
 example, `gcResourceNew(id = 1uL, value = 42uL)` uses `id` and `value` rather than
 internal wire identifiers. Constructor and record expansions add component names,

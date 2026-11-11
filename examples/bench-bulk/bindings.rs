@@ -1,4 +1,4 @@
-use prebindgen_declarations::{callback, expand_param, expand_return, fun, Input};
+use prebindgen_declarations::{callback, convert, expand_param, expand_return, fun, Input};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -151,16 +151,33 @@ fn main() {
         } else {
             nested_callback.callback_return()
         };
-        let batch_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])))])));
-        let mixed_batch_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk()])));
-        let batches = fun!(callback_batches_owned_handles).expand_param("callback",
-            callback!(impl Fn() -> Vec<HandleBatch>).name("OwnedBatchesCallback")
-                .expand_return(if bulk { batch_input.bulk() } else { batch_input }))
+        let batch_input = Input::Sequence(Box::new(Input::Record(vec![
+            Input::Leaf,
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))),
+        ])));
+        let mixed_batch_input = Input::Sequence(Box::new(Input::Record(vec![
+            Input::Leaf,
+            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
+        ])));
+        let batches = fun!(callback_batches_owned_handles)
+            .expand_param(
+                "callback",
+                callback!(impl Fn() -> Vec<HandleBatch>)
+                    .name("OwnedBatchesCallback")
+                    .expand_return(if bulk {
+                        batch_input.bulk()
+                    } else {
+                        batch_input
+                    }),
+            )
             .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
-        let mixed_batches = fun!(callback_mixed_batches_owned_handles).expand_param("callback",
-            callback!(impl Fn() -> Vec<HandleBatch>).name("OwnedMixedBatchesCallback").expand_return(mixed_batch_input))
+        let mixed_batches = fun!(callback_mixed_batches_owned_handles)
+            .expand_param(
+                "callback",
+                callback!(impl Fn() -> Vec<HandleBatch>)
+                    .name("OwnedMixedBatchesCallback")
+                    .expand_return(mixed_batch_input),
+            )
             .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
         let callback_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
         let callback_input = if bulk {
@@ -210,7 +227,51 @@ fn main() {
         } else {
             buffers
         };
+        let value_input = || expand_param!(BenchValue).variant(fun!(bench_value_from));
+        let value_output = || expand_return!(BenchValue).field(fun!(bench_value_to));
+        let canonical_value = fun!(canonical_value);
+        let expanded_value = fun!(expanded_value)
+            .expand_param("value", value_input())
+            .expand_return(value_output());
+        let canonical_values = fun!(canonical_values);
+        let expanded_values = fun!(expanded_values);
+        let (canonical_values, expanded_values) = if bulk {
+            (
+                canonical_values
+                    .expand_param(
+                        "values",
+                        expand_param!(Vec<BenchValue>).variant_self().bulk(),
+                    )
+                    .expand_return(expand_return!(Vec<BenchValue>).field_self_into().bulk()),
+                expanded_values
+                    .expand_param("values", value_input().bulk())
+                    .expand_return(value_output().bulk()),
+            )
+        } else {
+            (
+                canonical_values,
+                expanded_values
+                    .expand_param("values", value_input())
+                    .expand_return(value_output()),
+            )
+        };
+        let canonical_callback = fun!(canonical_value_callback);
+        let expanded_callback = fun!(expanded_value_callback)
+            .expand_param("value", value_input())
+            .expand_return(value_output())
+            .expand_param(
+                "callback",
+                callback!(impl Fn(BenchValue) -> BenchValue)
+                    .name("ExpandedValueCallback")
+                    .expand_param(0, value_output())
+                    .expand_return(value_input()),
+            );
         let builder = JniGen::builder()
+            .convert(
+                convert!(BenchValue)
+                    .input(fun!(bench_value_from))
+                    .output(fun!(bench_value_to)),
+            )
             // Freeze both baselines: this fixture compares explicit transport choices.
             .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
@@ -218,10 +279,17 @@ fn main() {
             .set_jni_native_init(r#"System.loadLibrary("bulk_bench")"#)
             .package(
                 package!()
+                    .fun(canonical_value)
+                    .fun(expanded_value)
+                    .fun(canonical_values)
+                    .fun(expanded_values)
+                    .fun(canonical_callback)
+                    .fun(expanded_callback)
                     .class(ptr_class!(InputHandle))
                     .class(data_class!(HandleRecord))
                     .class(data_class!(HandleBatch))
-                    .fun(batches).fun(mixed_batches)
+                    .fun(batches)
+                    .fun(mixed_batches)
                     .class(data_class!(BufferRecord))
                     .fun(fun!(input_handle_new))
                     .fun(fun!(input_handle_value))

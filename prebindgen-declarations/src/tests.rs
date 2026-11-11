@@ -1721,8 +1721,7 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     )
     .is_err());
     let errors = vec![(syn::parse_quote!(E), "message".into())];
-    let names =
-        declarations::source_functions(&[], &[], &errors, [&fun!(f).on_error(fun!(message))]);
+    let names = declarations::source_items(&[], &[], &errors, [&fun!(f).on_error(fun!(message))]);
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
 }
 

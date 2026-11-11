@@ -22,6 +22,7 @@ static perftest_buffer_view bytes_view(const perftest_owned_vec_u8_672e72343c1b4
 #include "enum_inputs.h"
 #include "inline_inputs.h"
 #include "mixed_callback_rows.h"
+#include "canonical_values.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -545,6 +546,7 @@ static void check_results(void) {
     perftest_free_error(NULL);
 }
 int main(void) {
+    check_canonical_values();
     check_numeric_loans();
     check_shared_inputs();
     check_inline_owners();

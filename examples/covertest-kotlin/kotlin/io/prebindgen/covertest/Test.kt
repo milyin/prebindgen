@@ -42,6 +42,7 @@ fun main(args: Array<String>) {
     checkSequenceDelivery()
     checkTypedSequenceRows()
     checkCallbackLocalFrames()
+    checkCanonicalValues()
     checkResults()
     checkOptions()
     checkEnums()

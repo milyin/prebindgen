@@ -8,6 +8,10 @@ impl Input {
         match self {
             Input::Request(never) => match never {},
             Input::Leaf => Input::Leaf,
+            Input::Convert { conversion, input } => Input::Convert {
+                conversion,
+                input: Box::new(input.into_preparation()),
+            },
             Input::Bulk(child) => Input::Bulk(Box::new(child.into_preparation())),
             Input::Temporary(child) => Input::Temporary(Box::new(child.into_preparation())),
             Input::Callback(callback) => Input::Callback(callback),
@@ -36,6 +40,10 @@ impl Output {
         match self {
             Output::Request(never) => match never {},
             Output::Leaf => Output::Leaf,
+            Output::Convert { conversion, output } => Output::Convert {
+                conversion,
+                output: Box::new(output.into_preparation()),
+            },
             Output::Bulk(child) => Output::Bulk(Box::new(child.into_preparation())),
             Output::Discard => Output::Discard,
             Output::Projected(policy) => Output::Projected(policy),

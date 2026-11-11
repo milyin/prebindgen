@@ -6,7 +6,10 @@
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
-pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
+pub use prebindgen_declarations::{
+    callback, convert, from, into, try_from, try_into, CallbackDecl, ConvertDecl, ConvertSource,
+    Projection, ProjectionMode,
+};
 mod bulk;
 mod metadata;
 pub use bulk::BulkRecord;
@@ -257,6 +260,7 @@ pub struct JniGenBuilder {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
+    conversions: Vec<prebindgen_declarations::ConvertDecl>,
     inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
     outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
@@ -346,7 +350,12 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register an input/output default using the declaration syntax.
+    /// Select a type's canonical single-value input/output representations.
+    pub fn convert(mut self, declaration: prebindgen_declarations::ConvertDecl) -> Self {
+        self.conversions.push(declaration);
+        self
+    }
+    /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
     pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         use prebindgen_declarations::ExpandDecl;
@@ -450,16 +459,22 @@ impl JniGenBuilder {
                 }
             }
         }
-        let references = prebindgen_declarations::declarations::source_functions(
+        let mut references = prebindgen_declarations::declarations::source_items(
             &self.inputs,
             &self.outputs,
             &self.error_mappers,
             self.packages.iter().flat_map(|p| &p.functions),
         );
+        references.extend(self.conversions.iter().flat_map(|c| c.functions()));
         let types: Vec<_> = self
             .packages
             .iter()
             .flat_map(|p| p.classes.iter().map(|c| c.ty().clone()))
+            .chain(
+                self.conversions
+                    .iter()
+                    .flat_map(|c| std::iter::once(c.ty.clone()).chain(c.representation_types())),
+            )
             .chain(self.error_classes.iter().map(|(ty, _)| ty.clone()))
             .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
             .collect();
@@ -580,6 +595,7 @@ impl JniGenBuilder {
         }
         let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
         validate_declaration_names(&flat)?;
+        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         data::prepare(&mut flat)?;
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
@@ -1184,7 +1200,7 @@ impl Codec for JniCodec<'_> {
             ));
         }
         Ok(Some(Input::Record(vec![
-            Input::Leaf;
+            Input::value();
             flat.record(ty)?.fields.len()
         ])))
     }
@@ -1222,12 +1238,12 @@ impl Codec for JniCodec<'_> {
         let inherited = policy.as_ref().map(Projection::inherited);
         let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(Output::Leaf); };
+            let Some(policy) = &policy else { return Ok(Output::value()); };
             let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
-            Ok(Output::Projected(child.clone()))
+            Ok(Output::Request(OutputRequest::Value {projection:Some(child.clone())}))
         }).collect::<Result<Vec<_>>>()?;
         Ok(Some(Output::Record {
             fields: children,
@@ -2428,6 +2444,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     })
 }
 
+#[cfg(test)]
+mod canonical_tests;
 #[cfg(test)]
 mod input_contract_tests;
 #[cfg(test)]

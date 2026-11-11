@@ -7,6 +7,12 @@ internal object JNINative {
     @JvmStatic external fun drop_RowReturnHandler_0972ff7cb1556afa(id: Long)
     @JvmStatic external fun drop_WideRowReturnHandler_ed750f04931eb9ca(id: Long)
     @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_canonical_value_6b06907d41ff5474(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_expanded_value_bb1afc8a668b541f(p0_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_canonical_values_4a18f6c897a6e47d(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_expanded_values_69fd56d541c804cc(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_canonical_value_callback_32a58c45934fa8ba(p0_callback: Any?, p1_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_expanded_value_callback_785f73f6925ad475(p0_callback: Any?, p1_w2: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_callback_batches_owned_handles_33b783abb5780e95(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_callback_mixed_batches_owned_handles_2c0ba11b9a082cc3(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_input_handle_new_d7aa473c3cabcfa5(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

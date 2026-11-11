@@ -47,6 +47,10 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
     val referenceText = "x".repeat(64)
     val referenceBytes = ByteArray(64)
     val cases = mutableListOf(
+        Case("canonical_value", 1, BASE + 1, 1, Operation { i -> bench.plain.canonicalValue(BASE + (i and MASK)) }),
+        Case("expanded_value", 1, BASE + 1, 1, Operation { i -> bench.plain.expandedValue(BASE + (i and MASK)) }),
+        Case("canonical_value_callback", 1, BASE + 1, 1, Operation { i -> bench.plain.canonicalValueCallback({ callbacks[0]++; it + 1 }, BASE + (i and MASK)) }, true),
+        Case("expanded_value_callback", 1, BASE + 1, 1, Operation { i -> bench.plain.expandedValueCallback({ callbacks[0]++; it + 1 }, BASE + (i and MASK)) }, true),
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.plain.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.plain.scalar(BASE + (i and MASK)) }),
         Case("handle_input", 1, BASE, 0, Operation { _ -> bench.plain.inputHandleValue(singleHandle) }),
@@ -63,6 +67,10 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
     for (size in sizes) {
         val numbers = List(size) { BASE + it }
         val rows = List(size) { i -> val x = BASE + i; bench.plain.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7) }
+        cases.add(Case("canonical_values", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.plain.canonicalValues(numbers).sum() }))
+        cases.add(Case("expanded_values", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.plain.expandedValues(numbers).sum() }))
         cases.add(Case("numbers_input", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
             Operation { _ -> bench.plain.numbersSum(numbers) }))
         cases.add(Case("records_input", size, rowsTotal(size), 0,
@@ -208,6 +216,10 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
     val referenceText = "x".repeat(64)
     val referenceBytes = ByteArray(64)
     val cases = mutableListOf(
+        Case("canonical_value", 1, BASE + 1, 1, Operation { i -> bench.bulk.canonicalValue(BASE + (i and MASK)) }),
+        Case("expanded_value", 1, BASE + 1, 1, Operation { i -> bench.bulk.expandedValue(BASE + (i and MASK)) }),
+        Case("canonical_value_callback", 1, BASE + 1, 1, Operation { i -> bench.bulk.canonicalValueCallback({ callbacks[0]++; it + 1 }, BASE + (i and MASK)) }, true),
+        Case("expanded_value_callback", 1, BASE + 1, 1, Operation { i -> bench.bulk.expandedValueCallback({ callbacks[0]++; it + 1 }, BASE + (i and MASK)) }, true),
         Case("control", 1, BASE + 1, 1, Operation { i -> bench.bulk.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.bulk.scalar(BASE + (i and MASK)) }),
         Case("handle_input", 1, BASE, 0, Operation { _ -> bench.bulk.inputHandleValue(singleHandle) }),
@@ -224,6 +236,10 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
     for (size in sizes) {
         val numbers = List(size) { BASE + it }
         val rows = List(size) { i -> val x = BASE + i; bench.bulk.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7) }
+        cases.add(Case("canonical_values", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.bulk.canonicalValues(numbers).sum() }))
+        cases.add(Case("expanded_values", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
+            Operation { _ -> bench.bulk.expandedValues(numbers).sum() }))
         cases.add(Case("numbers_input", size, size * BASE + size.toLong() * (size - 1) / 2, 0,
             Operation { _ -> bench.bulk.numbersSum(numbers) }))
         cases.add(Case("records_input", size, rowsTotal(size), 0,

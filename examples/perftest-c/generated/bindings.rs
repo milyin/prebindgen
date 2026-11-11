@@ -97,6 +97,12 @@ fn __pb_owned_owned_vec_perftest_flat_callbackrow_f03a4febf07e44f9_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_canonmillis_663d3173bfe07b79_len(
+    value: &Vec<perftest_flat::CanonMillis>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_len(
     value: &Vec<perftest_flat::CollectionItem>,
 ) -> usize {
@@ -317,6 +323,21 @@ const _: () = {
         "C binding target differs from the Rust compilation target"
     );
 };
+/**# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_canonical_token(
+    ptr: *mut perftest_flat::CanonToken,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !ptr.is_null() {
+            drop(Box::from_raw(ptr));
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -1170,6 +1191,13 @@ pub struct perftest_callback_4f6170b342252c1b {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_4f90a51a652b13b2 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> i64>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_callback_5b6f807c27356f4b_callback_return_w8 {
     pub v0: *mut perftest_flat::OwnedResource,
     pub v1: u32,
@@ -1364,6 +1392,13 @@ pub struct perftest_callback_a7558edd85392388 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_a97639874330f1a4 {
+    pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i64) -> ()>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_callback_aaca2bf4492ad16a_callback_arg_0_w0 {
     pub v0: i64,
 }
@@ -1510,6 +1545,18 @@ pub struct perftest_callback_d47c7bdcce5eb73a {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_e00f09649cf788a6 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *mut perftest_flat::CanonToken,
+        ) -> *mut perftest_flat::CanonToken,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct perftest_callback_e79b477ebab70ab0 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> u32>,
     pub context: *mut ::core::ffi::c_void,
@@ -1545,6 +1592,50 @@ pub struct perftest_callback_fac4c5ae31f5b10e {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, u8) -> u8>,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+pub struct __PbError_canonical_error {
+    pub v0: i32,
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+unsafe fn __pb_report_canonical_error(
+    source_error: perftest_flat::CanonError,
+    error_output: *mut __PbError_canonical_error,
+    reported: &mut bool,
+) -> Result<(), String> {
+    if error_output.is_null() {
+        return Ok(());
+    }
+    {
+        let ret_w0 = source_error;
+        let ret_w1 = ret_w0.code;
+        let result = __PbError_canonical_error {
+            v0: ret_w1,
+        };
+        std::ptr::write(error_output, result);
+        *reported = true;
+        Ok(())
+    }
+}
+/**# Safety
+The pointer must be null or writable storage containing a live error produced by this library.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_canonical_error(
+    error: *mut __PbError_canonical_error,
+) {
+    if let Err(message) = ::prebindgen_runtime::boundary(|| {
+        let _ = error;
+        Ok(())
+    }) {
+        panic!("C error destructor failed: {}", message);
+    }
 }
 #[repr(C)]
 pub struct __PbError_result_error {
@@ -11197,6 +11288,1172 @@ pub unsafe extern "C" fn perftest_callback_row_resource_live() -> i64 {
             let source_value = perftest_flat::callback_row_resource_live();
             let ret_w0 = source_value;
             let result = perftest_callback_row_resource_live_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_celsius_result {
+    pub v0: i32,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_celsius(p0_w3: i32) -> i32 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_celsius_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: i32 = ::core::convert::Into::into(p0_w3);
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonCelsius = <i32 as ::core::convert::Into<
+                perftest_flat::CanonCelsius,
+            >>::into(p0_w1_repr);
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_celsius(__prebindgen_argument_0);
+            let ret_w0 = source_value;
+            let ret_w1 = <perftest_flat::CanonCelsius as ::core::convert::Into<
+                i32,
+            >>::into(ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_celsius_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_consume_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_consume(
+    p0_w3: *mut perftest_flat::CanonToken,
+    p1_w3: *mut perftest_flat::CanonToken,
+    p2_w3: *mut perftest_flat::CanonToken,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut __PbError_canonical_error,
+) -> bool {
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_consume_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w3_pointer = p0_w3 as *mut perftest_flat::CanonToken;
+            let p0_w2: perftest_flat::CanonToken = {
+                let p0_w2 = unsafe { Box::from_raw(p0_w3_pointer) };
+                {
+                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                }
+                *p0_w2
+            };
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonOwned = (perftest_flat::canonical_owned_new(
+                p0_w1_repr,
+            ))
+                .map_err(|error| ::std::string::ToString::to_string(&error))?;
+            let __prebindgen_argument_0 = p0_w1;
+            let p1_w3_pointer = p1_w3 as *mut perftest_flat::CanonToken;
+            let p1_w2: perftest_flat::CanonToken = {
+                let p1_w2 = unsafe { Box::from_raw(p1_w3_pointer) };
+                {
+                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                }
+                *p1_w2
+            };
+            let p1_w1_repr = p1_w2;
+            let p1_w1: perftest_flat::CanonOwned = (perftest_flat::canonical_owned_new(
+                p1_w1_repr,
+            ))
+                .map_err(|error| ::std::string::ToString::to_string(&error))?;
+            let __prebindgen_argument_1 = p1_w1;
+            let p2_w3_pointer = p2_w3 as *mut perftest_flat::CanonToken;
+            let p2_w2: perftest_flat::CanonToken = {
+                let p2_w2 = unsafe { Box::from_raw(p2_w3_pointer) };
+                {
+                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                }
+                *p2_w2
+            };
+            let p2_w1_repr = p2_w2;
+            let p2_w1: perftest_flat::CanonOwned = (perftest_flat::canonical_owned_new(
+                p2_w1_repr,
+            ))
+                .map_err(|error| ::std::string::ToString::to_string(&error))?;
+            let __prebindgen_argument_2 = p2_w1;
+            let source_value = perftest_flat::canonical_consume(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        unsafe {
+                            __pb_report_canonical_error(
+                                ret_w1,
+                                error,
+                                &mut error_reported,
+                            )
+                        }?;
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_canonical_consume_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    std::ptr::write(ownership, ownership_accepted.get());
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                let mut delivered = false;
+                if ::prebindgen_runtime::boundary(|| unsafe {
+                        __pb_report_canonical_error(
+                            <perftest_flat::CanonError as From<String>>::from(message),
+                            error,
+                            &mut delivered,
+                        )
+                    })
+                    .is_err() && !delivered
+                {
+                    std::ptr::write(error, __PbError_canonical_error { v0: 0 });
+                }
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_canonical_domain_error_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_domain_error(
+    p0_w3: i64,
+    out0: *mut i64,
+    error: *mut __PbError_canonical_error,
+) -> bool {
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_domain_error_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: i64 = ::core::convert::Into::into(p0_w3);
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                p0_w1_repr,
+            );
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_domain_error(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        unsafe {
+                            __pb_report_canonical_error(
+                                ret_w1,
+                                error,
+                                &mut error_reported,
+                            )
+                        }?;
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let ret_w3 = perftest_flat::canonical_millis_value(&ret_w2);
+            let ret_w4 = ret_w3;
+            let result = perftest_canonical_domain_error_result {
+                v0: ret_w4,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                let mut delivered = false;
+                if ::prebindgen_runtime::boundary(|| unsafe {
+                        __pb_report_canonical_error(
+                            <perftest_flat::CanonError as From<String>>::from(message),
+                            error,
+                            &mut delivered,
+                        )
+                    })
+                    .is_err() && !delivered
+                {
+                    std::ptr::write(error, __PbError_canonical_error { v0: 0 });
+                }
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_canonical_live_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_live() -> i64 {
+    let mut storage = std::mem::MaybeUninit::<perftest_canonical_live_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::canonical_live();
+            let ret_w0 = source_value;
+            let result = perftest_canonical_live_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_borrow_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_borrow(p0_w4: i64) -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_borrow_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_mut, unused_assignments)]
+            let mut p0_w5: Option<perftest_flat::CanonMillis> = None;
+            {
+                let p0_w3: i64 = ::core::convert::Into::into(p0_w4);
+                let p0_w2_repr = p0_w3;
+                let p0_w2: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                    p0_w2_repr,
+                );
+                let p0_w5_owned = p0_w2;
+                p0_w5 = Some(p0_w5_owned);
+            };
+            let __prebindgen_argument_0 = p0_w5.as_ref().expect("active temporary");
+            let source_value = perftest_flat::canonical_millis_borrow(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_canonical_millis_borrow_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_callback_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_callback(
+    p0_callback: perftest_callback_4f90a51a652b13b2,
+) -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |callback_source_0: perftest_flat::CanonMillis| {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let callback_arg_0_w0 = callback_source_0;
+                    let callback_arg_0_w1 = perftest_flat::canonical_millis_value(
+                        &callback_arg_0_w0,
+                    );
+                    let callback_arg_0_w2 = callback_arg_0_w1;
+                    let callback_argument_0 = callback_arg_0_w2;
+                    {}
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    let callback_return_w3 = raw_result;
+                    let callback_return_w2: i64 = ::core::convert::Into::into(
+                        callback_return_w3,
+                    );
+                    let callback_return_w1_repr = callback_return_w2;
+                    let callback_return_w1: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                        callback_return_w1_repr,
+                    );
+                    let callback_return_value = callback_return_w1;
+                    Ok(callback_return_value)
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_4f90a51a652b13b2",
+                            "(perftest_flat :: CanonMillis)->perftest_flat :: CanonMillis",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::canonical_millis_callback(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = perftest_flat::canonical_millis_value(&ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_callback_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_echo_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_echo(p0_w3: i64) -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_echo_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: i64 = ::core::convert::Into::into(p0_w3);
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                p0_w1_repr,
+            );
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_millis_echo(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = perftest_flat::canonical_millis_value(&ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_echo_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_from_token_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_from_token(
+    p0_w3: *const perftest_flat::CanonToken,
+) -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_from_token_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w3_pointer = p0_w3 as *mut perftest_flat::CanonToken;
+            let p0_w2: &perftest_flat::CanonToken = unsafe { &(*p0_w3_pointer) };
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonMillis = perftest_flat::canonical_from_borrowed_token(
+                p0_w1_repr,
+            );
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_millis_from_token(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = perftest_flat::canonical_millis_value(&ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_from_token_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_local_result {
+    pub v0: i32,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_local(p0_w3: i32) -> i32 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_local_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: i32 = ::core::convert::Into::into(p0_w3);
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonMillis = <i32 as ::core::convert::Into<
+                perftest_flat::CanonMillis,
+            >>::into(p0_w1_repr);
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_millis_local(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = <perftest_flat::CanonMillis as ::core::convert::Into<
+                i32,
+            >>::into(ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_local_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_notify_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_notify(
+    p0_callback: perftest_callback_a97639874330f1a4,
+) {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_notify_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |callback_source_0: perftest_flat::CanonMillis| {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let callback_arg_0_w0 = callback_source_0;
+                    let callback_arg_0_w1 = perftest_flat::canonical_millis_value(
+                        &callback_arg_0_w0,
+                    );
+                    let callback_arg_0_w2 = callback_arg_0_w1;
+                    let callback_argument_0 = callback_arg_0_w2;
+                    {}
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    Ok(())
+                });
+                if let Err(error) = result {
+                    ::prebindgen_runtime::report_callback_error(
+                        "perftest_callback_a97639874330f1a4",
+                        "(perftest_flat :: CanonMillis)->()",
+                        &error,
+                    );
+                }
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::canonical_millis_notify(
+                __prebindgen_argument_0,
+            );
+            let result = perftest_canonical_millis_notify_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_optional_result {
+    pub v0: i32,
+    pub v1: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_optional(
+    p0_w1: i32,
+    p0_w5: i64,
+    out1: *mut i64,
+) -> i32 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if p0_w1 == 1i32 {
+                {
+                    let p0_w4: i64 = ::core::convert::Into::into(p0_w5);
+                    let p0_w3_repr = p0_w4;
+                    let p0_w3: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                        p0_w3_repr,
+                    );
+                    let p0_w0_payload = p0_w3;
+                    Some(p0_w0_payload)
+                }
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::canonical_millis_optional(
+                __prebindgen_argument_0,
+            );
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ret_w1;
+                let ret_w3 = perftest_flat::canonical_millis_value(&ret_w2);
+                let ret_w4 = ret_w3;
+                let ret_w0_values = (ret_w4,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (0,), None)
+            };
+            let result = perftest_canonical_millis_optional_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_canonical_millis_rows_p0_w1 {
+    pub v0: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_canonical_millis_rows_ret_w0 {
+    pub v0: i64,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_rows_ret_w0_rows_free(
+    rows: __PbRows,
+) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_canonical_millis_rows_ret_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_rows_result {
+    pub v0: __PbRows,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_rows(p0_w1: __PbRows) -> __PbRows {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_rows_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<perftest_flat::CanonMillis> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data
+                    as *const __PbRow_canonical_millis_rows_p0_w1;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w7 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        perftest_flat::CanonMillis,
+                        String,
+                    > {
+                        {
+                            let p0_w6: i64 = ::core::convert::Into::into(p0_w7);
+                            let p0_w5_repr = p0_w6;
+                            let p0_w5: perftest_flat::CanonMillis = perftest_flat::canonical_millis_new(
+                                p0_w5_repr,
+                            );
+                            let p0_w1_row_value = p0_w5;
+                            Ok(p0_w1_row_value)
+                        }
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::canonical_millis_rows(
+                __prebindgen_argument_0,
+            );
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::CanonMillis> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            unsafe fn ret_w0_release_row(row: &__PbRow_canonical_millis_rows_ret_w0) {}
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_canonical_millis_rows_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                let ret_w4 = ret_w1;
+                let ret_w5 = perftest_flat::canonical_millis_value(&ret_w4);
+                let ret_w6 = ret_w5;
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_canonical_millis_rows_ret_w0 {
+                            v0: ret_w6,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {})();
+                unsafe {
+                    ret_w0.commit_row();
+                }
+            }
+            let result = perftest_canonical_millis_rows_result {
+                v0: __PbRows {
+                    data: if ret_w0.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w0.as_ptr().cast()
+                    },
+                    len: ret_w0.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w0.commit();
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_static_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_static() -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_static_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::canonical_millis_static();
+            let ret_w0 = source_value;
+            let ret_w1 = perftest_flat::canonical_millis_value(ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_static_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_owned_callback_result {
+    pub v0: *mut perftest_flat::CanonToken,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_owned_callback(
+    p0_callback: perftest_callback_e00f09649cf788a6,
+) -> *mut perftest_flat::CanonToken {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_owned_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |callback_source_0: perftest_flat::CanonOwned| {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let callback_arg_0_w0 = callback_source_0;
+                    let callback_arg_0_w1 = perftest_flat::canonical_owned_token(
+                        callback_arg_0_w0,
+                    );
+                    let callback_arg_0_w2: *mut perftest_flat::CanonToken = Box::into_raw(
+                        Box::new(callback_arg_0_w1),
+                    );
+                    let callback_arg_0_w2_owner = __PbOutputOwner(callback_arg_0_w2);
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let callback_argument_0 = callback_arg_0_w2;
+                    {
+                        ::core::mem::forget(callback_arg_0_w2_owner);
+                    }
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    let callback_return_w3 = raw_result;
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                if let Err(error) = ::prebindgen_runtime::boundary(|| {
+                                    unsafe {
+                                        drop(
+                                            Box::from_raw(
+                                                callback_return_w3 as *mut perftest_flat::CanonToken,
+                                            ),
+                                        );
+                                    }
+                                    Ok(())
+                                }) {
+                                    ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                        let callback_return_w3_pointer = callback_return_w3
+                            as *mut perftest_flat::CanonToken;
+                        let callback_return_w2: perftest_flat::CanonToken = {
+                            let callback_return_w2 = unsafe {
+                                Box::from_raw(callback_return_w3_pointer)
+                            };
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            *callback_return_w2
+                        };
+                        let callback_return_w1_repr = callback_return_w2;
+                        let callback_return_w1: perftest_flat::CanonOwned = (perftest_flat::canonical_owned_new(
+                            callback_return_w1_repr,
+                        ))
+                            .map_err(|error| ::std::string::ToString::to_string(
+                                &error,
+                            ))?;
+                        let callback_return_value = callback_return_w1;
+                        Ok(callback_return_value)
+                    };
+                    let callback_decoded = callback_outcome?;
+                    callback_return_cleanup.commit();
+                    Ok(callback_decoded)
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_e00f09649cf788a6",
+                            "(perftest_flat :: CanonOwned)->perftest_flat :: CanonOwned",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::canonical_owned_callback(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = perftest_flat::canonical_owned_token(ret_w0);
+            let ret_w2: *mut perftest_flat::CanonToken = Box::into_raw(Box::new(ret_w1));
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
+            let result = perftest_canonical_owned_callback_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w2_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_token_new_result {
+    pub v0: *mut perftest_flat::CanonToken,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_token_new(
+    p0_w1: i64,
+) -> *mut perftest_flat::CanonToken {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_token_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::canonical_token_new(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::CanonToken = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_canonical_token_new_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_token_value_result {
+    pub v0: i64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_token_value(
+    p0_w1: *const perftest_flat::CanonToken,
+) -> i64 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_token_value_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = p0_w1 as *mut perftest_flat::CanonToken;
+            let p0_w0: &perftest_flat::CanonToken = unsafe { &(*p0_w1_pointer) };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::canonical_token_value(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let result = perftest_canonical_token_value_result {
                 v0: ret_w0,
             };
             std::ptr::write(output, result);
@@ -31265,6 +32522,30 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CallbackRowResource > () != 0,
     "flat object `CallbackRowResource` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonCelsius > () != 0,
+    "flat object `CanonCelsius` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonError > () != 0,
+    "flat object `CanonError` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonMillis > () != 0,
+    "flat object `CanonMillis` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonOwned > () != 0,
+    "flat object `CanonOwned` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonPercent > () != 0,
+    "flat object `CanonPercent` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::CanonToken > () != 0,
+    "flat object `CanonToken` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::CleanupGroup > () != 0,
