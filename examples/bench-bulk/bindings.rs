@@ -234,9 +234,7 @@ fn main() {
             .expand_param("value", value_input())
             .expand_return(value_output());
         let canonical_values = fun!(canonical_values);
-        let expanded_values = fun!(expanded_values)
-            .expand_param("values", value_input())
-            .expand_return(value_output());
+        let expanded_values = fun!(expanded_values);
         let (canonical_values, expanded_values) = if bulk {
             (
                 canonical_values
@@ -250,7 +248,12 @@ fn main() {
                     .expand_return(value_output().bulk()),
             )
         } else {
-            (canonical_values, expanded_values)
+            (
+                canonical_values,
+                expanded_values
+                    .expand_param("values", value_input())
+                    .expand_return(value_output()),
+            )
         };
         let canonical_callback = fun!(canonical_value_callback);
         let expanded_callback = fun!(expanded_value_callback)

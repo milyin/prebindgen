@@ -254,12 +254,37 @@ impl<M: Schema> Flat<M> {
                 _ => None,
             }
         }
-        struct References<'a>(&'a mut BTreeSet<String>);
+        // A qualified path selects a capture only when its origin crate matches.
+        // `std::io::Error` must not pull in an unrelated flat type named Error.
+        let qualified: BTreeSet<_> = items
+            .iter()
+            .filter_map(|(item, location)| {
+                matches!(
+                    item,
+                    syn::Item::Struct(_) | syn::Item::Enum(_) | syn::Item::Type(_)
+                )
+                .then(|| {
+                    (
+                        location.crate_name.as_deref().unwrap_or("crate").to_owned(),
+                        name(item).unwrap(),
+                    )
+                })
+            })
+            .collect();
+        struct References<'a>(&'a mut BTreeSet<String>, &'a BTreeSet<(String, String)>);
         impl VisitMut for References<'_> {
             fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
                 if path.qself.is_none() {
-                    if let Some(segment) = path.path.segments.last() {
-                        self.0.insert(segment.ident.to_string());
+                    let segments = &path.path.segments;
+                    if segments.len() == 1 {
+                        self.0.insert(segments[0].ident.to_string());
+                    } else if segments.len() == 2
+                        && self.1.contains(&(
+                            segments[0].ident.to_string(),
+                            segments[1].ident.to_string(),
+                        ))
+                    {
+                        self.0.insert(segments[1].ident.to_string());
                     }
                 }
                 syn::visit_mut::visit_type_path_mut(self, path);
@@ -267,7 +292,7 @@ impl<M: Schema> Flat<M> {
         }
         let mut needed: BTreeSet<_> = functions.iter().cloned().collect();
         for ty in types {
-            References(&mut needed).visit_type_mut(&mut ty.clone());
+            References(&mut needed, &qualified).visit_type_mut(&mut ty.clone());
         }
         loop {
             let old = needed.len();
@@ -275,7 +300,7 @@ impl<M: Schema> Flat<M> {
                 if !name(item).is_some_and(|n| needed.contains(&n)) {
                     continue;
                 }
-                let mut visitor = References(&mut needed);
+                let mut visitor = References(&mut needed, &qualified);
                 match item {
                     syn::Item::Fn(f) => visitor.visit_signature_mut(&mut f.sig.clone()),
                     syn::Item::Struct(s) => visitor.visit_fields_mut(&mut s.fields.clone()),

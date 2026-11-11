@@ -407,3 +407,25 @@ fn callback_returns_are_qualified_validated_and_discovered() {
     .unwrap();
     assert!(flat.record(&syn::parse_quote!(crate::OnlyReturn)).is_ok());
 }
+
+#[test]
+fn qualified_source_selection_respects_the_capture_origin() {
+    let items = || {
+        syn::parse_file("pub struct Value{pub n:i64}pub struct Error{private:i64}")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default()))
+    };
+    let selected = Flat::<()>::parse_selected(
+        items(),
+        &[],
+        &[
+            syn::parse_quote!(crate::Value),
+            syn::parse_quote!(std::io::Error),
+        ],
+    )
+    .unwrap();
+    assert!(selected.type_info(&syn::parse_quote!(crate::Value)).is_ok());
+    assert!(!selected.types.contains_key("Error"));
+}

@@ -24,7 +24,9 @@ or `Result<Repr, E>`. Captured signatures in Flat remain authoritative; conversi
 reference their existing function names instead of copying signatures into a new
 registry. Trait declarations explicitly state the other type and use
 fully qualified `Into`/`TryInto` calls. Borrowing is never implemented by an
-implicit clone. Consuming-only output conversions cannot observe borrowed values.
+implicit clone. Consuming-only output conversions cannot observe borrowed values. A shared output
+helper also represents `&T` as the canonical value when a native handle class for
+`T` is declared; borrowed inputs can still use that handle class.
 
 Both global declarations and local overrides resolve to the same `ValueConversion`
 node; they share compilation, error routing, borrowing and ownership reporting.
@@ -97,7 +99,8 @@ registration maps or runtime conversion dispatch added by this API.
 This task includes captured helper functions, From/Into and TryFrom/TryInto,
 chained representations, local overrides, data properties, options, collections,
 callbacks and ordinary/bulk transport. Binding-local helper signatures and declared
-scalar domains/niches remain their own backlog tasks. Property representation
+scalar domains/niches remain their own backlog tasks. Kotlin property representations retain the existing scalar, String, byte-vector,
+Vec, data-class and handle property model. Property representation
 support does not imply adding payload enums, reference-valued records or arbitrary
 C by-value structs.
 
