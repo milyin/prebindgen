@@ -34,6 +34,15 @@ The old `InputConstruction` modes and their C/JNI row-specific leaf rewrites are
 removed. Sequence transport still binds/releases rows and constructs directly
 into final storage, including nested/bulk collections.
 
+Hoisting an owner does not require wrapping it in `Option`. The bulk input buffer
+uses a deferred-initialized local: its declaration is outside the branch, and the
+selected conversion assigns it before borrowing it. Rust tracks initialization
+and drops the buffer only if it was initialized. Declaring the buffer before
+owners that borrow from it also preserves their destruction order. This avoids
+an unnecessary presence check; in the measured record decoder, the optional
+buffer also caused two extra pointer loads from the stack per row. Continuations
+are composed Rust blocks, not additional runtime function or closure calls.
+
 ## Ownership and failure
 
 C and JNI derive possible incoming ownership from their existing wire kinds.

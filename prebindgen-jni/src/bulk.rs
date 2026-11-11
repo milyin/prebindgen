@@ -156,7 +156,11 @@ pub(crate) fn input(
     let conversion = resolve(&child.code, "bulk_reader", &quote!(#reader))?;
     child.storage = resolve(&child.storage, "bulk_reader", &quote!(#reader))?;
     let backing = std::mem::take(&mut child.storage);
-    child.storage = quote!(#[allow(unused_mut,unused_assignments)] let mut #bytes=None; #backing);
+    // The carrier is initialized only on the selected conversion path. Rust's
+    // definite-initialization/drop tracking preserves that conditional lifetime;
+    // an Option adds an unnecessary presence check and can spill the row-loop
+    // pointers even though the carrier is always present when the reader is used.
+    child.storage = quote!(#[allow(clippy::needless_late_init)] let #bytes; #backing);
     let read = parameter(&format!("bulk_read_{wire}"));
     let env = parameter("environment");
     // Keep the wire operands explicit so enclosing row composition can rebind
@@ -166,8 +170,8 @@ pub(crate) fn input(
     child.code = quote! {{
         #[allow(clippy::redundant_closure_call)]
         let bulk_value=#read?;
-        #bytes=Some(bulk_value);
-        let #bytes=#bytes.as_ref().expect("active bulk carrier");
+        #bytes=bulk_value;
+        let #bytes=&#bytes;
         let #reader=&::prebindgen_jni_runtime::bulk::Reader::new(#bytes);
         if #truncated{return Err("truncated bulk root record".into());}
         #bind #conversion

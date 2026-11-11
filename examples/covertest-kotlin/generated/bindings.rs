@@ -9235,16 +9235,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_691042cfe26de2b8>()
@@ -9304,16 +9304,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 }
             }
             let __prebindgen_argument_0 = p0_w2;
-            #[allow(unused_mut, unused_assignments)]
-            let mut p1_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p1_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p1_w1,
                 p1_w1_length,
             )?;
-            p1_w1_bytes = Some(bulk_value);
-            let p1_w1_bytes = p1_w1_bytes.as_ref().expect("active bulk carrier");
+            p1_w1_bytes = bulk_value;
+            let p1_w1_bytes = &p1_w1_bytes;
             let p1_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p1_w1_bytes);
             if p1_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_c0e77b118c420293>()
@@ -9466,16 +9466,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_c5f2417c9e799f21>()
@@ -9535,16 +9535,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 }
             }
             let __prebindgen_argument_0 = p0_w2;
-            #[allow(unused_mut, unused_assignments)]
-            let mut p1_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p1_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p1_w1,
                 p1_w1_length,
             )?;
-            p1_w1_bytes = Some(bulk_value);
-            let p1_w1_bytes = p1_w1_bytes.as_ref().expect("active bulk carrier");
+            p1_w1_bytes = bulk_value;
+            let p1_w1_bytes = &p1_w1_bytes;
             let p1_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p1_w1_bytes);
             if p1_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_a134f9aa0d8c76d6>()
@@ -9687,16 +9687,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_691042cfe26de2b8>()
@@ -9756,16 +9756,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                 }
             }
             let __prebindgen_argument_0 = p0_w2;
-            #[allow(unused_mut, unused_assignments)]
-            let mut p1_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p1_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p1_w1,
                 p1_w1_length,
             )?;
-            p1_w1_bytes = Some(bulk_value);
-            let p1_w1_bytes = p1_w1_bytes.as_ref().expect("active bulk carrier");
+            p1_w1_bytes = bulk_value;
+            let p1_w1_bytes = &p1_w1_bytes;
             let p1_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p1_w1_bytes);
             if p1_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_c5f2417c9e799f21>()
@@ -10189,16 +10189,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_62ead3aacdc8be2d>()
@@ -10592,16 +10592,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_add1c00744245e75>()
@@ -10957,8 +10957,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -10970,10 +10970,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -11336,8 +11334,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -11349,10 +11347,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -11612,16 +11608,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_ab3ae4944fbfb9e9>()
@@ -11805,16 +11801,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_cedc43bd1c5d31f6>()
@@ -13734,16 +13730,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>()
@@ -14017,16 +14013,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_560cf018ca83c8a9>()
@@ -14298,16 +14294,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_ca7ae8840b1d5037>()
@@ -14935,16 +14931,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_c2b72962102e7ef8>()
@@ -15103,16 +15099,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_c2b72962102e7ef8>()
@@ -17286,16 +17282,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_55fb9dde8a946716>()
@@ -17638,16 +17634,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_55fb9dde8a946716>()
@@ -17992,16 +17988,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_3087f4c8799259e2>()
@@ -18528,8 +18524,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -18541,10 +18537,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -18966,16 +18960,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_55fb9dde8a946716>()
@@ -19442,8 +19436,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -19455,10 +19449,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -19838,16 +19830,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_5019fbfb9686d1a8>()
@@ -20239,8 +20231,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -20252,10 +20244,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -20635,8 +20625,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -20648,10 +20638,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -20997,16 +20985,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_i32_7fe138bb3730f8e7>()
@@ -21515,8 +21503,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -21528,10 +21516,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -21823,16 +21809,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_10bed0e0898eed85>()
@@ -22147,8 +22133,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -22160,10 +22146,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -22399,16 +22383,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_ff46ac585710e08a>()
@@ -22967,16 +22951,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_46147a291c22570d>()
@@ -23376,8 +23360,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w1_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w1_bytes;
                                             #[allow(clippy::redundant_closure_call)]
                                             let bulk_value = (|_, _, _| Ok::<
                                                 _,
@@ -23389,10 +23373,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                 &callback_return_w1,
                                                 callback_return_w1_length,
                                             )?;
-                                            callback_return_w1_bytes = Some(bulk_value);
-                                            let callback_return_w1_bytes = callback_return_w1_bytes
-                                                .as_ref()
-                                                .expect("active bulk carrier");
+                                            callback_return_w1_bytes = bulk_value;
+                                            let callback_return_w1_bytes = &callback_return_w1_bytes;
                                             let callback_return_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                 callback_return_w1_bytes,
                                             );
@@ -23592,16 +23574,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_i64_fd1551214c82cfe3>()
@@ -23729,16 +23711,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_i64_dafeaae0e426fdd5>()
@@ -23881,16 +23863,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_49be3e7148c9ff8f>()
@@ -24069,16 +24051,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_f41b5b157c049db1>()
@@ -24228,16 +24210,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_f4f41f2e97b83c0c>()
@@ -24546,16 +24528,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_u8_i8_8a5c993ab6685b67>()
@@ -24802,16 +24784,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Array_807a81a0a53fa8e0>()
@@ -25068,8 +25050,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     });
                                     {
                                         let callback_return_decoded = ({
-                                            #[allow(unused_mut, unused_assignments)]
-                                            let mut callback_return_w4_bytes = None;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w4_bytes;
                                             if callback_return_w1 != 0 && callback_return_w1 != 1 {
                                                 return Err("invalid option presence".into());
                                             }
@@ -25086,10 +25068,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                         &callback_return_w4,
                                                         callback_return_w4_length,
                                                     )?;
-                                                    callback_return_w4_bytes = Some(bulk_value);
-                                                    let callback_return_w4_bytes = callback_return_w4_bytes
-                                                        .as_ref()
-                                                        .expect("active bulk carrier");
+                                                    callback_return_w4_bytes = bulk_value;
+                                                    let callback_return_w4_bytes = &callback_return_w4_bytes;
                                                     let callback_return_w4_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                         callback_return_w4_bytes,
                                                     );
@@ -25265,16 +25245,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_87bd2f61e8a69677>()
@@ -25519,16 +25499,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_Range_37f6d28aa836bfb7>()
@@ -25667,16 +25647,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_a5f90e11a63369ed>()
@@ -25901,16 +25881,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_Range_37f6d28aa836bfb7>()
@@ -26528,16 +26508,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_42eab86179b36709>()
@@ -26749,16 +26729,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_d515d9783303b819>()
@@ -26867,16 +26847,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>()
@@ -26902,16 +26882,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 p0_w2.value
             };
             let __prebindgen_argument_0 = p0_w2;
-            #[allow(unused_mut, unused_assignments)]
-            let mut p1_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p1_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p1_w1,
                 p1_w1_length,
             )?;
-            p1_w1_bytes = Some(bulk_value);
-            let p1_w1_bytes = p1_w1_bytes.as_ref().expect("active bulk carrier");
+            p1_w1_bytes = bulk_value;
+            let p1_w1_bytes = &p1_w1_bytes;
             let p1_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p1_w1_bytes);
             if p1_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_062153e85348d725>()
@@ -27042,16 +27022,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_e0c6fa25bb7482b5>()
@@ -27229,16 +27209,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_31d2b5a17a152d89>()
@@ -27520,8 +27500,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 } else {
                                     Vec::new()
                                 };
-                                #[allow(unused_mut, unused_assignments)]
-                                let mut callback_return_w2_bytes = None;
+                                #[allow(clippy::needless_late_init)]
+                                let callback_return_w2_bytes;
                                 #[allow(clippy::redundant_closure_call)]
                                 let bulk_value = (|_, _, _| Ok::<
                                     _,
@@ -27533,10 +27513,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     &callback_return_w2,
                                     callback_return_w2_length,
                                 )?;
-                                callback_return_w2_bytes = Some(bulk_value);
-                                let callback_return_w2_bytes = callback_return_w2_bytes
-                                    .as_ref()
-                                    .expect("active bulk carrier");
+                                callback_return_w2_bytes = bulk_value;
+                                let callback_return_w2_bytes = &callback_return_w2_bytes;
                                 let callback_return_w2_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                     callback_return_w2_bytes,
                                 );
@@ -27828,8 +27806,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 } else {
                                     Vec::new()
                                 };
-                                #[allow(unused_mut, unused_assignments)]
-                                let mut callback_return_w2_bytes = None;
+                                #[allow(clippy::needless_late_init)]
+                                let callback_return_w2_bytes;
                                 #[allow(clippy::redundant_closure_call)]
                                 let bulk_value = (|_, _, _| Ok::<
                                     _,
@@ -27841,10 +27819,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     &callback_return_w2,
                                     callback_return_w2_length,
                                 )?;
-                                callback_return_w2_bytes = Some(bulk_value);
-                                let callback_return_w2_bytes = callback_return_w2_bytes
-                                    .as_ref()
-                                    .expect("active bulk carrier");
+                                callback_return_w2_bytes = bulk_value;
+                                let callback_return_w2_bytes = &callback_return_w2_bytes;
                                 let callback_return_w2_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                     callback_return_w2_bytes,
                                 );
@@ -28216,8 +28192,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     Ok(())
                                 });
                                 let callback_return_decoded = ({
-                                    #[allow(unused_mut, unused_assignments)]
-                                    let mut callback_return_w2_bytes = None;
+                                    #[allow(clippy::needless_late_init)]
+                                    let callback_return_w2_bytes;
                                     #[allow(clippy::redundant_closure_call)]
                                     let bulk_value = (|_, _, _| Ok::<
                                         _,
@@ -28229,10 +28205,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &callback_return_w2,
                                         callback_return_w2_length,
                                     )?;
-                                    callback_return_w2_bytes = Some(bulk_value);
-                                    let callback_return_w2_bytes = callback_return_w2_bytes
-                                        .as_ref()
-                                        .expect("active bulk carrier");
+                                    callback_return_w2_bytes = bulk_value;
+                                    let callback_return_w2_bytes = &callback_return_w2_bytes;
                                     let callback_return_w2_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                         callback_return_w2_bytes,
                                     );
@@ -28459,16 +28433,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>()
@@ -28600,16 +28574,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_a8ec97310260b4fd>()
@@ -28823,16 +28797,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_a8ec97310260b4fd>()
@@ -29052,8 +29026,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             let mut p0_w2: Vec<perftest_flat::BulkPoint> = Vec::new();
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
@@ -29061,8 +29035,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_a8ec97310260b4fd>()
@@ -29382,16 +29356,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_f27ab2e6065597a6>()
@@ -29667,16 +29641,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>()
@@ -29851,8 +29825,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             let mut p0_w2: Vec<i64> = Vec::new();
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
@@ -29860,8 +29834,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>()
@@ -29991,16 +29965,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>()
@@ -30110,16 +30084,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>()
@@ -30288,16 +30262,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_01c263066f8f1a73>()
@@ -30537,16 +30511,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_963ae3ba49e0cb2b>()
@@ -30660,16 +30634,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_79427dd643a1b061>()
@@ -30851,16 +30825,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_c8d6433a01ad4efb>()
@@ -31131,16 +31105,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_ba88ec47a5d9bc85>()
@@ -34196,16 +34170,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1nulla
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i32_Range_6217a02e84ef490c>()
@@ -35878,16 +35852,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1param
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_i64_i64_6e43cfd3fd9cdd8f>()
@@ -46350,8 +46324,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             perftest_flat::CallbackOptionalBatch,
                                                             String,
                                                         > {
-                                                            #[allow(unused_mut, unused_assignments)]
-                                                            let mut callback_return_w6_bytes = None;
+                                                            #[allow(clippy::needless_late_init)]
+                                                            let callback_return_w6_bytes;
                                                             {
                                                                 let callback_return_w5_f0_present: i32 = i32::from(
                                                                     ((*callback_return_w5_f0_some
@@ -46394,10 +46368,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                     &(*callback_return_w6.as_ref().map_err(|e| e.clone())?),
                                                                     *callback_return_w6_length.as_ref().map_err(|e| e.clone())?,
                                                                 )?;
-                                                                callback_return_w6_bytes = Some(bulk_value);
-                                                                let callback_return_w6_bytes = callback_return_w6_bytes
-                                                                    .as_ref()
-                                                                    .expect("active bulk carrier");
+                                                                callback_return_w6_bytes = bulk_value;
+                                                                let callback_return_w6_bytes = &callback_return_w6_bytes;
                                                                 let callback_return_w6_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                                     callback_return_w6_bytes,
                                                                 );
@@ -47215,8 +47187,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     perftest_flat::CallbackScalarBatch,
                                                     String,
                                                 > {
-                                                    #[allow(unused_mut, unused_assignments)]
-                                                    let mut callback_return_w6_bytes = None;
+                                                    #[allow(clippy::needless_late_init)]
+                                                    let callback_return_w6_bytes;
                                                     {
                                                         let callback_return_w4_f0: i64 = ::core::convert::Into::into(
                                                             *callback_return_w5_f0.as_ref().map_err(|e| e.clone())?,
@@ -47228,10 +47200,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             &(*callback_return_w6.as_ref().map_err(|e| e.clone())?),
                                                             *callback_return_w6_length.as_ref().map_err(|e| e.clone())?,
                                                         )?;
-                                                        callback_return_w6_bytes = Some(bulk_value);
-                                                        let callback_return_w6_bytes = callback_return_w6_bytes
-                                                            .as_ref()
-                                                            .expect("active bulk carrier");
+                                                        callback_return_w6_bytes = bulk_value;
+                                                        let callback_return_w6_bytes = &callback_return_w6_bytes;
                                                         let callback_return_w6_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                             callback_return_w6_bytes,
                                                         );
@@ -47637,8 +47607,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 6usize,
                                             )?;
                                             {
-                                                #[allow(unused_mut, unused_assignments)]
-                                                let mut callback_return_w4_bytes = None;
+                                                #[allow(clippy::needless_late_init)]
+                                                let callback_return_w4_bytes;
                                                 let callback_return_w1_f0_pointer = callback_return_w1_f0
                                                     as *mut ::prebindgen_jni_runtime::Allocation<
                                                         perftest_flat::CallbackReturnResource,
@@ -47678,10 +47648,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     &callback_return_w4,
                                                     callback_return_w4_length,
                                                 )?;
-                                                callback_return_w4_bytes = Some(bulk_value);
-                                                let callback_return_w4_bytes = callback_return_w4_bytes
-                                                    .as_ref()
-                                                    .expect("active bulk carrier");
+                                                callback_return_w4_bytes = bulk_value;
+                                                let callback_return_w4_bytes = &callback_return_w4_bytes;
                                                 let callback_return_w4_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                     callback_return_w4_bytes,
                                                 );
@@ -48907,16 +48875,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
         }
         __pb_receipt_valid.set(true);
         {
-            #[allow(unused_mut, unused_assignments)]
-            let mut p0_w1_bytes = None;
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
             #[allow(clippy::redundant_closure_call)]
             let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
                 &mut jni_environment,
                 &p0_w1,
                 p0_w1_length,
             )?;
-            p0_w1_bytes = Some(bulk_value);
-            let p0_w1_bytes = p0_w1_bytes.as_ref().expect("active bulk carrier");
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
             let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
             if p0_w1_bytes.len()
                 < ::core::mem::size_of::<__PbBulk_Range_d0f85d5de64becff>()
@@ -50180,10 +50148,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                             perftest_flat::CallbackNestedBatch,
                                                             String,
                                                         > {
-                                                            #[allow(unused_mut, unused_assignments)]
-                                                            let mut callback_return_w8_bytes = None;
-                                                            #[allow(unused_mut, unused_assignments)]
-                                                            let mut callback_return_w24_bytes = None;
+                                                            #[allow(clippy::needless_late_init)]
+                                                            let callback_return_w8_bytes;
+                                                            #[allow(clippy::needless_late_init)]
+                                                            let callback_return_w24_bytes;
                                                             {
                                                                 let callback_return_w5_f0_pointer = (*callback_return_w5_f0
                                                                     .as_ref()
@@ -50228,10 +50196,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                     &(*callback_return_w8.as_ref().map_err(|e| e.clone())?),
                                                                     *callback_return_w8_length.as_ref().map_err(|e| e.clone())?,
                                                                 )?;
-                                                                callback_return_w8_bytes = Some(bulk_value);
-                                                                let callback_return_w8_bytes = callback_return_w8_bytes
-                                                                    .as_ref()
-                                                                    .expect("active bulk carrier");
+                                                                callback_return_w8_bytes = bulk_value;
+                                                                let callback_return_w8_bytes = &callback_return_w8_bytes;
                                                                 let callback_return_w8_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                                     callback_return_w8_bytes,
                                                                 );
@@ -50508,10 +50474,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                                     &(*callback_return_w24.as_ref().map_err(|e| e.clone())?),
                                                                     *callback_return_w24_length.as_ref().map_err(|e| e.clone())?,
                                                                 )?;
-                                                                callback_return_w24_bytes = Some(bulk_value);
-                                                                let callback_return_w24_bytes = callback_return_w24_bytes
-                                                                    .as_ref()
-                                                                    .expect("active bulk carrier");
+                                                                callback_return_w24_bytes = bulk_value;
+                                                                let callback_return_w24_bytes = &callback_return_w24_bytes;
                                                                 let callback_return_w24_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                                     callback_return_w24_bytes,
                                                                 );
