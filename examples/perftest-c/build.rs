@@ -2,10 +2,13 @@
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use syn::parse_quote as pq;
 
+#[path = "build_support/canonical_values.rs"]
+mod canonical_values;
+
 fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
-    let mut cbindgen = prebindgen_c::Cbindgen::builder()
+    let mut cbindgen = canonical_values::configure(prebindgen_c::Cbindgen::builder())
         // These coverage fixtures intentionally construct temporary owned buffers
         // for borrowed String/Vec parameters; ordinary shared inputs never do so.
         .expand(expand_param!(&String).reconstruct())

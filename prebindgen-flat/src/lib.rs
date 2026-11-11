@@ -9,6 +9,9 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
+mod value;
+pub use value::{ValueConversion, ValueConversions, ValueSource};
+
 mod conversion;
 pub use conversion::*;
 
@@ -57,6 +60,8 @@ impl Schema for () {
 /// including for opaque aliases that have neither fields nor variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeInfo<M = ()> {
+    /// Prepared canonical value representations; empty for source-only inspection.
+    pub conversion: ValueConversions,
     /// Qualified Rust type. Alias implementations remain opaque.
     pub ty: Type,
     /// Generator-owned declaration information shared by every occurrence.
@@ -336,6 +341,7 @@ impl<M: Schema> Flat<M> {
                 types.insert(
                     id.to_string(),
                     TypeInfo {
+                        conversion: Default::default(),
                         ty: syn::parse_quote!(#module::#id),
                         metadata: Default::default(),
                     },
@@ -549,6 +555,7 @@ impl<M: Schema> Flat<M> {
             .types
             .entry(key)
             .or_insert_with(|| TypeInfo {
+                conversion: Default::default(),
                 ty,
                 metadata: Default::default(),
             })

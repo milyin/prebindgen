@@ -41,6 +41,8 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
+mod canonical_values;
+pub use canonical_values::*;
 mod bulk;
 mod enum_inputs;
 mod inline_inputs;

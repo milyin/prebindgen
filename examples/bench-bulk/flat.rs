@@ -306,3 +306,49 @@ pub struct HandleBatch { pub guard: InputHandle, pub rows: Vec<HandleRecord> }
 pub fn callback_batches_owned_handles(callback: impl Fn() -> Vec<HandleBatch>) -> Vec<HandleBatch> { callback() }
 #[prebindgen]
 pub fn callback_mixed_batches_owned_handles(callback: impl Fn() -> Vec<HandleBatch>) -> Vec<HandleBatch> { callback() }
+
+// Identical source work through canonical values or explicit boundary expansions.
+#[prebindgen]
+pub struct BenchValue {
+    pub value: i64,
+}
+#[prebindgen]
+pub fn bench_value_from(value: i64) -> BenchValue {
+    BenchValue { value }
+}
+#[prebindgen]
+pub fn bench_value_to(value: &BenchValue) -> i64 {
+    value.value
+}
+#[prebindgen]
+pub fn canonical_value(value: BenchValue) -> BenchValue {
+    BenchValue {
+        value: std::hint::black_box(value.value) + 1,
+    }
+}
+#[prebindgen]
+pub fn expanded_value(value: BenchValue) -> BenchValue {
+    canonical_value(value)
+}
+#[prebindgen]
+pub fn canonical_values(values: Vec<BenchValue>) -> Vec<BenchValue> {
+    std::hint::black_box(values)
+}
+#[prebindgen]
+pub fn expanded_values(values: Vec<BenchValue>) -> Vec<BenchValue> {
+    canonical_values(values)
+}
+#[prebindgen]
+pub fn canonical_value_callback(
+    callback: impl Fn(BenchValue) -> BenchValue,
+    value: BenchValue,
+) -> BenchValue {
+    callback(std::hint::black_box(value))
+}
+#[prebindgen]
+pub fn expanded_value_callback(
+    callback: impl Fn(BenchValue) -> BenchValue,
+    value: BenchValue,
+) -> BenchValue {
+    callback(std::hint::black_box(value))
+}

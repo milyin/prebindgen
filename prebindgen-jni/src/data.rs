@@ -127,6 +127,69 @@ pub struct DataGroup {
     pub(crate) condition: String,
 }
 
+// Resolve the Rust type describing one public value, independently of boundary
+// expansions. Function slots still retain the actual domain type and conversion.
+fn value_type(
+    flat: &Bindings,
+    ty: &syn::Type,
+    input: bool,
+    stack: &mut Vec<String>,
+) -> Result<(syn::Type, bool)> {
+    let key = type_key(ty);
+    let conversion = flat
+        .type_info(ty)
+        .ok()
+        .and_then(|i| {
+            if input {
+                i.conversion.input.as_ref()
+            } else {
+                i.conversion.output.as_ref()
+            }
+        })
+        .or_else(|| {
+            if input {
+                None
+            } else {
+                match ty {
+                    syn::Type::Reference(r) => flat
+                        .type_info(&r.elem)
+                        .ok()
+                        .and_then(|i| i.conversion.output.as_ref()),
+                    _ => None,
+                }
+            }
+        });
+    if let Some(c) = conversion {
+        if stack.contains(&key) {
+            return Err(format!(
+                "recursive canonical property representation `{key}`"
+            ));
+        }
+        stack.push(key);
+        let result = value_type(flat, &c.representation, input, stack);
+        stack.pop();
+        return result.map(|(ty, _)| (ty, true));
+    }
+    if let Some(inner) = prebindgen_flat::option_inner(ty) {
+        let (inner, changed) = value_type(flat, inner, input, stack)?;
+        return Ok((syn::parse_quote!(Option<#inner>), changed));
+    }
+    if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+        let (inner, changed) = value_type(flat, inner, input, stack)?;
+        return Ok((syn::parse_quote!(Vec<#inner>), changed));
+    }
+    let ty = if let syn::Type::Reference(r) = ty {
+        match Value::of(ty) {
+            Some(Value::Text) => syn::parse_quote!(String),
+            Some(Value::Bytes) => syn::parse_quote!(Vec<u8>),
+            _ => (*r.elem).clone(),
+        }
+    } else {
+        ty.clone()
+    };
+    Ok((ty, false))
+}
+
 /// Complete class and enum declarations already attached to their source types.
 pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
     fn element(
@@ -227,8 +290,32 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
                     "data class `{key}` field `{name}` has a conflicting JVM getter `{getter}"
                 ));
             }
-            let optional = prebindgen_declarations::option_inner(&f.ty);
-            let ty = optional.unwrap_or(&f.ty);
+            let (input_type, input_changed) = value_type(flat, &f.ty, true, &mut Vec::new())?;
+            let (output_type, output_changed) = value_type(flat, &f.ty, false, &mut Vec::new())?;
+            if input_changed && output_changed {
+                let input = element(flat, &input_type, stack, resolved)?;
+                let output = element(flat, &output_type, stack, resolved)?;
+                if input.0 != output.0 {
+                    return Err(format!("data class `{key}` field `{name}` has incompatible canonical input/output representations: {} versus {}",input.0,output.0));
+                }
+            }
+            let property_type = if input_changed {
+                &input_type
+            } else if output_changed {
+                &output_type
+            } else {
+                &f.ty
+            };
+            let optional = prebindgen_declarations::option_inner(property_type);
+            let ty = optional.unwrap_or(property_type);
+            let ty = match ty {
+                syn::Type::Reference(r)
+                    if (input_changed || output_changed) && Value::of(ty).is_none() =>
+                {
+                    &*r.elem
+                }
+                _ => ty,
+            };
             if optional
                 .and_then(prebindgen_declarations::option_inner)
                 .is_some()

@@ -3,6 +3,9 @@
 
 use prebindgen_conversions::value::Value;
 pub use prebindgen_conversions::Access;
+pub use prebindgen_declarations::{
+    convert, from, into, try_from, try_into, ConvertDecl, ConvertSource,
+};
 use prebindgen_flat::{
     Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
 };
@@ -950,6 +953,7 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
+    conversions: Vec<prebindgen_declarations::ConvertDecl>,
     inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
     outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
@@ -971,6 +975,7 @@ impl Cbindgen {
         Self {
             flat: None,
             source: None,
+            conversions: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
             error_mappers: Vec::new(),
@@ -998,7 +1003,12 @@ impl Cbindgen {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register an input/output default using the production declaration syntax.
+    /// Select a type's canonical single-value input/output representations.
+    pub fn convert(mut self, declaration: prebindgen_declarations::ConvertDecl) -> Self {
+        self.conversions.push(declaration);
+        self
+    }
+    /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
     pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         use prebindgen_declarations::ExpandDecl;
@@ -1096,6 +1106,7 @@ impl Cbindgen {
         Self {
             flat: Some(flat),
             source: None,
+            conversions: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
             error_mappers: Vec::new(),
@@ -1239,13 +1250,14 @@ impl Cbindgen {
                     .build();
                 let flat = Flat::parse_selected(
                     source.items_all(),
-                    &prebindgen_declarations::declarations::source_functions(
+                    &prebindgen_declarations::declarations::source_items(
                         &self.inputs,
                         &self.outputs,
                         &self.error_mappers,
                         &self.functions,
                     )
                     .into_iter()
+                    .chain(self.conversions.iter().flat_map(|c| c.functions()))
                     .chain(
                         self.owned
                             .iter()
@@ -1258,6 +1270,9 @@ impl Cbindgen {
                         .chain(&self.enums)
                         .chain(&self.errors)
                         .map(|(_, ty)| ty.clone())
+                        .chain(self.conversions.iter().flat_map(|c| {
+                            std::iter::once(c.ty.clone()).chain(c.representation_types())
+                        }))
                         .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
                         .chain(self.owned.iter().map(|(_, ty, _, _)| ty.clone()))
                         .collect::<Vec<_>>(),
@@ -1393,6 +1408,7 @@ impl Cbindgen {
             }
         }
         owned::accessors(&mut flat)?;
+        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         let declarations = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,

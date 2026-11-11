@@ -176,6 +176,9 @@ mod input_contracts;
 #[path = "build_support/output_contracts.rs"]
 mod output_contracts;
 
+#[path = "build_support/canonical_values.rs"]
+mod canonical_values;
+
 fn main() {
     use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
     let ordinary_rows = |element| Output::Sequence {
@@ -198,7 +201,7 @@ fn main() {
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
     let type_rows = || Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
     let type_nested = || Input::Sequence(Box::new(type_rows()));
-    let binding = JniGen::builder()
+    let binding = canonical_values::configure(JniGen::builder())
         .package(package!("typeinputs")
             .class(ptr_class!(TypeInputA)).class(ptr_class!(TypeInputB))
             .class(ptr_class!(TypeInputControl).gc_managed())

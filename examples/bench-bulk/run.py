@@ -14,8 +14,8 @@ import tempfile
 
 FIXTURE = Path(__file__).resolve().parent
 MODES = ("plain", "bulk")
-SINGLE_CASES = ("callback_owned_record", "control", "scalar", "handle_input", "buffer_input", "selected_handle_input", "inactive_handle_input", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
-KINDS = ("callback_batches_large", "callback_batches_many", "callback_mixed_batches_large", "callback_mixed_batches_many", "numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip", "owned_handle_records_roundtrip", "nested_owned_handles_roundtrip", "nested_many_owned_handles_roundtrip", "callback_nested_owned_handles", "callback_many_nested_owned_handles", "callback_owned_records", "owned_buffer_records_roundtrip")
+SINGLE_CASES = ("canonical_value", "expanded_value", "canonical_value_callback", "expanded_value_callback", "callback_owned_record", "control", "scalar", "handle_input", "buffer_input", "selected_handle_input", "inactive_handle_input", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
+KINDS = ("canonical_values", "expanded_values", "callback_batches_large", "callback_batches_many", "callback_mixed_batches_large", "callback_mixed_batches_many", "numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce", "handles_input", "handle_records_input", "owned_handles_roundtrip", "owned_handle_records_roundtrip", "nested_owned_handles_roundtrip", "nested_many_owned_handles_roundtrip", "callback_nested_owned_handles", "callback_many_nested_owned_handles", "callback_owned_records", "owned_buffer_records_roundtrip")
 
 
 def command_version(command, cwd=None):

@@ -8,6 +8,9 @@
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
+mod convert;
+pub use convert::{prepare_value_conversions, ConvertDecl, ConvertSource};
+
 use prebindgen_conversions::{InputPlan, OutputPlan};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use prebindgen_flat::{Schema, WireNode};
@@ -131,6 +134,13 @@ pub enum Input<P = std::convert::Infallible> {
     /// A pending preparation instruction. The default payload is uninhabited,
     /// so a resolved Input cannot contain this variant in safe Rust.
     Request(P),
+    /// Convert one canonical representation before constructing the source value.
+    Convert {
+        /// Prepared source/representation operation.
+        conversion: prebindgen_flat::ValueConversion,
+        /// Conversion of the representation itself.
+        input: Box<Input<P>>,
+    },
     /// Retain a source callback with independent, fully resolved invocation conversions.
     Callback(Box<CallbackInput>),
     /// Construct a foreign record value using its configured language representation.
@@ -163,6 +173,10 @@ pub enum Input<P = std::convert::Infallible> {
 /// Source-dependent choices accepted only while preparing an input tree.
 #[derive(Clone, Debug)]
 pub enum InputRequest {
+    /// Resolve only the canonical value form, independently of boundary defaults.
+    Value,
+    /// Select a local single-value conversion.
+    Conversion(Box<ConvertDecl>),
     /// Select the configured default for this source occurrence.
     Auto,
     /// Select or override a callback signature's argument and result conversions.
@@ -179,6 +193,10 @@ pub enum InputRequest {
 }
 
 impl Input<InputRequest> {
+    /// Request the canonical value representation, bypassing boundary defaults.
+    pub fn value() -> Self {
+        Self::Request(InputRequest::Value)
+    }
     /// Request this source type's configured default during preparation.
     pub fn auto() -> Self {
         Self::Request(InputRequest::Auto)
@@ -303,6 +321,13 @@ pub enum Output<P = std::convert::Infallible> {
     /// A pending preparation instruction. Resolved Output uses an uninhabited
     /// payload and therefore cannot contain a request.
     Request(P),
+    /// Convert a source value before encoding its single-value representation.
+    Convert {
+        /// Prepared source/representation operation.
+        conversion: prebindgen_flat::ValueConversion,
+        /// Conversion of the representation itself.
+        output: Box<Output<P>>,
+    },
     /// Deliver a configured foreign record value with explicit field conversions.
     Record {
         /// Explicit source-field conversions in declaration order.
@@ -367,6 +392,13 @@ pub enum Output<P = std::convert::Infallible> {
 /// Source-dependent choices accepted only while preparing an output tree.
 #[derive(Clone, Debug)]
 pub enum OutputRequest {
+    /// Resolve only the canonical value form, independently of boundary defaults.
+    Value {
+        /// Explicit field ownership/projection policy, if any.
+        projection: Option<Projection>,
+    },
+    /// Select a local single-value conversion.
+    Conversion(Box<ConvertDecl>),
     /// Select the configured output default for this source occurrence.
     Auto,
     /// Apply a type-specific override, including inside optional/sequence sources.
@@ -386,6 +418,10 @@ pub enum OutputRequest {
 }
 
 impl Output<OutputRequest> {
+    /// Request the canonical value representation, bypassing boundary defaults.
+    pub fn value() -> Self {
+        Self::Request(OutputRequest::Value { projection: None })
+    }
     /// Request this source type's configured output default during preparation.
     pub fn auto() -> Self {
         Self::Request(OutputRequest::Auto)
@@ -519,6 +555,16 @@ impl Output {
         borrowed: bool,
     ) -> bool {
         match self {
+            Self::Convert { conversion, .. } => match &conversion.source {
+                prebindgen_flat::ValueSource::Function(name) => {
+                    flat.function(name).is_ok_and(|f| {
+                        f.params
+                            .first()
+                            .is_some_and(|p| !matches!(p.ty.ty, Type::Reference(_)))
+                    })
+                }
+                prebindgen_flat::ValueSource::Into { .. } => true,
+            },
             Self::Sequence { mode, .. } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
@@ -934,6 +980,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             .map(|(_, var)| var.clone())
             .unwrap_or_else(|| self.name());
         match recipe {
+            Input::Convert { conversion, input } => {
+                self.input_conversion(ty, conversion, input, extra, active, names)
+            }
             Input::Temporary(inner) => {
                 let owned = temporary_input_type(ty)?;
                 let mut child = self.input_named(&owned, inner, extra, active, names)?;
@@ -1444,6 +1493,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Convert { conversion, output } => {
+                return self.output_conversion(ty, conversion, output, extra, value, borrowed)
+            }
             Output::Bulk(inner) => {
                 require_bulk(self.codec, Direction::Output)?;
                 if self.bulk.get() {

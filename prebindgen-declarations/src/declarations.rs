@@ -135,7 +135,8 @@ impl Declarations {
                 | Output::Bulk(child)
                 | Output::Named { output: child, .. }
                 | Output::Getter { output: child, .. }
-                | Output::Into { output: child, .. } => select(child),
+                | Output::Into { output: child, .. }
+                | Output::Convert { output: child, .. } => select(child),
                 Output::Combine(children)
                 | Output::Fields(children)
                 | Output::OwnedFields(children)
@@ -347,7 +348,7 @@ impl Declarations {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
             .map(lift_input_bulk)
     }
-    fn input<C: Codec>(
+    pub(crate) fn input<C: Codec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
@@ -360,6 +361,35 @@ impl Declarations {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
+            Input::Request(InputRequest::Value) => {
+                self.resolve_input_value(flat, codec, ty, extra, stack)
+            }
+            Input::Request(InputRequest::Conversion(decl)) => {
+                decl.validate()?;
+                let source = decl
+                    .input
+                    .as_ref()
+                    .ok_or("local input conversion has no input source")?;
+                let conversion = source.resolve(flat, ty, true)?;
+                self.resolve_input_conversion(
+                    flat,
+                    codec,
+                    ty,
+                    conversion,
+                    &Input::value(),
+                    extra,
+                    stack,
+                )
+            }
+            Input::Convert { conversion, input } => self.resolve_input_conversion(
+                flat,
+                codec,
+                ty,
+                conversion.clone(),
+                input,
+                extra,
+                stack,
+            ),
             Input::Temporary(child) => Ok(Input::Temporary(Box::new(resolve(
                 &crate::temporary_input_type(ty)?,
                 &input_body((**child).clone()),
@@ -416,6 +446,32 @@ impl Declarations {
                 Err("input expansion type does not match occurrence".into())
             }
             Input::Leaf => {
+                if flat
+                    .type_info(ty)
+                    .ok()
+                    .is_some_and(|i| i.conversion.input.is_none() && i.conversion.output.is_some())
+                {
+                    return Err(format!(
+                        "`{}` has no canonical input conversion",
+                        type_key(ty)
+                    ));
+                }
+                if let Some(conversion) = flat
+                    .type_info(ty)
+                    .ok()
+                    .and_then(|i| i.conversion.input.clone())
+                {
+                    return self.resolve_input_conversion(
+                        flat,
+                        codec,
+                        ty,
+                        conversion,
+                        &Input::value(),
+                        extra,
+                        stack,
+                    );
+                }
+
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
                     return resolve(
                         ty,
@@ -613,7 +669,7 @@ impl Declarations {
             .map(lift_output_bulk)
     }
     #[allow(clippy::too_many_arguments)] // Getter defaults differ from the existing plain-reference ABI.
-    fn output<C: Codec>(
+    pub(crate) fn output<C: Codec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
@@ -637,6 +693,41 @@ impl Declarations {
             }
         }
         match tree {
+            Output::Request(OutputRequest::Value { projection }) => self.resolve_output_value(
+                flat,
+                codec,
+                ty,
+                extra,
+                stack,
+                getter_result,
+                projection.as_ref(),
+            ),
+            Output::Request(OutputRequest::Conversion(decl)) => {
+                decl.validate()?;
+                let source = decl
+                    .output
+                    .as_ref()
+                    .ok_or("local output conversion has no output source")?;
+                let conversion = source.resolve(flat, ty, false)?;
+                self.resolve_output_conversion(
+                    flat,
+                    codec,
+                    ty,
+                    conversion,
+                    &Output::value(),
+                    extra,
+                    stack,
+                )
+            }
+            Output::Convert { conversion, output } => self.resolve_output_conversion(
+                flat,
+                codec,
+                ty,
+                conversion.clone(),
+                output,
+                extra,
+                stack,
+            ),
             Output::Bulk(child) => Ok(Output::Bulk(Box::new(resolve(
                 ty,
                 &output_body((**child).clone()),
@@ -715,6 +806,43 @@ impl Declarations {
                 Err("output expansion type does not match occurrence".into())
             }
             Output::Leaf | Output::Projected(_) => {
+                let conversion_type = crate::output_referent(ty).unwrap_or(ty);
+                if flat
+                    .type_info(conversion_type)
+                    .ok()
+                    .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
+                {
+                    return Err(format!(
+                        "`{}` has no canonical output conversion",
+                        type_key(ty)
+                    ));
+                }
+                let converted = flat
+                    .type_info(ty)
+                    .ok()
+                    .and_then(|i| i.conversion.output.clone())
+                    .or_else(|| {
+                        crate::output_referent(ty)
+                            .and_then(|t| flat.type_info(t).ok())
+                            .and_then(|i| i.conversion.output.clone())
+                    });
+                if let Some(conversion) = converted {
+                    return self.resolve_output_conversion(
+                        flat,
+                        codec,
+                        ty,
+                        conversion,
+                        &match tree {
+                            Output::Projected(p) => Output::Request(OutputRequest::Value {
+                                projection: Some(p.clone()),
+                            }),
+                            _ => Output::value(),
+                        },
+                        extra,
+                        stack,
+                    );
+                }
+
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(inner, tree, stack)?)));
                 }
@@ -954,7 +1082,7 @@ impl FunctionDecl {
         self.input(name, decl)
     }
     /// Replace this return's default conversion using the production API.
-    pub fn expand_return(self, decl: crate::ExpandReturnDecl) -> Self {
+    pub fn expand_return(self, decl: impl Into<Output<OutputRequest>>) -> Self {
         self.output(decl)
     }
     /// Add callback delivery alongside the ordinary sequence return.
@@ -1069,15 +1197,42 @@ impl From<String> for FunctionDecl {
     }
 }
 
-/// Collect referenced source helper functions directly from the conversion trees.
-pub fn source_functions<'a>(
+/// Collect source helper and representation-type names needed by `Flat::parse_selected`.
+pub fn source_items<'a>(
     inputs: &[Input<InputRequest>],
     outputs: &[Output<OutputRequest>],
     errors: &[(syn::Type, String)],
     functions: impl IntoIterator<Item = &'a FunctionDecl>,
 ) -> Vec<String> {
+    fn representation_types(decl: &crate::ConvertDecl, names: &mut Vec<String>) {
+        struct References<'a>(&'a mut Vec<String>);
+        impl syn::visit_mut::VisitMut for References<'_> {
+            fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
+                if path.qself.is_none() && path.path.segments.len() == 1 {
+                    self.0.push(path.path.segments[0].ident.to_string());
+                }
+                syn::visit_mut::visit_type_path_mut(self, path);
+            }
+        }
+        for mut ty in decl.representation_types() {
+            syn::visit_mut::VisitMut::visit_type_mut(&mut References(names), &mut ty);
+        }
+    }
     fn input(tree: &Input<InputRequest>, names: &mut Vec<String>) {
         match tree {
+            Input::Request(InputRequest::Conversion(d)) => {
+                names.extend(d.functions());
+                representation_types(d, names);
+            }
+            Input::Convert {
+                conversion,
+                input: child,
+            } => {
+                if let prebindgen_flat::ValueSource::Function(f) = &conversion.source {
+                    names.push(f.clone());
+                }
+                input(child, names);
+            }
             Input::Callback(callback) => {
                 for tree in &callback.arguments {
                     output(&tree.clone().into_preparation(), names);
@@ -1109,11 +1264,26 @@ pub fn source_functions<'a>(
                     input(child, names)
                 }
             }
-            Input::Leaf | Input::Request(InputRequest::Auto) => {}
+            Input::Leaf
+            | Input::Request(InputRequest::Auto)
+            | Input::Request(InputRequest::Value) => {}
         }
     }
     fn output(tree: &Output<OutputRequest>, names: &mut Vec<String>) {
         match tree {
+            Output::Request(OutputRequest::Conversion(d)) => {
+                names.extend(d.functions());
+                representation_types(d, names);
+            }
+            Output::Convert {
+                conversion,
+                output: child,
+            } => {
+                if let prebindgen_flat::ValueSource::Function(f) = &conversion.source {
+                    names.push(f.clone());
+                }
+                output(child, names);
+            }
             Output::Named { output: child, .. } => output(child, names),
             Output::Discard => {}
             Output::Getter {
@@ -1152,7 +1322,10 @@ pub fn source_functions<'a>(
                     output(child, names)
                 }
             }
-            Output::Request(OutputRequest::Auto) | Output::Leaf | Output::Projected(_) => {}
+            Output::Request(OutputRequest::Auto)
+            | Output::Request(OutputRequest::Value { .. })
+            | Output::Leaf
+            | Output::Projected(_) => {}
         }
     }
     let mut names = vec![];
@@ -1184,6 +1357,10 @@ pub fn parse_type(text: &str) -> syn::Type {
 
 fn lift_input_bulk(tree: Input) -> Input {
     match tree {
+        Input::Convert { conversion, input } => Input::Convert {
+            conversion,
+            input: Box::new(lift_input_bulk(*input)),
+        },
         Input::Bulk(c) => Input::Bulk(Box::new(lift_input_bulk(*c))),
         Input::Temporary(c) => Input::Temporary(Box::new(lift_input_bulk(*c))),
         Input::Sequence(c) => {
@@ -1210,6 +1387,10 @@ fn lift_input_bulk(tree: Input) -> Input {
 }
 fn lift_output_bulk(tree: Output) -> Output {
     match tree {
+        Output::Convert { conversion, output } => Output::Convert {
+            conversion,
+            output: Box::new(lift_output_bulk(*output)),
+        },
         Output::Bulk(c) => Output::Bulk(Box::new(lift_output_bulk(*c))),
         Output::Sequence {
             element,
@@ -1266,6 +1447,7 @@ fn lift_output_bulk(tree: Output) -> Output {
 
 fn input_has_bulk(tree: &Input) -> bool {
     match tree {
+        Input::Convert { input, .. } => input_has_bulk(input),
         Input::Bulk(_) => true,
         Input::Optional(c) | Input::Sequence(c) => input_has_bulk(c),
         Input::Fields(c) | Input::Record(c) | Input::Selector(c) => c.iter().any(input_has_bulk),
@@ -1281,6 +1463,7 @@ fn output_has_bulk(tree: &Output) -> bool {
             delivery: SequenceDelivery::Callback,
             ..
         } => false,
+        Output::Convert { output, .. } => output_has_bulk(output),
         Output::Bulk(_) => true,
         Output::Optional(c)
         | Output::Named { output: c, .. }
