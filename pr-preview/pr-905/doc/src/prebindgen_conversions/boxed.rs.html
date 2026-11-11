@@ -113,80 +113,83 @@
 <a href=#113 id=113 data-nosnippet>113</a>                Storage::Direct =&gt; <span class="macro">quote!</span>(<span class="kw-2">*</span>#var),
 <a href=#114 id=114 data-nosnippet>114</a>                Storage::Wrapped(<span class="kw">_</span>) =&gt; <span class="macro">quote!</span>(#var.value),
 <a href=#115 id=115 data-nosnippet>115</a>            };
-<a href=#116 id=116 data-nosnippet>116</a>            <span class="macro">quote!</span>(<span class="kw">let </span>#var=<span class="kw">unsafe </span>{Box::from_raw(#pointer)};#transfer <span class="kw">let </span>#var:#ty=#value;)
-<a href=#117 id=117 data-nosnippet>117</a>        }
-<a href=#118 id=118 data-nosnippet>118</a>        Access::Shared =&gt; <span class="macro">quote!</span>(<span class="kw">let </span>#var:#ty=<span class="kw">unsafe </span>{<span class="kw-2">&amp;</span>(<span class="kw-2">*</span>#pointer)#field};),
-<a href=#119 id=119 data-nosnippet>119</a>        Access::Exclusive =&gt; <span class="macro">quote!</span>(<span class="kw">let </span>#var:#ty=<span class="kw">unsafe </span>{<span class="kw-2">&amp;mut </span>(<span class="kw-2">*</span>#pointer)#field};),
-<a href=#120 id=120 data-nosnippet>120</a>    };
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
-<a href=#122 id=122 data-nosnippet>122</a>        prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
-<a href=#123 id=123 data-nosnippet>123</a>            name: wire.clone(),
-<a href=#124 id=124 data-nosnippet>124</a>            kind: wire_kind(BoxedWire {
-<a href=#125 id=125 data-nosnippet>125</a>                ty: target.clone(),
-<a href=#126 id=126 data-nosnippet>126</a>                access,
-<a href=#127 id=127 data-nosnippet>127</a>            }),
-<a href=#128 id=128 data-nosnippet>128</a>        }]),
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="macro">quote!</span>(<span class="kw">let </span>#pointer=#wire <span class="kw">as </span><span class="kw-2">*mut </span>#allocation;#check #conversion),
-<a href=#130 id=130 data-nosnippet>130</a>        <span class="macro">quote!</span>(#var),
-<a href=#131 id=131 data-nosnippet>131</a>    );
-<a href=#132 id=132 data-nosnippet>132</a>    plan.fallible = <span class="macro">matches!</span>(storage, Storage::Wrapped(<span class="kw">_</span>));
-<a href=#133 id=133 data-nosnippet>133</a>    <span class="prelude-val">Ok</span>(plan)
-<a href=#134 id=134 data-nosnippet>134</a>}
-<a href=#135 id=135 data-nosnippet>135</a><span class="doccomment">/// Prepare an owned boxed-address output with deferred ownership transfer.
-<a href=#136 id=136 data-nosnippet>136</a>///
-<a href=#137 id=137 data-nosnippet>137</a>/// A reference source type is rejected. `statements` retains the box, `values`
-<a href=#138 id=138 data-nosnippet>138</a>/// exposes its address as a `*mut` pointer to the allocation, and `commit`
-<a href=#139 id=139 data-nosnippet>139</a>/// relinquishes ownership only after successful delivery. The adapter must provide
-<a href=#140 id=140 data-nosnippet>140</a>/// a matching destructor. Named source types must satisfy the nonzero-size guards
-<a href=#141 id=141 data-nosnippet>141</a>/// from the flat model.
-<a href=#142 id=142 data-nosnippet>142</a>///
-<a href=#143 id=143 data-nosnippet>143</a>/// # Arguments
-<a href=#144 id=144 data-nosnippet>144</a>///
-<a href=#145 id=145 data-nosnippet>145</a>/// * `storage` — the allocation layout, matching the adapter's inputs and destructor.
-<a href=#146 id=146 data-nosnippet>146</a>/// * `ty` — the owned source type of the value.
-<a href=#147 id=147 data-nosnippet>147</a>/// * `wire` — identifier of the delivered wire, also used for the local box.
-<a href=#148 id=148 data-nosnippet>148</a>/// * `value` — Rust expression producing the value.
-<a href=#149 id=149 data-nosnippet>149</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
-<a href=#150 id=150 data-nosnippet>150</a>///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
-<a href=#151 id=151 data-nosnippet>151</a>/// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
-<a href=#153 id=153 data-nosnippet>153</a>    storage: <span class="kw-2">&amp;</span>Storage,
-<a href=#154 id=154 data-nosnippet>154</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#155 id=155 data-nosnippet>155</a>    wire: syn::Ident,
-<a href=#156 id=156 data-nosnippet>156</a>    value: TokenStream,
-<a href=#157 id=157 data-nosnippet>157</a>    borrowed: bool,
-<a href=#158 id=158 data-nosnippet>158</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
-<a href=#159 id=159 data-nosnippet>159</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B&gt;&gt; {
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">if </span><span class="macro">matches!</span>(ty, syn::Type::Reference(<span class="kw">_</span>)) {
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"borrowed pointer outputs are outside this subset"</span>.into());
-<a href=#162 id=162 data-nosnippet>162</a>    }
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>value = <span class="kw">if </span>borrowed {
-<a href=#164 id=164 data-nosnippet>164</a>        <span class="macro">quote!</span>(::core::clone::Clone::clone(#value))
-<a href=#165 id=165 data-nosnippet>165</a>    } <span class="kw">else </span>{
-<a href=#166 id=166 data-nosnippet>166</a>        value
-<a href=#167 id=167 data-nosnippet>167</a>    };
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">let </span>value = storage.wrap(value);
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">let </span>allocation = storage.ty(ty);
-<a href=#170 id=170 data-nosnippet>170</a>    <span class="prelude-val">Ok</span>(OutputPlan {
-<a href=#171 id=171 data-nosnippet>171</a>        fallible: <span class="bool-val">false</span>,
-<a href=#172 id=172 data-nosnippet>172</a>        context: Default::default(),
-<a href=#173 id=173 data-nosnippet>173</a>        delivery: Default::default(),
-<a href=#174 id=174 data-nosnippet>174</a>        outcomes: prebindgen_flat::Outcomes {
-<a href=#175 id=175 data-nosnippet>175</a>            success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
-<a href=#176 id=176 data-nosnippet>176</a>                name: wire.clone(),
-<a href=#177 id=177 data-nosnippet>177</a>                kind: wire_kind(BoxedWire {
-<a href=#178 id=178 data-nosnippet>178</a>                    ty: ty.clone(),
-<a href=#179 id=179 data-nosnippet>179</a>                    access: Access::Move,
-<a href=#180 id=180 data-nosnippet>180</a>                }),
-<a href=#181 id=181 data-nosnippet>181</a>            }]),
-<a href=#182 id=182 data-nosnippet>182</a>            source_error: <span class="prelude-val">None</span>,
-<a href=#183 id=183 data-nosnippet>183</a>            binding_failure: <span class="prelude-val">None</span>,
-<a href=#184 id=184 data-nosnippet>184</a>        },
-<a href=#185 id=185 data-nosnippet>185</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
-<a href=#186 id=186 data-nosnippet>186</a>        values: <span class="macro">vec!</span>[(wire.clone(), <span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation))],
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="comment">// Moving the Box can retag its allocation. Integer wire addresses must
-<a href=#188 id=188 data-nosnippet>188</a>        // recover the final raw pointer's provenance, including native rollback.
-<a href=#189 id=189 data-nosnippet>189</a>        </span>commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire).expose_provenance();),
-<a href=#190 id=190 data-nosnippet>190</a>    })
-<a href=#191 id=191 data-nosnippet>191</a>}
+<a href=#116 id=116 data-nosnippet>116</a>            <span class="comment">// Release the emptied allocation as part of this conversion, before
+<a href=#117 id=117 data-nosnippet>117</a>            // the next input or source call. Keeping its Box in the enclosing
+<a href=#118 id=118 data-nosnippet>118</a>            // scope changes allocator reuse and needlessly retains storage.
+<a href=#119 id=119 data-nosnippet>119</a>            </span><span class="macro">quote!</span>(<span class="kw">let </span>#var:#ty={<span class="kw">let </span>#var=<span class="kw">unsafe </span>{Box::from_raw(#pointer)};#transfer #value};)
+<a href=#120 id=120 data-nosnippet>120</a>        }
+<a href=#121 id=121 data-nosnippet>121</a>        Access::Shared =&gt; <span class="macro">quote!</span>(<span class="kw">let </span>#var:#ty=<span class="kw">unsafe </span>{<span class="kw-2">&amp;</span>(<span class="kw-2">*</span>#pointer)#field};),
+<a href=#122 id=122 data-nosnippet>122</a>        Access::Exclusive =&gt; <span class="macro">quote!</span>(<span class="kw">let </span>#var:#ty=<span class="kw">unsafe </span>{<span class="kw-2">&amp;mut </span>(<span class="kw-2">*</span>#pointer)#field};),
+<a href=#123 id=123 data-nosnippet>123</a>    };
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
+<a href=#125 id=125 data-nosnippet>125</a>        prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
+<a href=#126 id=126 data-nosnippet>126</a>            name: wire.clone(),
+<a href=#127 id=127 data-nosnippet>127</a>            kind: wire_kind(BoxedWire {
+<a href=#128 id=128 data-nosnippet>128</a>                ty: target.clone(),
+<a href=#129 id=129 data-nosnippet>129</a>                access,
+<a href=#130 id=130 data-nosnippet>130</a>            }),
+<a href=#131 id=131 data-nosnippet>131</a>        }]),
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="macro">quote!</span>(<span class="kw">let </span>#pointer=#wire <span class="kw">as </span><span class="kw-2">*mut </span>#allocation;#check #conversion),
+<a href=#133 id=133 data-nosnippet>133</a>        <span class="macro">quote!</span>(#var),
+<a href=#134 id=134 data-nosnippet>134</a>    );
+<a href=#135 id=135 data-nosnippet>135</a>    plan.fallible = <span class="macro">matches!</span>(storage, Storage::Wrapped(<span class="kw">_</span>));
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="prelude-val">Ok</span>(plan)
+<a href=#137 id=137 data-nosnippet>137</a>}
+<a href=#138 id=138 data-nosnippet>138</a><span class="doccomment">/// Prepare an owned boxed-address output with deferred ownership transfer.
+<a href=#139 id=139 data-nosnippet>139</a>///
+<a href=#140 id=140 data-nosnippet>140</a>/// A reference source type is rejected. `statements` retains the box, `values`
+<a href=#141 id=141 data-nosnippet>141</a>/// exposes its address as a `*mut` pointer to the allocation, and `commit`
+<a href=#142 id=142 data-nosnippet>142</a>/// relinquishes ownership only after successful delivery. The adapter must provide
+<a href=#143 id=143 data-nosnippet>143</a>/// a matching destructor. Named source types must satisfy the nonzero-size guards
+<a href=#144 id=144 data-nosnippet>144</a>/// from the flat model.
+<a href=#145 id=145 data-nosnippet>145</a>///
+<a href=#146 id=146 data-nosnippet>146</a>/// # Arguments
+<a href=#147 id=147 data-nosnippet>147</a>///
+<a href=#148 id=148 data-nosnippet>148</a>/// * `storage` — the allocation layout, matching the adapter's inputs and destructor.
+<a href=#149 id=149 data-nosnippet>149</a>/// * `ty` — the owned source type of the value.
+<a href=#150 id=150 data-nosnippet>150</a>/// * `wire` — identifier of the delivered wire, also used for the local box.
+<a href=#151 id=151 data-nosnippet>151</a>/// * `value` — Rust expression producing the value.
+<a href=#152 id=152 data-nosnippet>152</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
+<a href=#153 id=153 data-nosnippet>153</a>///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
+<a href=#154 id=154 data-nosnippet>154</a>/// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
+<a href=#156 id=156 data-nosnippet>156</a>    storage: <span class="kw-2">&amp;</span>Storage,
+<a href=#157 id=157 data-nosnippet>157</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#158 id=158 data-nosnippet>158</a>    wire: syn::Ident,
+<a href=#159 id=159 data-nosnippet>159</a>    value: TokenStream,
+<a href=#160 id=160 data-nosnippet>160</a>    borrowed: bool,
+<a href=#161 id=161 data-nosnippet>161</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
+<a href=#162 id=162 data-nosnippet>162</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B&gt;&gt; {
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">if </span><span class="macro">matches!</span>(ty, syn::Type::Reference(<span class="kw">_</span>)) {
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"borrowed pointer outputs are outside this subset"</span>.into());
+<a href=#165 id=165 data-nosnippet>165</a>    }
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span>value = <span class="kw">if </span>borrowed {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="macro">quote!</span>(::core::clone::Clone::clone(#value))
+<a href=#168 id=168 data-nosnippet>168</a>    } <span class="kw">else </span>{
+<a href=#169 id=169 data-nosnippet>169</a>        value
+<a href=#170 id=170 data-nosnippet>170</a>    };
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">let </span>value = storage.wrap(value);
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">let </span>allocation = storage.ty(ty);
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="prelude-val">Ok</span>(OutputPlan {
+<a href=#174 id=174 data-nosnippet>174</a>        fallible: <span class="bool-val">false</span>,
+<a href=#175 id=175 data-nosnippet>175</a>        context: Default::default(),
+<a href=#176 id=176 data-nosnippet>176</a>        delivery: Default::default(),
+<a href=#177 id=177 data-nosnippet>177</a>        outcomes: prebindgen_flat::Outcomes {
+<a href=#178 id=178 data-nosnippet>178</a>            success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
+<a href=#179 id=179 data-nosnippet>179</a>                name: wire.clone(),
+<a href=#180 id=180 data-nosnippet>180</a>                kind: wire_kind(BoxedWire {
+<a href=#181 id=181 data-nosnippet>181</a>                    ty: ty.clone(),
+<a href=#182 id=182 data-nosnippet>182</a>                    access: Access::Move,
+<a href=#183 id=183 data-nosnippet>183</a>                }),
+<a href=#184 id=184 data-nosnippet>184</a>            }]),
+<a href=#185 id=185 data-nosnippet>185</a>            source_error: <span class="prelude-val">None</span>,
+<a href=#186 id=186 data-nosnippet>186</a>            binding_failure: <span class="prelude-val">None</span>,
+<a href=#187 id=187 data-nosnippet>187</a>        },
+<a href=#188 id=188 data-nosnippet>188</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
+<a href=#189 id=189 data-nosnippet>189</a>        values: <span class="macro">vec!</span>[(wire.clone(), <span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation))],
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="comment">// Moving the Box can retag its allocation. Integer wire addresses must
+<a href=#191 id=191 data-nosnippet>191</a>        // recover the final raw pointer's provenance, including native rollback.
+<a href=#192 id=192 data-nosnippet>192</a>        </span>commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire).expose_provenance();),
+<a href=#193 id=193 data-nosnippet>193</a>    })
+<a href=#194 id=194 data-nosnippet>194</a>}
 </code></pre></div></section></main></body></html>
