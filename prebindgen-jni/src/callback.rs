@@ -347,25 +347,17 @@ impl JniCallback {
         let retained = format_ident!("{wire}_retained");
         let environment = format_ident!("callback_environment");
         let context = JniContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             return_delivery: crate::JniReturnDelivery::Packet,
             prepared_delivery: None,
             environment: environment.clone(),
-            acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("unused_domain"),
             return_sink: None,
             is_domain_error: false,
             output_committed: quote!(),
         };
         if let Some(value) = &self.return_value {
-            let mut resources = Vec::new();
-            value.input.code_fragment_slot(
-                InputFragment::Resources {
-                    context: &context,
-                    resources: &mut resources,
-                },
-                &syn::parse_quote!(()),
-            )?;
-            crate::handles::require_preflight(&value.input, &resources)
+            crate::handles::require_preflight(&value.input)
                 .map_err(|error| format!("callback `{}` return value: {error}", self.name))?;
         }
         let mut descriptor = String::from("(");
@@ -464,24 +456,18 @@ impl JniCallback {
         } else {
             quote!(#retained.with_env(#capacity, |#environment| { let mut #environment = #environment; #source_bindings #invoke });)
         };
-        Ok(InputPlan {
-            fallible: true,
-            context: Default::default(),
-            node: WireNode::Leaf(vec![Wire {
+        let mut plan = InputPlan::new(
+            WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: JniWire::Callback {
                     callback: self.clone(),
                 },
             }]),
-            acknowledgement: None,
-            acquire: quote!(),
-            resources: vec![],
-            validation: registration,
-            statements: quote!(#activate # [allow(unused_mut, clippy::collapsible_if)] let #var = move |#(#params),*| {
-                #invocation
-            };),
-            argument: quote!(#var),
-        })
+            quote!(#registration #activate #[allow(unused_mut,clippy::collapsible_if)] let #var=move |#(#params),*| {#invocation};),
+            quote!(#var),
+        );
+        plan.fallible = true;
+        Ok(plan)
     }
 
     pub(crate) fn adapter(
@@ -698,15 +684,14 @@ impl CallbackReturn {
         env: &syn::Ident,
     ) -> Result<TokenStream> {
         let input = &self.input;
-        let mut resources = Vec::new();
-        input.code_fragment_slot(
-            InputFragment::Resources {
-                context,
-                resources: &mut resources,
-            },
-            &syn::parse_quote!(()),
-        )?;
-        crate::handles::require_preflight(input, &resources)?;
+        crate::handles::require_preflight(input)?;
+        let mut local_context = context.clone();
+        local_context.input_transfers = if crate::takes_input_owners(input.input_node()) {
+            prebindgen_conversions::InputTransfers::Report(format_ident!("__pb_input_consumed"))
+        } else {
+            prebindgen_conversions::InputTransfers::Forbidden
+        };
+        let context = &local_context;
         let fields = self.fields();
         let result = format_ident!("callback_result");
         let root_row = format_ident!("callback_result_rows");
@@ -725,7 +710,7 @@ impl CallbackReturn {
             self.ownership_guard()?
         };
         let ownership_reads = quote!(#owners #cache);
-        let (return_type, decode, mut late_decode) = match fields.as_slice() {
+        let (return_type, decode, late_decode) = match fields.as_slice() {
             [field] => {
                 let name = &field.name;
                 let read = field.kind.read_callback_return(&result);
@@ -760,30 +745,22 @@ impl CallbackReturn {
                 )
             }
         };
+        // Resolve only carrier-owned fragments here. The complete value converter
+        // has already rendered its own code before receiving its continuation.
+        let decode = context.render(&decode)?;
+        let cache = context.render(&cache)?;
+        let owners = context.render(&owners)?;
+        let commit_owners = context.render(&commit_owners)?;
+        let mut late_decode = context.render(&late_decode)?;
+        let cleanup_rows = cleanup_rows.map(|code| context.render(&code)).transpose()?;
         let target = format_ident!("callback_return_value");
         let ty = &self.source_type;
         let expected = syn::parse_quote!(::prebindgen_runtime::Result<#ty>);
         let mut body = input.callback_return_fragment(
-            InputFragment::Construct {
+            InputFragment {
                 context,
                 target: &target,
                 next: quote!(Ok::<_,String>(#target)),
-            },
-            &expected,
-            cleanup_rows.is_none(),
-        )?;
-        body = input.callback_return_fragment(
-            InputFragment::Acquire {
-                context,
-                next: body,
-            },
-            &expected,
-            cleanup_rows.is_none(),
-        )?;
-        body = input.callback_return_fragment(
-            InputFragment::Validate {
-                context,
-                next: body,
             },
             &expected,
             cleanup_rows.is_none(),
@@ -813,9 +790,14 @@ impl CallbackReturn {
                 callback_return_decoded
             });
         }
-        context.render(&quote!({
-            let __pb_input_consumed=::core::cell::Cell::new(0usize);
-            let __prebindgen_input_consumed=&__pb_input_consumed;
+        let counter = crate::takes_input_owners(input.input_node()).then(|| {
+            quote!(
+                let __pb_input_consumed=::core::cell::Cell::new(0usize);
+                let __prebindgen_input_consumed=&__pb_input_consumed;
+            )
+        });
+        Ok(quote!({
+            #counter
             let #result = unsafe { #retained.invoke_return(#env, #return_type, &arguments) }?;
             #decode
             #cache
@@ -932,13 +914,17 @@ fn receive_native_return_owners(node: &kotlin::JniNode) -> Result<TokenStream> {
 }
 
 fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Result<TokenStream> {
-    let code = prebindgen_conversions::render_template(code, &|name| {
-        Ok(if name == "source_result" {
-            quote!(#source)
-        } else {
-            prebindgen_conversions::template_parameter(name)
-        })
-    })?;
+    let code = prebindgen_conversions::render_template(
+        code,
+        &|name| {
+            Ok(if name == "source_result" {
+                quote!(#source)
+            } else {
+                prebindgen_conversions::template_parameter(name)
+            })
+        },
+        &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
+    )?;
     context.render(&code)
 }
 pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
@@ -1106,7 +1092,7 @@ mod preflight_tests {
             .package(package!().class(ptr_class!(Handle)).fun(fun!(consume)))
             .prepare()
             .unwrap();
-        let mut plan = JniCodec::raw()
+        let plan = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &model,
                 &syn::parse_quote!(Handle),
@@ -1116,7 +1102,6 @@ mod preflight_tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        plan.resources[0].allocation_type = None;
         let input = JniInput::from(plan);
         let callback = Rc::new(JniCallback {
             package: "test".into(),
@@ -1128,18 +1113,17 @@ mod preflight_tests {
                 input,
             }),
         });
-        let error = callback
+        let plan = callback
             .input(
                 format_ident!("wire"),
                 format_ident!("value"),
                 &Default::default(),
             )
-            .err()
             .unwrap();
-        assert!(
-            error.contains("callback `ReturnHandle` return value"),
-            "{error}"
-        );
-        assert!(error.contains("allocation type"), "{error}");
+        assert!(plan.code.to_string().contains("__pb_input_consumed"));
+        assert!(!plan
+            .code
+            .to_string()
+            .contains("__prebindgen_input_transfer"));
     }
 }

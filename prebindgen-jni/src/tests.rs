@@ -4033,55 +4033,32 @@ fn kotlin_preflight_is_required_and_uses_retained_handles() {
 }
 
 #[test]
-fn incomplete_custom_resource_metadata_is_rejected() {
-    for missing in ["allocation", "mismatch", "access", "deferred"] {
-        let mut model = JniGen::builder()
-            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(first:&mut A,second:&A){}"))
-            .set_package_prefix("test")
-            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
-            .prepare().unwrap();
-        let ty = model.function("call").unwrap().params[0].ty.ty.clone();
-        let mut plan = JniCodec::raw()
-            .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &model,
-                &ty,
-                &(),
-                syn::parse_quote!(bad_wire),
-                syn::parse_quote!(bad_value),
-                &prebindgen_declarations::Condition::default(),
-            ))
-            .unwrap();
-        plan.resources[0].registered = true;
-        let first = &mut plan.resources[0];
-        let expected = match missing {
-            "allocation" => {
-                first.allocation_type = None;
-                "allocation type"
-            }
-            "mismatch" => {
-                first.allocation_type = Some(syn::parse_quote!(B));
-                "matching allocation types and access modes"
-            }
-            "access" => {
-                first.access = Access::Shared;
-                "matching allocation types and access modes"
-            }
-            _ => {
-                first.registered = false;
-                "eagerly prepared"
-            }
-        };
-        model.function_mut("call").unwrap().params[0].ty.slot = Some(plan.into());
-        let error = generate(&model).err().unwrap();
-        assert!(
-            error.contains("function `call` parameter `first`"),
-            "{error}"
-        );
-        assert!(
-            error.contains("Kotlin handle preflight") && error.contains(expected),
-            "{error}"
-        );
-    }
+fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
+    let mut model = JniGen::builder()
+        .flat(flat(
+            "pub struct A{pub n:i64}pub fn call(first:&mut A,second:&A){}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(A)).fun(fun!(call)))
+        .prepare()
+        .unwrap();
+    let ty = model.function("call").unwrap().params[0].ty.ty.clone();
+    let plan = JniCodec::raw()
+        .input_leaf(prebindgen_declarations::InputLeaf::new(
+            &model,
+            &ty,
+            &(),
+            syn::parse_quote!(raw_wire),
+            syn::parse_quote!(raw_value),
+            &Default::default(),
+        ))
+        .unwrap();
+    model.function_mut("call").unwrap().params[0].ty.slot = Some(plan.into());
+    let generated = generate(&model).unwrap();
+    assert!(generated
+        .kotlin
+        .values()
+        .any(|code| code.contains("withHandleLocks")));
 }
 
 #[test]

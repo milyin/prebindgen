@@ -24,50 +24,6 @@ pub(crate) fn decode_buffer(value: Value, wire: &syn::Ident) -> TokenStream {
     }
 }
 
-/// Prepare C row leaves once, independently of the enum-aware declaration codec.
-pub(crate) fn prepare_input_leaf(
-    plan: &mut InputPlan<CWire>,
-    ty: &syn::Type,
-    wire: &syn::Ident,
-    var: &syn::Ident,
-    active: &prebindgen_declarations::Condition,
-) -> Result<()> {
-    if let WireNode::Leaf(wires) = &plan.node {
-        if let [Wire {
-            kind:
-                CWire::Owned {
-                    owner,
-                    by_value: false,
-                    ..
-                },
-            ..
-        }] = wires.as_slice()
-        {
-            *plan = owned::input(
-                owner.clone(),
-                ty,
-                wire.clone(),
-                var.clone(),
-                active,
-                false,
-                true,
-            );
-        }
-    }
-    // A row can contain several moves and a panicking empty-owner factory.
-    // Acknowledge each successful leaf acquisition in wire order.
-    for resource in &mut plan.resources {
-        if !resource.registered && !resource.records_consumption && resource.access == Access::Move
-        {
-            let condition = &resource.active;
-            let count = &resource.count;
-            plan.acquire.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count)); }));
-            resource.records_consumption = true;
-        }
-    }
-    Ok(())
-}
-
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,

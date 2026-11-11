@@ -165,35 +165,28 @@ impl Codec for TestCodec {
             extra,
             wire: w,
             target: v,
-            active,
             ..
         } = request;
 
         let name = extra.name;
         if let Some(value) = Value::of(ty) {
             let decode = quote!(decode(#name, #w)?);
-            return value::input(
-                ty,
-                w,
-                v,
-                &active.rust(),
-                decode,
-                wire(Kind::Value(value), ty, extra),
-            );
+            return value::input(ty, w, v, decode, wire(Kind::Value(value), ty, extra));
         }
-        Ok(InputPlan {
-            fallible: false,
-            context: Default::default(),
-            acknowledgement: None,
-            node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-                name: w.clone(),
-                kind: wire(Kind::Token, ty, extra),
-            }]),
-            validation: quote!(),
-            acquire: quote!(),
-            resources: vec![],
-            statements: quote!(let #v=receive_token(#w);),
-            argument: quote!(#v),
+        Ok({
+            let validation = quote!();
+            let acquire = quote!();
+            let statements = quote!(let #v=receive_token(#w););
+            let mut plan = InputPlan::new(
+                prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: w.clone(),
+                    kind: wire(Kind::Token, ty, extra),
+                }]),
+                quote!(#validation #acquire #statements),
+                quote!(#v),
+            );
+            plan.fallible = false;
+            plan
         })
     }
     fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<TestWire>> {
@@ -577,7 +570,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .name,
         "result"
     );
-    assert!(x.validation.to_string().contains("\"x\""));
+    assert!(x.code.to_string().contains("\"x\""));
 }
 #[test]
 fn declaration_compilation_is_atomic_even_when_output_fails() {
@@ -740,7 +733,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
             .ty,
         "i64"
     );
-    assert!(input.validation.to_string().contains("scalar"));
+    assert!(input.code.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
 #[test]
@@ -929,7 +922,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 ..
             } = request;
 
-            let mut plan = TEST_CODEC.input_leaf(crate::InputLeaf::new(
+            let plan = TEST_CODEC.input_leaf(crate::InputLeaf::new(
                 flat,
                 ty,
                 extra,
@@ -937,11 +930,6 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 v,
                 active,
             ))?;
-            plan.acknowledgement = Some(if extra.name == "conflict" {
-                quote!(ack(#w);)
-            } else {
-                quote!(ack();)
-            });
             Ok(plan)
         }
         fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<TestWire>> {
@@ -969,11 +957,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 },
             ))
         }
-        fn finish_input(&self, plan: &mut InputPlan<TestWire>, _: &Extra) -> Result<()> {
-            assert_eq!(
-                plan.acknowledgement.as_ref().unwrap().to_string(),
-                quote!(ack();).to_string()
-            );
+        fn finish_input(&self, plan: &mut InputPlan<TestWire>, extra: &Extra) -> Result<()> {
+            if extra.name == "conflict" {
+                return Err("input finalization failed".into());
+            }
             assert_eq!(TestAbi::wires(&plan.node).len(), 2);
             assert_eq!(
                 prebindgen_flat::wire_definitions(std::iter::once(&plan.node)).count(),
@@ -1036,7 +1023,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
     )
     .unwrap_err()
-    .contains("conflicting input acknowledgements"));
+    .contains("input finalization failed"));
     assert!(conflicting.function("take").unwrap().params[0]
         .ty
         .slot
@@ -1176,69 +1163,37 @@ fn source_binding() -> syn::Ident {
 }
 
 #[test]
-fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknowledgements() {
-    use prebindgen_conversions::{Access, Resource};
-    let make = |index: usize, ack: TokenStream| {
-        let name = format_ident!("field{index}");
+fn shared_record_input_composes_complete_fields_and_hoists_backing_storage() {
+    let make = |index: usize| {
+        let target = format_ident!("field{index}");
         let mut child = TEST_CODEC
             .input_leaf(crate::InputLeaf::new(
                 &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("wire{index}"),
-                format_ident!("value{index}"),
+                target.clone(),
                 &Condition::default(),
             ))
             .unwrap();
-        child.validation = quote!(validate(#index););
-        child.acquire = quote!(acquire(#index););
-        child.acknowledgement = Some(ack);
-        child.resources.push(Resource {
-            allocation_type: None,
-            registered: false,
-            records_consumption: false,
-            count: quote!(1usize),
-            access: Access::Move,
-            active: quote!(selected),
-        });
-        Ok((name, child))
+        child.storage = quote!(let #target=(););
+        Ok((target, child))
     };
     let plan = record_input(
         &TEST_CODEC,
         &syn::parse_quote!(Pair),
         format_ident!("pair"),
-        [make(0, quote!(ack())), make(1, quote!(ack()))],
+        [make(0), make(1)],
     )
     .unwrap();
-    assert_eq!(
-        plan.validation.to_string(),
-        quote!(validate(0usize); validate(1usize);).to_string()
-    );
-    assert_eq!(
-        plan.acquire.to_string(),
-        quote!(acquire(0usize); acquire(1usize);).to_string()
-    );
-    assert_eq!(plan.resources.len(), 2);
-    assert!(plan
-        .resources
-        .iter()
-        .all(|r| r.access == Access::Move && r.active.to_string() == "selected"));
-    assert_eq!(
-        plan.acknowledgement.unwrap().to_string(),
-        quote!(ack()).to_string()
-    );
+    assert!(plan.storage.to_string().contains("field0"));
+    assert!(plan.storage.to_string().contains("field1"));
+    let code = plan.code.to_string();
+    assert!(code.find("wire0").unwrap() < code.find("wire1").unwrap());
     assert_eq!(
         TestAbi::wires(&plan.node).nth(1).unwrap().kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
-    assert!(record_input(
-        &TEST_CODEC,
-        &syn::parse_quote!(Pair),
-        format_ident!("pair"),
-        [make(0, quote!(ack())), make(1, quote!(different()))]
-    )
-    .unwrap_err()
-    .contains("conflicting input acknowledgements"));
 }
 
 #[test]
@@ -2025,7 +1980,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         .slot
         .as_ref()
         .unwrap()
-        .validation
+        .code
         .to_string();
     let output_before = flat
         .function("f")
@@ -2070,7 +2025,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
                 .slot
                 .as_ref()
                 .unwrap()
-                .validation
+                .code
                 .to_string(),
             input_before
         );
@@ -2549,4 +2504,99 @@ fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
         "{error}"
     );
     assert!(flat.function("values").unwrap().ret.slot.is_none());
+}
+
+#[test]
+fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
+    let size = |width: usize| {
+        let fields = (0..width)
+            .map(|i| format!("pub f{i}:Option<i64>"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let flat = parse(&format!(
+            "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
+        ));
+        let recipe = Input::Fields(
+            (0..width)
+                .map(|_| Input::Optional(Box::new(Input::Leaf)))
+                .collect(),
+        );
+        let plan = compile_input(
+            &flat,
+            &TEST_CODEC,
+            "consume",
+            "value",
+            &recipe,
+            &Extra::default(),
+        )
+        .unwrap();
+        let code = plan.code.to_string();
+        assert_eq!(code.matches("continuation").count(), 1);
+        code.len()
+    };
+    let small = size(8);
+    let large = size(64);
+    assert!(large < small * 10, "{small} -> {large}");
+}
+
+#[test]
+fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
+    let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
+    let recipe = Input::Optional(Box::new(Input::Temporary(Box::new(Input::Leaf))));
+    let first = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "combine",
+        "first",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap();
+    let second = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "combine",
+        "second",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap();
+    let a = syn::parse_quote!(first);
+    let b = syn::parse_quote!(second);
+    let body = second.bind(&b, quote!(Ok(combine(#a,#b)))).unwrap();
+    let body = first.bind(&a, body).unwrap();
+    let parameters = TestAbi::wires(&first.node)
+        .chain(TestAbi::wires(&second.node))
+        .map(|w| {
+            let name = &w.name;
+            let ty = w.rust_type();
+            quote!(#name:#ty)
+        })
+        .collect::<Vec<_>>();
+    let program = quote! {
+        fn decode(_: &str,value:String)->Result<String,String>{Ok(value)}
+        fn combine(first:Option<&str>,second:Option<&str>)->usize {first.map_or(0,str::len)+second.map_or(0,str::len)}
+        fn bridge(#(#parameters),*)->Result<usize,String>{#body}
+        fn main(){assert_eq!(bridge(1,"hello".into(),1,"world".into()).unwrap(),10);assert_eq!(bridge(0,"ignored".into(),1,"a".into()).unwrap(),1);assert_eq!(bridge(1,"a".into(),0,"ignored".into()).unwrap(),1);}
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("borrows.rs");
+    let executable = directory.path().join("borrows");
+    std::fs::write(&source, program.to_string()).unwrap();
+    let built = std::process::Command::new("rustc")
+        .args(["--edition=2021"])
+        .arg(source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(std::process::Command::new(executable)
+        .status()
+        .unwrap()
+        .success());
 }

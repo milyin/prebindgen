@@ -37,9 +37,9 @@ pub use sequence::JniSequence;
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::{
-    Alternatives, Codec, Condition, Direction, GroupKind, InputConstruction, InputLeaf, Optional,
-    OptionalEncoding, OutputLeaf, Presence, Representation, SequenceInputRequest,
-    SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
+    Alternatives, Codec, Condition, Direction, GroupKind, InputLeaf, Optional, OptionalEncoding,
+    OutputLeaf, Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
+    SourceErrorPlan, ValueAccess,
 };
 pub use wire::{JniArgument, JniWire};
 mod emission;
@@ -803,18 +803,7 @@ impl Codec for JniCodec<'_> {
     type Wire = JniWire;
     type Context = JniContext;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.node)?;
-        let env = prebindgen_conversions::template_parameter("environment");
-        let ownership = prebindgen_conversions::template_parameter("acknowledgement");
-        if plan.resources.iter().any(|r| r.access == Access::Move) {
-            plan.acknowledgement = Some(quote!(
-                if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
-                    return Err("invalid ownership acknowledgement".into());
-                }
-                __pb_receipt_valid.set(true);
-            ));
-        }
-        Ok(())
+        group::validate_layout(&plan.node)
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
@@ -834,8 +823,12 @@ impl Codec for JniCodec<'_> {
         &self,
         request: SequenceInputRequest<'_, Self>,
     ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        if !request.view.is_owned() && takes_input_owners(request.element) {
+            return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
+        }
         let SequenceInputRequest {
             extra: _,
+            view: _,
             wire,
             length,
             index,
@@ -915,18 +908,9 @@ impl Codec for JniCodec<'_> {
         !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
     }
     fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
-        let grouped_bulk = request.representation == Representation::Bulk
-            && request.construction == InputConstruction::GroupedRow;
-        let wire = request.wire.clone();
-        let var = request.target.clone();
-        let ty = request.ty;
-        let active = request.active;
-        let mut plan = self.input_value(request)?;
-        if grouped_bulk {
-            bulk::prepare_row_leaf(&mut plan, ty, &wire, &var, active);
-        }
-        Ok(plan)
+        self.input_value(request)
     }
+
     fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<JniWire>> {
         let OutputLeaf {
             flat: _flat,
@@ -1409,17 +1393,12 @@ impl JniCodec<'_> {
                 JniWire::bytes(),
             ),
             None => {
-                return prebindgen_conversions::boxed::input(
-                    &storage(),
-                    ty,
-                    w,
-                    v,
-                    &active.rust(),
-                    |b| JniWire::handle(b, kotlin_condition(active)),
-                )
+                return prebindgen_conversions::boxed::input(&storage(), ty, w, v, |b| {
+                    JniWire::handle(b, kotlin_condition(active))
+                })
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
+        prebindgen_conversions::value::input(ty, w, v, decode, kind)
     }
 }
 
@@ -1691,7 +1670,7 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 /// Emit Rust/JNI and Kotlin using only the prepared Flat model.
 /// All project-dependent settings and declarations are read from its metadata.
 /// Built-in and independent inputs use this same emitter. Inputs must provide
-/// native resource/acknowledgement requests and matching Kotlin handle snapshots
+/// native wire ownership and matching Kotlin handle snapshots
 /// and ownership updates; incomplete descriptions return a generation error.
 pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
@@ -1929,10 +1908,14 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let mut context = JniContext {
+            input_transfers: if inputs.iter().any(|i| takes_input_owners(i.input_node())) {
+                prebindgen_conversions::InputTransfers::Report(format_ident!("__pb_input_consumed"))
+            } else {
+                prebindgen_conversions::InputTransfers::Forbidden
+            },
             return_delivery: crate::JniReturnDelivery::Packet,
             prepared_delivery: None,
             environment: env.clone(),
-            acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
             return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
@@ -2037,16 +2020,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         )?;
         let mut delegated_handles = false;
         for (parameter, input) in f.params.iter().zip(&inputs) {
-            let mut resources = Vec::new();
-            input.code_fragment_slot(
-                prebindgen_conversions::InputFragment::Resources {
-                    context: &context,
-                    resources: &mut resources,
-                },
-                &syn::parse_quote!(()),
-            )?;
-            delegated_handles |= !resources.is_empty();
-            handles::require_preflight(*input, &resources).map_err(|error| {
+            delegated_handles |= crate::kotlin::input_handles(input.input_node(), false);
+            handles::require_preflight(*input).map_err(|error| {
                 format!(
                     "function `{}` parameter `{}`: {error}",
                     f.name, parameter.name
@@ -2084,19 +2059,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         }
         let has_consumes = !consumed.is_empty();
         debug_assert_eq!(acknowledgement != 0, has_consumes);
-        let has_acknowledgement = f
-            .input_conversions()?
-            .iter()
-            .map(|i| {
-                i.code_fragment_slot(
-                    prebindgen_conversions::InputFragment::Acknowledge { context: &context },
-                    &syn::parse_quote!(()),
-                )
-                .map(|code| code.to_string() != quote!(()).to_string())
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .any(|present| present);
+        let has_acknowledgement = inputs.iter().any(|i| takes_input_owners(i.input_node()));
         if has_acknowledgement != has_consumes {
             return Err("JNI acknowledgement does not match slot ownership updates".into());
         }
@@ -2191,6 +2154,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         } else {
             TokenStream::new()
         };
+        let incoming_counter =
+            has_consumes.then(|| quote!(let __pb_input_consumed=::core::cell::Cell::new(0usize);));
         let body = prebindgen_conversions::staged::emit_call(
             f,
             &context,
@@ -2200,6 +2165,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 .map(|w| w.name.clone())
                 .collect::<Vec<_>>(),
         )?;
+        let receipt_ready=has_consumes.then(||quote!(if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {return Err("invalid ownership acknowledgement".into());} __pb_receipt_valid.set(true);));
+        let body = quote!(#receipt_ready #body);
         let body = if callback {
             quote!(if #env.get_array_length(&__pb_output_accepted).map_err(|e|e.to_string())? != 1 {return Err("invalid sequence output acknowledgement".into());} if __pb_callback.is_null(){return Err("null sequence callback".into());} #body)
         } else {
@@ -2292,13 +2259,13 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
         ));
         rust.extend(quote!{
-   #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+   # [allow(clippy::let_and_return,clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nThe caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*) #native_signature_return {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     #success_tracking
-    let __pb_input_consumed=::core::cell::Cell::new(0usize);
+    #incoming_counter
     let __pb_receipt_valid=::core::cell::Cell::new(false);
     let outcome=::prebindgen_runtime::boundary(||{
      #reserve_outputs
@@ -2489,4 +2456,9 @@ fn native_handle(prefix: &str, gc_managed: bool) -> String {
     } else {
         source
     }
+}
+
+fn takes_input_owners(node: &crate::kotlin::JniNode) -> bool {
+    prebindgen_flat::wire_definitions(std::iter::once(node))
+        .any(|w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move))
 }

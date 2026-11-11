@@ -47,8 +47,9 @@ impl Value {
     }
 }
 
-/// Decode one wire into the value type `ty` during validation.
+/// Decode one wire into the value type `ty` inside its conversion scope.
 ///
+/// The enclosing optional/selector invokes this operation only when active.
 /// The generated code converts the decoded value with `Into` for owned targets and
 /// `AsRef` for views, so a view target borrows without copying.
 ///
@@ -57,10 +58,8 @@ impl Value {
 /// * `ty` — the source parameter type; it must satisfy [`Value::of`].
 /// * `wire` — identifier of the boundary parameter `decode` reads.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — an emitted Rust boolean expression. `decode` runs
-///   only when they are selected.
 /// * `decode` — Rust expression that reads `wire` and yields the owned value or,
-///   for text and bytes, a view (`&str`, `&[u8]`). It runs during validation and
+///   for text and bytes, a view (`&str`, `&[u8]`). It runs during conversion and
 ///   may return a `String` error with `?`.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
 ///
@@ -72,61 +71,55 @@ impl Value {
 /// use quote::quote;
 /// let input = value::input::<syn::Type, (), (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
-///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
+///     quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
 /// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "& str");
-/// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &TokenStream,
     decode: TokenStream,
     kind: W,
 ) -> Result<InputPlan<W, C, N, B>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
-    let condition = active.clone();
-    let (decode, statements, argument) = match ty {
-        Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
-            let target = &r.elem;
-            (
-                decode,
-                quote!(),
-                quote!(::core::convert::AsRef::<#target>::as_ref(#var.as_ref().expect("active value"))),
-            )
-        }
+    let (storage, code, value) = match ty {
         Type::Reference(r) => {
             let owned = &r.elem;
+            let (decode, value) = if matches!(type_key(owned).as_str(), "str" | "[u8]") {
+                (
+                    decode,
+                    quote!(::core::convert::AsRef::<#owned>::as_ref(#var.as_ref().expect("active value"))),
+                )
+            } else {
+                (
+                    quote!(::core::convert::Into::<#owned>::into(#decode)),
+                    quote!(#var.as_ref().expect("active value")),
+                )
+            };
             (
-                quote!(::core::convert::Into::<#owned>::into(#decode)),
-                quote!(),
-                quote!(#var.as_ref().expect("active value")),
+                quote!(#[allow(unused_mut,unused_assignments)] let mut #var=None;),
+                quote!(#var=Some(#decode);),
+                value,
             )
         }
         _ => (
-            decode,
-            quote!(let #var: #ty = ::core::convert::Into::into(#var.expect("active value"));),
+            quote!(),
+            quote!(let #var:#ty=::core::convert::Into::into(#decode);),
             quote!(#var),
         ),
     };
-    Ok(InputPlan {
-        fallible: true,
-        context: Default::default(),
-        acknowledgement: None,
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-            name: wire.clone(),
-            kind,
-        }]),
-        validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
-        acquire: quote!(),
-        resources: vec![],
-        statements,
-        argument,
-    })
+    let mut plan = InputPlan::new(
+        prebindgen_flat::WireNode::Leaf(vec![Wire { name: wire, kind }]),
+        code,
+        value,
+    );
+    plan.storage = storage;
+    plan.fallible = true;
+    Ok(plan)
 }
 
 /// Deliver an owned value type. A borrowed `value` is copied first: scalars by

@@ -181,6 +181,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINative_bu
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -202,23 +203,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: i64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = crate::output_contracts::duration_echo(
                 __prebindgen_argument_0,
             );
@@ -273,6 +262,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -291,23 +281,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
 ) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: i64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = crate::output_contracts::duration_packet(
                 __prebindgen_argument_0,
             );
@@ -351,6 +329,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -370,7 +349,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
@@ -439,6 +417,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -459,7 +438,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
@@ -557,6 +535,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -577,23 +556,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: bool = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = crate::output_contracts::duration_optional(
                 __prebindgen_argument_0,
             );
@@ -667,6 +634,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -688,23 +656,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: i64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = crate::output_contracts::duration_result(
                 __prebindgen_argument_0,
             );
@@ -773,6 +729,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -794,23 +751,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let p0_w0 = if true { Some(p0_w1) } else { None };
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_w0_built = if true {
-                Some({
-                    let p0_w0: i64 = ::core::convert::Into::into(
-                        p0_w0.expect("active value"),
-                    );
-                    p0_w0
-                })
-            } else {
-                None
-            };
-            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
             let source_value = crate::output_contracts::plain_result(
                 __prebindgen_argument_0,
             );
@@ -879,6 +824,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -900,7 +846,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
@@ -926,8 +871,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
                                     },
                                 ];
                                 {}
-                                let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-                                let __prebindgen_input_consumed = &__pb_input_consumed;
                                 let callback_result = unsafe {
                                     custom_callback_retained
                                         .invoke_return(
@@ -941,13 +884,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
                                 let callback_duration_wire = callback_result
                                     .j()
                                     .map_err(|e| e.to_string())?;
-                                let callback_duration_value = if true {
-                                    Some(callback_duration_wire)
-                                } else {
-                                    None
-                                };
                                 let callback_duration_value: i64 = ::core::convert::Into::into(
-                                    callback_duration_value.expect("active value"),
+                                    callback_duration_wire,
                                 );
                                 let callback_return_value = callback_duration_value;
                                 Ok::<_, String>(callback_return_value)
@@ -1011,6 +949,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -1032,7 +971,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
@@ -1042,70 +980,46 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
                 "(J)J",
                 "io.prebindgen.covertest.outputcontracts.i64Toi64Callback",
             )?;
-            #[allow(clippy::let_and_return, clippy::unit_arg)]
-            let p0_callback_value_built = if true {
-                Some({
-                    #[allow(unused_mut, clippy::collapsible_if)]
-                    let p0_callback_value = move |callback_source_0: i64| {
-                        p0_callback_retained
-                            .with_env_result(
-                                17i32,
-                                |callback_environment| {
-                                    let mut callback_environment = callback_environment;
-                                    let callback_value_0 = callback_source_0;
-                                    {
-                                        let callback_arg_0_w0 = callback_value_0;
-                                        let arguments = [
-                                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                                j: callback_arg_0_w0,
-                                            },
-                                        ];
-                                        {}
-                                        let __pb_input_consumed = ::core::cell::Cell::new(0usize);
-                                        let __prebindgen_input_consumed = &__pb_input_consumed;
-                                        let callback_result = unsafe {
-                                            p0_callback_retained
-                                                .invoke_return(
-                                                    callback_environment,
-                                                    ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
-                                                        ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
-                                                    ),
-                                                    &arguments,
-                                                )
-                                        }?;
-                                        let callback_return_w1 = callback_result
-                                            .j()
-                                            .map_err(|e| e.to_string())?;
-                                        let callback_return_w0 = if true {
-                                            Some(callback_return_w1)
-                                        } else {
-                                            None
-                                        };
-                                        #[allow(clippy::let_and_return, clippy::unit_arg)]
-                                        let callback_return_w0_built = if true {
-                                            Some({
-                                                let callback_return_w0: i64 = ::core::convert::Into::into(
-                                                    callback_return_w0.expect("active value"),
-                                                );
-                                                callback_return_w0
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let callback_return_value = callback_return_w0_built
-                                            .expect("active input");
-                                        Ok::<_, String>(callback_return_value)
-                                    }
-                                },
-                            )
-                            .unwrap_or_else(|error| panic!("callback failed: {}", error))
-                    };
-                    p0_callback_value
-                })
-            } else {
-                None
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move |callback_source_0: i64| {
+                p0_callback_retained
+                    .with_env_result(
+                        17i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let callback_arg_0_w0 = callback_value_0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: callback_arg_0_w0,
+                                    },
+                                ];
+                                {}
+                                let callback_result = unsafe {
+                                    p0_callback_retained
+                                        .invoke_return(
+                                            callback_environment,
+                                            ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
+                                                ::prebindgen_jni_runtime::jni::signature::Primitive::Long,
+                                            ),
+                                            &arguments,
+                                        )
+                                }?;
+                                let callback_return_w1 = callback_result
+                                    .j()
+                                    .map_err(|e| e.to_string())?;
+                                let callback_return_w0: i64 = ::core::convert::Into::into(
+                                    callback_return_w1,
+                                );
+                                let callback_return_value = callback_return_w0;
+                                Ok::<_, String>(callback_return_value)
+                            }
+                        },
+                    )
+                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
             };
-            let __prebindgen_argument_0 = p0_callback_value_built.expect("active input");
+            let __prebindgen_argument_0 = p0_callback_value;
             let source_value = crate::output_contracts::plain_callback(
                 __prebindgen_argument_0,
             );
@@ -1193,6 +1107,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINative_in
     }
 }
 #[allow(
+    clippy::let_and_return,
     clippy::needless_borrow,
     clippy::borrow_deref_ref,
     clippy::let_unit_value,
@@ -1215,7 +1130,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i32 = Default::default();
-    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
     let __pb_receipt_valid = ::core::cell::Cell::new(false);
     let outcome = ::prebindgen_runtime::boundary(|| {
         if jni_environment

@@ -136,24 +136,17 @@ pub(crate) fn input_sequence(
     } else {
         quote!(#slice)
     };
-    Ok(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        acknowledgement: None,
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
+    Ok(InputPlan::new(
+        prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::SliceView { element },
         }]),
-        validation: quote!(let #var = if #condition {
-            let #pointer=if #wire.len==0 && #wire.data.is_null() {::core::ptr::NonNull::<#native>::dangling().as_ptr() as *const #native}else{#wire.data};
-            let #slice = unsafe {::core::slice::from_raw_parts(#pointer,#wire.len)};
-            Some(#argument)
-        } else {None};),
-        acquire: TokenStream::new(),
-        resources: vec![],
-        statements: TokenStream::new(),
-        argument: quote!(#var.expect("active slice view")),
-    })
+        quote!(let #var=if #condition {
+        let #pointer=if #wire.len==0 && #wire.data.is_null(){::core::ptr::NonNull::<#native>::dangling().as_ptr() as *const #native}else{#wire.data};
+        let #slice=unsafe {::core::slice::from_raw_parts(#pointer,#wire.len)};Some(#argument)
+    } else {None};),
+        quote!(#var.expect("active slice view")),
+    ))
 }
 /// A loan anywhere in a packet, including fields inside converted rows.
 pub(crate) fn has_loans(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) -> bool {

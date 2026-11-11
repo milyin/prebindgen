@@ -1902,6 +1902,14 @@ bool perftest_result_text(uint8_t p0_w1, perftest_owned_string *out0, char * *er
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool perftest_result_unit(uint8_t p0_w1, char * *error);
+uintptr_t perftest_scoped_input_drops(void);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_scoped_input_failure(perftest_owned_resource * scoped_first, int64_t p1_w3, perftest_owned_resource * p1_w5, int64_t *out0, size_t *ownership, char * *error);
+int64_t perftest_scoped_input_id(const perftest_owned_resource * p0_w1);
+perftest_owned_resource * perftest_scoped_input_new(int64_t p0_w1);
+int64_t perftest_scoped_input_pair(const perftest_owned_resource * scoped_first, perftest_owned_resource * p1_w1);
 /* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */
 /* Callback sequence return: ret_w3 reports the delivered element count; the visitor receives 1 fields per element. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */

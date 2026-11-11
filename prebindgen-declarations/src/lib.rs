@@ -833,10 +833,8 @@ struct Compiler<'a, C: Codec> {
     // Explicit borrowed collection/record projections authorize owning copies
     // of borrowed leaves, without changing conversions of owned getter results.
     copy_borrowed: std::cell::Cell<bool>,
-    grouped_input: std::cell::Cell<bool>,
     // Row temporaries may borrow only the enclosing sequence's cached frame,
     // never a separate bulk field decoded inside an ordinary JVM object row.
-    bulk_input_row: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
@@ -851,8 +849,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
             input_role: InputRole::Parameter,
             bulk: std::cell::Cell::new(false),
             copy_borrowed: std::cell::Cell::new(false),
-            grouped_input: std::cell::Cell::new(false),
-            bulk_input_row: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
@@ -915,43 +911,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
-        let ready = names
-            .map(|(_, var)| format_ident!("{var}_built"))
-            .unwrap_or_else(|| format_ident!("{}_w{}_built", self.prefix, self.next.get()));
-        let mut plan = self.input_unprepared_named(ty, recipe, extra, active, names)?;
-        if self.grouped_input.get() {
-            return Ok(plan);
-        }
-        let mut transferred = TokenStream::new();
-        for resource in &mut plan.resources {
-            if resource.registered {
-                continue;
-            }
-            let condition = &resource.active;
-            if resource.access == prebindgen_conversions::Access::Move
-                && !resource.records_consumption
-            {
-                let count = &resource.count;
-                transferred.extend(quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#count));}));
-            }
-            resource.registered = true;
-        }
-        let validation = plan.validation;
-        let acquire = plan.acquire;
-        let statements = plan.statements;
-        let argument = plan.argument;
-        let condition = active.rust();
-        let built = if statements.is_empty() {
-            quote!(Some(#argument))
-        } else {
-            quote!(Some({#statements #argument}))
-        };
-        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #acquire #transferred #built } else {None};);
-        plan.acquire = quote!();
-        plan.statements = quote!();
-        plan.argument = quote!(#ready.expect("active input"));
-        Ok(plan)
+        self.input_unprepared_named(ty, recipe, extra, active, names)
     }
+
     fn input_unprepared_named(
         &self,
         ty: &Type,
@@ -971,57 +933,38 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let var = names
             .map(|(_, var)| var.clone())
             .unwrap_or_else(|| self.name());
-        let mut wires = Vec::new();
-        let mut fallible = false;
-        let mut validation = TokenStream::new();
-        let mut acquire = TokenStream::new();
-        let mut resources = Vec::new();
-        let mut acknowledgement = None;
-        let mut statements = TokenStream::new();
-        let argument = quote!(#var);
         match recipe {
             Input::Temporary(inner) => {
                 let owned = temporary_input_type(ty)?;
-                let grouped = self.grouped_input.get();
                 let mut child = self.input_named(&owned, inner, extra, active, names)?;
                 let storage = self.name();
-                let build = std::mem::take(&mut child.statements);
-                let argument = &child.argument;
-                let condition = active.rust();
-                if grouped {
-                    // Declare the owner outside Optional/Selector blocks. Row
-                    // construction fills it while its temporary storage is alive.
-                    child.validation.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #storage:Option<#owned>=None;));
-                    child.statements = quote!(if #condition {#build #storage=Some(#argument);});
-                } else {
-                    let built = if build.is_empty() {
-                        quote!(Some(#argument))
-                    } else {
-                        quote!(Some({#build #argument}))
-                    };
-                    child
-                        .validation
-                        .extend(quote!(let #storage = if #condition {#built} else {None};));
-                }
+                let target = format_ident!("{storage}_owned");
+                let mut backing = std::mem::take(&mut child.storage);
+                backing.extend(quote!(#[allow(unused_mut,unused_assignments)] let mut #storage:Option<#owned>=None;));
+                let build = child.bind(&target, quote!(#storage=Some(#target);))?;
                 let Type::Reference(reference) = ty else {
                     unreachable!()
                 };
-                let target = &reference.elem;
-                child.argument = if matches!(target.as_ref(), Type::Slice(_))
-                    || matches!(target.as_ref(),Type::Path(path) if path.path.is_ident("str"))
+                let elem = &reference.elem;
+                let value = if matches!(elem.as_ref(), Type::Slice(_))
+                    || matches!(elem.as_ref(),Type::Path(p) if p.path.is_ident("str"))
                 {
-                    quote!(::core::convert::AsRef::<#target>::as_ref(#storage.as_ref().expect("active temporary")))
+                    quote!(::core::convert::AsRef::<#elem>::as_ref(#storage.as_ref().expect("active temporary")))
                 } else {
                     quote!(#storage.as_ref().expect("active temporary"))
                 };
-                // Keep the temporary boundary visible. In particular a borrowed
-                // String buffer must not look like a persistent foreign &str.
-                child.node = WireNode::Branch {
-                    controls: vec![],
-                    children: vec![child.node],
-                    meta: self.codec.group(GroupKind::Values)?,
-                };
-                return Ok(child);
+                let mut plan = InputPlan::new(
+                    WireNode::Branch {
+                        controls: vec![],
+                        children: vec![child.node],
+                        meta: self.codec.group(GroupKind::Values)?,
+                    },
+                    quote!(#build;),
+                    value,
+                );
+                plan.storage = backing;
+                plan.fallible = child.fallible;
+                Ok(plan)
             }
             Input::Bulk(inner) => {
                 require_bulk(self.codec, Direction::Input)?;
@@ -1030,17 +973,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let wire = self.name();
                 self.bulk.set(true);
-                let previous_row = self.bulk_input_row.replace(false);
                 let child = self.input_named(ty, inner, extra, active, names);
-                self.bulk_input_row.set(previous_row);
                 self.bulk.set(false);
-                return self
-                    .codec
-                    .bulk_input(self.flat, ty, extra, wire, child?, active);
+                self.codec
+                    .bulk_input(self.flat, ty, extra, wire, child?, active)
             }
             Input::Callback(callback) => {
                 callback.validate_for(self.flat, ty)?;
-                return self.codec.callback_input(
+                self.codec.callback_input(
                     self.flat,
                     callback,
                     extra,
@@ -1049,7 +989,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         .unwrap_or_else(|| self.name()),
                     var,
                     active,
-                );
+                )
             }
             Input::Sequence(element_recipe) => {
                 if matches!(ty, Type::Reference(_)) {
@@ -1086,28 +1026,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let wire = self.name();
                 let length = self.name();
                 let index = self.name();
-                // Nested sequences manage their own resource lifetime and receipts.
-                fn contains_sequence(input: &Input) -> bool {
-                    match input {
-                        Input::Sequence(_) | Input::Callback(_) => true,
-                        Input::Bulk(inner) | Input::Optional(inner) | Input::Temporary(inner) => {
-                            contains_sequence(inner)
-                        }
-                        Input::Record(children)
-                        | Input::Fields(children)
-                        | Input::Selector(children) => children.iter().any(contains_sequence),
-                        Input::Constructor { args, .. } => args.iter().any(contains_sequence),
-                        _ => false,
-                    }
-                }
-                let grouped_elements = !contains_sequence(element_recipe);
-                let previous = self.grouped_input.replace(grouped_elements);
-                let previous_bulk_row = self.bulk_input_row.replace(self.bulk.get());
                 let child = self.input(element, element_recipe, extra, &Condition::default());
-                self.bulk_input_row.set(previous_bulk_row);
-                self.grouped_input.set(previous);
                 let child = child?;
-                return sequence::input(
+                sequence::input(
                     self.codec,
                     ty,
                     extra,
@@ -1118,7 +1039,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
-                );
+                )
             }
             Input::Optional(inner) => {
                 let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
@@ -1136,29 +1057,21 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 } else {
                     self.input(ty, inner, extra, &active.arm(tag.clone(), 1))?
                 };
-                return optional_input(self.codec, extra, tag, var, active, child);
+                optional_input(self.codec, extra, tag, var, active, child)
             }
             Input::Leaf => {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                let (representation, construction) =
-                    if self.bulk_input_row.get() && self.grouped_input.get() {
-                        (Representation::Bulk, InputConstruction::GroupedRow)
-                    } else if self.bulk.get() {
-                        (Representation::Bulk, InputConstruction::EnclosingConversion)
-                    } else if self.grouped_input.get() {
-                        (Representation::Ordinary, InputConstruction::GroupedRow)
-                    } else {
-                        (
-                            Representation::Ordinary,
-                            InputConstruction::EnclosingConversion,
-                        )
-                    };
+                let representation = if self.bulk.get() {
+                    Representation::Bulk
+                } else {
+                    Representation::Ordinary
+                };
                 if representation == Representation::Bulk {
                     require_bulk(self.codec, Direction::Input)?;
                 }
-                return self.codec.input_leaf(InputLeaf {
+                self.codec.input_leaf(InputLeaf {
                     flat: self.flat,
                     ty,
                     extra,
@@ -1166,28 +1079,21 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     target: var,
                     active,
                     representation,
-                    construction,
                     role: self.input_role,
-                });
+                })
             }
             Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    return Ok(InputPlan {
-                        fallible: false,
-                        context: Default::default(),
-                        acknowledgement,
-                        node: WireNode::Branch {
+                    return Ok(InputPlan::new(
+                        WireNode::Branch {
                             controls: vec![],
                             children: vec![],
                             meta: self.codec.group(GroupKind::Fields)?,
                         },
-                        validation,
-                        acquire,
-                        resources,
-                        statements,
-                        argument: quote!(()),
-                    });
+                        quote!(),
+                        quote!(()),
+                    ));
                 }
                 let r = self.flat.record(ty)?;
                 if r.fields.len() != children.len() {
@@ -1231,7 +1137,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     self.codec
                         .input_record_metadata(self.flat, ty, &wire, active, &mut plan, extra)?;
                 }
-                return Ok(plan);
+                Ok(plan)
             }
             Input::Constructor { function, args } => {
                 let f = self.flat.function(function)?;
@@ -1245,32 +1151,48 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if f.params.len() != args.len() {
                     return Err(format!("constructor `{function}`: wrong argument count"));
                 }
+                let mut plans = Vec::new();
                 let mut call_args = Vec::new();
-                for (param, child) in f.params.iter().zip(args) {
+                let mut wires = Vec::new();
+                let mut storage = TokenStream::new();
+                let mut fallible = false;
+                for (i, (param, child)) in f.params.iter().zip(args).enumerate() {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
                     self.prefix(
                         &mut p.node,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
                     fallible |= p.fallible;
-                    validation.extend(p.validation);
-                    acquire.extend(p.acquire);
-                    resources.extend(p.resources);
-                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
-                    statements.extend(p.statements);
-                    wires.push(p.node);
-                    call_args.push(p.argument);
+                    storage.extend(std::mem::take(&mut p.storage));
+                    let target = format_ident!("{var}_argument_{i}");
+                    call_args.push(target.clone());
+                    plans.push((target, p));
                 }
                 let path = &f.path;
-                statements.extend(quote!(let #var:#ty=#path(#(#call_args),*);));
-                wires = vec![WireNode::Branch {
+                let mut plan = InputPlan::new(
+                    WireNode::default(),
+                    quote!(let #var:#ty=#path(#(#call_args),*);),
+                    quote!(#var),
+                );
+                for (target, p) in plans.iter().rev() {
+                    plan.code = p.bind(target, plan.code)?;
+                }
+                for (_, p) in plans {
+                    wires.push(p.node);
+                }
+                plan.node = WireNode::Branch {
                     controls: vec![],
                     children: wires,
                     meta: self.codec.group(GroupKind::Values)?,
-                }];
+                };
+                plan.storage = storage;
+                plan.fallible = fallible;
+                Ok(plan)
             }
             Input::Selector(arms) => {
-                fallible = self.codec.validates_inputs();
+                let mut fallible = self.codec.validates_inputs();
+                let mut storage = TokenStream::new();
+                let mut validation = TokenStream::new();
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
@@ -1301,15 +1223,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
                     self.prefix(&mut p.node, ComponentSegment::Alternative(i));
                     fallible |= p.fallible;
-                    validation.extend(p.validation);
-                    acquire.extend(p.acquire);
-                    resources.extend(p.resources);
-                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
-                    let body = p.statements;
-                    let value = p.argument;
+                    storage.extend(std::mem::take(&mut p.storage));
+                    let target = format_ident!("{var}_alternative_{i}");
+                    let body = p.bind(&target, quote!(#target))?;
                     alternatives.push(p.node);
                     let i = i as i32;
-                    cases.push(quote!(#i=>{#body #value}));
+                    cases.push(quote!(#i=>#body));
                 }
                 let metadata = self.codec.alternatives(Alternatives {
                     selector: &selector,
@@ -1320,27 +1239,24 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     meta: metadata,
                     children: alternatives,
                 };
-                wires = vec![node];
+
                 let invalid = if self.codec.validates_inputs() {
                     quote!(unreachable!("validated selector"))
                 } else {
                     quote!(unsafe { ::core::hint::unreachable_unchecked() })
                 };
-                statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>#invalid};);
+                let mut plan = InputPlan::new(
+                    node,
+                    quote!(#validation let #var:#ty=match #tag {#(#cases,)* _=>#invalid};),
+                    quote!(#var),
+                );
+                plan.storage = storage;
+                plan.fallible = fallible;
+                Ok(plan)
             }
         }
-        Ok(InputPlan {
-            fallible,
-            context: Default::default(),
-            acknowledgement,
-            node: wires.remove(0),
-            validation,
-            acquire,
-            resources,
-            statements,
-            argument,
-        })
     }
+
     fn output_root(
         &self,
         ty: &Type,
@@ -2096,22 +2012,6 @@ pub use declarations::{CallbackReturn, Declarations, FunctionDecl};
 /// Returns an error for invalid syntax, including paths or multiple identifiers.
 pub fn ident(name: &str) -> Result<syn::Ident> {
     syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
-}
-
-fn merge_acknowledgement(
-    target: &mut Option<TokenStream>,
-    incoming: Option<TokenStream>,
-) -> Result<()> {
-    if let Some(code) = incoming {
-        if let Some(previous) = target {
-            if previous.to_string() != code.to_string() {
-                return Err("conflicting input acknowledgements".into());
-            }
-        } else {
-            *target = Some(code);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
