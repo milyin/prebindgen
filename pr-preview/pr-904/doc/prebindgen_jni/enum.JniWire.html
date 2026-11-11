@@ -118,10 +118,10 @@ A custom generator can render both fragments with its <a href="struct.JniContext
 <span class="kw">use </span>prebindgen_jni::{JniContext, JniWire};
 <span class="kw">use </span>quote::quote;
 <span class="kw">let </span>context = JniContext {
+    input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
     return_delivery: prebindgen_jni::JniReturnDelivery::Packet,
     prepared_delivery: <span class="prelude-val">None</span>,
     environment: <span class="macro">syn::parse_quote!</span>(env),
-    acknowledgement: <span class="macro">syn::parse_quote!</span>(accepted),
     domain_output: <span class="macro">syn::parse_quote!</span>(domain_output),
     return_sink: <span class="prelude-val">None</span>,
     is_domain_error: <span class="bool-val">false</span>,
